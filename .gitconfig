@@ -1,0 +1,31 @@
+[user]
+    email = hoge@example.com
+    name = Shigenobu Nishikawa
+[color]
+    ui = auto
+[alias]
+    co = checkout
+    st = status
+    ci = commit
+    di = diff
+    br = branch
+    wh = whatchanged
+    stat = log --stat --summary
+    logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
+    logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+    current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
+    push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
+
+[core]
+    excludesfile = ~/.gitignore
+    pager = lv -c
+[difftool "sourcetree"]
+    cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+    path =
+[mergetool "sourcetree"]
+    cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+trustExitCode = true
+
+[github]
+    user = shishi
+    token = hogehoge
