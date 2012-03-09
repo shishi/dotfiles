@@ -7,7 +7,7 @@ alias be='bundle exec'
 alias r='bundle exec rails'
 alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 
-export EDITOR='emacsclient -n'
+export EDITOR='emacsclient --alternate-editor=vim'
 export PAGER='lv -c'
 export RSENSE_HOME='$HOME/.emacs.d/share/rsense'
 export PATH=/usr/local/bin:$PATH
