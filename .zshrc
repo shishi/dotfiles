@@ -24,7 +24,6 @@ HISTFILE=$HOME/.zsh-history
 HISTSIZE=100000
 SAVEHIST=100000
 
-# 色を使う
 setopt prompt_subst
 autoload -U colors; colors
 colors
@@ -41,10 +40,9 @@ export LSCOLORS=gxfxcxdxbxegedabagacad
 export LS_COLORS='di=36:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
 #export LSCOLORS=gxfxxxxxcxxxxxxxxxgxgx
 
-# Set up the prompt
-
-#autoload -Uz promptinit
-#promptinit
+# Set up the prompt theme
+autoload -Uz promptinit
+promptinit
 #prompt adam1
 
 # ビープを鳴らさない
