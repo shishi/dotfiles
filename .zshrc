@@ -1,21 +1,24 @@
-source /usr/local/Cellar/coreutils/8.14/aliases
 alias sudo='sudo '
 alias ll='ls -l --color'
 alias grep='grep --color'
 alias g='git'
 alias be='bundle exec'
 alias r='bundle exec rails'
-alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 
-export EDITOR='emacsclient --alternate-editor=vim'
+if [ `uname` = Darwin ]; then
+    source /usr/local/Cellar/coreutils/8.14/aliases
+    alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+fi
+
+export EDITOR="emacsclient -n --alternate-editor='vim'"
 export PAGER='lv -c'
-export RSENSE_HOME='$HOME/.emacs.d/share/rsense'
+export RSENSE_HOME="$HOME/.emacs.d/share/rsense"
 export PATH=/usr/local/bin:$PATH
 
 # rbenv
 export PATH="$HOME/.rbenv/bin:$PATH"
 eval "$(rbenv init -)"
-source ~/.rbenv/completions/rbenv.zsh
+# source ~/.rbenv/completions/rbenv.zsh
 
 # zsh option
 #########################################
@@ -58,11 +61,12 @@ setopt long_list_jobs
 # 出力時8ビットを通す
 setopt print_eight_bit
 
+# サスペンド中のプロセスと同じコマンド名を実行した場合はリジューム
+setopt auto_resume
+
 # コマンド補正
 setopt correct
 
-# サスペンド中のプロセスと同じコマンド名を実行した場合はリジューム
-setopt auto_resume
 # 補完機能の強化
 autoload -U compinit
 compinit
@@ -70,6 +74,12 @@ compinit
 setopt list_types
 # 補完候補を一覧表示
 setopt auto_list
+# 検索に一致するものを補完
+autoload history-search-end
+zle -N history-beginning-search-backward-end history-search-end
+zle -N history-beginning-search-forward-end history-search-end
+bindkey "^P" history-beginning-search-backward-end
+bindkey "^N" history-beginning-search-forward-end
 # 補完候補の色づけ
 zstyle ':completion:*' list-colors 'di=36' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
 # zsh recommend
@@ -90,7 +100,6 @@ zstyle ':completion:*' verbose true
 
 zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
 zstyle ':completion:*:kill:*' command 'ps -u $USER -o pid,%cpu,tty,cputime,cmd'
-
 # 補完を良い感じに中断できる
 zstyle ':completion:*:default' menu select=1
 # カッコの対応などを自動的に補完
