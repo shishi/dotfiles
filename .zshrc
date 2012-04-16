@@ -10,9 +10,9 @@ if [ `uname` = Darwin ]; then
     alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 fi
 
-export EDITOR="emacsclient -n --alternate-editor='vim'"
+export EDITOR="emacsclient --alternate-editor='vim'"
 export PAGER='lv -c'
-export RSENSE_HOME="$HOME/.emacs.d/share/rsense"
+export RSENSE_HOME="$HOME/.emacs.d/rsense"
 export PATH=/usr/local/bin:$PATH
 
 # rbenv
