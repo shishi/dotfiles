@@ -29,15 +29,26 @@ SAVEHIST=100000
 
 setopt prompt_subst
 autoload -U colors; colors
-colors
+# colors
+
+# display git branch
+autoload -Uz vcs_info
+zstyle ':vcs_info:*' formats ':(%s)%b'
+zstyle ':vcs_info:*' actionformats ':(%s)%b|%a'
+precmd () {
+    psvar=()
+    LANG=en_US.UTF-8 vcs_info
+    [[ -n "$vcs_info_msg_0_" ]] && psvar[1]="$vcs_info_msg_0_"
+}
+
 if [ `whoami` = root ];
 then
-PROMPT="[%{${fg[red]}%}%B%n@%m%b]%#%{${reset_color}%} "
+    PROMPT="[%{${fg[red]}%}%B%n@%m%b]%#%{${reset_color}%} "
 else
-PROMPT="[%{${fg[green]}%}%B%n@%m%b]%#%{${reset_color}%} "
+    PROMPT="[%{${fg[green]}%}%B%n@%m%b]%#%{${reset_color}%} "
 fi
 SPROMPT="%{${fg[red]}%}Maybe you want to type this command? %{${reset_color}%}> '%r' [%BY%bes %BN%bo %BA%bbort %BE%bdit] "
-RPROMPT="[%{${fg[yellow]}%}%B%T%b%{${reset_color}%}] [%{${fg[cyan]}%}%B%/%b%{${reset_color}%}]"
+RPROMPT="["%1(v|%F{green}%1v%f|)"] [%{${fg[yellow]}%}%B%T%b%{${reset_color}%}] [%{${fg[cyan]}%}%B%/%b%{${reset_color}%}]"
 
 export LSCOLORS=gxfxcxdxbxegedabagacad
 export LS_COLORS='di=36:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
