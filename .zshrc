@@ -1,24 +1,60 @@
 alias sudo='sudo '
-alias ll='ls -l --color'
 alias grep='grep --color'
 alias g='git'
 alias be='bundle exec'
 alias r='bundle exec rails'
 
 if [ `uname` = Darwin ]; then
-    source /usr/local/Cellar/coreutils/8.14/aliases
-    alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+    if which emacs >/dev/null; then
+        alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+    fi
+    if which gls >/dev/null; then
+        PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+        alias ll='ls -l --color'
+    else
+        alias ll ='ls -lG'
+    fi
+else
+    alias ll='ls -l --color'
 fi
 
-export EDITOR="emacsclient --alternate-editor='vim'"
-export PAGER='lv -c'
-export RSENSE_HOME="$HOME/.emacs.d/rsense"
-export PATH=/usr/local/bin:$PATH
+if which brew >/dev/null; then
+    fpath=(/usr/local/share/zsh/site-functions /usr/local/Library/Contributions/brew_zsh_completion.zsh $fpath)
+fi
+
+if which emacs >/dev/null; then
+    export EDITOR="emacsclient --alternate-editor='vim'"
+fi
+
+if which lv >/dev/null; then
+    export PAGER='lv -c'
+fi
+
+if [ -f ~/.rsense ]; then
+    export RSENSE_HOME="$HOME/.emacs.d/rsense"
+fi
+
+if [ -d ~/.nodebrew ]; then
+    export PATH=$HOME/.nodebrew/current/bin:/usr/local/bin:$PATH
+fi
 
 # rbenv
-export PATH="$HOME/.rbenv/bin:$PATH"
-eval "$(rbenv init -)"
-# source ~/.rbenv/completions/rbenv.zsh
+if [ -d ~/.rbenv ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init -)"
+    # source ~/.rbenv/completions/rbenv.zsh
+fi
+
+# perlbrew
+if [ -d ~/perl5/perlbrew ]; then
+    source ~/perl5/perlbrew/etc/bashrc
+fi
+
+# phpbrew
+if [ -d ~/.phpbrew ]; then
+    source ~/.phpbrew/bashrc
+    # export PHPBREW_SET_PROMPT=1
+fi
 
 # zsh option
 #########################################
