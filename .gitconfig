@@ -5,10 +5,10 @@
     ui = auto
 [alias]
     co = checkout
-    st = status
+    st = status -sb
     ci = commit -v
     di = diff
-    br = branch
+    br = branch -a
     wh = whatchanged
     stat = log --stat --summary
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
