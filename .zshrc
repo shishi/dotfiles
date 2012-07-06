@@ -3,6 +3,7 @@ alias grep='grep --color'
 alias g='git'
 alias be='bundle exec'
 alias r='bundle exec rails'
+alias rakeds='rake db:setup && rake db:setup RAILS_ENV=test'
 
 if [ `uname` = Darwin ]; then
     if which emacs >/dev/null; then
