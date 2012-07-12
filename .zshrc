@@ -57,6 +57,10 @@ if [ -d ~/.phpbrew ]; then
     # export PHPBREW_SET_PROMPT=1
 fi
 
+# incr 
+if [ -f ~/.zsh/plugin/incr*.zsh ]; then
+    source ~/.zsh/plugin/incr*.zsh
+fi
 # zsh option
 #########################################
 export LANG=ja_JP.UTF-8
