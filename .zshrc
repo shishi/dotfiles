@@ -57,10 +57,21 @@ if [ -d ~/.phpbrew ]; then
     # export PHPBREW_SET_PROMPT=1
 fi
 
-# incr 
-if [ -f ~/.zsh/plugin/incr*.zsh ]; then
-    source ~/.zsh/plugin/incr*.zsh
+# rake_completion
+if [ -f ~/.zsh/rake_completion.zsh ]; then
+    source ~/.zsh/rake_completion.zsh
 fi
+
+# auto-fu
+if [ -f ~/.zsh/auto-fu.zsh/auto-fu.zsh ]; then
+source ~/.zsh/auto-fu.zsh/auto-fu.zsh
+    function zle-line-init () {
+        auto-fu-init
+    }
+    zle -N zle-line-init
+    zstyle ':completion:*' completer _oldlist _expand _complete _correct _approximate
+fi
+
 # zsh option
 #########################################
 export LANG=ja_JP.UTF-8
@@ -136,7 +147,7 @@ bindkey "^N" history-beginning-search-forward-end
 zstyle ':completion:*' list-colors 'di=36' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
 # zsh recommend
 zstyle ':completion:*' auto-description 'specify: %d'
-zstyle ':completion:*' completer _expand _complete _correct _approximate
+#zstyle ':completion:*' completer _expand _complete _correct _approximate
 zstyle ':completion:*' format 'Completing %d'
 zstyle ':completion:*' group-name ''
 zstyle ':completion:*' menu select=2
