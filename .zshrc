@@ -7,16 +7,16 @@ alias rakeds='rake db:setup && rake db:setup RAILS_ENV=test'
 
 if [ `uname` = Darwin ]; then
     if which emacs >/dev/null; then
-        alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
     fi
     if which gls >/dev/null; then
         PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-        alias ll='ls -l --color'
+        alias ll='gls -la --color'
     else
-        alias ll ='ls -lG'
+        alias ll ='ls -laG'
     fi
 else
-    alias ll='ls -l --color'
+    alias ll='ls -la --color'
 fi
 
 if which brew >/dev/null; then
@@ -57,10 +57,10 @@ if [ -d ~/.phpbrew ]; then
     # export PHPBREW_SET_PROMPT=1
 fi
 
-# incr 
-if [ -f ~/.zsh/plugin/incr*.zsh ]; then
-    source ~/.zsh/plugin/incr*.zsh
-fi
+# incr
+#if [ -f ~/.zsh/plugin/incr*.zsh ]; then
+#    source ~/.zsh/plugin/incr*.zsh
+#fi
 # zsh option
 #########################################
 export LANG=ja_JP.UTF-8
@@ -140,7 +140,7 @@ zstyle ':completion:*' completer _expand _complete _correct _approximate
 zstyle ':completion:*' format 'Completing %d'
 zstyle ':completion:*' group-name ''
 zstyle ':completion:*' menu select=2
-eval "$(dircolors -b)"
+#eval "$(dircolors -b)"
 zstyle ':completion:*:default' list-colors ${(s.:.)LS_COLORS}
 zstyle ':completion:*' list-colors ''
 zstyle ':completion:*' list-prompt %SAt %p: Hit TAB for more, or the character to insert%s
