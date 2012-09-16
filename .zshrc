@@ -3,7 +3,7 @@ alias grep='grep --color'
 alias g='git'
 alias be='bundle exec'
 alias r='bundle exec rails'
-alias rakeds='rake db:setup && rake db:setup RAILS_ENV=test'
+alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
 if [ `uname` = Darwin ]; then
     if which emacs >/dev/null; then
@@ -57,10 +57,21 @@ if [ -d ~/.phpbrew ]; then
     # export PHPBREW_SET_PROMPT=1
 fi
 
-# incr
-#if [ -f ~/.zsh/plugin/incr*.zsh ]; then
-#    source ~/.zsh/plugin/incr*.zsh
-#fi
+# # rake_completion
+# if [ -f ~/.zsh/rake_completion.zsh ]; then
+#     source ~/.zsh/rake_completion.zsh
+# fi
+
+# # auto-fu
+# if [ -f ~/.zsh/auto-fu.zsh/auto-fu.zsh ]; then
+# source ~/.zsh/auto-fu.zsh/auto-fu.zsh
+#     function zle-line-init () {
+#         auto-fu-init
+#     }
+#     zle -N zle-line-init
+#     zstyle ':completion:*' completer _oldlist _expand _complete _correct _approximate
+# fi
+
 # zsh option
 #########################################
 export LANG=ja_JP.UTF-8
@@ -187,3 +198,4 @@ setopt auto_cd
 setopt auto_pushd
 # 同じディレクトリを pushd しない
 setopt pushd_ignore_dups
+
