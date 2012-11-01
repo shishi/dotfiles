@@ -6,6 +6,10 @@ alias gl='git log'
 alias gg='git grep'
 alias be='bundle exec'
 alias r='bundle exec rails'
+alias rs='bundle exec rails server'
+alias rc='bundle exec rails console'
+alias bgs='bundle exec guard start'
+
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
 if [ `uname` = Darwin ]; then
