@@ -12,12 +12,19 @@ alias bgs='bundle exec guard start'
 
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
+if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
+    if [ ! -f ~/.zsh/_brew ]; then
+        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
+    fi
+fi
+
 if [ `uname` = Darwin ]; then
     if which emacs >/dev/null; then
         #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
     fi
     if which gls >/dev/null; then
         PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+        MANPATH="$(brew --prefix coreutils)/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
     else
         alias ll ='ls -laG'
@@ -120,19 +127,25 @@ promptinit
 
 # ビープを鳴らさない
 setopt nobeep
+
 # emacs キーバインド
 bindkey -e
+
 # コアダンプサイズを制限
 limit coredumpsize 102400
+
 # 出力の文字列末尾に改行コードが無い場合でも表示
 unsetopt promptcr
+
 # 内部コマンド jobs の出力をデフォルトで jobs -l にする
 setopt long_list_jobs
+
 # 出力時8ビットを通す
 setopt print_eight_bit
 
 # サスペンド中のプロセスと同じコマンド名を実行した場合はリジューム
 setopt auto_resume
+
 
 # コマンド補正
 setopt correct
@@ -140,18 +153,23 @@ setopt correct
 # 補完機能の強化
 autoload -U compinit
 compinit
+
 # 補完候補一覧でファイルの種別をマーク表示
 setopt list_types
+
 # 補完候補を一覧表示
 setopt auto_list
+
 # 検索に一致するものを補完
 autoload history-search-end
 zle -N history-beginning-search-backward-end history-search-end
 zle -N history-beginning-search-forward-end history-search-end
 bindkey "^P" history-beginning-search-backward-end
 bindkey "^N" history-beginning-search-forward-end
+
 # 補完候補の色づけ
 zstyle ':completion:*' list-colors 'di=36' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
+
 # zsh recommend
 zstyle ':completion:*' auto-description 'specify: %d'
 zstyle ':completion:*' completer _expand _complete _correct _approximate
@@ -170,34 +188,47 @@ zstyle ':completion:*' verbose true
 
 zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
 zstyle ':completion:*:kill:*' command 'ps -u $USER -o pid,%cpu,tty,cputime,cmd'
+
 # 補完を良い感じに中断できる
 zstyle ':completion:*:default' menu select=1
+
 # カッコの対応などを自動的に補完
 setopt auto_param_keys
+
 # ディレクトリ名の補完で末尾の / を自動的に付加し、次の補完に備える
 setopt auto_param_slash
+
 # TAB で順に補完候補を切り替える
 setopt auto_menu
+
 # --prefix=/usr などの = 以降も補完
 setopt magic_equal_subst
+
 # =command を command のパス名に展開する
 setopt equals
 
 # ファイル名で #, ~, ^ の 3 文字を正規表現として扱う
 setopt extended_glob
 
+
 # ヒストリを共有
 setopt share_history
+
 # 直前と同じコマンドをヒストリに追加しない
 #setopt hist_ignore_dups
+
 # すべての同じコマンドをヒストリを追加しない
 setopt histignorealldups
+
 # zsh の開始, 終了時刻をヒストリファイルに書き込む
 setopt extended_history
+
 # ヒストリを呼び出してから実行する間に一旦編集
 setopt hist_verify
+
 # ファイル名の展開で辞書順ではなく数値的にソート
 setopt numeric_glob_sort
+
 
 # ディレクトリ名だけで cd
 setopt auto_cd
@@ -205,4 +236,3 @@ setopt auto_cd
 setopt auto_pushd
 # 同じディレクトリを pushd しない
 setopt pushd_ignore_dups
-
