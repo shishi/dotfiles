@@ -12,12 +12,6 @@ alias bgs='bundle exec guard start'
 
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
-if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
-    if [ ! -f ~/.zsh/_brew ]; then
-        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
-    fi
-fi
-
 if [ `uname` = Darwin ]; then
     if which emacs >/dev/null; then
         #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
@@ -33,12 +27,18 @@ else
     alias ll='ls -la --color'
 fi
 
+if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
+    if [ ! -f ~/.zsh/_brew ]; then
+        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
+    fi
+fi
+
 if which brew >/dev/null; then
-    fpath=(/usr/local/share/zsh/site-functions /usr/local/Library/Contributions/brew_zsh_completion.zsh $fpath)
+    fpath=(/usr/local/share/zsh/site-functions ~/.zsh $fpath)
 fi
 
 if which emacs >/dev/null; then
-    export EDITOR="emacsclient --alternate-editor='vim'"
+    export EDITOR="emacsclient"
 fi
 
 if which lv >/dev/null; then
