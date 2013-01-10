@@ -1,5 +1,6 @@
 alias sudo='sudo '
 alias grep='grep --color'
+alias lv='lv -c'
 alias g='git'
 alias gs='git status'
 alias gl='git log'
@@ -12,10 +13,12 @@ alias bgs='bundle exec guard start'
 
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
+#PATH='/usr/local/bin:$PATH'
+
 if [ `uname` = Darwin ]; then
-    if which emacs >/dev/null; then
-        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
-    fi
+      #if which emacs >/dev/null; then
+          #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+      # fi
     if which gls >/dev/null; then
         PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
         MANPATH="$(brew --prefix coreutils)/libexec/gnuman:$MANPATH"
