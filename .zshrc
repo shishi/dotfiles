@@ -13,10 +13,10 @@ alias bgs='bundle exec guard start'
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
 
 if [ `uname` = Darwin ]; then
-    if which emacs >/dev/null; then
+#    if which emacs >/dev/null; then
         #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
-    fi
-    if which gls >/dev/null; then
+#    fi
+    if [[ ! `which gls` =~ ".+not found" ]]; then
         PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
         MANPATH="$(brew --prefix coreutils)/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
@@ -33,15 +33,15 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
     fi
 fi
 
-if which brew >/dev/null; then
+if [[ ! `which brew` =~ ".+not found"  ]]; then
     fpath=(/usr/local/share/zsh/site-functions ~/.zsh $fpath)
 fi
 
-if which emacs >/dev/null; then
+if [[ ! `which emacs` =~ ".+not found " ]]; then
     export EDITOR="emacsclient"
 fi
 
-if which lv >/dev/null; then
+if [[ ! `which lv` =~ ".+not found" ]]; then
     export PAGER='lv -c'
 fi
 
