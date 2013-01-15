@@ -1,5 +1,6 @@
 alias sudo='sudo '
 alias grep='grep --color'
+alias lv='lv -c'
 alias g='git'
 alias gs='git status'
 alias gl='git log'
@@ -11,6 +12,8 @@ alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
 
 alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
+
+PATH='/usr/local/bin:$PATH'
 
 if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
