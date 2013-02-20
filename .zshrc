@@ -2,22 +2,26 @@ alias sudo='sudo '
 alias grep='grep --color'
 alias lv='lv -c'
 alias g='git'
-alias gs='git status'
+alias gs='git status -sb'
 alias gl='git log'
 alias gg='git grep'
+alias gd='git diff'
+alias ga='git add'
 alias be='bundle exec'
 alias r='bundle exec rails'
 alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
+alias ks='kinjirou startonce'
+alias kf='kinjirou finish'
 
-alias rakeds='rake db:migrate:reset && rake db:setup && rake db:setup RAILS_ENV=test'
+alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup'
 
-PATH='/usr/local/bin:$PATH'
+PATH=/usr/local/bin:$PATH
 
 if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
-        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+#        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 #    fi
     if [[ ! `which gls` =~ ".+not found" ]]; then
         PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
@@ -53,7 +57,7 @@ if [ -f ~/.rsense ]; then
 fi
 
 if [ -d ~/.nodebrew ]; then
-    export PATH=$HOME/.nodebrew/current/bin:/usr/local/bin:$PATH
+    export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
 fi
 
 # rbenv
