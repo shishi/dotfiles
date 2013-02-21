@@ -15,7 +15,7 @@ alias bgs='bundle exec guard start'
 alias ks='kinjirou startonce'
 alias kf='kinjirou finish'
 
-alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup'
+alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && bundle exec rake db:setup RAILS_ENV=test'
 
 PATH=/usr/local/bin:$PATH
 
@@ -77,21 +77,6 @@ if [ -d ~/.phpbrew ]; then
     source ~/.phpbrew/bashrc
     # export PHPBREW_SET_PROMPT=1
 fi
-
-# # rake_completion
-# if [ -f ~/.zsh/rake_completion.zsh ]; then
-#     source ~/.zsh/rake_completion.zsh
-# fi
-
-# # auto-fu
-# if [ -f ~/.zsh/auto-fu.zsh/auto-fu.zsh ]; then
-# source ~/.zsh/auto-fu.zsh/auto-fu.zsh
-#     function zle-line-init () {
-#         auto-fu-init
-#     }
-#     zle -N zle-line-init
-#     zstyle ':completion:*' completer _oldlist _expand _complete _correct _approximate
-# fi
 
 # zsh option
 #########################################
