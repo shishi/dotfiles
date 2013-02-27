@@ -8,24 +8,30 @@
     st = status -sb
     ci = commit -v
     di = diff
-    br = branch -a
+    br = branch
     wh = whatchanged
     stat = log --stat --summary
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
     logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
-
 [core]
-    excludesfile = ~/.gitignore
+    excludesfile = /Users/snishikawa/.gitignore
     pager = lv -c
+[difftool]
+    prompt = false
 [difftool "sourcetree"]
     cmd = opendiff \"$LOCAL\" \"$REMOTE\"
     path =
 [mergetool "sourcetree"]
     cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
-trustExitCode = true
-
+    trustExitCode = true
 [github]
     user = shishi
     token = hogehoge
+[heroku]
+    account = shishi
+[push]
+    default = current
+[help]
+    autocorrect = 1
