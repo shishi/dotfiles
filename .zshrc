@@ -24,8 +24,8 @@ if [ `uname` = Darwin ]; then
 #        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 #    fi
     if [[ ! `which gls` =~ ".+not found" ]]; then
-        PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-        MANPATH="$(brew --prefix coreutils)/libexec/gnuman:$MANPATH"
+        PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+        MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
     else
         alias ll ='ls -laG'
@@ -107,6 +107,9 @@ else
 fi
 SPROMPT="%{${fg[red]}%}Maybe you want to type this command? %{${reset_color}%}> '%r' [%BY%bes %BN%bo %BA%bbort %BE%bdit] "
 RPROMPT="["%1(v|%F{green}%1v%f|)"] [%{${fg[yellow]}%}%B%T%b%{${reset_color}%}] [%{${fg[cyan]}%}%B%/%b%{${reset_color}%}]"
+
+# 右プロンプトを良い感じに消す
+setopt transient_rprompt
 
 export LSCOLORS=gxfxcxdxbxegedabagacad
 export LS_COLORS='di=36:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
