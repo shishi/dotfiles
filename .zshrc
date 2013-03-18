@@ -18,6 +18,7 @@ alias kf='kinjirou finish'
 alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && bundle exec rake db:setup RAILS_ENV=test'
 
 PATH=/usr/local/bin:$PATH
+PATH=~/bin:$PATH
 
 if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
