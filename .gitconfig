@@ -16,7 +16,7 @@
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
-    excludesfile = /Users/snishikawa/.gitignore
+    excludesfile = /Users/shishi/.gitignore
     pager = lv -c
 [push]
     default = current
@@ -29,7 +29,7 @@
     prompt = false
 [difftool "sourcetree"]
     cmd = opendiff \"$LOCAL\" \"$REMOTE\"
-    path =
+    path = 
 [mergetool "sourcetree"]
     cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
     trustExitCode = true
