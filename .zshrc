@@ -29,7 +29,7 @@ if [ `uname` = Darwin ]; then
         MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
     else
-        alias ll ='ls -laG'
+        alias ll='ls -laG'
     fi
 else
     alias ll='ls -la --color'
