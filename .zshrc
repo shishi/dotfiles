@@ -19,6 +19,9 @@ alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && 
 
 PATH=/usr/local/bin:$PATH
 PATH=~/local/bin:$PATH
+PATH=~/bin/:$PATH
+
+fpath=(~/.zsh /usr/local/share/zsh-completions $fpath)
 
 if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
@@ -42,7 +45,7 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
 fi
 
 if [[ ! `which brew` =~ ".+not found"  ]]; then
-    fpath=(/usr/local/share/zsh/site-functions ~/.zsh $fpath)
+    fpath=(/usr/local/share/zsh/site-functions $fpath)
 fi
 
 if [[ ! `which emacs` =~ ".+not found " ]]; then
