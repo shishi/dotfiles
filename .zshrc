@@ -19,7 +19,6 @@ alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && 
 
 PATH=/usr/local/bin:$PATH
 PATH=~/local/bin:$PATH
-PATH=~/bin/:$PATH
 
 fpath=(~/.zsh /usr/local/share/zsh-completions $fpath)
 
@@ -49,7 +48,7 @@ if [[ ! `which brew` =~ ".+not found"  ]]; then
 fi
 
 if [[ ! `which emacs` =~ ".+not found " ]]; then
-    export EDITOR="emacsclient"
+    export EDITOR=emacsclient
 fi
 
 if [[ ! `which lv` =~ ".+not found" ]]; then
