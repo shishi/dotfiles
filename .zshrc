@@ -48,7 +48,7 @@ if [[ ! `which brew` =~ ".+not found"  ]]; then
 fi
 
 if [[ ! `which emacs` =~ ".+not found " ]]; then
-    export EDITOR=emacsclient
+    export EDITOR="emacsclient -n --alternate-editor vim"
 fi
 
 if [[ ! `which lv` =~ ".+not found" ]]; then
