@@ -20,7 +20,7 @@ alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && 
 PATH=/usr/local/bin:$PATH
 PATH=~/local/bin:$PATH
 
-fpath=(~/.zsh /usr/local/share/zsh-completions $fpath)
+fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
 if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
@@ -43,12 +43,8 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
     fi
 fi
 
-if [[ ! `which brew` =~ ".+not found"  ]]; then
-    fpath=(/usr/local/share/zsh/site-functions $fpath)
-fi
-
 if [[ ! `which emacs` =~ ".+not found " ]]; then
-    export EDITOR="emacsclient -n --alternate-editor vim"
+    export EDITOR='emacsclient -n --alternate-editor vim'
 fi
 
 if [[ ! `which lv` =~ ".+not found" ]]; then
@@ -79,6 +75,12 @@ fi
 if [ -d ~/.phpbrew ]; then
     source ~/.phpbrew/bashrc
     # export PHPBREW_SET_PROMPT=1
+fi
+
+# direnv
+if [[ ! `which direnv` =~ ".+not found"  ]]; then
+    # eval "$(direnv hook $0)"
+    eval "$(direnv hook $SHELL)"
 fi
 
 # zsh option
