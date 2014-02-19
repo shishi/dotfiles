@@ -26,7 +26,7 @@ if [ `uname` = Darwin ]; then
 #    if which emacs >/dev/null; then
 #        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
 #    fi
-    if [[ ! `which gls` =~ ".+not found" ]]; then
+    if which gls > /dev/null; then
         PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
@@ -43,11 +43,11 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
     fi
 fi
 
-if [[ ! `which emacs` =~ ".+not found " ]]; then
+if which emacs > /dev/null; then
     export EDITOR='emacsclient -n --alternate-editor vim'
 fi
 
-if [[ ! `which lv` =~ ".+not found" ]]; then
+if which lv > /dev/null; then
     export PAGER='lv -c'
 fi
 
@@ -55,30 +55,32 @@ if [ -f ~/.rsense ]; then
     export RSENSE_HOME="$HOME/.emacs.d/rsense"
 fi
 
-if [ -d ~/.nodebrew ]; then
-    export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
-fi
-
 # rbenv
-if [ -d ~/.rbenv ]; then
+if which rbenv > /dev/null; then
     export PATH="$HOME/.rbenv/bin:$PATH"
     eval "$(rbenv init -)"
     # source ~/.rbenv/completions/rbenv.zsh
 fi
 
+# nodebrew
+if which nodebrew > /dev/null; then
+    export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
+fi
+
 # perlbrew
-if [ -d ~/perl5/perlbrew ]; then
+# if [ -d ~/perl5/perlbrew ]; then
+if which perlbrew > /dev/null; then
     source ~/perl5/perlbrew/etc/bashrc
 fi
 
 # phpbrew
-if [ -d ~/.phpbrew ]; then
+if which phpbrew > /dev/null; then
     source ~/.phpbrew/bashrc
     # export PHPBREW_SET_PROMPT=1
 fi
 
 # direnv
-if [[ ! `which direnv` =~ ".+not found"  ]]; then
+if which direnv > /dev/null; then
     # eval "$(direnv hook $0)"
     eval "$(direnv hook $SHELL)"
 fi
