@@ -23,9 +23,9 @@ PATH=~/local/bin:$PATH
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
 if [ `uname` = Darwin ]; then
-#    if which emacs >/dev/null; then
-#        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
-#    fi
+    #    if which emacs >/dev/null; then
+    #        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
+    #    fi
     if which gls > /dev/null; then
         PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
@@ -41,6 +41,13 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
     if [ ! -f ~/.zsh/_brew ]; then
         ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
     fi
+fi
+
+if [ -d ~/.zsh/zsh-notify-master ]; then
+    source ~/.zsh/zsh-notify-master/notify.plugin.zsh
+    # install from homebrew
+    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
+    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=10
 fi
 
 if which emacs > /dev/null; then
