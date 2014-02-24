@@ -12,8 +12,6 @@ alias r='bundle exec rails'
 alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
-alias ks='kinjirou startonce'
-alias kf='kinjirou finish'
 
 alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && bundle exec rake db:setup RAILS_ENV=test'
 
