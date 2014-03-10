@@ -43,7 +43,7 @@ fi
 
 if [ -d ~/.zsh/zsh-notify-master ]; then
     autoload add-zsh-hook
-    source ~/.zsh/zsh-notify-master/notify.plugin.zsh
+    source ~/.zsh/zsh-notify/notify.plugin.zsh
     # terminal-notifier install from homebrew
     export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
     export NOTIFY_COMMAND_COMPLETE_TIMEOUT=10
