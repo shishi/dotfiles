@@ -18,6 +18,8 @@ alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && 
 PATH=/usr/local/bin:$PATH
 PATH=~/local/bin:$PATH
 
+export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
+
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
 if [ `uname` = Darwin ]; then
