@@ -41,7 +41,7 @@ if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
     fi
 fi
 
-if [ -d ~/.zsh/zsh-notify-master ]; then
+if [ -d ~/.zsh/zsh-notify ]; then
     autoload add-zsh-hook
     source ~/.zsh/zsh-notify/notify.plugin.zsh
     # terminal-notifier install from homebrew
