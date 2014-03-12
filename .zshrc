@@ -13,10 +13,10 @@ alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
 
-alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:setup && bundle exec rake db:setup RAILS_ENV=test'
+alias rakeds='bundle exec rake db:migrate:reset && bundle exec rake db:migrate:reset RAILS_ENV=test && bundle exec rake db:seed'
 
 PATH=/usr/local/bin:$PATH
-PATH=~/local/bin:$PATH
+PATH=~/bin:$PATH
 
 export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 
