@@ -32,6 +32,7 @@ install findutils
 install lv
 install rsync
 install terminal-notifier
+install unrar
 
 # dev
 install jenkins
@@ -43,8 +44,6 @@ install git
 install mercurial
 install bazaar
 install subversion
-
-install unrar
 
 # cask
 cask install adobe-creative-cloud
@@ -78,6 +77,7 @@ cask install onyx
 cask install opera
 cask install parallels
 cask install path-finder
+cask install sequel-pro
 cask install silverlight
 cask install skype
 cask install sublime-text
