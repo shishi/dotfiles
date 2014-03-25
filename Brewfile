@@ -1,5 +1,7 @@
 tap homebrew/dupes
+tap homebrew/versions
 tap phinze/cask
+tap caskroom/versions
 
 update
 upgrade
@@ -60,6 +62,7 @@ cask install dropbox
 #cask install emacs
 cask install firefox
 cask install google-chrome
+cask install google-japanese-ime
 cask install google-music
 cask install google-web-designer
 cask install google-drive
@@ -76,11 +79,11 @@ cask install mplayerx
 cask install onyx
 cask install opera
 cask install parallels
-cask install path-finder
+#cask install path-finder
 cask install sequel-pro
 cask install silverlight
 cask install skype
-cask install sublime-text
+cask install sublime-text3
 cask install tag
 cask install tuneinstructor
 cask install unity3d
@@ -102,3 +105,4 @@ cask install yorufukurou
 #cask install stackroom
 
 cleanup
+cask cleanup
