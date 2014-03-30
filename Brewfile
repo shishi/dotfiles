@@ -1,6 +1,7 @@
 tap homebrew/dupes
 tap homebrew/versions
 tap phinze/cask
+tap caskroom/fonts
 tap caskroom/versions
 
 update
@@ -52,21 +53,26 @@ cask install adobe-creative-cloud
 cask install alfred
 cask install anvil
 cask install appcleaner
+cask install atmonitor
 cask install bartender
 cask install bettertouchtool
+cask install burn
 cask install caffeine
 cask install calibre
 cask install carbon-copy-cloner
+cask install ccleaner
+cask install chicken
 cask install coteditor
 cask install dropbox
 #cask install emacs
+cask install evernote
 cask install firefox
 cask install google-chrome
 cask install google-japanese-ime
-cask install google-music
 cask install google-web-designer
 cask install google-drive
 cask install gyazo
+cask install handbrake
 cask install ifunbox
 cask install iterm2
 cask install java
@@ -75,14 +81,20 @@ cask install league-of-legends
 cask install libreoffice
 cask install lightpaper
 cask install lighttable
+cask install limechat
+cask install mou
 cask install mplayerx
+cask install musicmanager
 cask install onyx
 cask install opera
 cask install parallels
-#cask install path-finder
+cask install path-finder
 cask install sequel-pro
 cask install silverlight
+cask install skitch
 cask install skype
+cask install slack
+cask install sourcetree
 cask install sublime-text3
 cask install tag
 cask install tuneinstructor
@@ -97,12 +109,11 @@ cask install yorufukurou
 
 # not found formula
 #cask install cooviewer
-#cask install dupscan(ub)
-#cask install google-input
-#cask install kinoppy
+#cask install dmm
+#cask install dupscanub
 #cask install lyrics-master
-#cask install mow
 #cask install stackroom
+#cask install blu-ray-player
 
 cleanup
 cask cleanup

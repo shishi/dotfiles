@@ -1,5 +1,5 @@
 [user]
-    email = hoge@example.com
+    email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
 [color]
     ui = auto
@@ -24,15 +24,6 @@
     autocorrect = 1
 [branch]
     autosetuprebase = always
-
-[difftool]
-    prompt = false
-[difftool "sourcetree"]
-    cmd = opendiff \"$LOCAL\" \"$REMOTE\"
-    path =
-[mergetool "sourcetree"]
-    cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
-    trustExitCode = true
 
 [github]
     user = shishi
