@@ -56,13 +56,16 @@ cask install appcleaner
 cask install atmonitor
 cask install bartender
 cask install bettertouchtool
+cask install blu-ray-player
 cask install burn
 cask install caffeine
 cask install calibre
 cask install carbon-copy-cloner
 cask install ccleaner
 cask install chicken
+cask install cooviewer
 cask install coteditor
+cask install dupscanub
 cask install dropbox
 #cask install emacs
 cask install evernote
@@ -82,6 +85,7 @@ cask install libreoffice
 cask install lightpaper
 cask install lighttable
 cask install limechat
+cask install lyrics-master
 cask install mou
 cask install mplayerx
 cask install musicmanager
@@ -96,6 +100,7 @@ cask install skype
 cask install slack
 cask install sourcetree
 cask install sublime-text3
+cask install stackroom
 cask install tag
 cask install tuneinstructor
 cask install unity3d
@@ -108,12 +113,7 @@ cask install xld
 cask install yorufukurou
 
 # not found formula
-#cask install cooviewer
 #cask install dmm
-#cask install dupscanub
-#cask install lyrics-master
-#cask install stackroom
-#cask install blu-ray-player
 
 cleanup
 cask cleanup
