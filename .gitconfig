@@ -24,6 +24,14 @@
     autocorrect = 1
 [branch]
     autosetuprebase = always
+# [merge]
+#         tool = ediff
+# [mergetool "ediff"]
+#         cmd = emacs --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
+[merge]
+  tool = ediff
+[mergetool "ediff"]
+  cmd = emacsclient -c -a \"\"  --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
 
 [github]
     user = shishi
