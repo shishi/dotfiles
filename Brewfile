@@ -91,6 +91,7 @@ cask install mplayerx
 cask install musicmanager
 cask install onyx
 cask install opera
+cask install paragon-ntfs
 cask install parallels
 cask install path-finder
 cask install sequel-pro
@@ -98,10 +99,12 @@ cask install silverlight
 cask install skitch
 cask install skype
 cask install slack
+cask install smoothmouse
 cask install sourcetree
 cask install sublime-text3
 cask install stackroom
 cask install tag
+cask install teleport
 cask install tuneinstructor
 cask install unity3d
 cask install utorrent
