@@ -94,6 +94,7 @@ cask install opera
 cask install paragon-ntfs
 cask install parallels
 cask install path-finder
+cask install plex-media-server
 cask install sequel-pro
 cask install silverlight
 cask install skitch
