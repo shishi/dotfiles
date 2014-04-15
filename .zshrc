@@ -20,6 +20,7 @@ PATH=~/bin:$PATH
 
 export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
+export RIOT_GAMES_API_KEY="e07763f8-69aa-490e-8fd3-60cc62398b90"
 
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
@@ -49,11 +50,15 @@ if [ -d ~/.zsh/zsh-notify ]; then
     source ~/.zsh/zsh-notify/notify.plugin.zsh
     # terminal-notifier install from homebrew
     export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
-    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=10
+    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
 fi
 
-if which emacs > /dev/null; then
-    export EDITOR='emacsclient -n --alternate-editor vim'
+if which ec > /dev/null; then
+   export EDITOR='ec'
+elif which emacsclient > /dev/null; then
+   export EDITOR='emacsclient -n --alternate-editor vim'
+else
+   export EDITOR='vi'
 fi
 
 if which lv > /dev/null; then
