@@ -1,5 +1,6 @@
 tap homebrew/dupes
 tap homebrew/versions
+tap homebrew/binary
 tap phinze/cask
 tap caskroom/fonts
 tap caskroom/versions
@@ -32,6 +33,7 @@ install curl
 install curl-ca-bundle
 install direnv
 install findutils
+install kindlegen
 install lv
 install rsync
 install terminal-notifier
