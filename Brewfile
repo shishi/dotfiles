@@ -1,7 +1,7 @@
 tap homebrew/dupes
 tap homebrew/versions
 tap homebrew/binary
-tap phinze/cask
+tap caskroom/cask
 tap caskroom/fonts
 tap caskroom/versions
 
@@ -30,7 +30,6 @@ install ag
 install coreutils
 install ctags
 install curl
-install curl-ca-bundle
 install direnv
 install findutils
 install kindlegen
@@ -53,6 +52,7 @@ install subversion
 # cask
 cask install adobe-creative-cloud
 cask install alfred
+cask install amazon-cloud-drive
 cask install anvil
 cask install appcleaner
 cask install atmonitor
