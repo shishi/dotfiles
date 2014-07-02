@@ -8,7 +8,7 @@ tap caskroom/versions
 update
 upgrade
 
-install brew-cask
+install caskroom/cask/brew-cask 
 
 install zsh
 install emacs --cocoa --srgb --janapese
