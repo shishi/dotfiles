@@ -13,7 +13,7 @@ alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
 
-alias rakeds='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rake db:migrate:reset && bundle exec rake db:seed_fu'
+alias rakeds='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rake db:migrate:reset && bundle exec rake db:seed'
 
 PATH=/usr/local/bin:$PATH
 PATH=~/bin:$PATH
