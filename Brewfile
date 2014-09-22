@@ -8,7 +8,7 @@ tap caskroom/versions
 update
 upgrade
 
-install caskroom/cask/brew-cask 
+install caskroom/cask/brew-cask
 
 install zsh
 install emacs --cocoa --srgb --janapese
@@ -67,6 +67,7 @@ cask install ccleaner
 cask install chicken
 cask install cooviewer
 cask install coteditor
+#cask install dmm
 cask install dupscanub
 cask install dropbox
 #cask install emacs
@@ -88,6 +89,7 @@ cask install lightpaper
 cask install lighttable
 cask install limechat
 cask install lyrics-master
+cask install macdown
 cask install mou
 cask install mplayerx
 cask install musicmanager
@@ -117,9 +119,6 @@ cask install vlc
 cask install xee
 cask install xld
 cask install yorufukurou
-
-# not found formula
-#cask install dmm
 
 cleanup
 cask cleanup
