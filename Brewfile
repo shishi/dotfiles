@@ -109,6 +109,7 @@ cask install sourcetree
 cask install sublime-text3
 cask install stackroom
 cask install tag
+cask install teamspeak-client
 cask install teleport
 cask install tuneinstructor
 cask install unity3d
