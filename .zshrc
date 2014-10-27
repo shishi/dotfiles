@@ -12,8 +12,9 @@ alias r='bundle exec rails'
 alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
-
 alias rakeds='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rake db:migrate:reset && bundle exec rake db:seed'
+
+alias cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
 PATH=/usr/local/bin:$PATH
 PATH=~/bin:$PATH
