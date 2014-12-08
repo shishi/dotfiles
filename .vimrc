@@ -3,7 +3,7 @@
 "*****************************************************************************
 
 if has('vim_starting')
-  "set nocompatible               " Be iMproved
+  set nocompatible               " Be iMproved
 
   " Required:
   set runtimepath+=~/.vim/bundle/neobundle.vim/
@@ -29,10 +29,8 @@ NeoBundleFetch 'Shougo/neobundle.vim'
 "" NeoBundle install packages
 "*****************************************************************************
 NeoBundle 'scrooloose/nerdtree'
-"NeoBundle 'tpope/vim-commentary'
 NeoBundle 'scrooloose/nerdcommenter'
 NeoBundle 'tpope/vim-fugitive'
-NeoBundle 'kien/ctrlp.vim'
 NeoBundle 'bling/vim-airline'
 NeoBundle 'airblade/vim-gitgutter'
 NeoBundle 'sheerun/vim-polyglot'
@@ -49,9 +47,8 @@ NeoBundle 'Shougo/vimproc.vim', {
 NeoBundle 'Shougo/vimshell.vim'
 
 "" Snippets
-"NeoBundle 'SirVer/ultisnips'
 NeoBundle 'Shougo/neosnippet.vim'
-NeoBundle 'honza/vim-snippets'
+NeoBundle 'Shougo/neosnippet-snippets'
 
 "" Color
 NeoBundle 'tomasr/molokai'
@@ -63,11 +60,11 @@ NeoBundle 'arnaud-lb/vim-php-namespace'
 
 
 "" Ruby Bundle
-NeoBundle "tpope/vim-rails"
-NeoBundle "tpope/vim-rake"
-NeoBundle "tpope/vim-projectionist"
-NeoBundle "thoughtbot/vim-rspec"
-NeoBundle "majutsushi/tagbar"
+NeoBundle 'tpope/vim-rails'
+NeoBundle 'tpope/vim-rake'
+NeoBundle 'tpope/vim-projectionist'
+NeoBundle 'thoughtbot/vim-rspec'
+NeoBundle 'majutsushi/tagbar'
 
 
 "" HTML Bundle
@@ -78,9 +75,22 @@ NeoBundle 'tpope/vim-haml'
 
 
 "" Javascript Bundle
-NeoBundle "scrooloose/syntastic"
+NeoBundle 'scrooloose/syntastic'
 
+"" Unite
+NeoBundle 'Shougo/unite.vim'
+NeoBundle 'Shougo/neomru.vim'
+let g:unite_enable_start_insert=1
+let g:unite_source_history_yank_enable =1
+let g:unite_source_file_mru_limit = 200
+nnoremap <silent> ,uy :<C-u>Unite history/yank<CR>
+nnoremap <silent> ,ub :<C-u>Unite buffer<CR>
+nnoremap <silent> ,uf :<C-u>UniteWithBufferDir -buffer-name=files file<CR>
+nnoremap <silent> ,ur :<C-u>Unite -buffer-name=register register<CR>
+nnoremap <silent> ,uu :<C-u>Unite file_mru buffer<CR>
 
+nnoremap <silent> ,e  :<C-u>Unite file_rec/async:!<CR>
+nnoremap <silent> ,o  :<C-u>Unite file<CR>
 
 call neobundle#end()
 
@@ -140,7 +150,7 @@ set shell=/bin/sh
 set clipboard=unnamed,unnamedplus
 set mouse=a
 set shellslash
-set iminsert=2
+set iminsert=0
 
 "" command line
 set wildmenu wildmode=list:longest,full
@@ -159,19 +169,19 @@ set number
 
 let no_buffers_menu=1
 highlight BadWhitespace ctermbg=red guibg=red
-colorscheme molokai
+colorscheme desert
 
 set mousemodel=popup
 set t_Co=256
 set nocursorline
 set guioptions=egmrti
-set gfn=Monospace\ 8
+"set guifont=Monospace\ 8
 
 if has("gui_running")
   if has("gui_mac") || has("gui_macvim")
     set guifont=Menlo:h12
     set transparency=7
-  endif
+     endif
 else
   let g:CSApprox_loaded = 1
 
@@ -287,6 +297,9 @@ if has("gui_running")
   autocmd BufWritePre * :call TrimWhiteSpace()
 endif
 
+"" remove trailing space
+autocmd BufWritePre * :%s/\s\+$//e
+
 set autoread
 
 "*****************************************************************************
@@ -307,35 +320,12 @@ noremap <Leader>gd :Gvdiff<CR>
 noremap <Leader>gr :Gremove<CR>
 
 "" Tabs
-nnoremap <Tab> gt
-nnoremap <S-Tab> gT
-nnoremap <silent> <S-t> :tabnew<CR>
+"nnoremap <Tab> gt
+"nnoremap <S-Tab> gT
+"nnoremap <silent> <S-t> :tabnew<CR>
 
 "" Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
-
-"" Opens an edit command with the path of the currently edited file filled in
-noremap <Leader>e :e <C-R>=expand("%:p:h") . "/" <CR>
-
-"" Opens a tab edit command with the path of the currently edited file filled
-noremap <Leader>te :tabe <C-R>=expand("%:p:h") . "/" <CR>
-
-"" ctrlp.vim
-set wildmode=list:longest,list:full
-set wildignore+=*.o,*.obj,.git,*.rbc,*.pyc,__pycache__
-let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn|tox)$'
-let g:ctrlp_user_command = "find %s -type f | grep -Ev '"+ g:ctrlp_custom_ignore +"'"
-let g:ctrlp_use_caching = 0
-cnoremap <C-P> <C-R>=expand("%:p:h") . "/" <CR>
-noremap <leader>b :CtrlPBuffer<CR>
-let g:ctrlp_map = ',e'
-let g:ctrlp_open_new_file = 'r'
-
-" snippets
-let g:UltiSnipsExpandTrigger="<tab>"
-let g:UltiSnipsJumpForwardTrigger="<tab>"
-let g:UltiSnipsJumpBackwardTrigger="<c-b>"
-let g:UltiSnipsEditSplit="vertical"
 
 " syntastic
 let g:syntastic_always_populate_loc_list=1
@@ -370,7 +360,7 @@ noremap <leader>x :bn<CR>
 noremap <leader>w :bn<CR>
 
 "" Close buffer
-noremap <leader>c :bd<CR>
+noremap <leader>b :bd<CR>
 
 "" Clean search (highlight)
 nnoremap <silent> <leader><space> :noh<cr>
@@ -380,10 +370,15 @@ vmap < <gv
 vmap > >gv
 
 "" Open current line on GitHub
-noremap ,o :!echo `git url`/blob/`git rev-parse --abbrev-ref HEAD`/%\#L<C-R>=line('.')<CR> \| xargs open<CR><CR>
+"noremap ,og :!echo `git url`/blob/`git rev-parse --abbrev-ref HEAD`/%\#L<C-R>=line('.')<CR> \| xargs open<CR><CR>
+
 "" Custom configs
 
+"" Opens an edit command with the path of the currently edited file filled in
+"noremap <Leader>e :e <C-R>=expand("%:p:h") . "/" <CR>
 
+"" Opens a tab edit command with the path of the currently edited file filled
+"noremap <Leader>te :tabe <C-R>=expand("%:p:h") . "/" <CR>
 
 let g:rubycomplete_buffer_loading = 1
 let g:rubycomplete_classes_in_global = 1
@@ -417,3 +412,7 @@ let g:javascript_enable_domhtmlcss = 1
 if filereadable(expand("~/.vimrc.local"))
   source ~/.vimrc.local
 endif
+
+"nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
+"nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
+"nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>

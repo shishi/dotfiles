@@ -115,6 +115,7 @@ cask install tuneinstructor
 cask install unity3d
 cask install utorrent
 cask install vagrant
+cask install macvim-kaoriya
 cask install virtualbox
 cask install vlc
 cask install xee
