@@ -1,10 +1,10 @@
 colorscheme desert
 
-" default windows size
+"" default windows size
 set lines=80
 set columns=240
 
-" remember window size and posion
+"" remember window size and posion
 let g:save_window_file = expand('~/.vimwinpos')
 augroup SaveWindow
   autocmd!

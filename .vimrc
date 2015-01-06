@@ -3,8 +3,6 @@
 "*****************************************************************************
 
 if has('vim_starting')
-  set nocompatible               " Be iMproved
-
   " Required:
   set runtimepath+=~/.vim/bundle/neobundle.vim/
 endif
@@ -45,6 +43,7 @@ NeoBundle 'Shougo/vimproc.vim', {
       \    },
       \ }
 NeoBundle 'Shougo/vimshell.vim'
+NeoBundle 'tpope/vim-surround'
 
 "" Snippets
 NeoBundle 'Shougo/neosnippet.vim'
@@ -53,11 +52,8 @@ NeoBundle 'Shougo/neosnippet-snippets'
 "" Color
 NeoBundle 'tomasr/molokai'
 
-"" Custom bundles
-
 "" PHP Bundle
 NeoBundle 'arnaud-lb/vim-php-namespace'
-
 
 "" Ruby Bundle
 NeoBundle 'tpope/vim-rails'
@@ -66,13 +62,11 @@ NeoBundle 'tpope/vim-projectionist'
 NeoBundle 'thoughtbot/vim-rspec'
 NeoBundle 'majutsushi/tagbar'
 
-
 "" HTML Bundle
 NeoBundle 'amirh/HTML-AutoCloseTag'
 NeoBundle 'hail2u/vim-css3-syntax'
 NeoBundle 'gorodinskiy/vim-coloresque'
 NeoBundle 'tpope/vim-haml'
-
 
 "" Javascript Bundle
 NeoBundle 'scrooloose/syntastic'
@@ -80,17 +74,6 @@ NeoBundle 'scrooloose/syntastic'
 "" Unite
 NeoBundle 'Shougo/unite.vim'
 NeoBundle 'Shougo/neomru.vim'
-let g:unite_enable_start_insert=1
-let g:unite_source_history_yank_enable =1
-let g:unite_source_file_mru_limit = 200
-nnoremap <silent> ,uy :<C-u>Unite history/yank<CR>
-nnoremap <silent> ,ub :<C-u>Unite buffer<CR>
-nnoremap <silent> ,uf :<C-u>UniteWithBufferDir -buffer-name=files file<CR>
-nnoremap <silent> ,ur :<C-u>Unite -buffer-name=register register<CR>
-nnoremap <silent> ,uu :<C-u>Unite file_mru buffer<CR>
-
-nnoremap <silent> ,e  :<C-u>Unite file_rec/async:!<CR>
-nnoremap <silent> ,o  :<C-u>Unite file<CR>
 
 call neobundle#end()
 
@@ -108,11 +91,17 @@ NeoBundleCheck
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=iso-2022-jp,euc-jp,sjis,utf-8
+set fileformats=unix,dos,mac
+"set bomb
+set ttyfast
+set binary
 
 "" Fix backspace indent
 set backspace=indent,eol,start
 
 "" Tabs. May be overriten by autocmd rules
+set autoindent
+set smartindent
 set tabstop=4
 set softtabstop=0
 set shiftwidth=4
@@ -132,29 +121,26 @@ set smartcase
 set wrapscan
 set gdefault
 
-"" Encoding
-set bomb
-set ttyfast
-set binary
-
 "" Directories for swp files
-set nobackup
-set noswapfile
-
-set fileformats=unix,dos,mac
-set backspace=indent,eol,start
-set showcmd
-set shell=/bin/sh
+"set nobackup
+"set noswapfile
+"set noundofile
+set directory=~/.vim/tmp
+set backupdir=~/.vim/tmp
+set undodir=~/.vim/tmp
 
 "" integration
 set clipboard=unnamed,unnamedplus
 set mouse=a
+set ttymouse=xterm2
+set shell=/bin/bash
 set shellslash
 set iminsert=0
 
 "" command line
+set showcmd
 set wildmenu wildmode=list:longest,full
-set history=10000
+set history=5000
 
 "" beep
 set visualbell t_vb=
@@ -258,6 +244,20 @@ let g:vimshell_user_prompt = 'fnamemodify(getcwd(), ":~")'
 let g:vimshell_prompt =  '$ '
 nnoremap <silent> <leader>sh :VimShellCreate<CR>
 
+" unite
+let g:unite_enable_start_insert=1
+let g:unite_source_history_yank_enable =1
+let g:unite_source_file_mru_limit = 200
+let g:unite_source_rec_min_cache_files = 3000
+nnoremap <silent> <leader>uy :<C-u>Unite history/yank<CR>
+nnoremap <silent> <leader>uub :<C-u>Unite buffer<CR>
+nnoremap <silent> <leader>uf :<C-u>UniteWithBufferDir -buffer-name=files file<CR>
+nnoremap <silent> <leader>ur :<C-u>Unite -buffer-name=register register<CR>
+nnoremap <silent> <leader>uu :<C-u>Unite file_mru buffer<CR>
+
+nnoremap <silent> <leader>e  :<C-u>Unite buffer file_mru file_rec/async:!<CR>
+nnoremap <silent> <leader>o  :<C-u>Unite file<CR>
+
 "*****************************************************************************
 "" Functions
 "*****************************************************************************
@@ -305,6 +305,25 @@ set autoread
 "*****************************************************************************
 "" Mappings
 "*****************************************************************************
+"" move for insert mode
+inoremap <C-j> <Down>
+inoremap <C-k> <Up>
+inoremap <C-h> <Left>
+inoremap <C-l> <Right>
+
+"" move window
+nnoremap <C-j> <c-w>j
+nnoremap <C-k> <c-w>k
+nnoremap <C-h> <c-w>h
+nnoremap <C-l> <c-w>l
+
+"" auto complete bracket
+inoremap { {}<LEFT>
+inoremap [ []<LEFT>
+inoremap ( ()<LEFT>
+inoremap " ""<LEFT>
+inoremap ' ''<LEFT>
+
 "" Split
 noremap <Leader>h :<C-u>split<CR>
 noremap <Leader>v :<C-u>vsplit<CR>
@@ -326,6 +345,8 @@ noremap <Leader>gr :Gremove<CR>
 
 "" Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
+
+"**********************************************************************
 
 " syntastic
 let g:syntastic_always_populate_loc_list=1
@@ -416,3 +437,5 @@ endif
 "nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
 "nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
 "nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
+
+nnoremap <silent> <leader>c :<C-u>NERDComNestedComment<CR>
