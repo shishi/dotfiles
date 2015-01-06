@@ -69,9 +69,9 @@ else
    export EDITOR='vi'
 fi
 
-if which lv > /dev/null; then
-    export PAGER='lv -c'
-fi
+# if which lv > /dev/null; then
+#     export PAGER='lv -c'
+# fi
 
 if [ -f ~/.rsense ]; then
     export RSENSE_HOME="$HOME/.emacs.d/rsense"
