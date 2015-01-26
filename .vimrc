@@ -29,8 +29,10 @@ NeoBundleFetch 'Shougo/neobundle.vim'
 NeoBundle 'scrooloose/nerdtree'
 NeoBundle 'scrooloose/nerdcommenter'
 NeoBundle 'tpope/vim-fugitive'
-NeoBundle 'bling/vim-airline'
+NeoBundle 'idanarye/vim-merginal'
+NeoBundle 'gregsexton/gitv'
 NeoBundle 'airblade/vim-gitgutter'
+NeoBundle 'bling/vim-airline'
 NeoBundle 'sheerun/vim-polyglot'
 NeoBundle 'vim-scripts/grep.vim'
 NeoBundle 'vim-scripts/CSApprox'
@@ -235,6 +237,9 @@ set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.pyc,*.db,*.sqlite
 nnoremap <silent> <F2> :NERDTreeFind<CR>
 noremap <F3> :NERDTreeToggle<CR>
 
+"" NERDNestedComment
+nnoremap <silent> ,c :<C-u>NERDComNestedComment<CR>
+
 " grep.vim
 nnoremap <silent> <leader>f :Rgrep<CR>
 let Grep_Default_Options = '-IR'
@@ -249,14 +254,30 @@ let g:unite_enable_start_insert=1
 let g:unite_source_history_yank_enable =1
 let g:unite_source_file_mru_limit = 200
 let g:unite_source_rec_min_cache_files = 3000
-nnoremap <silent> <leader>uy :<C-u>Unite history/yank<CR>
-nnoremap <silent> <leader>uub :<C-u>Unite buffer<CR>
+nnoremap <silent> <leader>uh :<C-u>Unite history/yank<CR>
+nnoremap <silent> <leader>ub :<C-u>Unite buffer<CR>
 nnoremap <silent> <leader>uf :<C-u>UniteWithBufferDir -buffer-name=files file<CR>
 nnoremap <silent> <leader>ur :<C-u>Unite -buffer-name=register register<CR>
-nnoremap <silent> <leader>uu :<C-u>Unite file_mru buffer<CR>
+nnoremap <silent> <leader>uu :<C-u>Unite buffer file_mru<CR>
 
-nnoremap <silent> <leader>e  :<C-u>Unite buffer file_mru file_rec/async:!<CR>
-nnoremap <silent> <leader>o  :<C-u>Unite file<CR>
+nnoremap <silent> ,e  :<C-u>Unite buffer file_mru file_rec/async:!<CR>
+nnoremap <silent> ,o  :<C-u>Unite file<CR>
+
+" fugitive
+noremap <Leader>ga :Gwrite<CR>
+noremap <Leader>gc :Gcommit -v<CR>
+noremap <Leader>gs :Gstatus<CR>
+noremap <Leader>gbl :Gblame<CR>
+noremap <Leader>gd :Gvdiff<CR>
+noremap <Leader>gr :Gremove<CR>
+
+" Merginal
+noremap <Leader>gbr :Merginal<CR>
+
+" Gitv
+noremap <Leader>gl :Gitv<CR>
+noremap <Leader>glp :Gitv!<CR>
+
 
 "*****************************************************************************
 "" Functions
@@ -305,17 +326,18 @@ set autoread
 "*****************************************************************************
 "" Mappings
 "*****************************************************************************
-"" move for insert mode
-inoremap <C-j> <Down>
-inoremap <C-k> <Up>
-inoremap <C-h> <Left>
-inoremap <C-l> <Right>
+" "" move for insert mode
+" inoremap <C-j> <Down>
+" inoremap <C-k> <Up>
+" inoremap <C-h> <Left>
+" inoremap <C-l> <Right>
 
 "" move window
-nnoremap <C-j> <c-w>j
-nnoremap <C-k> <c-w>k
-nnoremap <C-h> <c-w>h
-nnoremap <C-l> <c-w>l
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-h> <C-w>h
+nnoremap <C-l> <C-w>l
+nnoremap <C-w> <C-w>w
 
 "" auto complete bracket
 inoremap { {}<LEFT>
@@ -329,14 +351,8 @@ noremap <Leader>h :<C-u>split<CR>
 noremap <Leader>v :<C-u>vsplit<CR>
 
 "" Git
-noremap <Leader>ga :!git add .<CR>
-noremap <Leader>gc :!git commit -m '<C-R>="'"<CR>
-noremap <Leader>gsh :!git push<CR>
-noremap <Leader>gll :!git pull<CR>
-noremap <Leader>gs :Gstatus<CR>
-noremap <Leader>gb :Gblame<CR>
-noremap <Leader>gd :Gvdiff<CR>
-noremap <Leader>gr :Gremove<CR>
+" noremap <Leader>gps :!git push<CR>
+" noremap <Leader>gpl :!git pull<CR>
 
 "" Tabs
 "nnoremap <Tab> gt
@@ -390,9 +406,6 @@ nnoremap <silent> <leader><space> :noh<cr>
 vmap < <gv
 vmap > >gv
 
-"" Open current line on GitHub
-"noremap ,og :!echo `git url`/blob/`git rev-parse --abbrev-ref HEAD`/%\#L<C-R>=line('.')<CR> \| xargs open<CR><CR>
-
 "" Custom configs
 
 "" Opens an edit command with the path of the currently edited file filled in
@@ -437,5 +450,3 @@ endif
 "nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
 "nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
 "nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
-
-nnoremap <silent> <leader>c :<C-u>NERDComNestedComment<CR>
