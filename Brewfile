@@ -1,126 +1,128 @@
-tap homebrew/dupes
-tap homebrew/versions
-tap homebrew/binary
-tap caskroom/cask
-tap caskroom/fonts
-tap caskroom/versions
+# brew tap homebrew/brewdler
 
-update
-upgrade
+tap 'homebrew/dupes'
+tap 'homebrew/versions'
+tap 'homebrew/binary'
+tap 'homebrew/brewdler'
+tap 'caskroom/cask'
+tap 'caskroom/fonts'
+tap 'caskroom/versions'
 
-install caskroom/cask/brew-cask
+brew 'caskroom/cask/brew-cask'
 
-install zsh
-install emacs --cocoa --srgb --janapese
-
-# rbenv
-install rbenv
-install rbenv-gem-rehash
-install ruby-build
-install openssl
-install readline
-install libyaml
-install libxml2
+brew 'zsh'
+brew 'emacs', args: ['cocoa', 'srgb', 'japanese']
 
 # lang
-install go
+## ruby
+brew 'rbenv'
+brew 'rbenv-gem-rehash'
+brew 'ruby-build'
+brew 'openssl'
+brew 'readline'
+brew 'libyaml'
+brew 'libxml2'
+## go
+brew 'go'
 
 # utils
-install ag
-install coreutils
-install ctags
-install curl
-install direnv
-install findutils
-install kindlegen
-install lv
-install rsync
-install terminal-notifier
-install unrar
+brew 'ag'
+brew 'coreutils'
+brew 'ctags'
+brew 'curl'
+brew 'direnv'
+brew 'findutils'
+brew 'kindlegen'
+brew 'lv'
+brew 'node'
+brew 'rsync'
+brew 'terminal-notifier'
+brew 'unrar'
 
 # dev
-install jenkins
-install mysql
-install phantomjs
+brew 'mysql'
+brew 'sqlite'
+brew 'redis'
+brew 'jenkins'
+brew 'phantomjs'
 
-#scm
-install git
-install mercurial
-install bazaar
-install subversion
+# scm
+brew 'git'
+brew 'mercurial'
+brew 'bazaar'
+brew 'subversion'
 
 # cask
-cask install adobe-creative-cloud
-cask install alfred
-cask install amazon-cloud-drive
-cask install anvil
-cask install appcleaner
-cask install atmonitor
-cask install bartender
-cask install bettertouchtool
-cask install blu-ray-player
-cask install burn
-cask install caffeine
-cask install calibre
-cask install carbon-copy-cloner
-cask install ccleaner
-cask install chicken
-cask install cooviewer
-cask install coteditor
-#cask install dmm
-cask install dupscanub
-cask install dropbox
-#cask install emacs
-cask install evernote
-cask install firefox
-cask install google-chrome
-cask install google-japanese-ime
-cask install google-web-designer
-cask install google-drive
-cask install gyazo
-cask install handbrake
-cask install ifunbox
-cask install iterm2
-cask install java
-cask install kobito
-cask install league-of-legends
-cask install libreoffice
-cask install lightpaper
-cask install lighttable
-cask install limechat
-cask install lyrics-master
-cask install macdown
-cask install mou
-cask install mplayerx
-cask install musicmanager
-cask install onyx
-cask install opera
-cask install paragon-ntfs
-cask install parallels
-cask install path-finder
-cask install plex-media-server
-cask install sequel-pro
-cask install silverlight
-cask install skitch
-cask install skype
-cask install slack
-cask install smoothmouse
-cask install sourcetree
-cask install sublime-text3
-cask install stackroom
-cask install tag
-cask install teamspeak-client
-cask install teleport
-cask install tuneinstructor
-cask install unity3d
-cask install utorrent
-cask install vagrant
-cask install macvim-kaoriya
-cask install virtualbox
-cask install vlc
-cask install xee
-cask install xld
-cask install yorufukurou
-
-cleanup
-cask cleanup
+cask 'adobe-creative-cloud'
+cask 'alfred'
+cask 'amazon-cloud-drive'
+cask 'anvil'
+cask 'appcleaner'
+cask 'atmonitor'
+cask 'atom'
+cask 'bartender'
+cask 'bettertouchtool'
+cask 'blu-ray-player'
+cask 'burn'
+cask 'caffeine'
+cask 'calibre'
+cask 'carbon-copy-cloner'
+cask 'ccleaner'
+cask 'chicken'
+cask 'cooviewer'
+cask 'coteditor'
+#cask 'dmm'
+cask 'dupscanub'
+cask 'dropbox'
+#cask 'emacs'
+cask 'evernote'
+cask 'firefox'
+cask 'google-chrome'
+cask 'google-drive'
+cask 'google-japanese-ime'
+cask 'google-web-designer'
+cask 'gyazo'
+cask 'handbrake'
+cask 'ifunbox'
+cask 'iterm2'
+cask 'java'
+cask 'kobito'
+cask 'league-of-legends'
+cask 'libreoffice'
+#cask 'lightpaper'
+cask 'lighttable'
+cask 'limechat'
+cask 'lyrics-master'
+cask 'macdown'
+cask 'macvim-kaoriya'
+cask 'mou'
+cask 'mplayerx'
+cask 'musicmanager'
+cask 'onyx'
+cask 'opera'
+cask 'paragon-ntfs'
+cask 'parallels'
+cask 'path-finder'
+#cask 'plex-media-server'
+cask 'sequel-pro'
+cask 'silverlight'
+cask 'skitch'
+cask 'skype'
+cask 'slack'
+cask 'smoothmouse'
+cask 'sourcetree'
+cask 'sublime-text3'
+cask 'stackroom'
+cask 'tag'
+cask 'teamspeak-client'
+cask 'teleport'
+cask 'tuneinstructor'
+cask 'unity3d'
+cask 'utorrent'
+cask 'vagrant'
+cask 'macvim-kaoriya'
+cask 'virtualbox'
+cask 'vlc'
+cask 'xee'
+cask 'xld'
+cask 'yorufukurou'
