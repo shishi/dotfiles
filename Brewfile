@@ -11,7 +11,7 @@ tap 'caskroom/versions'
 brew 'caskroom/cask/brew-cask'
 
 brew 'zsh'
-brew 'emacs', args: ['cocoa', 'srgb', 'japanese']
+brew 'emacs', args: ['cocoa', 'japanese']
 
 # lang
 ## ruby
