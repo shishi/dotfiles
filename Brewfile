@@ -123,4 +123,5 @@ cask 'virtualbox'
 cask 'vlc'
 cask 'xee'
 cask 'xld'
+cask 'xtrafinder'
 #cask 'yorufukurou'#, args: ['force']
