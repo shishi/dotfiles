@@ -53,76 +53,74 @@ brew 'bazaar'
 brew 'subversion'
 
 # cask
-cask 'adobe-creative-cloud'
+#cask 'adobe-creative-cloud'
 cask 'alfred'
-cask 'amazon-cloud-drive'
-cask 'anvil'
+cask 'amazon-cloud-drive'#, args: ['force']
+cask 'anvil'#, args: ['force']
 cask 'appcleaner'
-cask 'atmonitor'
-cask 'atom'
+cask 'atom'#, args: ['force']
 cask 'bartender'
-cask 'bettertouchtool'
+cask 'bettertouchtool'#, args: ['force']
 cask 'blu-ray-player'
 cask 'burn'
 cask 'caffeine'
 cask 'calibre'
-cask 'carbon-copy-cloner'
+cask 'carbon-copy-cloner'#, args: ['force']
 cask 'ccleaner'
 cask 'chicken'
 cask 'cooviewer'
 cask 'coteditor'
-#cask 'dmm'
+cask 'dmm'#, args: ['force']
 cask 'dupscanub'
-cask 'dropbox'
+cask 'dropbox'#, args: ['force']
 #cask 'emacs'
-cask 'evernote'
+cask 'evernote'#, args: ['force']
 cask 'firefox'
-cask 'google-chrome'
-cask 'google-drive'
-cask 'google-japanese-ime'
-cask 'google-web-designer'
+cask 'google-chrome'#, args: ['force']
+cask 'google-drive'#, args: ['force']
+cask 'google-japanese-ime'#, args: ['force']
+cask 'google-web-designer'#, args: ['force']
 cask 'gyazo'
 cask 'handbrake'
-cask 'ifunbox'
+cask 'ifunbox'#, args: ['force']
 cask 'iterm2'
 cask 'java'
 cask 'kobito'
-cask 'league-of-legends'
+cask 'league-of-legends'#, args: ['force']
 cask 'libreoffice'
-#cask 'lightpaper'
 cask 'lighttable'
 cask 'limechat'
 cask 'lyrics-master'
-cask 'macdown'
+cask 'macdown'#, args: ['force']
 cask 'macvim-kaoriya'
-cask 'mou'
+cask 'mou'#, args: ['force']
 cask 'mplayerx'
 cask 'musicmanager'
-cask 'onyx'
+cask 'onyx'#, args: ['force']
 cask 'opera'
-cask 'paragon-ntfs'
+cask 'paragon-ntfs'#, args: ['force']
 cask 'parallels'
 cask 'path-finder'
 #cask 'plex-media-server'
 cask 'sequel-pro'
-cask 'silverlight'
+#cask 'silverlight'
 cask 'skitch'
-cask 'skype'
+cask 'skype'#, args: ['force']
 cask 'slack'
-cask 'smoothmouse'
+cask 'smoothmouse'#, args: ['force']
 cask 'sourcetree'
 cask 'sublime-text3'
 cask 'stackroom'
 cask 'tag'
 cask 'teamspeak-client'
-cask 'teleport'
+cask 'teleport'#, args: ['force']
 cask 'tuneinstructor'
 cask 'unity3d'
-cask 'utorrent'
+cask 'utorrent'#, args: ['force']
 cask 'vagrant'
 cask 'macvim-kaoriya'
 cask 'virtualbox'
 cask 'vlc'
 cask 'xee'
 cask 'xld'
-cask 'yorufukurou'
+#cask 'yorufukurou'#, args: ['force']
