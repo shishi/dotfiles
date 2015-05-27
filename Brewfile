@@ -22,6 +22,7 @@ brew 'openssl'
 brew 'readline'
 brew 'libyaml'
 brew 'libxml2'
+brew 'icu4c'
 ## go
 brew 'go'
 
