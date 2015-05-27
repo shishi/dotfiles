@@ -23,6 +23,8 @@ brew 'readline'
 brew 'libyaml'
 brew 'libxml2'
 brew 'icu4c'
+brew 'imagemagick' # libtool, jpeg, libpng, freetype
+brew 'cmake'
 ## go
 brew 'go'
 
