@@ -34,6 +34,7 @@ brew 'coreutils'
 brew 'ctags'
 brew 'curl'
 brew 'direnv'
+brew 'ffmpeg'
 brew 'findutils'
 brew 'kindlegen'
 brew 'lv'
@@ -43,11 +44,14 @@ brew 'terminal-notifier'
 brew 'unrar'
 
 # dev
+brew 'graphviz'
+brew 'memcached'
 brew 'mysql'
 brew 'sqlite'
 brew 'redis'
 brew 'jenkins'
 brew 'phantomjs'
+brew 'qt'
 
 # scm
 brew 'git'
@@ -95,6 +99,7 @@ cask 'lighttable'
 cask 'limechat'
 cask 'lyrics-master'
 cask 'macdown'#, args: ['force']
+cask 'macid'
 cask 'macvim-kaoriya'
 cask 'mou'#, args: ['force']
 cask 'mplayerx'
