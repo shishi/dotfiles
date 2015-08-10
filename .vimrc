@@ -127,9 +127,9 @@ set gdefault
 "set nobackup
 "set noswapfile
 "set noundofile
-"set directory=~/.vim/tmp
-"set backupdir=~/.vim/tmp
-"set undodir=~/.vim/tmp
+set directory=/tmp
+set backupdir=/tmp
+set undodir=/tmp
 
 "" integration
 set clipboard=unnamed,unnamedplus
