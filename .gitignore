@@ -5,6 +5,7 @@
 .rspec
 .rbenv_version
 .ruby-version
+.envrc
 
 TAGS
 RINARI_TAGS
