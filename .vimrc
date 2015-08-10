@@ -127,9 +127,9 @@ set gdefault
 "set nobackup
 "set noswapfile
 "set noundofile
-set directory=~/.vim/tmp
-set backupdir=~/.vim/tmp
-set undodir=~/.vim/tmp
+"set directory=~/.vim/tmp
+"set backupdir=~/.vim/tmp
+"set undodir=~/.vim/tmp
 
 "" integration
 set clipboard=unnamed,unnamedplus
@@ -207,7 +207,7 @@ set titlestring=%F
 set statusline=%F%m%r%h%w%=(%{&ff}/%Y)\ (line\ %l\/%L,\ col\ %c)\ %{fugitive#statusline()}
 
 let g:airline_theme = 'powerlineish'
-let g:airline_enable_branch = 1
+let g:airline#extensions#branch#enabled = 1
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#left_sep = ' '
 let g:airline#extensions#tabline#left_alt_sep = '|'
@@ -374,7 +374,7 @@ let g:syntastic_auto_loc_list=1
 let g:syntastic_aggregate_errors = 1
 
 " vim-airline
-let g:airline_enable_syntastic = 1
+let g:airline#extensions#syntastic#enabled = 1
 
 "" Remove trailing whitespace on <leader>S
 nnoremap <silent> <leader>S :call TrimWhiteSpace()<cr>:let @/=''<CR>
