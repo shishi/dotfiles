@@ -1,4 +1,4 @@
-# brew tap homebrew/brewdler
+# brew tap 'Homebrew/bundle'
 
 tap 'homebrew/dupes'
 tap 'homebrew/versions'
@@ -10,59 +10,49 @@ tap 'caskroom/versions'
 
 brew 'caskroom/cask/brew-cask'
 
-brew 'zsh'
-brew 'emacs', args: ['cocoa', 'japanese']
-
-# lang
-## ruby
-brew 'rbenv'
-brew 'rbenv-gem-rehash'
-brew 'ruby-build'
-brew 'openssl'
-brew 'readline'
-brew 'libyaml'
-brew 'libxml2'
-brew 'icu4c'
-brew 'imagemagick' # libtool, jpeg, libpng, freetype
-brew 'cmake'
-## go
-brew 'go'
-
-# utils
 brew 'ag'
+brew 'bazaar'
+brew 'cmake'
 brew 'coreutils'
 brew 'ctags'
 brew 'curl'
 brew 'direnv'
+brew 'emacs', args: ['cocoa', 'japanese']
 brew 'ffmpeg'
 brew 'findutils'
-brew 'kindlegen'
-brew 'lv'
-brew 'node'
-brew 'rsync'
-brew 'terminal-notifier'
-brew 'unrar'
-
-# dev
+brew 'git'
+brew 'go'
 brew 'graphviz'
-brew 'memcached'
-brew 'mysql'
-brew 'sqlite'
-brew 'redis'
+brew 'icu4c'
+brew 'imagemagick' # libtool, jpeg, libpng, freetype
 brew 'jenkins'
+brew 'kindlegen'
+brew 'libxml2'
+brew 'libyaml'
+brew 'lv'
+brew 'memcached'
+brew 'mercurial'
+brew 'mysql'
+brew 'node'
+brew 'openssl'
 brew 'phantomjs'
 brew 'qt'
-
-# scm
-brew 'git'
-brew 'mercurial'
-brew 'bazaar'
+brew 'rbenv'
+brew 'rbenv-gem-rehash'
+brew 'readline'
+brew 'redis'
+brew 'rsync'
+brew 'ruby-build'
+brew 'sqlite'
 brew 'subversion'
+brew 'terminal-notifier'
+brew 'unrar'
+brew 'zsh'
 
 # cask
 #cask 'adobe-creative-cloud'
 cask 'alfred'
-cask 'amazon-cloud-drive'#, args: ['force']
+#cask 'amazon-cloud-drive'#, args: ['force']
 cask 'anvil'#, args: ['force']
 cask 'appcleaner'
 cask 'atom'#, args: ['force']
@@ -103,11 +93,11 @@ cask 'macid'
 cask 'macvim-kaoriya'
 cask 'mou'#, args: ['force']
 cask 'mplayerx'
-cask 'musicmanager'
+cask 'music-manager'
 cask 'onyx'#, args: ['force']
 cask 'opera'
 cask 'paragon-ntfs'#, args: ['force']
-cask 'parallels'
+cask 'parallels-desktop'
 cask 'path-finder'
 #cask 'plex-media-server'
 cask 'sequel-pro'
@@ -119,11 +109,12 @@ cask 'smoothmouse'#, args: ['force']
 cask 'sourcetree'
 cask 'sublime-text3'
 cask 'stackroom'
+cask 'stay'
 cask 'tag'
 cask 'teamspeak-client'
 cask 'teleport'#, args: ['force']
 cask 'tuneinstructor'
-cask 'unity3d'
+cask 'unity'
 cask 'utorrent'#, args: ['force']
 cask 'vagrant'
 cask 'macvim-kaoriya'
