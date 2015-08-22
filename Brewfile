@@ -83,6 +83,7 @@ cask 'ifunbox'#, args: ['force']
 cask 'iterm2'
 cask 'java'
 cask 'kobito'
+cask 'kindle'
 cask 'league-of-legends'#, args: ['force']
 cask 'libreoffice'
 cask 'lighttable'
