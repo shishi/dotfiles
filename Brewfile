@@ -1,14 +1,14 @@
-# brew tap 'Homebrew/bundle'
+# brew tap 'Homebrew/homebrew-bundle'
 
-tap 'homebrew/dupes'
-tap 'homebrew/versions'
-tap 'homebrew/binary'
-tap 'homebrew/brewdler'
-tap 'caskroom/cask'
-tap 'caskroom/fonts'
-tap 'caskroom/versions'
+tap 'Homebrew/homebrew-dupes'
+tap 'Homebrew/homebrew-versions'
+tap 'Homebrew/homebrew-binary'
+tap 'caskroom/homebrew-cask'
+tap 'caskroom/homebrew-versions'
+tap 'caskroom/homebrew-unofficial'
+tap 'caskroom/homebrew-fonts'
 
-brew 'caskroom/cask/brew-cask'
+brew 'caskroom/homebrew-cask/brew-cask'
 
 brew 'ag'
 brew 'bazaar'
