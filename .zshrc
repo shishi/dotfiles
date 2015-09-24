@@ -21,7 +21,7 @@ PATH=~/bin:$PATH
 
 export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
-export RIOT_GAMES_API_KEY="e07763f8-69aa-490e-8fd3-60cc62398b90"
+export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
