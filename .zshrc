@@ -69,43 +69,47 @@ else
    export EDITOR='vi'
 fi
 
-# if which lv > /dev/null; then
-#     export PAGER='lv -c'
-# fi
-
 if [ -f ~/.rsense ]; then
     export RSENSE_HOME="$HOME/.emacs.d/rsense"
 fi
 
-# rbenv
-if which rbenv > /dev/null; then
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init -)"
-    # source ~/.rbenv/completions/rbenv.zsh
-fi
-
-# nodebrew
-if which nodebrew > /dev/null; then
-    export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
-fi
-
-# perlbrew
-# if [ -d ~/perl5/perlbrew ]; then
-if which perlbrew > /dev/null; then
-    source ~/perl5/perlbrew/etc/bashrc
-fi
-
-# phpbrew
-if which phpbrew > /dev/null; then
-    source ~/.phpbrew/bashrc
-    # export PHPBREW_SET_PROMPT=1
-fi
+# if which lv > /dev/null; then
+#     export PAGER='lv -c'
+# fi
 
 # direnv
 if which direnv > /dev/null; then
     # eval "$(direnv hook $0)"
     eval "$(direnv hook $SHELL)"
 fi
+
+# anyenv
+export PATH="$HOME/.anyenv/bin:$PATH"
+eval "$(anyenv init -)"
+
+# # rbenv
+# if which rbenv > /dev/null; then
+#     export PATH="$HOME/.rbenv/bin:$PATH"
+#     eval "$(rbenv init -)"
+#     # source ~/.rbenv/completions/rbenv.zsh
+# fi
+
+# # nodebrew
+# if which nodebrew > /dev/null; then
+#     export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
+# fi
+
+# # perlbrew
+# # if [ -d ~/perl5/perlbrew ]; then
+# if which perlbrew > /dev/null; then
+#     source ~/perl5/perlbrew/etc/bashrc
+# fi
+
+# # phpbrew
+# if which phpbrew > /dev/null; then
+#     source ~/.phpbrew/bashrc
+#     # export PHPBREW_SET_PROMPT=1
+# fi
 
 # zsh option
 #########################################
