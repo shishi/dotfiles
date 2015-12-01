@@ -1,92 +1,4 @@
 "*****************************************************************************
-"" NeoBundle core
-"*****************************************************************************
-
-if has('vim_starting')
-  " Required:
-  set runtimepath+=~/.vim/bundle/neobundle.vim/
-endif
-
-let neobundle_readme=expand('~/.vim/bundle/neobundle.vim/README.md')
-
-if !filereadable(neobundle_readme)
-  echo "Installing NeoBundle..."
-  echo ""
-  silent !mkdir -p ~/.vim/bundle
-  silent !git clone https://github.com/Shougo/neobundle.vim ~/.vim/bundle/neobundle.vim/
-endif
-
-" Required:
-call neobundle#begin(expand('~/.vim/bundle/'))
-
-" Let NeoBundle manage NeoBundle
-" Required:
-NeoBundleFetch 'Shougo/neobundle.vim'
-
-"*****************************************************************************
-"" NeoBundle install packages
-"*****************************************************************************
-NeoBundle 'scrooloose/nerdtree'
-NeoBundle 'scrooloose/nerdcommenter'
-NeoBundle 'tpope/vim-fugitive'
-NeoBundle 'idanarye/vim-merginal'
-NeoBundle 'gregsexton/gitv'
-NeoBundle 'airblade/vim-gitgutter'
-NeoBundle 'bling/vim-airline'
-NeoBundle 'sheerun/vim-polyglot'
-NeoBundle 'vim-scripts/grep.vim'
-NeoBundle 'vim-scripts/CSApprox'
-NeoBundle 'Shougo/vimproc.vim', {
-      \ 'build' : {
-      \     'windows' : 'tools\\update-dll-mingw',
-      \     'cygwin' : 'make -f make_cygwin.mak',
-      \     'mac' : 'make -f make_mac.mak',
-      \     'unix' : 'make -f make_unix.mak',
-      \    },
-      \ }
-NeoBundle 'Shougo/vimshell.vim'
-NeoBundle 'tpope/vim-surround'
-
-"" Snippets
-NeoBundle 'Shougo/neosnippet.vim'
-NeoBundle 'Shougo/neosnippet-snippets'
-
-"" Color
-NeoBundle 'tomasr/molokai'
-
-"" PHP Bundle
-NeoBundle 'arnaud-lb/vim-php-namespace'
-
-"" Ruby Bundle
-NeoBundle 'tpope/vim-rails'
-NeoBundle 'tpope/vim-rake'
-NeoBundle 'tpope/vim-projectionist'
-NeoBundle 'thoughtbot/vim-rspec'
-NeoBundle 'majutsushi/tagbar'
-
-"" HTML Bundle
-NeoBundle 'amirh/HTML-AutoCloseTag'
-NeoBundle 'hail2u/vim-css3-syntax'
-NeoBundle 'gorodinskiy/vim-coloresque'
-NeoBundle 'tpope/vim-haml'
-
-"" Javascript Bundle
-NeoBundle 'scrooloose/syntastic'
-
-"" Unite
-NeoBundle 'Shougo/unite.vim'
-NeoBundle 'Shougo/neomru.vim'
-
-call neobundle#end()
-
-" Required:
-filetype plugin indent on
-
-" If there are uninstalled bundles found on startup,
-" this will conveniently prompt you to install them.
-NeoBundleCheck
-
-"*****************************************************************************
 "" Basic Setup
 "*****************************************************************************"
 "" Encoding
@@ -204,81 +116,6 @@ set title
 set titleold="Terminal"
 set titlestring=%F
 
-set statusline=%F%m%r%h%w%=(%{&ff}/%Y)\ (line\ %l\/%L,\ col\ %c)\ %{fugitive#statusline()}
-
-let g:airline_theme = 'powerlineish'
-let g:airline#extensions#branch#enabled = 1
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#left_sep = ' '
-let g:airline#extensions#tabline#left_alt_sep = '|'
-
-"*****************************************************************************
-"" Abbreviations
-"*****************************************************************************
-"" no one is really happy until you have this shortcuts
-cnoreabbrev W! w!
-cnoreabbrev Q! q!
-cnoreabbrev Wq wq
-cnoreabbrev Wa wa
-cnoreabbrev wQ wq
-cnoreabbrev WQ wq
-cnoreabbrev W w
-cnoreabbrev Q q
-
-"" NERDTree configuration
-let g:NERDTreeChDirMode=2
-let g:NERDTreeIgnore=['\.rbc$', '\~$', '\.pyc$', '\.db$', '\.sqlite$', '__pycache__']
-let g:NERDTreeSortOrder=['^__\.py$', '\/$', '*', '\.swp$', '\.bak$', '\~$']
-let g:NERDTreeShowBookmarks=1
-let g:nerdtree_tabs_focus_on_files=1
-let g:NERDTreeMapOpenInTabSilent = '<RightMouse>'
-let g:NERDTreeWinSize = 20
-set wildignore+=*/tmp/*,*.so,*.swp,*.zip,*.pyc,*.db,*.sqlite
-nnoremap <silent> <F2> :NERDTreeFind<CR>
-noremap <F3> :NERDTreeToggle<CR>
-
-"" NERDNestedComment
-nnoremap <silent> ,c :<C-u>NERDComNestedComment<CR>
-
-" grep.vim
-nnoremap <silent> <leader>f :Rgrep<CR>
-let Grep_Default_Options = '-IR'
-
-" vimshell
-let g:vimshell_user_prompt = 'fnamemodify(getcwd(), ":~")'
-let g:vimshell_prompt =  '$ '
-nnoremap <silent> <leader>sh :VimShellCreate<CR>
-
-" unite
-let g:unite_enable_start_insert=1
-let g:unite_source_history_yank_enable =1
-let g:unite_source_file_mru_limit = 200
-let g:unite_source_rec_min_cache_files = 3000
-nnoremap <silent> <leader>uh :<C-u>Unite history/yank<CR>
-nnoremap <silent> <leader>ub :<C-u>Unite buffer<CR>
-nnoremap <silent> <leader>uf :<C-u>UniteWithBufferDir -buffer-name=files file<CR>
-nnoremap <silent> <leader>ur :<C-u>Unite -buffer-name=register register<CR>
-nnoremap <silent> <leader>uu :<C-u>Unite buffer file_mru<CR>
-
-nnoremap <silent> ,e  :<C-u>Unite buffer file_mru file_rec/async:!<CR>
-nnoremap <silent> ,o  :<C-u>Unite file<CR>
-
-" fugitive
-noremap <Leader>ga :Gwrite<CR>
-noremap <Leader>gc :Gcommit -v<CR>
-noremap <Leader>gs :Gstatus<CR>
-noremap <Leader>gbl :Gblame<CR>
-noremap <Leader>gd :Gvdiff<CR>
-noremap <Leader>gr :Gremove<CR>
-
-" Merginal
-noremap <Leader>gbr :Merginal<CR>
-
-" Gitv
-noremap <Leader>gl :Gitv<CR>
-noremap <Leader>glp :Gitv!<CR>
-
-
 "*****************************************************************************
 "" Functions
 "*****************************************************************************
@@ -324,13 +161,26 @@ autocmd BufWritePre * :%s/\s\+$//e
 set autoread
 
 "*****************************************************************************
+"" Abbreviations
+"*****************************************************************************
+"" no one is really happy until you have this shortcuts
+cnoreabbrev W! w!
+cnoreabbrev Q! q!
+cnoreabbrev Wq wq
+cnoreabbrev Wa wa
+cnoreabbrev wQ wq
+cnoreabbrev WQ wq
+cnoreabbrev W w
+cnoreabbrev Q q
+
+"*****************************************************************************
 "" Mappings
 "*****************************************************************************
-" "" move for insert mode
-" inoremap <C-j> <Down>
-" inoremap <C-k> <Up>
-" inoremap <C-h> <Left>
-" inoremap <C-l> <Right>
+"" move for insert mode
+inoremap <C-j> <Down>
+inoremap <C-k> <Up>
+inoremap <C-h> <Left>
+inoremap <C-l> <Right>
 
 "" move window
 nnoremap <C-j> <C-w>j
@@ -350,45 +200,14 @@ inoremap ' ''<LEFT>
 noremap <Leader>h :<C-u>split<CR>
 noremap <Leader>v :<C-u>vsplit<CR>
 
-"" Git
-" noremap <Leader>gps :!git push<CR>
-" noremap <Leader>gpl :!git pull<CR>
-
-"" Tabs
-"nnoremap <Tab> gt
-"nnoremap <S-Tab> gT
-"nnoremap <silent> <S-t> :tabnew<CR>
-
 "" Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
 
-"**********************************************************************
+"" Opens an edit command with the path of the currently edited file filled in
+noremap <Leader>e :e <C-R>=expand("%:p:h") . "/" <CR>
 
-" syntastic
-let g:syntastic_always_populate_loc_list=1
-let g:syntastic_error_symbol='✗'
-let g:syntastic_warning_symbol='⚠'
-let g:syntastic_style_error_symbol = '✗'
-let g:syntastic_style_warning_symbol = '⚠'
-let g:syntastic_auto_loc_list=1
-let g:syntastic_aggregate_errors = 1
-
-" vim-airline
-let g:airline#extensions#syntastic#enabled = 1
-
-"" Remove trailing whitespace on <leader>S
-nnoremap <silent> <leader>S :call TrimWhiteSpace()<cr>:let @/=''<CR>
-
-"" Copy/Paste/Cut
-noremap YY "+y<CR>
-noremap P "+gP<CR>
-noremap XX "+x<CR>
-
-if has('macunix')
-  " pbcopy for OSX copy/paste
-  vmap <C-x> :!pbcopy<CR>
-  vmap <C-c> :w !pbcopy<CR><CR>
-endif
+"" Opens a tab edit command with the path of the currently edited file filled
+noremap <Leader>te :tabe <C-R>=expand("%:p:h") . "/" <CR>
 
 "" Buffer nav
 noremap <leader>z :bp<CR>
@@ -406,47 +225,39 @@ nnoremap <silent> <leader><space> :noh<cr>
 vmap < <gv
 vmap > >gv
 
-"" Custom configs
+"" Remove trailing whitespace on <leader>S
+nnoremap <silent> <leader>S :call TrimWhiteSpace()<cr>:let @/=''<CR>
 
-"" Opens an edit command with the path of the currently edited file filled in
-"noremap <Leader>e :e <C-R>=expand("%:p:h") . "/" <CR>
+"" Copy/Paste/Cut
+noremap YY "+y<CR>
+noremap P "+gP<CR>
+noremap XX "+x<CR>
 
-"" Opens a tab edit command with the path of the currently edited file filled
-"noremap <Leader>te :tabe <C-R>=expand("%:p:h") . "/" <CR>
+"" Open Configs
+"nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
+"nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
+"nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
 
-let g:rubycomplete_buffer_loading = 1
-let g:rubycomplete_classes_in_global = 1
-let g:rubycomplete_rails = 1
+"*****************************************************************************
+"" Tweaks
+"*****************************************************************************
 
-autocmd BufNewFile,BufRead *.rb,*.rbw,*.gemspec setlocal filetype=ruby
-autocmd Filetype ruby setlocal ts=2 sts=2 sw=2
-
-" Tagbar
-nmap <silent> <F4> :TagbarToggle<CR>
-let g:tagbar_autofocus = 1
-
-let g:tagbar_type_ruby = {
-    \ 'kinds' : [
-        \ 'm:modules',
-        \ 'c:classes',
-        \ 'd:describes',
-        \ 'C:contexts',
-        \ 'f:methods',
-        \ 'F:singleton methods'
-    \ ]
-\ }
-
-
-
-
-let g:javascript_enable_domhtmlcss = 1
-
+if has('macunix')
+  " pbcopy for OSX copy/paste
+  vmap <C-x> :!pbcopy<CR>
+  vmap <C-c> :w !pbcopy<CR><CR>
+endif
 
 "" Include user's local vim config
 if filereadable(expand("~/.vimrc.local"))
   source ~/.vimrc.local
 endif
 
-"nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
-"nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
-"nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
+"*****************************************************************************
+"" File Type Setting
+"*****************************************************************************
+
+"" ruby
+
+autocmd BufNewFile,BufRead *.rb,*.rbw,*.gemspec setlocal filetype=ruby
+autocmd Filetype ruby setlocal ts=2 sts=2 sw=2
