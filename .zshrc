@@ -65,20 +65,16 @@ if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
 fi
 
 if which ec > /dev/null; then
-   export EDITOR='ec'
+    export EDITOR='ec'
 elif which emacsclient > /dev/null; then
-   export EDITOR='emacsclient -n --alternate-editor vim'
+    export EDITOR='emacsclient -n --alternate-editor vim'
 else
-   export EDITOR='vi'
+    export EDITOR='vi'
 fi
 
-if [ -f ~/.rsense ]; then
-    export RSENSE_HOME="$HOME/.emacs.d/rsense"
+if which lv > /dev/null; then
+    export PAGER='lv -c'
 fi
-
-# if which lv > /dev/null; then
-#     export PAGER='lv -c'
-# fi
 
 # direnv
 if which direnv > /dev/null; then
@@ -89,30 +85,6 @@ fi
 # anyenv
 export PATH="$HOME/.anyenv/bin:$PATH"
 eval "$(anyenv init -)"
-
-# # rbenv
-# if which rbenv > /dev/null; then
-#     export PATH="$HOME/.rbenv/bin:$PATH"
-#     eval "$(rbenv init -)"
-#     # source ~/.rbenv/completions/rbenv.zsh
-# fi
-
-# # nodebrew
-# if which nodebrew > /dev/null; then
-#     export PATH=/usr/local/share/npm/bin:$HOME/.nodebrew/current/bin:$PATH
-# fi
-
-# # perlbrew
-# # if [ -d ~/perl5/perlbrew ]; then
-# if which perlbrew > /dev/null; then
-#     source ~/perl5/perlbrew/etc/bashrc
-# fi
-
-# # phpbrew
-# if which phpbrew > /dev/null; then
-#     source ~/.phpbrew/bashrc
-#     # export PHPBREW_SET_PROMPT=1
-# fi
 
 # zsh option
 #########################################
@@ -177,7 +149,6 @@ setopt print_eight_bit
 # サスペンド中のプロセスと同じコマンド名を実行した場合はリジューム
 setopt auto_resume
 
-
 # コマンド補正
 setopt correct
 
@@ -241,7 +212,6 @@ setopt equals
 # ファイル名で #, ~, ^ の 3 文字を正規表現として扱う
 setopt extended_glob
 
-
 # ヒストリを共有
 setopt share_history
 
@@ -259,7 +229,6 @@ setopt hist_verify
 
 # ファイル名の展開で辞書順ではなく数値的にソート
 setopt numeric_glob_sort
-
 
 # ディレクトリ名だけで cd
 setopt auto_cd

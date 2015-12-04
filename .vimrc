@@ -176,11 +176,11 @@ cnoreabbrev Q q
 "*****************************************************************************
 "" Mappings
 "*****************************************************************************
-"" move for insert mode
-inoremap <C-j> <Down>
-inoremap <C-k> <Up>
-inoremap <C-h> <Left>
-inoremap <C-l> <Right>
+" "" move for insert mode
+" inoremap <M-j> <Down>
+" inoremap <M-k> <Up>
+" inoremap <M-h> <Left>
+" inoremap <M-l> <Right>
 
 "" move window
 nnoremap <C-j> <C-w>j
