@@ -83,8 +83,10 @@ if which direnv > /dev/null; then
 fi
 
 # anyenv
-export PATH="$HOME/.anyenv/bin:$PATH"
-eval "$(anyenv init -)"
+if which anyenv > /dev/null; then
+    export PATH="$HOME/.anyenv/bin:$PATH"
+    eval "$(anyenv init -)"
+fi
 
 # zsh option
 #########################################
