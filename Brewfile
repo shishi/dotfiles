@@ -1,5 +1,6 @@
-# brew tap 'Homebrew/homebrew-bundle'
+# brew tap 'Homebrew/bundle'
 
+tap 'Homebrew/bundle'
 tap 'Homebrew/homebrew-dupes'
 tap 'Homebrew/homebrew-versions'
 tap 'Homebrew/homebrew-binary'
@@ -7,8 +8,7 @@ tap 'caskroom/homebrew-cask'
 tap 'caskroom/homebrew-versions'
 tap 'caskroom/homebrew-unofficial'
 tap 'caskroom/homebrew-fonts'
-
-brew 'caskroom/homebrew-cask/brew-cask'
+tap 'caskroom/cask'
 
 brew 'ag'
 brew 'bazaar'
@@ -35,6 +35,7 @@ brew 'mercurial'
 brew 'mysql'
 brew 'openssl'
 brew 'phantomjs'
+brew 'postgresql'
 brew 'qt'
 brew 'readline'
 brew 'redis'
@@ -43,76 +44,77 @@ brew 'sqlite'
 brew 'subversion'
 brew 'terminal-notifier'
 brew 'unrar'
+brew 'wget'
 brew 'zsh'
 
 # cask
-#cask 'adobe-creative-cloud'
 cask 'alfred'
-#cask 'amazon-cloud-drive'#, args: ['force']
-cask 'anvil'#, args: ['force']
+cask 'anvil'
 cask 'appcleaner'
-cask 'atom'#, args: ['force']
+cask 'atom'
 cask 'bartender'
-cask 'bettertouchtool'#, args: ['force']
+cask 'bettertouchtool'
+cask 'bathyscaphe'
 cask 'blu-ray-player'
 cask 'burn'
 cask 'caffeine'
 cask 'calibre'
-cask 'carbon-copy-cloner'#, args: ['force']
+cask 'carbon-copy-cloner'
 cask 'ccleaner'
 cask 'chicken'
 cask 'cooviewer'
 cask 'coteditor'
-cask 'dmm'#, args: ['force']
+cask 'dmm'
+cask 'duet'
 cask 'dupscanub'
-cask 'dropbox'#, args: ['force']
-#cask 'emacs'
-cask 'evernote'#, args: ['force']
+cask 'dropbox'
+cask 'edgeview'
+cask 'evernote'
 cask 'firefox'
-cask 'google-chrome'#, args: ['force']
-cask 'google-drive'#, args: ['force']
-cask 'google-japanese-ime'#, args: ['force']
-cask 'google-web-designer'#, args: ['force']
+cask 'gitup'
+cask 'google-chrome'
+cask 'google-drive'
+cask 'google-japanese-ime'
+cask 'google-web-designer'
 cask 'gyazo'
 cask 'handbrake'
-cask 'ifunbox'#, args: ['force']
+cask 'ifunbox'
 cask 'iterm2'
 cask 'java'
 cask 'kobito'
 cask 'kindle'
-cask 'league-of-legends'#, args: ['force']
+cask 'league-of-legends'
 cask 'libreoffice'
 cask 'lighttable'
 cask 'limechat'
 cask 'lyrics-master'
-cask 'macdown'#, args: ['force']
+cask 'macdown'
 cask 'macid'
 cask 'macvim-kaoriya'
-cask 'mou'#, args: ['force']
 cask 'mplayerx'
 cask 'music-manager'
-cask 'onyx'#, args: ['force']
+cask 'onyx'
 cask 'opera'
-cask 'paragon-ntfs'#, args: ['force']
+cask 'paragon-ntfs'
 cask 'parallels-desktop'
 cask 'path-finder'
 #cask 'plex-media-server'
 cask 'sequel-pro'
 #cask 'silverlight'
-cask 'skitch'
-cask 'skype'#, args: ['force']
+cask 'skype'
 cask 'slack'
-cask 'smoothmouse'#, args: ['force']
+cask 'smoothmouse'
 cask 'sourcetree'
+cask 'spideroakone'
 cask 'sublime-text3'
 cask 'stackroom'
 cask 'stay'
 cask 'tag'
 cask 'teamspeak-client'
-cask 'teleport'#, args: ['force']
+cask 'teleport'
 cask 'tuneinstructor'
 cask 'unity'
-cask 'utorrent'#, args: ['force']
+cask 'utorrent'
 cask 'vagrant'
 cask 'macvim-kaoriya'
 cask 'virtualbox'
@@ -120,4 +122,4 @@ cask 'vlc'
 cask 'xee'
 cask 'xld'
 cask 'xtrafinder'
-#cask 'yorufukurou'#, args: ['force']
+#cask 'yorufukurou'

@@ -19,7 +19,7 @@ alias rdmrs='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rak
 
 alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
-export PATH=~/bin:/usr/local/bin:$PATH
+export PATH=~/bin:~/.cask/bin:/usr/local/bin:$PATH
 
 export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
@@ -27,7 +27,6 @@ export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 
-export PATH="/Users/reducate/.cask/bin:$PATH"
 if [ `uname` = Darwin ]; then
     #    if which emacs >/dev/null; then
     #        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
