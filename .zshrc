@@ -82,7 +82,7 @@ if which direnv > /dev/null; then
 fi
 
 # anyenv
-if which anyenv > /dev/null; then
+if [ -d ~/.anyenv ]; then
     export PATH="$HOME/.anyenv/bin:$PATH"
     eval "$(anyenv init -)"
 fi
