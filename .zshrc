@@ -1,12 +1,14 @@
 alias sudo='sudo '
 alias grep='grep --color'
 alias lv='lv -c'
+
 alias g='git'
 alias gs='git status -sb'
 alias gl='git log'
 alias gg='git grep'
 alias gd='git diff'
 alias ga='git add'
+
 alias be='bundle exec'
 alias r='bundle exec rails'
 alias rs='bundle exec rails server'
@@ -56,19 +58,10 @@ if [ -d ~/.zsh/zsh-notify ]; then
     export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
 fi
 
-# macvim-kaoriya
-if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
-    PATH="/Applications/MacVim.app/Contents/MacOS:$PATH"
-    alias vi='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-    alias vim='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-fi
-
-if which ec > /dev/null; then
-    export EDITOR='ec'
-elif which emacsclient > /dev/null; then
+if which emacsclient > /dev/null; then
     export EDITOR='emacsclient -n --alternate-editor vim'
 else
-    export EDITOR='vi'
+    export EDITOR='vim'
 fi
 
 if which lv > /dev/null; then
@@ -85,6 +78,18 @@ fi
 if [ -d ~/.anyenv ]; then
     export PATH="$HOME/.anyenv/bin:$PATH"
     eval "$(anyenv init -)"
+fi
+
+# docker
+if which docker-machine > /dev/null; then
+    eval "$(docker-machine env dev)"
+fi
+
+# macvim-kaoriya
+if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
+    PATH="/Applications/MacVim.app/Contents/MacOS:$PATH"
+    alias vi='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+    alias vim='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
 fi
 
 # zsh option
