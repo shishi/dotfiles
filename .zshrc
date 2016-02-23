@@ -80,10 +80,10 @@ if [ -d ~/.anyenv ]; then
     eval "$(anyenv init -)"
 fi
 
-# docker
-if which docker-machine > /dev/null; then
-    eval "$(docker-machine env dev)"
-fi
+## docker
+# if which docker-machine > /dev/null; then
+#     eval "$(docker-machine env dev)"
+# fi
 
 # macvim-kaoriya
 if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
