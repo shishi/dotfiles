@@ -21,6 +21,7 @@ alias rdmrs='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rak
 alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
+export PATH=/usr/local/opt/findutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
 
 export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
