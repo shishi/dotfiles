@@ -12,6 +12,7 @@ tap 'caskroom/cask'
 
 brew 'ag'
 brew 'awscli'
+brew 'cask'
 brew 'cmake'
 brew 'coreutils'
 brew 'ctags'
