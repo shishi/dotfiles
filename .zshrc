@@ -23,7 +23,7 @@ alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | gre
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
 export PATH=/usr/local/opt/findutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
 
-export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
+#export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
 export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 
@@ -44,11 +44,11 @@ else
     alias ll='ls -la --color'
 fi
 
-if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
-    if [ ! -f ~/.zsh/_brew ]; then
-        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
-    fi
-fi
+#if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
+#    if [ ! -f ~/.zsh/_brew ]; then
+#        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
+#    fi
+#fi
 
 if [ -d ~/.zsh/zsh-notify ]; then
     autoload add-zsh-hook
@@ -80,10 +80,11 @@ if [ -d ~/.anyenv ]; then
     eval "$(anyenv init -)"
 fi
 
-# boot2docker
-if which docker-machine > /dev/null; then
-    eval "$(docker-machine env)"
-fi
+# docker
+#if which docker-machine > /dev/null; then
+#    docker-machine start default
+#    eval "$(docker-machine env default)"
+#fi
 
 # macvim-kaoriya
 if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
