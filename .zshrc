@@ -28,6 +28,7 @@ export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e185458
 export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 
 fpath=(~/.zsh /usr/local/share/zsh/site-functions $fpath)
+source /usr/local/share/zsh/site-functions/_aws #なぜかfpathだけだと読まれない
 
 if [ `uname` = Darwin ]; then
     #    if which emacs >/dev/null; then
