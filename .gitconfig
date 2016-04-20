@@ -38,3 +38,5 @@
     token = hogehoge
 [heroku]
     account = shishi
+[credential]
+	helper = osxkeychain
