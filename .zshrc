@@ -91,10 +91,10 @@ fi
 #fi
 
 # macvim-kaoriya
-if [ -f /Applications/MacVim.app/Contents/MacOS/Vim ]; then
-    PATH="/Applications/MacVim.app/Contents/MacOS:$PATH"
-    alias vi='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-    alias vim='env LANG=ja_JP.UTF-8 /Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then
+    PATH="~/Applications/MacVim.app/Contents/MacOS:$PATH"
+    alias vi='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+    alias vim='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
 fi
 
 # zsh option

@@ -105,9 +105,6 @@ set scrolloff=3
 "" Status bar
 set laststatus=2
 
-"" allow backspacing over everything in insert mode
-set backspace=indent,eol,start
-
 "" Use modeline overrides
 set modeline
 set modelines=10
@@ -234,9 +231,9 @@ noremap P "+gP<CR>
 noremap XX "+x<CR>
 
 "" Open Configs
-"nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
-"nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
-"nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
+nnoremap <Leader>erc :<C-u>tabnew ~/.vimrc<CR>
+nnoremap <Leader>rrc :<C-u>source ~/.vimrc<CR>
+nnoremap <Leader>rgrc :<C-u>source ~/.gvimrc<CR>
 
 "*****************************************************************************
 "" Tweaks
