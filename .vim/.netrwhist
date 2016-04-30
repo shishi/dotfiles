@@ -1,4 +1,0 @@
-let g:netrw_dirhistmax  =10
-let g:netrw_dirhist_cnt =2
-let g:netrw_dirhist_1='/Users/shishi/.anyenv/envs/rbenv/versions/2.2.3/lib/ruby/gems/2.2.0/gems/activesupport-4.1.14.1/lib/active_support/core_ext'
-let g:netrw_dirhist_2='/Users/shishi/.anyenv/envs/rbenv/versions/2.2.3/lib/ruby/gems/2.2.0/gems/activesupport-4.1.14.1/lib/active_support/core_ext/object'
