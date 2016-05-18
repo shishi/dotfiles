@@ -48,12 +48,6 @@ else
     alias ll='ls -la --color'
 fi
 
-#if [ -f $(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh ]; then
-#    if [ ! -f ~/.zsh/_brew ]; then
-#        ln -s "$(brew --prefix)/Library/Contributions/brew_zsh_completion.zsh" ~/.zsh/_brew
-#    fi
-#fi
-
 if [ -d ~/.zsh/zsh-notify ]; then
     autoload add-zsh-hook
     source ~/.zsh/zsh-notify/notify.plugin.zsh
@@ -83,12 +77,6 @@ if [ -d ~/.anyenv ]; then
     export PATH="$HOME/.anyenv/bin:$PATH"
     eval "$(anyenv init -)"
 fi
-
-# docker
-#if which docker-machine > /dev/null; then
-#    docker-machine start default
-#    eval "$(docker-machine env default)"
-#fi
 
 # macvim-kaoriya
 if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then

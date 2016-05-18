@@ -40,3 +40,5 @@
     account = shishi
 [credential]
 	helper = osxkeychain
+[url "https://"]
+	insteadOf = git://

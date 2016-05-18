@@ -5,6 +5,7 @@ tap 'Homebrew/homebrew-dupes'
 tap 'Homebrew/homebrew-versions'
 tap 'Homebrew/homebrew-binary'
 tap 'Homebrew/completions'
+tap 'Homebrew/services'
 tap 'caskroom/homebrew-cask'
 tap 'caskroom/homebrew-versions'
 tap 'caskroom/homebrew-fonts'
@@ -26,22 +27,22 @@ brew 'git'
 brew 'go'
 brew 'graphviz'
 brew 'icu4c'
-brew 'imagemagick' # libtool, jpeg, libpng, freetype
-brew 'jenkins'
+brew 'imagemagick'
+brew 'jenkins', restart_service: :changed
 brew 'kindlegen'
 brew 'libxml2'
 brew 'libyaml'
 brew 'lv'
-brew 'memcached'
+brew 'memcached', restart_service: :changed
 brew 'mercurial'
-brew 'mysql'
+brew 'mysql', restart_service: :changed
 brew 'openssl'
 brew 'phantomjs'
-brew 'postgresql'
+brew 'postgresql', restart_service: :changed
 brew 'qt5'
 brew 'rar'
 brew 'readline'
-brew 'redis'
+brew 'redis', restart_service: :changed
 brew 'rsync'
 brew 'sqlite'
 brew 'terraform'
@@ -76,7 +77,7 @@ cask 'edgeview'
 cask 'emacs'
 cask 'evernote'
 cask 'firefox'
-cask 'gitup'
+#cask 'gitup'
 cask 'google-chrome'
 cask 'google-drive'
 cask 'google-japanese-ime'
@@ -88,7 +89,7 @@ cask 'ifunbox'
 cask 'iterm2'
 cask 'java'
 cask 'jdownloader'
-cask 'kensington-trackball-works'
+#cask 'kensington-trackball-works'
 cask 'kindle'
 cask 'league-of-legends'
 cask 'libreoffice'
@@ -97,7 +98,7 @@ cask 'limechat'
 cask 'lyrics-master'
 cask 'macdown'
 cask 'macid'
-cask 'macvim-kaoriya'
+cask 'macvim-kaoriya' # args: --override-system-vim
 cask 'mplayerx'
 cask 'music-manager'
 cask 'onyx'
@@ -129,3 +130,56 @@ cask 'xee'
 cask 'xld'
 #cask 'xtrafinder'
 #cask 'yorufukurou'
+
+# autoconfs
+# automake
+# awscli
+# cask
+# cmakes
+# coreutils
+# ctags
+# curl
+# direnvs
+# docker-completion
+# ffmpeg
+# findutils
+# freetypes
+# gdbm
+# git
+# go
+# graphviz
+# icu4c
+# imagemagick
+# jpeg
+# kindlegen
+# lame
+# libevent
+# libpng
+# libtiff
+# libtool
+# libxml2
+# libyaml
+# lv
+# memcached
+# mercurial
+# mysql
+# openssl
+# pcre
+# phantomjs
+# pkg-config
+# postgresql
+# qt5
+# rar
+# readline
+# redis
+# rsync
+# sqlite
+# terminal-notifier
+# terraform
+# the_silver_searcher
+# v8
+# wget
+# x264
+# xvid
+# xz
+# zsh
