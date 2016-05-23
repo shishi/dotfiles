@@ -20,7 +20,7 @@ brew 'ctags'
 brew 'curl'
 brew 'direnv'
 brew 'docker-completion'
-#brew 'emacs', args: ['with-cocoa']
+brew 'emacs', args: ['with-cocoa'], restart_service: changed
 brew 'ffmpeg'
 brew 'findutils'
 brew 'git'
@@ -30,18 +30,21 @@ brew 'icu4c'
 brew 'imagemagick'
 brew 'jenkins', restart_service: :changed
 brew 'kindlegen'
-brew 'libxml2'
-brew 'libyaml'
+brew 'libffi' # ruby
+brew 'libiconv' #nokogiri
+#brew 'libxml2'
+brew 'libyaml' #ruby
 brew 'lv'
+brew 'mas'
 brew 'memcached', restart_service: :changed
 brew 'mercurial'
 brew 'mysql', restart_service: :changed
-brew 'openssl'
+brew 'openssl' # ruby
 brew 'phantomjs'
 brew 'postgresql', restart_service: :changed
 brew 'qt5'
 brew 'rar'
-brew 'readline'
+brew 'readline' # ruby
 brew 'redis', restart_service: :changed
 brew 'rsync'
 brew 'sqlite'
@@ -74,7 +77,7 @@ cask 'duet'
 cask 'dupscanub'
 cask 'dropbox'
 cask 'edgeview'
-cask 'emacs'
+#cask 'emacs'
 cask 'evernote'
 cask 'firefox'
 #cask 'gitup'
@@ -131,55 +134,9 @@ cask 'xld'
 #cask 'xtrafinder'
 #cask 'yorufukurou'
 
-# autoconfs
-# automake
-# awscli
-# cask
-# cmakes
-# coreutils
-# ctags
-# curl
-# direnvs
-# docker-completion
-# ffmpeg
-# findutils
-# freetypes
-# gdbm
-# git
-# go
-# graphviz
-# icu4c
-# imagemagick
-# jpeg
-# kindlegen
-# lame
-# libevent
-# libpng
-# libtiff
-# libtool
-# libxml2
-# libyaml
-# lv
-# memcached
-# mercurial
-# mysql
-# openssl
-# pcre
-# phantomjs
-# pkg-config
-# postgresql
-# qt5
-# rar
-# readline
-# redis
-# rsync
-# sqlite
-# terminal-notifier
-# terraform
-# the_silver_searcher
-# v8
-# wget
-# x264
-# xvid
-# xz
-# zsh
+mas 'CotEditor', id: 1024640650
+mas 'Keynote', id: 409183694
+mas 'Entropy', id: 437151949
+mas 'PopClip', id: 445189367
+mas 'Tweetbot', id: 557168941
+
