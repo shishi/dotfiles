@@ -31,8 +31,8 @@ brew 'imagemagick'
 brew 'jenkins', restart_service: :changed
 brew 'kindlegen'
 brew 'libffi' # ruby
-brew 'libiconv' #nokogiri
-#brew 'libxml2'
+brew 'libiconv' # nokogiri
+#brew 'libxml2' # nokogiri
 brew 'libyaml' #ruby
 brew 'lv'
 brew 'mas'
@@ -135,8 +135,8 @@ cask 'xld'
 #cask 'yorufukurou'
 
 mas 'CotEditor', id: 1024640650
-mas 'Keynote', id: 409183694
+mas 'Deckset', id: 847496013
 mas 'Entropy', id: 437151949
+mas 'Keynote', id: 409183694
 mas 'PopClip', id: 445189367
 mas 'Tweetbot', id: 557168941
-
