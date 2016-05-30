@@ -140,4 +140,3 @@ mas 'Entropy', id: 437151949
 mas 'Keynote', id: 409183694
 mas 'PopClip', id: 445189367
 mas 'Tweetbot', id: 557168941
-
