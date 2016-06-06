@@ -20,7 +20,6 @@ alias rdmrs='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rak
 alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
-export PATH=/usr/local/opt/findutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
 
 #export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
@@ -37,6 +36,7 @@ if [ `uname` = Darwin ]; then
     #    if which emacs >/dev/null; then
     #        #alias emacs="/usr/local/Cellar/emacs/23.4/Emacs.app/Contents/MacOS/Emacs -nw"
     #    fi
+
     if which gls > /dev/null; then
         PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
@@ -44,17 +44,22 @@ if [ `uname` = Darwin ]; then
     else
         alias ll='ls -laG'
     fi
+
+    if which gfind > /dev/null; then
+        PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+        MANPATH="/usr/local/opt/findutils/libexec/gnuman:$MANPATH"
+    fi
 else
     alias ll='ls -la --color'
 fi
 
-if [ -d ~/.zsh/zsh-notify ]; then
-    autoload add-zsh-hook
-    source ~/.zsh/zsh-notify/notify.plugin.zsh
-    # terminal-notifier install from homebrew
-    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
-    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
-fi
+#if [ -d ~/.zsh/zsh-notify ]; then
+#    autoload add-zsh-hook
+#    source ~/.zsh/zsh-notify/notify.plugin.zsh
+#    # terminal-notifier install from homebrew
+#    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
+#    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
+#fi
 
 if which emacsclient > /dev/null; then
     export EDITOR='emacsclient -n --alternate-editor vim'
