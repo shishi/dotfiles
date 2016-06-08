@@ -49,6 +49,9 @@ if [ `uname` = Darwin ]; then
         PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
         MANPATH="/usr/local/opt/findutils/libexec/gnuman:$MANPATH"
     fi
+
+    # iterm shell integration
+    test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 else
     alias ll='ls -la --color'
 fi
@@ -240,3 +243,4 @@ setopt auto_cd
 setopt auto_pushd
 # 同じディレクトリを pushd しない
 setopt pushd_ignore_dups
+
