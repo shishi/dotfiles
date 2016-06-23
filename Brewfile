@@ -53,8 +53,10 @@ brew 'terminal-notifier'
 brew 'v8'
 brew 'wget'
 brew 'zsh'
+brew 'zsh-completions'
 
 # cask
+cask 'adobe-creative-cloud'
 cask 'alfred'
 cask 'anvil'
 cask 'appcleaner'

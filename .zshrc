@@ -12,10 +12,10 @@ alias be='bundle exec'
 alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias bgs='bundle exec guard start'
-alias rdm='bundle exec rake db:migrate && RAILS_ENV=test bundle exec rake db:migrate'
-alias rdms='bundle exec rake db:migrate && RAILS_ENV=test bundle exec rake db:migrate && bundle exec rake db:seed'
-alias rdmr='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rake db:migrate:reset'
-alias rdmrs='bundle exec rake db:migrate:reset && RAILS_ENV=test bundle exec rake db:migrate:reset && bundle exec rake db:seed'
+alias rdm='bundle exec rake db:migrate'
+alias rdms='bundle exec rake db:migrate &&  bundle exec rake db:seed'
+alias rdmr='bundle exec rake db:migrate:reset'
+alias rdmrs='bundle exec rake db:migrate:reset && bundle exec rake db:seed'
 
 alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
@@ -25,7 +25,7 @@ export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
 export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
 export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 
-fpath=(~/.zsh /usr/local/share/zsh/site-functions $fpath)
+fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 if [ -f /usr/local/share/zsh/site-functions/_aws ]; then
     autoload -Uz compinit
     compinit
@@ -243,4 +243,3 @@ setopt auto_cd
 setopt auto_pushd
 # 同じディレクトリを pushd しない
 setopt pushd_ignore_dups
-
