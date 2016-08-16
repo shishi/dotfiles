@@ -93,6 +93,15 @@ if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then
     alias vim='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
 fi
 
+
+# function
+#########################################
+
+function docker_cs3_setup() {
+    ssh -NL localhost:2374:/var/run/docker.sock docker@docker-aws.cs3.recruitjobs.net -i ~/.ssh/cusweb03-develop.pem -p 443 &
+    export DOCKER_HOST="localhost:2374"
+}
+
 # zsh option
 #########################################
 export LANG=ja_JP.UTF-8
