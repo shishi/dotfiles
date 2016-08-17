@@ -24,14 +24,14 @@
     autocorrect = 1
 [branch]
     autosetuprebase = always
-# [merge]
-#         tool = ediff
-# [mergetool "ediff"]
-#         cmd = emacs --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
+
 [merge]
-  tool = ediff
+    tool = ediff
 [mergetool "ediff"]
-  cmd = emacsclient -c -a \"\"  --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
+    cmd = emacsclient -c -a \"\"  --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
+[merge "mergepbx"]
+    name = Xcode project files merger
+    driver = mergepbx %O %A %B
 
 [github]
     user = shishi
