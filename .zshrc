@@ -28,7 +28,7 @@ export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 if [ -f /usr/local/share/zsh/site-functions/_aws ]; then
     autoload -Uz compinit
-    compinit
+    compinit -u
     source /usr/local/share/zsh/site-functions/_aws #なぜかfpathだけだと読まれない
 fi
 
@@ -170,7 +170,7 @@ setopt correct
 
 # 補完機能の強化
 autoload -U compinit
-compinit
+compinit -u
 
 # 補完候補一覧でファイルの種別をマーク表示
 setopt list_types
