@@ -14,25 +14,25 @@ tap 'caskroom/cask'
 brew 'ag'
 brew 'awscli'
 brew 'cask'
-brew 'cmake'
+#brew 'cmake'
 brew 'coreutils'
 brew 'ctags'
 brew 'curl'
 brew 'direnv'
 brew 'docker-completion'
 brew 'emacs', args: ['with-cocoa'], restart_service: :changed
-brew 'ffmpeg'
+#brew 'ffmpeg'
 brew 'findutils'
 brew 'git'
 brew 'go'
 #brew 'graphviz'
 #brew 'icu4c'
-brew 'imagemagick'
+#brew 'imagemagick'
 brew 'jenkins', restart_service: :changed
 brew 'kindlegen'
 brwe 'leiningen'
 brew 'libffi' # ruby
-brew 'libiconv' # nokogiri
+#brew 'libiconv' # nokogiri
 #brew 'libxml2' # nokogiri
 brew 'libyaml' #ruby
 brew 'lv'
@@ -52,6 +52,7 @@ brew 'sqlite'
 brew 'terraform'
 brew 'terminal-notifier'
 brew 'v8'
+brew 'xz', args: ['universal']
 brew 'wget'
 brew 'zsh'
 brew 'zsh-completions'
