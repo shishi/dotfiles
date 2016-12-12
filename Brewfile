@@ -21,16 +21,14 @@ brew 'curl'
 brew 'direnv'
 brew 'docker-completion'
 brew 'emacs', args: ['with-cocoa'], restart_service: :changed
-#brew 'ffmpeg'
+brew 'ffmpeg'
 brew 'findutils'
 brew 'git'
 brew 'go'
-#brew 'graphviz'
-#brew 'icu4c'
-#brew 'imagemagick'
+brew 'imagemagick'
 brew 'jenkins', restart_service: :changed
 brew 'kindlegen'
-brwe 'leiningen'
+brew 'leiningen'
 brew 'libffi' # ruby
 #brew 'libiconv' # nokogiri
 #brew 'libxml2' # nokogiri
@@ -43,11 +41,13 @@ brew 'mysql', restart_service: :changed
 brew 'openssl' # ruby
 brew 'phantomjs'
 brew 'postgresql', restart_service: :changed
+brew 'python'
 brew 'qt5'
 brew 'rar'
 brew 'readline' # ruby
 brew 'redis', restart_service: :changed
 brew 'rsync'
+brew 'subversion'
 brew 'sqlite'
 brew 'terraform'
 brew 'terminal-notifier'
@@ -109,7 +109,7 @@ cask 'macvim-kaoriya' # args: --override-system-vim
 cask 'mplayerx'
 cask 'music-manager'
 cask 'onyx'
-cask 'opera'
+#cask 'opera'
 cask 'paragon-ntfs'
 cask 'parallels-desktop'
 cask 'path-finder'
@@ -131,7 +131,7 @@ cask 'teamspeak-client'
 cask 'teleport'
 cask 'tuneinstructor'
 cask 'unity'
-#cask 'utorrent'
+cask 'utorrent'
 cask 'vagrant'
 cask 'virtualbox'
 cask 'vlc'
