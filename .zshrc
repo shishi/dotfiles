@@ -19,12 +19,6 @@ alias rdmrs='bundle exec rake db:migrate:reset && bundle exec rake db:seed'
 
 alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
 
-export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
-
-#export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
-export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
-export RIOT_GAMES_API_KEY="59034238-2ca4-4b27-9662-87fb1bbef12a"
-
 fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functions $fpath)
 if [ -f /usr/local/share/zsh/site-functions/_aws ]; then
     autoload -Uz compinit
@@ -38,40 +32,29 @@ if [ `uname` = Darwin ]; then
     #    fi
 
     if which gls > /dev/null; then
-        PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
-        MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
         alias ll='gls -la --color'
     else
         alias ll='ls -laG'
     fi
 
-    if which gfind > /dev/null; then
-        PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
-        MANPATH="/usr/local/opt/findutils/libexec/gnuman:$MANPATH"
+    #if [ -d ~/.zsh/zsh-notify ]; then
+    #    autoload add-zsh-hook
+    #    source ~/.zsh/zsh-notify/notify.plugin.zsh
+    #    # terminal-notifier install from homebrew
+    #    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
+    #    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
+    #fi
+
+    # macvim-kaoriya
+    if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then
+        alias vi='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+        alias vim='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
     fi
 
     # iterm shell integration
     test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 else
     alias ll='ls -la --color'
-fi
-
-#if [ -d ~/.zsh/zsh-notify ]; then
-#    autoload add-zsh-hook
-#    source ~/.zsh/zsh-notify/notify.plugin.zsh
-#    # terminal-notifier install from homebrew
-#    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
-#    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
-#fi
-
-if which emacsclient > /dev/null; then
-    export EDITOR='emacsclient -n --alternate-editor vim'
-else
-    export EDITOR='vim'
-fi
-
-if which lv > /dev/null; then
-    export PAGER='lv -c'
 fi
 
 # direnv
@@ -82,25 +65,9 @@ fi
 
 # anyenv
 if [ -d ~/.anyenv ]; then
-    export PATH="$HOME/.anyenv/bin:$PATH"
+    # export PATH="$HOME/.anyenv/bin:$PATH"
     eval "$(anyenv init -)"
 fi
-
-# macvim-kaoriya
-if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then
-    PATH="~/Applications/MacVim.app/Contents/MacOS:$PATH"
-    alias vi='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-    alias vim='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-fi
-
-
-# function
-#########################################
-
-function docker_cs3_setup() {
-    ssh -NL localhost:2374:/var/run/docker.sock docker@docker-aws.cs3.recruitjobs.net -i ~/.ssh/cusweb03-develop.pem -p 443 &
-    export DOCKER_HOST="localhost:2374"
-}
 
 # zsh option
 #########################################
