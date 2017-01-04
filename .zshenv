@@ -1,7 +1,7 @@
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
 
 #export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
-export CODECLIMATE_REPO_TOKEN="81eb5c871ceafdf53bb05f2311220c146d7ffdb7d0e1854583902ed979fc8620"
+#export CODECLIMATE_REPO_TOKEN=""
 #export RIOT_GAMES_API_KEY=""
 
 if [ `uname` = Darwin ]; then

@@ -147,11 +147,13 @@ fi
 
 # display git branch
 autoload -Uz vcs_info
-zstyle ':vcs_info:git:*' check-for-changes true
-zstyle ':vcs_info:git:*' stagedstr "+"
-zstyle ':vcs_info:git:*' unstagedstr "-"
-zstyle ':vcs_info:*' formats '(%s)%c%u%b'
-zstyle ':vcs_info:*' actionformats '(%s)%c%u%b|%a'
+# zstyle ':vcs_info:git:*' check-for-changes true
+# zstyle ':vcs_info:git:*' stagedstr "+"
+# zstyle ':vcs_info:git:*' unstagedstr "-"
+# zstyle ':vcs_info:*' formats '(%s)%c%u%b'
+# zstyle ':vcs_info:*' actionformats '(%s)%c%u%b|%a'
+zstyle ':vcs_info:*' formats '(%s)%b'
+zstyle ':vcs_info:*' actionformats '(%s)%b|%a'
 
 precmd () {
     psvar=()
@@ -171,7 +173,7 @@ alias lv='lv -c'
 
 alias g='git'
 alias gs='git status -sb'
-alias gl='git log'
+alias gl='git log --graph --oneline --decorate=full'
 alias gg='git grep'
 alias gd='git diff'
 alias ga='git add'
@@ -180,7 +182,7 @@ alias be='bundle exec'
 alias rs='bundle exec rails server'
 alias rc='bundle exec rails console'
 alias rdm='bundle exec rake db:migrate'
-alias rdms='bundle exec rake db:migrate &&  bundle exec rake db:seed'
+alias rdms='bundle exec rake db:migrate && bundle exec rake db:seed'
 alias rdmr='bundle exec rake db:migrate:reset'
 alias rdmrs='bundle exec rake db:migrate:reset && bundle exec rake db:seed'
 
@@ -215,10 +217,10 @@ if [ -d ~/.zsh/zsh-notify ]; then
     source ~/.zsh/zsh-notify/notify.plugin.zsh
 fi
 
-if [ `uname` = Darwin ]; then
-    # iterm shell integration
-    test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
-fi
+# if [ `uname` = Darwin ]; then
+#     # iterm shell integration
+#     test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+# fi
 
 # direnv
 if which direnv > /dev/null; then

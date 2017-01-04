@@ -9,10 +9,9 @@
     ci = commit -v
     di = diff
     br = branch
-    wh = whatchanged
-    stat = log --stat --summary
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
-    logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+	logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+	graph = log --graph --oneline --decorate
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
@@ -24,15 +23,10 @@
     autocorrect = 1
 [branch]
     autosetuprebase = always
-
 [merge]
     tool = ediff
 [mergetool "ediff"]
     cmd = emacsclient -c -a \"\"  --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
-[merge "mergepbx"]
-    name = Xcode project files merger
-    driver = mergepbx %O %A %B
-
 [github]
     user = shishi
     token = hogehoge
