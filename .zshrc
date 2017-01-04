@@ -60,8 +60,8 @@ SAVEHIST=100000
 autoload -U history-search-end
 zle -N history-beginning-search-backward-end history-search-end
 zle -N history-beginning-search-forward-end history-search-end
-bindkey "^[p" history-beginning-search-backward-end
-bindkey "^[n" history-beginning-search-forward-end
+bindkey "^P" history-beginning-search-backward-end
+bindkey "^N" history-beginning-search-forward-end
 
 # ヒストリを共有
 setopt share_history
@@ -109,7 +109,7 @@ setopt pushd_ignore_dups
 LISTMAX=1000
 
 autoload -Uz compinit
-compinit -u
+compinit -C
 
 # 補完候補一覧でファイルの種別をマーク表示
 setopt list_types
@@ -138,8 +138,7 @@ setopt correct
 # 大文字小文字無視
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 
-if [ `whoami` = root ];
-then
+if [ `whoami` = root ];then
     PROMPT="[%{${fg[red]}%}%B%n@%m%b]%#%{${reset_color}%} "
 else
     PROMPT="[%{${fg[green]}%}%B%n@%m%b]%#%{${reset_color}%} "
@@ -231,5 +230,9 @@ fi
 # anyenv
 if [ -d ~/.anyenv ]; then
     # export PATH="$HOME/.anyenv/bin:$PATH"
-    eval "$(anyenv init -)"
+    eval "$(anyenv init - --no-rehash)"
 fi
+
+# if (which zprof > /dev/null) ;then
+#   zprof | less
+# fi

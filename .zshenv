@@ -1,3 +1,4 @@
+#zmodload zsh/zprof && zprof
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
 
 #export HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
