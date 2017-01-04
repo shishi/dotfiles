@@ -193,22 +193,11 @@ if [ `uname` = Darwin ]; then
         alias ll='ls -laG'
     fi
 
-    #if [ -d ~/.zsh/zsh-notify ]; then
-    #    autoload add-zsh-hook
-    #    source ~/.zsh/zsh-notify/notify.plugin.zsh
-    #    # terminal-notifier install from homebrew
-    #    export SYS_NOTIFIER="/usr/local/bin/terminal-notifier"
-    #    export NOTIFY_COMMAND_COMPLETE_TIMEOUT=20
-    #fi
-
     # macvim-kaoriya
     if [ -f ~/Applications/MacVim.app/Contents/MacOS/Vim ]; then
         alias vi='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
         alias vim='env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
     fi
-
-    # iterm shell integration
-    test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 else
     alias ll='ls -la --color'
 fi
@@ -220,6 +209,10 @@ fpath=(~/.zsh /usr/local/share/zsh-completions /usr/local/share/zsh/site-functio
 
 if [ -f /usr/local/share/zsh/site-functions/_aws ]; then
     source /usr/local/share/zsh/site-functions/_aws #なぜかfpathだけだと読まれない
+fi
+
+if [ -d ~/.zsh/zsh-notify ]; then
+    source ~/.zsh/zsh-notify/notify.plugin.zsh
 fi
 
 if [ `uname` = Darwin ]; then
