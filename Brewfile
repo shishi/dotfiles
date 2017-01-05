@@ -11,6 +11,7 @@ tap 'caskroom/homebrew-cask'
 tap 'caskroom/homebrew-versions'
 tap 'caskroom/homebrew-fonts'
 tap 'caskroom/cask'
+tap 'codekitchen/dinghy'
 
 brew 'ag'
 brew 'awscli'
@@ -18,8 +19,10 @@ brew 'cask'
 brew 'coreutils'
 brew 'ctags'
 brew 'curl'
+brew 'dinghy'
 brew 'direnv'
 brew 'docker-completion'
+#brew 'elasticsearch'
 brew 'emacs', args: ['with-cocoa'], restart_service: :changed
 brew 'ffmpeg'
 brew 'findutils'
@@ -148,4 +151,3 @@ mas 'Keynote', id: 409183694
 mas 'PopClip', id: 445189367
 mas 'Tweetbot', id: 557168941
 #mas 'Dash2', id: 458034879
-

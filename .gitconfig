@@ -12,6 +12,9 @@
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
 	logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
 	graph = log --graph --oneline --decorate
+	ignore = update-index --assume-unchanged
+	not-ignore = update-index --no-assume-unchanged
+	ignored = !git ls-files -v | grep "^[[:lower:]]"
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
