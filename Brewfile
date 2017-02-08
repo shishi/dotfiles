@@ -127,6 +127,7 @@ cask 'slack'
 cask 'smoothmouse'
 cask 'sourcetree'
 cask 'spideroakone'
+cask 'spotify'
 cask 'sublime-text'
 cask 'stackroom'
 cask 'stay'
@@ -144,10 +145,28 @@ cask 'xld'
 #cask 'xtrafinder'
 #cask 'yorufukurou'
 
+mas 'BetterZip', id: 415086549
 mas 'CotEditor', id: 1024640650
+#mas 'Dash2', id: 458034879
 mas 'Deckset', id: 847496013
 mas 'Entropy', id: 437151949
+mas 'Fotor Photo Editor', id: 503039729
+mas 'Gemini', id: 463541543
+mas 'Growl', id: 467939042
 mas 'Keynote', id: 409183694
+mas 'LINE', id: 539883307
+mas 'Lyritop', id: 511004460
+mas 'MenuMate', id: 518594271
+mas 'Numbers', id: 409203825
 mas 'PopClip', id: 445189367
+mas 'Proxy', id: 874920950
+mas 'Ringtones Phone', id: 583334712
+mas 'Singlemizer', id: 410263119
+mas 'The Duplicate Finder', id: 654667344
 mas 'Tweetbot', id: 557168941
-#mas 'Dash2', id: 458034879
+mas 'VOX', id: 461369673
+mas 'Xcode', id: 497799835
+#mas 'YoruFukurou', id: 428834068
+mas 'iMovie', id: 408981434
+mas 'iPhoto', id: 408981381
+mas '紀伊國屋書店Kinoppy', id: 572547904
