@@ -1,5 +1,6 @@
 # brew tap 'Homebrew/bundle'
 
+tap 'homebrew/core'
 tap 'homebrew/bundle'
 tap 'homebrew/fuse'
 tap 'homebrew/homebrew-dupes'
@@ -30,7 +31,7 @@ brew 'git'
 brew 'go'
 brew 'imagemagick'
 brew 'jenkins', restart_service: :changed
-brew 'kindlegen'
+#brew 'kindlegen'
 brew 'leiningen'
 brew 'libffi' # ruby
 #brew 'libiconv' # nokogiri
@@ -98,6 +99,7 @@ cask 'handbrake'
 cask 'hyperswitch'
 cask 'ifunbox'
 cask 'iterm2'
+cask 'jasper'
 cask 'java'
 cask 'jdownloader'
 #cask 'kensington-trackball-works'
