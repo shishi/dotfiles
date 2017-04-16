@@ -32,6 +32,6 @@ if which lv > /dev/null; then
 fi
 
 # anyenv
-if [ -d ~/.anyenv ]; then
+if [ -d $HOME/.anyenv ]; then
     export PATH="$HOME/.anyenv/bin:$PATH"
 fi

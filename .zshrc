@@ -231,9 +231,9 @@ if which direnv > /dev/null; then
 fi
 
 # anyenv
-if [ -d ~/.anyenv ]; then
+if [ -d $HOME/.anyenv ]; then
     # export PATH="$HOME/.anyenv/bin:$PATH"
-    eval "$(anyenv init - --no-rehash)"
+    eval "$($HOME/.anyenv/bin/anyenv init - --no-rehash)"
 fi
 
 # if (which zprof > /dev/null) ;then
