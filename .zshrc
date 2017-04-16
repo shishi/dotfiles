@@ -188,9 +188,9 @@ alias rdmrs='bundle exec rake db:migrate:reset && bundle exec rake db:seed'
 alias dr='docker-compose run'
 alias de='docker-compose exec'
 
-alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
-
 if [ `uname` = Darwin ]; then
+    alias brew_cask_upgrade='for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed" || brew cask install $c; done'
+
     if which gls > /dev/null; then
         alias ll='gls -la --color'
     else
