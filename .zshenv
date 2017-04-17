@@ -1,3 +1,5 @@
+#export LANG=ja_JP.UTF-8
+
 #zmodload zsh/zprof && zprof
 export PATH=~/bin:/usr/local/sbin:/usr/local/bin:$PATH
 

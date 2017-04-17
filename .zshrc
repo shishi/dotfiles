@@ -1,7 +1,5 @@
 # zsh option
 #########################################
-export LANG=ja_JP.UTF-8
-
 # colors
 autoload -Uz colors
 colors

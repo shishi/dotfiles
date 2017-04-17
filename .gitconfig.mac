@@ -36,6 +36,6 @@
 [heroku]
     account = shishi
 [credential]
-	helper = cache --timeout=31536000
+    helper = osxkeychain
 [url "https://"]
-	insteadOf = git://
+    insteadOf = git://
