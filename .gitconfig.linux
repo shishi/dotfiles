@@ -36,6 +36,6 @@
 [heroku]
     account = shishi
 [credential]
-    helper = gnomekering
+    helper = gnome-keyring
 [url "https://"]
     insteadOf = git://
