@@ -1,0 +1,1 @@
+/home/shishi/.config/fisherman/await/functions/await.fish

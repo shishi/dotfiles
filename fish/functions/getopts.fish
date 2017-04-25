@@ -1,0 +1,1 @@
+/home/shishi/.config/fisherman/getopts/getopts.fish

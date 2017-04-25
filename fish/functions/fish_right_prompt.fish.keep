@@ -1,0 +1,28 @@
+function fish_right_prompt
+
+    if git_is_repo
+        set ahead (git_ahead)
+        set branch (git_branch_name)
+
+        if git_is_detached_head
+            set detached |detached
+        end
+
+        # if git_is_tag
+        #     set tag | (tag)
+        # end
+
+        if git_is_dirty
+            set color brmagenta
+        else
+            set color green
+        end
+
+        if git_is_staged
+            set color bryellow
+        end
+    end
+
+    #echo -ns [ (set_color $color) $ahead $branch $detached (set_color normal) ]
+    echo -ns (git_porcelain)
+end
