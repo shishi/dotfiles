@@ -1,0 +1,1 @@
+/home/shishi/.config/fisherman/ghq/completions/ghq.fish

@@ -35,4 +35,4 @@ SET fish_pager_color_description:B3A06D\x1eyellow
 SET fish_pager_color_prefix:white\x1e\x2d\x2dbold\x1e\x2d\x2dunderline
 SET fish_pager_color_progress:brwhite\x1e\x2d\x2dbackground\x3dcyan
 SET fisher_active_prompt:\x1d
-SET fisher_dependency_count:docker\x2dcompose\x1ez\x1egetopts\x1elast_job_id\x1eawait\x1egetopts\x1eget\x1efzf
+SET fisher_dependency_count:docker\x2dcompose\x1ez\x1egetopts\x1elast_job_id\x1eawait\x1egetopts\x1eget\x1efzf\x1eghq

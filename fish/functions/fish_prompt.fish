@@ -55,7 +55,7 @@ end
 
 # Show directory
 function show_pwd -d "Show the current directory"
-    set -l pwd (pwd)
+    set -l pwd (prompt_pwd)
     prompt_segment normal brblue "$pad$pwd "
 end
 
