@@ -42,6 +42,12 @@ if test -d ~/.rbenv
     set -x PATH ~/.rbenv/bin $PATH
 end
 
+# ghq
+if type ghq > /dev/null 2>&1
+    set -x GHQ_ROOT ~/dev
+end
+
+
 # alias
 #########################################
 
@@ -54,6 +60,8 @@ alias gl 'git log --graph --oneline --decorate=full'
 alias gg 'git grep'
 alias gd 'git diff'
 alias ga 'git add'
+
+alias gh 'ghq list | fzf'
 
 alias be 'bundle exec'
 alias rs 'bundle exec rails server'
@@ -92,7 +100,9 @@ end
 set default_user shishi
 
 # rbenv
-status --is-interactive; and source (rbenv init -|psub)
+if test -d ~/.rbenv
+    status --is-interactive; and source (rbenv init -|psub)
+end
 
 # direnv
 if type direnv > /dev/null 2>&1
