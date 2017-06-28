@@ -4,6 +4,7 @@
 #set -x LANG ja_JP.UTF-8
 
 set -x PATH /usr/local/sbin /usr/local/bin $PATH
+set -x GOPATH ~/dev/
 
 #set -x HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #set -x CODECLIMATE_REPO_TOKEN=""
@@ -44,7 +45,7 @@ end
 
 # ghq
 if type ghq > /dev/null 2>&1
-    set -x GHQ_ROOT ~/dev
+    set -x GHQ_ROOT ~/dev/src
 end
 
 
@@ -61,7 +62,7 @@ alias gg 'git grep'
 alias gd 'git diff'
 alias ga 'git add'
 
-alias gh 'ghq list | fzf'
+alias gq 'ghq list | fzf'
 
 alias be 'bundle exec'
 alias rs 'bundle exec rails server'
