@@ -3,7 +3,7 @@
 
 #set -x LANG ja_JP.UTF-8
 
-set -x PATH /usr/local/sbin /usr/local/bin $PATH
+set -x PATH ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 set -x GOPATH ~/dev/
 
 #set -x HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
