@@ -1,1 +1,1 @@
-/home/shishi/.config/fisherman/z/functions/__z_add.fish
+/Users/shishi/.config/fisherman/z/functions/__z_add.fish

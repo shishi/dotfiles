@@ -1,1 +1,1 @@
-/home/shishi/.config/fisherman/fzf/functions/__fzf_cd.fish
+/Users/shishi/.config/fisherman/fzf/functions/__fzf_cd.fish

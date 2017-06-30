@@ -26,4 +26,4 @@ ln -s $DOTDIR/.zsh ~/.zsh
 ln -s $DOTDIR/.zshenv ~/.zshenv
 ln -s $DOTDIR/.zshrc ~/.zshrc
 
-echo "reload shell and fisher"
+echo "reload shell and install ghq, fzf, fisherman"

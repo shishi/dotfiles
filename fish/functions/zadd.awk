@@ -1,1 +1,1 @@
-/home/shishi/.config/fisherman/z/functions/zadd.awk
+/Users/shishi/.config/fisherman/z/functions/zadd.awk

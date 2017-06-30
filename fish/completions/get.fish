@@ -1,1 +1,1 @@
-/home/shishi/.config/fisherman/get/completions/get.fish
+/Users/shishi/.config/fisherman/get/completions/get.fish

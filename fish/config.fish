@@ -76,7 +76,7 @@ alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
 
 if [ (uname) = Darwin ]
-    alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
+    # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
     # ll
     if type gls > /dev/null 2>&1

@@ -1,1 +1,1 @@
-/home/shishi/.config/fisherman/fzf/functions/__fzf_uninstall.fish
+/Users/shishi/.config/fisherman/fzf/functions/__fzf_uninstall.fish
