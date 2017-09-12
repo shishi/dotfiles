@@ -1,7 +1,7 @@
 #!/bin/sh
 
-DOTDIR=~/Dropbox/dev/src/github.com/shishi/dotfiles
-EMACSDIR=~/Dropbox/dev/src/github.com/shishi/emacs
+DOTDIR=~/dev/src/github.com/shishi/dotfiles
+EMACSDIR=~/dev/src/github.com/shishi/emacs
 
 ln -s $DOTDIR/fish ~/.config/fish
 ln -s $EMACSDIR ~/.emacs.d
@@ -17,6 +17,7 @@ ln -s $DOTDIR/.gitignore ~/.gitignore
 
 ln -s $DOTDIR/.vimrc ~/.vimrc
 ln -s $DOTDIR/.gvimrc ~/.gvimrc
+ln -s $DOTDIR/.vim ~/.vim
 
 ln -s $DOTDIR/.gemrc ~/.gemrc
 ln -s $DOTDIR/.rspec ~/.rspec
