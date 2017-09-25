@@ -63,7 +63,6 @@ brew 'zsh'
 brew 'zsh-completions'
 
 # cask
-cask 'adobe-creative-cloud'
 cask 'alfred'
 cask 'anvil'
 cask 'appcleaner'
@@ -74,7 +73,7 @@ cask 'bathyscaphe'
 cask 'blu-ray-player'
 cask 'burn'
 cask 'caffeine'
-cask 'calibre'
+#cask 'calibre'
 cask 'carbon-copy-cloner'
 cask 'ccleaner'
 cask 'chicken'
@@ -84,19 +83,19 @@ cask 'cooviewer'
 cask 'docker'
 cask 'duet'
 cask 'dupscanub'
-cask 'dropbox'
+#cask 'dropbox'
 cask 'edgeview'
 #cask 'emacs'
-cask 'evernote'
+#cask 'evernote'
 cask 'firefox'
 #cask 'gitup'
 cask 'google-chrome'
 cask 'google-drive'
 cask 'google-japanese-ime'
-cask 'google-web-designer'
+#cask 'google-web-designer'
 cask 'gyazo'
 cask 'handbrake'
-cask 'hyperswitch'
+#cask 'hyperswitch'
 cask 'ifunbox'
 cask 'iterm2'
 cask 'jasper'
@@ -128,16 +127,16 @@ cask 'skype'
 cask 'slack'
 cask 'smoothmouse'
 cask 'sourcetree'
-cask 'spideroakone'
+#cask 'spideroakone'
 cask 'spotify'
-cask 'sublime-text'
+#cask 'sublime-text'
 cask 'stackroom'
 cask 'stay'
-cask 'steelseries-engine'
-cask 'teamspeak-client'
+#cask 'steelseries-engine'
+#cask 'teamspeak-client'
 cask 'teleport'
 cask 'tuneinstructor'
-cask 'unity'
+#cask 'unity'
 cask 'utorrent'
 cask 'vagrant'
 cask 'virtualbox'
@@ -147,28 +146,28 @@ cask 'xld'
 #cask 'xtrafinder'
 #cask 'yorufukurou'
 
-mas 'BetterZip', id: 415086549
+#mas 'BetterZip', id: 415086549
 mas 'CotEditor', id: 1024640650
 #mas 'Dash2', id: 458034879
 mas 'Deckset', id: 847496013
 mas 'Entropy', id: 437151949
 mas 'Fotor Photo Editor', id: 503039729
-mas 'Gemini', id: 463541543
-mas 'Growl', id: 467939042
+#mas 'Gemini', id: 463541543
+#mas 'Growl', id: 467939042
+mas 'iMovie', id: 408981434
+mas 'iPhoto', id: 408981381
 mas 'Keynote', id: 409183694
 mas 'LINE', id: 539883307
-mas 'Lyritop', id: 511004460
+#mas 'Lyritop', id: 511004460
 mas 'MenuMate', id: 518594271
 mas 'Numbers', id: 409203825
 mas 'PopClip', id: 445189367
-mas 'Proxy', id: 874920950
+#mas 'Proxy', id: 874920950
 mas 'Ringtones Phone', id: 583334712
-mas 'Singlemizer', id: 410263119
-mas 'The Duplicate Finder', id: 654667344
+#mas 'Singlemizer', id: 410263119
+#mas 'The Duplicate Finder', id: 654667344
 mas 'Tweetbot', id: 557168941
-mas 'VOX', id: 461369673
+#mas 'VOX', id: 461369673
 mas 'Xcode', id: 497799835
 #mas 'YoruFukurou', id: 428834068
-mas 'iMovie', id: 408981434
-mas 'iPhoto', id: 408981381
 mas '紀伊國屋書店Kinoppy', id: 572547904
