@@ -48,6 +48,10 @@ if type ghq > /dev/null 2>&1
     set -x GHQ_ROOT ~/dev/src
 end
 
+# cask
+if type ~/.cask/bin/cask > /dev/null 2>&1
+    set -x PATH ~/.cask/bin $PATH
+end
 
 # alias
 #########################################
