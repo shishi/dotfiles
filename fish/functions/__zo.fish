@@ -1,1 +1,0 @@
-/home/shishi/.config/fisherman/z/functions/__zo.fish

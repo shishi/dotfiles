@@ -43,6 +43,11 @@ if test -d ~/.rbenv
     set -x PATH ~/.rbenv/bin $PATH
 end
 
+# fzf
+if type ~/.fzf/bin/fzf > /dev/null 2>&1
+    set -x PATH ~/.fzf/bin $PATH
+end
+
 # ghq
 if type ghq > /dev/null 2>&1
     set -x GHQ_ROOT ~/dev/src
