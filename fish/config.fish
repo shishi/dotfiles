@@ -10,7 +10,7 @@ set -x GOPATH ~/dev/
 #set -x CODECLIMATE_REPO_TOKEN=""
 #set -x RIOT_GAMES_API_KEY=""
 
-if [ (uname) = Darwin ]
+if [ (uname) = "Darwin" ]
     if type gls > /dev/null 2>&1
         set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
         set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
@@ -41,11 +41,6 @@ end
 # rbenv
 if test -d ~/.rbenv
     set -x PATH ~/.rbenv/bin $PATH
-end
-
-# fzf
-if type ~/.fzf/bin/fzf > /dev/null 2>&1
-    set -x PATH ~/.fzf/bin $PATH
 end
 
 # ghq
@@ -84,9 +79,8 @@ alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
 
-if [ (uname) = Darwin ]
+if [ (uname) = "Darwin" ]
     # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
-
     # ll
     if type gls > /dev/null 2>&1
         alias ll 'gls -la --color'
@@ -100,6 +94,7 @@ if [ (uname) = Darwin ]
         alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
 else
+    alias open 'xdg-open'
     alias ll 'ls -la --color'
 end
 
