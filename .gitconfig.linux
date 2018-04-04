@@ -41,3 +41,6 @@
     insteadOf = git://
 [magit]
 	hideCampaign = true
+[ghq]
+    root = ~/dev/src
+
