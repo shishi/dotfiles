@@ -23,8 +23,6 @@
     autocorrect = 1
 [branch]
     autosetuprebase = always
-[merge]
-    tool = ediff
 [github]
     user = shishi
     token = hogehoge
