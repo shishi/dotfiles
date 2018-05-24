@@ -21,6 +21,7 @@
     excludesfile = ~/.gitignore
     pager = lv -c
     autocrlf = input
+    safecrlf = true
 [push]
     default = current
 [help]
