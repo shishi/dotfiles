@@ -28,8 +28,6 @@
     autosetuprebase = always
 [merge]
     tool = ediff
-[mergetool "ediff"]
-    cmd = emacsclient -c -a \"\"  --eval \"(ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\" \\\"$BASE\\\" nil \\\"$MERGED\\\")\"
 [github]
     user = shishi
     token = hogehoge
@@ -39,3 +37,8 @@
     helper = osxkeychain
 [url "https://"]
     insteadOf = git://
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true

@@ -14,12 +14,9 @@
 	graph = log --graph --oneline --decorate
 	ignore = update-index --assume-unchanged
 	not-ignore = update-index --no-assume-unchanged
-	ignored = !git ls-files -v | grep "^[[:lower:]]"
-    current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
-    push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
     excludesfile = ~/.gitignore
-    pager = lv -c
+    autocrlf = input
 [push]
     default = current
 [help]
@@ -33,14 +30,10 @@
     token = hogehoge
 [heroku]
     account = shishi
-[credential]
-    helper = gnome-keyring
 [url "https://"]
     insteadOf = git://
 [magit]
 	hideCampaign = true
-[ghq]
-    root = ~/dev/src
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
