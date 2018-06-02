@@ -38,6 +38,11 @@ if type lv > /dev/null 2>&1
     set -x PAGER 'lv -c'
 end
 
+# ruby
+if test -d ~/.gem
+    set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
+end
+
 # rbenv
 if test -d ~/.rbenv
     set -x PATH ~/.rbenv/bin $PATH

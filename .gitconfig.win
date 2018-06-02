@@ -16,7 +16,8 @@
 	not-ignore = update-index --no-assume-unchanged
 [core]
     excludesfile = ~/.gitignore
-    autocrlf = input
+    # pager = lv -c
+    autocrlf = false
     safecrlf = true
 [push]
     default = current
