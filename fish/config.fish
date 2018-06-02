@@ -83,7 +83,8 @@ alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
 
 function gq
-  cd (ghq root)/(ghq list | fzf)
+  set dir (ghq root)/(ghq list | fzf)
+  cd $dir
 end
 
 if [ (uname) = "Darwin" ]
