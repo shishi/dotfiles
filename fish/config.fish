@@ -71,8 +71,6 @@ alias gg 'git grep'
 alias gd 'git diff'
 alias ga 'git add'
 
-alias gq 'ghq list | fzf'
-
 alias be 'bundle exec'
 alias rs 'bundle exec rails server'
 alias rc 'bundle exec rails console'
@@ -83,6 +81,10 @@ alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 
 alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
+
+function gq
+  cd (ghq root)/(ghq list | fzf)
+end
 
 if [ (uname) = "Darwin" ]
     # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'

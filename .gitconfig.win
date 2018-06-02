@@ -19,6 +19,7 @@
     # pager = lv -c
     autocrlf = false
     safecrlf = true
+    filemode = false
 [push]
     default = current
 [help]

@@ -20,8 +20,9 @@
 [core]
     excludesfile = ~/.gitignore
     # pager = lv -c
-    autocrlf = false
+	autocrlf = false
     safecrlf = true
+	filemode = false
 [push]
     default = current
 [help]

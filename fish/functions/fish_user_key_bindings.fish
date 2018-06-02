@@ -1,6 +1,6 @@
 function fish_user_key_bindings
     ### ghq ###
-    bind \cg 'ghq list | fzf'
+    bind \cg 'gq'
     ### gdq ###
 end
 
