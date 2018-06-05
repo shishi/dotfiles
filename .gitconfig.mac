@@ -37,6 +37,10 @@
     helper = osxkeychain
 [url "https://"]
     insteadOf = git://
+[magit]
+	hideCampaign = true
+[ghq]
+    root = ~/dev/src
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f

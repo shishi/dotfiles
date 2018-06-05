@@ -10,10 +10,10 @@
     di = diff
     br = branch
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
-	logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
-	graph = log --graph --oneline --decorate
-	ignore = update-index --assume-unchanged
-	not-ignore = update-index --no-assume-unchanged
+    logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+    graph = log --graph --oneline --decorate
+    ignore = update-index --assume-unchanged
+    not-ignore = update-index --no-assume-unchanged
 [core]
     excludesfile = ~/.gitignore
     # pager = lv -c
@@ -34,9 +34,11 @@
 [url "https://"]
     insteadOf = git://
 [magit]
-	hideCampaign = true
+    hideCampaign = true
+[ghq]
+    root = C:/Users/shishi/working/dev/src
 [filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    process = git-lfs filter-process
+    required = true
