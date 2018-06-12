@@ -34,6 +34,10 @@ else
     set -x VISUAL vim
 end
 
+if type less > /dev/null 2>&1
+    set -x LESS '-R'
+end
+
 if type lv > /dev/null 2>&1
     set -x PAGER 'lv -c'
 end
@@ -48,13 +52,8 @@ if test -d ~/.rbenv
     set -x PATH ~/.rbenv/bin $PATH
 end
 
-# ghq
-if type ghq > /dev/null 2>&1
-    set -x GHQ_ROOT ~/dev/src
-end
-
 # cask
-if type ~/.cask/bin/cask > /dev/null 2>&1
+if test -f ~/.cask/bin/cask > /dev/null 2>&1
     set -x PATH ~/.cask/bin $PATH
 end
 
@@ -87,8 +86,12 @@ function gq
   cd $dir
 end
 
-if [ (uname) = "Darwin" ]
+if [ (uname) = "MINGW64_NT-10.0" ]
+    alias ghq 'ghq.exe'
+    alias fzf 'fzf.exe'
+else if [ (uname) = "Darwin" ]
     # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
+
     # ll
     if type gls > /dev/null 2>&1
         alias ll 'gls -la --color'
@@ -101,7 +104,7 @@ if [ (uname) = "Darwin" ]
         alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
         alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
-else
+else if [ (uname) = "Linux" ]
     alias open 'xdg-open'
     alias ll 'ls -la --color'
 end
