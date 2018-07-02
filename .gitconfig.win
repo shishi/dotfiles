@@ -1,6 +1,7 @@
 [user]
     email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
+    signingkey = 4D25EC50B0F880E0
 [color]
     ui = auto
 [alias]
@@ -44,3 +45,5 @@
     required = true
 [credential]
 	helper = manager
+[commit]
+	gpgsign = true

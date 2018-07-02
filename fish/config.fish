@@ -83,7 +83,15 @@ alias dce 'docker-compose exec'
 
 function gq
   set dir (ghq root)/(ghq list | fzf)
-  cd $dir
+    if [ (uname) = "MINGW64_NT-10.0" ]
+        cd (cygpath $dir)
+    else
+        cd $dir
+    end
+end
+
+function pacman_remove_orphan
+     pacman -Rns (pacman -Qtdq)
 end
 
 if [ (uname) = "MINGW64_NT-10.0" ]
