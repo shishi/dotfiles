@@ -21,6 +21,8 @@
     autocrlf = false
     safecrlf = true
     filemode = false
+    preloadindex = true
+    fscache = true
 [push]
     default = current
 [help]
@@ -44,6 +46,6 @@
     process = git-lfs filter-process
     required = true
 [credential]
-	helper = manager
+    helper = manager
 [commit]
-	gpgsign = true
+    gpgsign = true
