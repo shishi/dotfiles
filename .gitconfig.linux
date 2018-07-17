@@ -19,7 +19,7 @@
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
     excludesfile = ~/.gitignore
-    # pager = lv -c
+    pager = lv -c
 	autocrlf = false
     safecrlf = true
 	filemode = false
@@ -35,7 +35,7 @@
 [heroku]
     account = shishi
 [credential]
-    helper = gnome-keyring
+    helper = /usr/lib/git-core/git-credential-libsecret
 [url "https://"]
     insteadOf = git://
 [magit]
