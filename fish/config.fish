@@ -48,7 +48,7 @@ if test -d ~/.gem
 end
 
 # rbenv
-if test -d ~/.rbenv
+if test -d ~/.rbenv/bin
     set -x PATH ~/.rbenv/bin $PATH
 end
 
@@ -88,6 +88,8 @@ function gq
     else
         cd $dir
     end
+
+    exec fish
 end
 
 function pacman_remove_orphan

@@ -11,6 +11,8 @@ if [ `uname` = Darwin ]; then
     ln -s $DOTDIR/Brewfile ~/Brewfile
 elif [ `uname` = Linux ]; then
     ln -s $DOTDIR/.gitconfig.linux ~/.gitconfig
+elif [ `uname` = MINGW64_NT-10.0 ]
+    ln -s $DOTDIR/.gitconfig.win ~/.gitconfig
 fi
 
 ln -s $DOTDIR/.gitignore ~/.gitignore
