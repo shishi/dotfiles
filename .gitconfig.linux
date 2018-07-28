@@ -1,6 +1,7 @@
 [user]
     email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
+    signingkey = 4D25EC50B0F880E0
 [color]
     ui = auto
 [alias]
@@ -10,19 +11,19 @@
     di = diff
     br = branch
     logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
-	logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
-	graph = log --graph --oneline --decorate
-	ignore = update-index --assume-unchanged
-	not-ignore = update-index --no-assume-unchanged
-	ignored = !git ls-files -v | grep "^[[:lower:]]"
+    logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+    graph = log --graph --oneline --decorate
+    ignore = update-index --assume-unchanged
+    not-ignore = update-index --no-assume-unchanged
+    ignored = !git ls-files -v | grep "^[[:lower:]]"
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
 [core]
     excludesfile = ~/.gitignore
     pager = lv -c
-	autocrlf = false
+    autocrlf = false
     safecrlf = true
-	filemode = false
+    filemode = false
 [push]
     default = current
 [help]
@@ -39,11 +40,13 @@
 [url "https://"]
     insteadOf = git://
 [magit]
-	hideCampaign = true
+    hideCampaign = true
 [ghq]
     root = ~/dev/src
 [filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    process = git-lfs filter-process
+    required = true
+[commit]
+    gpgsign = true
