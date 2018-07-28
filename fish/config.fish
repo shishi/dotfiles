@@ -1,3 +1,21 @@
+# settings
+#########################################
+
+set fish_greeting
+
+# cmorrell theme
+set default_user shishi
+
+# rbenv
+if test -d ~/.rbenv
+    status --is-interactive; and source (rbenv init -|psub)
+end
+
+# direnv
+if type direnv > /dev/null 2>&1
+    eval (direnv hook fish)
+end
+
 # environment variables
 #########################################
 
@@ -42,15 +60,15 @@ if type lv > /dev/null 2>&1
     set -x PAGER 'lv -c'
 end
 
-# ruby
-if test -d ~/.gem
-    set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
-end
-
 # rbenv
 if test -d ~/.rbenv/bin
     set -x PATH ~/.rbenv/bin $PATH
 end
+
+# ruby
+# if test -d ~/.gem/
+#     set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
+# end
 
 # cask
 if test -f ~/.cask/bin/cask > /dev/null 2>&1
@@ -63,6 +81,7 @@ end
 alias grep 'grep --color'
 alias lv 'lv -c'
 
+# git
 alias g 'git'
 alias gs 'git status -sb'
 alias gl 'git log --graph --oneline --decorate=full'
@@ -70,6 +89,7 @@ alias gg 'git grep'
 alias gd 'git diff'
 alias ga 'git add'
 
+# rails
 alias be 'bundle exec'
 alias rs 'bundle exec rails server'
 alias rc 'bundle exec rails console'
@@ -78,23 +98,9 @@ alias rdms 'bundle exec rake db:migrate; and bundle exec rake db:seed'
 alias rdmr 'bundle exec rake db:migrate:reset'
 alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 
+# docker
 alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
-
-function gq
-  set dir (ghq root)/(ghq list | fzf)
-    if [ (uname) = "MINGW64_NT-10.0" ]
-        cd (cygpath $dir)
-    else
-        cd $dir
-    end
-
-    exec fish
-end
-
-function pacman_remove_orphan
-     pacman -Rns (pacman -Qtdq)
-end
 
 if [ (uname) = "MINGW64_NT-10.0" ]
     alias ghq 'ghq.exe'
@@ -119,18 +125,28 @@ else if [ (uname) = "Linux" ]
     alias ll 'ls -la --color'
 end
 
-# other setting
+# function
 #########################################
 
-# cmorrell theme
-set default_user shishi
-
-# rbenv
-if test -d ~/.rbenv
-    status --is-interactive; and source (rbenv init -|psub)
+function su
+    /bin/su --shell=/usr/bin/fish $argv
 end
 
-# direnv
-if type direnv > /dev/null 2>&1
-    eval (direnv hook fish)
+function remove_orphan
+    if type yay > /dev/null 2>&1
+        yay -Yc
+    else
+        pacman -Rns (pacman -Qtdq)
+    end
 end
+
+function gq
+  set dir (ghq root)/(ghq list | fzf)
+    if [ (uname) = "MINGW64_NT-10.0" ]
+        cd (cygpath $dir)
+    else
+        cd $dir
+    end
+    exec fish
+end
+

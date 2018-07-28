@@ -11,7 +11,7 @@ if [ `uname` = Darwin ]; then
     ln -s $DOTDIR/Brewfile ~/Brewfile
 elif [ `uname` = Linux ]; then
     ln -s $DOTDIR/.gitconfig.linux ~/.gitconfig
-elif [ `uname` = MINGW64_NT-10.0 ]
+elif [ `uname` = MINGW64_NT-10.0 ]; then
     ln -s $DOTDIR/.gitconfig.win ~/.gitconfig
 fi
 
@@ -25,8 +25,8 @@ ln -s $DOTDIR/.gemrc ~/.gemrc
 ln -s $DOTDIR/.rspec ~/.rspec
 ln -s $DOTDIR/.pryrc ~/.pryrc
 
-ln -s $DOTDIR/.zsh ~/.zsh
-ln -s $DOTDIR/.zshenv ~/.zshenv
-ln -s $DOTDIR/.zshrc ~/.zshrc
+# ln -s $DOTDIR/.zsh ~/.zsh
+# ln -s $DOTDIR/.zshenv ~/.zshenv
+# ln -s $DOTDIR/.zshrc ~/.zshrc
 
-echo "reload shell and install ghq, fzf, fisherman"
+echo "please reload shell"
