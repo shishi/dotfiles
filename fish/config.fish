@@ -24,6 +24,17 @@ end
 set -x PATH ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 set -x GOPATH ~/dev/
 
+set -x EDITOR vim
+set -x VISUAL vim
+
+# if type emacsclient > /dev/null 2>&1
+#     set -x EDITOR 'emacsclient -n --alternate-editor vim'
+#     set -x VISUAL 'emacsclient -n --alternate-editor vim'
+# else
+#     set -x EDITOR vim
+#     set -x VISUAL vim
+# end
+
 #set -x HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #set -x CODECLIMATE_REPO_TOKEN=""
 #set -x RIOT_GAMES_API_KEY=""
@@ -42,14 +53,6 @@ if [ (uname) = "Darwin" ]
     if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
         set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
     end
-end
-
-if type emacsclient > /dev/null 2>&1
-    set -x EDITOR 'emacsclient -n --alternate-editor vim'
-    set -x VISUAL 'emacsclient -n --alternate-editor vim'
-else
-    set -x EDITOR vim
-    set -x VISUAL vim
 end
 
 if type less > /dev/null 2>&1
