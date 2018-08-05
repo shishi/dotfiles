@@ -9,8 +9,8 @@
     ci = commit -v
     di = diff
     br = branch
-    logs = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --stat
-	logn = log --graph --decorate --pretty=format:\"%ad [%cn] %h> %n %Cgreen%d%Creset %s %n\" --name-status
+    logs = log --graph --decorate --stat
+    logn = log --graph --decorate --name-status
 	graph = log --graph --oneline --decorate
 	ignore = update-index --assume-unchanged
 	not-ignore = update-index --no-assume-unchanged

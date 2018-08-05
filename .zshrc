@@ -170,7 +170,7 @@ alias lv='lv -c'
 
 alias g='git'
 alias gs='git status -sb'
-alias gl='git log --graph --oneline --decorate=full'
+alias gl='git log --graph --decorate --name-status'
 alias gg='git grep'
 alias gd='git diff'
 alias ga='git add'
