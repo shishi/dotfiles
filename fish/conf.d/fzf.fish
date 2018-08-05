@@ -1,0 +1,1 @@
+/home/shishi/.config/fisherman/fzf/conf.d/fzf.fish
