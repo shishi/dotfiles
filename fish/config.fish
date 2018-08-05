@@ -145,7 +145,7 @@ end
 
 # fzf
 
-function gq
+function ghq_fzf
   set dir (ghq root)/(ghq list | fzf)
     if [ (uname) = "MINGW64_NT-10.0" ]
         cd (cygpath $dir)
@@ -153,6 +153,11 @@ function gq
         cd $dir
     end
     exec fish
+end
+
+function ghq_fzf_godoc
+  set dir (ghq root)/(ghq list | fzf)
+  godoc $dir | less
 end
 
 function fbr -d "Fuzzy-find and checkout a branch"

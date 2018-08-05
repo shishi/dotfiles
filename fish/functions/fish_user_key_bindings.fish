@@ -1,6 +1,7 @@
 function fish_user_key_bindings
     ### ghq ###
-    bind \cs 'gq'
+    bind \cs 'ghq_fzf'
+    bind \es 'ghq_fzf_godoc'
     ### ghq ###
     ### fzf ###
     if test "$FZF_LEGACY_KEYBINDINGS" -eq 1
