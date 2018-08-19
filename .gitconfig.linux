@@ -1,7 +1,7 @@
 [user]
     email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
-    signingkey = 4D25EC50B0F880E0
+	signingkey = 2E54114188E8E91F74E40FC54F1B7C84D0056CCA
 [color]
     ui = auto
 [alias]

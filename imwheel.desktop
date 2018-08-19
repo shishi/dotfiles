@@ -1,0 +1,7 @@
+#!/usr/bin/env xdg-open
+
+[Desktop Entry]
+Exec=imwheel 
+StartupNotify=false
+Type=Application
+Name[en_US]=imwheel

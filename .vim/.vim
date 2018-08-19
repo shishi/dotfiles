@@ -1,0 +1,1 @@
+/home/shishi/dev/src/github.com/shishi/dotfiles/.vim

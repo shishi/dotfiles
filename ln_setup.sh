@@ -10,7 +10,13 @@ if [ `uname` = Darwin ]; then
     ln -s $DOTDIR/.gitconfig.mac ~/.gitconfig
     ln -s $DOTDIR/Brewfile ~/Brewfile
 elif [ `uname` = Linux ]; then
+    ln -s $DOTDIR/.xprofile ~/.xprofile
+    ln -s $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
+    ln -s $DOTDIR/.imwheelrc ~/.imwheelrc
+    ln -s $DOTDIR/imwheel.desktop ~/.config/autostart/imwheel.desktop
     ln -s $DOTDIR/.gitconfig.linux ~/.gitconfig
+    ln -s $DOTDIR/fonts.conf ~/.config/fontconfig/fonts.conf
+    fc-cache -fv
 elif [ `uname` = MINGW64_NT-10.0 ]; then
     ln -s $DOTDIR/.gitconfig.win ~/.gitconfig
 fi
