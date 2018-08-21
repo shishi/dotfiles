@@ -1,0 +1,12 @@
+set ignorecase
+set smartcase
+
+set incsearch
+set hlsearch
+
+set showcmd
+set display=lastline
+
+set clipboard+=unnamed
+
+set showmatch
