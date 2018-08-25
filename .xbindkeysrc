@@ -35,12 +35,12 @@
 
 
 
-#tilt left
-"xvkbd -text '\[Left]'"
+#back button
+"xvkbd -text '\[XF86Back]'"
    b:6
 
-#tilt right
-"xvkbd -text '\[Right]'"
+#forward button
+"xvkbd -text '\[XF86Forward]'"
    b:7
 
 #tilt left
