@@ -34,8 +34,6 @@
     token = hogehoge
 [heroku]
     account = shishi
-[url "https://"]
-    insteadOf = git://
 [magit]
     hideCampaign = true
 [ghq]
@@ -49,3 +47,5 @@
     helper = manager
 [commit]
     gpgsign = true
+[url "git@github.com:"]
+	insteadOf = https://github.com/
