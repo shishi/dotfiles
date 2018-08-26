@@ -36,7 +36,7 @@
 [heroku]
     account = shishi
 [credential]
-    helper = /usr/lib/git-core/git-credential-libsecret
+	helper = /usr/lib/git-core/git-credential-libsecret
 [magit]
     hideCampaign = true
 [ghq]
@@ -49,4 +49,4 @@
 [commit]
     gpgsign = true
 [url "git@github.com:"]
-	insteadOf = https://github.com/
+    insteadOf = https://github.com/

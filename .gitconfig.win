@@ -48,4 +48,6 @@
 [commit]
     gpgsign = true
 [url "git@github.com:"]
-	insteadOf = https://github.com/
+    insteadOf = https://github.com/
+[gpg]
+	program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe
