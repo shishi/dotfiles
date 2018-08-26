@@ -37,8 +37,8 @@
     account = shishi
 [credential]
     helper = /usr/lib/git-core/git-credential-libsecret
-[url "https://"]
-    insteadOf = git://
+[url "git://"]
+    insteadOf = https://
 [magit]
     hideCampaign = true
 [ghq]
