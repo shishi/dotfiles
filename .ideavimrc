@@ -1,3 +1,5 @@
+set showmode
+
 set ignorecase
 set smartcase
 
@@ -24,5 +26,5 @@ nnoremap ]c :<C-u>action VcsShowNextChangeMarker<CR>
 nnoremap [e :<C-u>action GotoPreviousError<CR>
 nnoremap ]e :<C-u>action GotoNextError<CR>
 
-nnoremap g; :<C-u>action JumpToLastChange<CR>
-nnoremap g, :<C-u>action JumpToNextChange<CR>
+nnoremap [g :<C-u>action JumpToLastChange<CR>
+nnoremap ]g :<C-u>action JumpToNextChange<CR>
