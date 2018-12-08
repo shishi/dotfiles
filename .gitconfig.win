@@ -1,7 +1,7 @@
 [user]
     email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
-    signingkey = 4D25EC50B0F880E0
+	signingkey = 2E54114188E8E91F74E40FC54F1B7C84D0056CCA
 [color]
     ui = auto
 [alias]
@@ -23,6 +23,8 @@
     filemode = false
     preloadindex = true
     fscache = true
+    symlinks = true
+	editor = 'C:\\bin\\Microsoft VS Code\\Code.exe' --wait
 [push]
     default = current
 [help]
@@ -45,9 +47,9 @@
     required = true
 [credential]
     helper = manager
-[commit]
-    gpgsign = true
+# [commit]
+#    gpgsign = true
+# [gpg]
+#    program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe    
 [url "git@github.com:"]
     insteadOf = https://github.com/
-[gpg]
-	program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe

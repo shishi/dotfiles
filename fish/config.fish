@@ -125,7 +125,7 @@ else if [ (uname) = "Darwin" ]
         alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
 else if [ (uname) = "Linux" ]
-    alias open 'xdg-open'
+    # alias open 'xdg-open'
     alias ll 'ls -la --color'
 end
 
