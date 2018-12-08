@@ -27,6 +27,8 @@ set -x GOPATH ~/dev/
 set -x EDITOR vim
 set -x VISUAL vim
 
+set -x GPG_TTY (tty)
+
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
 #     set -x VISUAL 'emacsclient -n --alternate-editor vim'
