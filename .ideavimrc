@@ -1,3 +1,5 @@
+set showmode
+
 set ignorecase
 set smartcase
 
@@ -18,11 +20,31 @@ nnoremap / :<C-u>action Find<CR>
 nnoremap [m :<C-u>action MethodUp<CR>
 nnoremap ]m :<C-u>action MethodDown<CR>
 
-nnoremap [c :<C-u>action VcsShowPrevChangeMarker<CR>
-nnoremap ]c :<C-u>action VcsShowNextChangeMarker<CR>
+nnoremap [v :<C-u>action VcsShowPrevChangeMarker<CR>
+nnoremap ]v :<C-u>action VcsShowNextChangeMarker<CR>
 
 nnoremap [e :<C-u>action GotoPreviousError<CR>
 nnoremap ]e :<C-u>action GotoNextError<CR>
 
-nnoremap g; :<C-u>action JumpToLastChange<CR>
-nnoremap g, :<C-u>action JumpToNextChange<CR>
+nnoremap [c :<C-u>action JumpToLastChange<CR>
+nnoremap ]c :<C-u>action JumpToNextChange<CR>
+
+nnoremap [n :<C-u>action NextOccurence<CR>
+nnoremap ]n :<C-u>action PreviousOccurence<CR>
+
+nnoremap <C-o> :<C-u>action Back<CR>
+nnoremap <C-i> :<C-u>action Forward<CR>
+nnoremap <C-S-o> <C-o>
+nnoremap <C-S-i> <C-i>
+
+nnoremap K :<C-u>action QuickJavaDoc<CR>
+nnoremap gjK :<C-u>action GotoDeclaration<CR>
+nnoremap gjk :<C-u>action GotoTypeDeclaration<CR>
+nnoremap gji :<C-u>action GotoImplementation<CR>
+nnoremap gjs :<C-u>action GotoSuperMethod<CR>
+nnoremap gjt :<C-u>action GotoTest<CR>
+nnoremap <C-k> :<C-u>action ShowUsages<CR>
+
+noremap <C-S-c> "*y
+noremap <C-S-v> "*P
+

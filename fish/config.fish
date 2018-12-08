@@ -70,9 +70,9 @@ if test -d ~/.rbenv/bin
     set -x PATH ~/.rbenv/bin $PATH
 end
 
-# ruby
+# # ruby
 # if test -d ~/.gem/
-#     set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
+#   set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
 # end
 
 # cask
