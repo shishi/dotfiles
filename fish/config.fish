@@ -108,27 +108,37 @@ alias dc 'docker-compose'
 alias dcr 'docker-compose run'
 alias dce 'docker-compose exec'
 
-if [ (uname) = "MINGW64_NT-10.0" ]
-    alias ghq 'ghq.exe'
-    alias fzf 'fzf.exe'
-else if [ (uname) = "Darwin" ]
-    # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
+switch (uname -a)
+    case "*MINGW64*"
+        alias ghq 'ghq.exe'
+        alias fzf 'fzf.exe'
+        alias docker 'docker.exe'
+        alias docker-compose 'docker-compose.exe'
+        alias docker-machine 'docker-machine.exe'
+    case "*Darwin*"
+        # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
-    # ll
-    if type gls > /dev/null 2>&1
-        alias ll 'gls -la --color'
-    else
-        alias ll 'ls -laG'
-    end
+        # ll
+        if type gls > /dev/null 2>&1
+            alias ll 'gls -la --color'
+        else
+            alias ll 'ls -laG'
+        end
 
-    # macvim-kaoriya
-    if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
-        alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-        alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
-    end
-else if [ (uname) = "Linux" ]
-    # alias open 'xdg-open'
-    alias ll 'ls -la --color'
+        # macvim-kaoriya
+        if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
+            alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+            alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
+        end
+    case "*Linux*"
+        if string match -q -- '*Microsoft*' (uname -a)
+            alias docker 'docker.exe'
+            alias docker-compose 'docker-compose.exe'
+            alias docker-machine 'docker-machine.exe'
+        end
+
+        alias ll 'ls -la --color'
+        # alias open 'xdg-open'
 end
 
 # function
