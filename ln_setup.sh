@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DOTDIR=~/dev/src/github.com/shishi/dotfiles
+DOTDIR=$(pwd)
 EMACSDIR=~/dev/src/github.com/shishi/emacs
 
 ln -s $DOTDIR/fish ~/.config/fish
