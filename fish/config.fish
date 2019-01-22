@@ -1,21 +1,3 @@
-# settings
-#########################################
-
-set fish_greeting
-
-# cmorrell theme
-set default_user shishi
-
-# rbenv
-if test -d ~/.rbenv
-    status --is-interactive; and source (rbenv init -|psub)
-end
-
-# direnv
-if type direnv > /dev/null 2>&1
-    eval (direnv hook fish)
-end
-
 # environment variables
 #########################################
 
@@ -78,6 +60,24 @@ end
 # cask
 if test -f ~/.cask/bin/cask > /dev/null 2>&1
     set -x PATH ~/.cask/bin $PATH
+end
+
+# settings
+#########################################
+
+set fish_greeting
+
+# cmorrell theme
+set default_user shishi
+
+# rbenv
+if test -d ~/.rbenv
+    status --is-interactive; and source (rbenv init -|psub)
+end
+
+# direnv
+if type direnv > /dev/null 2>&1
+    eval (direnv hook fish)
 end
 
 # alias
