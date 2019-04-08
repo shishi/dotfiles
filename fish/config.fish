@@ -105,7 +105,7 @@ alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 
 # docker
 alias dc 'docker-compose'
-alias dcr 'docker-compose run'
+alias dcr 'docker-compose run --rm'
 alias dce 'docker-compose exec'
 
 switch (uname -a)
