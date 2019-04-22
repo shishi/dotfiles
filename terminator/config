@@ -1,0 +1,37 @@
+[global_config]
+[keybindings]
+[profiles]
+  [[default]]
+    background_darkness = 0.7
+    background_type = transparent
+    cursor_color = "#aaaaaa"
+    foreground_color = "#00ff00"
+    show_titlebar = False
+    copy_on_selection = True
+[layouts]
+  [[default_org]]
+    [[[window0]]]
+      type = Window
+      parent = ""
+    [[[child1]]]
+      type = Terminal
+      parent = window0
+  [[default]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 290:101
+      maximised = False
+      fullscreen = False
+      size = 2324, 1708
+      title = shishi@terra: ~/dev/src/github.com/shishi/dotfiles
+      last_active_term = f77793fa-ed8c-4fcf-bbee-9f7dbfc51707
+      last_active_window = True
+    [[[terminal1]]]
+      type = Terminal
+      parent = child0
+      order = 0
+      profile = default
+      uuid = f77793fa-ed8c-4fcf-bbee-9f7dbfc51707
+[plugins]
