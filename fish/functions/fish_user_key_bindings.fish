@@ -4,3 +4,5 @@ function fish_user_key_bindings
     bind \es 'ghq_fzf_godoc'
     ### ghq ###
 end
+
+fzf_key_bindings
