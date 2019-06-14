@@ -259,6 +259,9 @@ tags
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.devcontainer/*
+# ruby
+solargraph.rb
 
 ### Windows ###
 # Windows thumbnail cache files
