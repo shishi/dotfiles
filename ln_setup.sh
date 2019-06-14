@@ -3,8 +3,21 @@
 DOTDIR=$(dirname "$0")
 EMACSDIR=~/dev/src/github.com/shishi/emacs
 
-ln -s $DOTDIR/fish ~/.config/fish
-ln -s $EMACSDIR ~/.emacs.d
+if [ -L $DOTDIR/fish ]; then
+    rm $DOTDIR/fish
+    ln -s $DOTDIR/fish ~/.config/fish
+else
+    rm -fr $DOTDIR/fish
+    ln -s $DOTDIR/fish ~/.config/fish
+fi
+
+if [ -L ~/.emacs.d ]; then
+    rm ~/.emacs.d
+    ln -s $EMACSDIR ~/.emacs.d
+else
+    rm -fr ~/.emacs.d
+    ln -s $EMACSDIR ~/.emacs.d
+fi
 
 ln -s $DOTDIR/.gitignore ~/.gitignore
 
@@ -24,8 +37,8 @@ if [ `uname` = Darwin ]; then
     ln -s $DOTDIR/.gitconfig.mac ~/.gitconfig
     ln -s $DOTDIR/Brewfile ~/Brewfile
 elif [ `uname` = Linux ]; then
-    ln -s $DOTDIR/terminator ~/.config/terminator
     ln -s $DOTDIR/.gitconfig.linux ~/.gitconfig
+#    ln -s $DOTDIR/terminator ~/.config/terminator
 #    ln -s $DOTDIR/.xprofile ~/.xprofile
 #    ln -s $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
 #    ln -s $DOTDIR/.imwheelrc ~/.imwheelrc
