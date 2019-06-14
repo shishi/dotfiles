@@ -3,19 +3,23 @@
 DOTDIR=$(dirname "$0")
 EMACSDIR=~/dev/src/github.com/shishi/emacs
 
-if [ -L $DOTDIR/fish ]; then
-    rm $DOTDIR/fish
+if [ -L ~/.config/fish ]; then
+    rm ~/.config/fish
+    ln -s $DOTDIR/fish ~/.config/fish
+elif [ -d ~/.config/fish ]
+    rm -fr ~/.config/fish
     ln -s $DOTDIR/fish ~/.config/fish
 else
-    rm -fr $DOTDIR/fish
     ln -s $DOTDIR/fish ~/.config/fish
 fi
 
 if [ -L ~/.emacs.d ]; then
     rm ~/.emacs.d
     ln -s $EMACSDIR ~/.emacs.d
-else
+elif [ -d ~/.emacs.d ]
     rm -fr ~/.emacs.d
+    ln -s $EMACSDIR ~/.emacs.d
+else
     ln -s $EMACSDIR ~/.emacs.d
 fi
 
