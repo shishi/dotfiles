@@ -1,7 +1,7 @@
 [user]
     email = shishi.s.n@gmail.com
     name = Shigenobu Nishikawa
-	signingkey = 2E54114188E8E91F74E40FC54F1B7C84D0056CCA
+	signingkey = 29079D0EF053084BFC2E4E0B8AB6DD1053ACF368
 [color]
     ui = auto
 [alias]
@@ -24,7 +24,7 @@
     preloadindex = true
     fscache = true
     symlinks = true
-	editor = 'C:\\bin\\Microsoft VS Code\\Code.exe' --wait
+	editor = ''C:\\Users\\shishi\\scoop\\apps\\vscode\\current\\Code.exe' --wait
 [push]
     default = current
 [help]
@@ -46,10 +46,11 @@
     process = git-lfs filter-process
     required = true
 [credential]
-	helper = manager
-# [commit]
-#    gpgsign = true
-# [gpg]
-#    program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe    
+    helper = cache --timeout=2419200
+	# helper = manager
+[commit]
+    gpgsign = true
+[gpg]
+    program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe    
 [url "git@github.com:"]
     insteadOf = https://github.com/
