@@ -7,9 +7,9 @@ SETUVAR FZF_PREVIEW_FILE_CMD:head\x20\x2dn\x2010
 SETUVAR FZF_TMUX_HEIGHT:40\x25
 SETUVAR ZO_CMD:zo
 SETUVAR Z_CMD:z
-SETUVAR Z_DATA:/home/shishi/\x2elocal/share/z/data
-SETUVAR Z_DATA_DIR:/home/shishi/\x2elocal/share/z
-SETUVAR Z_EXCLUDE:/home/shishi
+SETUVAR Z_DATA:/home/ruby/\x2elocal/share/z/data
+SETUVAR Z_DATA_DIR:/home/ruby/\x2elocal/share/z
+SETUVAR Z_EXCLUDE:/home/ruby
 SETUVAR __fish_init_2_39_8:\x1d
 SETUVAR __fish_init_2_3_0:\x1d
 SETUVAR __fish_init_3_x:\x1d
@@ -39,4 +39,3 @@ SETUVAR fish_pager_color_completion:\x1d
 SETUVAR fish_pager_color_description:B3A06D\x1eyellow
 SETUVAR fish_pager_color_prefix:white\x1e\x2d\x2dbold\x1e\x2d\x2dunderline
 SETUVAR fish_pager_color_progress:brwhite\x1e\x2d\x2dbackground\x3dcyan
-SETUVAR fish_user_paths:/home/shishi/\x2efzf/bin
