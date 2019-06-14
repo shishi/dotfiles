@@ -36,7 +36,8 @@
 [heroku]
     account = shishi
 [credential]
-	helper = /usr/lib/git-core/git-credential-libsecret
+	helper = cache --timeout=2419200
+	# helper = /usr/lib/git-core/git-credential-libsecret
 [magit]
     hideCampaign = true
 [ghq]
