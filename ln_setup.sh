@@ -6,7 +6,7 @@ EMACSDIR=~/dev/src/github.com/shishi/emacs
 if [ -L ~/.config/fish ]; then
     rm ~/.config/fish
     ln -s $DOTDIR/fish ~/.config/fish
-elif [ -d ~/.config/fish ]
+elif [ -d ~/.config/fish ]; then
     rm -fr ~/.config/fish
     ln -s $DOTDIR/fish ~/.config/fish
 else
@@ -16,7 +16,7 @@ fi
 if [ -L ~/.emacs.d ]; then
     rm ~/.emacs.d
     ln -s $EMACSDIR ~/.emacs.d
-elif [ -d ~/.emacs.d ]
+elif [ -d ~/.emacs.d ]; then
     rm -fr ~/.emacs.d
     ln -s $EMACSDIR ~/.emacs.d
 else
