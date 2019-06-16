@@ -158,42 +158,42 @@ end
 
 # fzf
 
-function ghq_fzf
-  set dir (ghq root)/(ghq list | fzf)
-    if [ (uname) = "MINGW64_NT-10.0" ]
-        cd (cygpath $dir)
-    else
-        cd $dir
-    end
-    exec fish
-end
+#function ghq_fzf
+#  set dir (ghq root)/(ghq list | fzf)
+#    if [ (uname) = "MINGW64_NT-10.0" ]
+#        cd (cygpath $dir)
+#    else
+#        cd $dir
+#    end
+#    exec fish
+#end
 
-function ghq_fzf_godoc
-  set dir (ghq root)/(ghq list | fzf)
-  godoc $dir | less
-end
+#function ghq_fzf_godoc
+#set dir (ghq root)/(ghq list | fzf)
+#  godoc $dir | less
+#end
 
-function fbr -d "Fuzzy-find and checkout a branch"
-  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
-end
-
-function fci -d "Fuzzy-find and checkout a commit"
-  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
-end
-
-function fssh -d "Fuzzy-find ssh host and ssh into it"
-  ag '^host [^*]' ~/.ssh/config | cut -d ' ' -f 2 | fzf | xargs -o ssh
-end
-
-function fpass -d "Fuzzy-find a Lastpass entry and copy the password"
-  if not lpass status -q
-    lpass login $EMAIL
-  end
-
-  if not lpass status -q
-    exit
-  end
-
-  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
-end
+#function fbr -d "Fuzzy-find and checkout a branch"
+#  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+#end
+#
+#function fci -d "Fuzzy-find and checkout a commit"
+#  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
+#end
+#
+#function fssh -d "Fuzzy-find ssh host and ssh into it"
+#  ag '^host [^*]' ~/.ssh/config | cut -d ' ' -f 2 | fzf | xargs -o ssh
+#end
+#
+#function fpass -d "Fuzzy-find a Lastpass entry and copy the password"
+#  if not lpass status -q
+#    lpass login $EMAIL
+#  end
+#
+#  if not lpass status -q
+#    exit
+#  end
+#
+#  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
+#end
 
