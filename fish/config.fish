@@ -156,6 +156,10 @@ function remove_orphan
     end
 end
 
+function expose_rails
+    ssh -o ServerAliveInterval=60 -R 80:localhost:3000 serveo.net
+end
+
 # fzf
 
 #function ghq_fzf
