@@ -2,10 +2,15 @@
 #########################################
 
 #set -x LANG ja_JP.UTF-8
-
-set -x PATH ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
-set -x GOPATH ~/dev/
-
+set uname (uname -a)
+if [ (echo $a | grep -c "microsoft") -gt 0 ]
+    set dev ~/dev
+else
+    set dev /mnt/c/Users/shishi/dev
+end
+set -x PATH $dev/bin /usr/local/sbin /usr/local/bin $PATH
+set -x GOPATH $dev
+set -x GHQ_ROOT $dev/src
 set -x EDITOR vim
 set -x VISUAL vim
 

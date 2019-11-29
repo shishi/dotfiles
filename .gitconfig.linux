@@ -40,8 +40,6 @@
 	# helper = /usr/lib/git-core/git-credential-libsecret
 [magit]
     hideCampaign = true
-[ghq]
-    root = ~/dev/src
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
