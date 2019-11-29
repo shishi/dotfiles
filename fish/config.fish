@@ -178,27 +178,16 @@ function expose_rails
     ssh -o ServerAliveInterval=60 -R 80:localhost:3000 serveo.net
 end
 
+function cdw
+    cd /mnt/c/Users/shishi
+end
+
 # fzf
 
-#function ghq_fzf
-#  set dir (ghq root)/(ghq list | fzf)
-#    if [ (uname) = "MINGW64_NT-10.0" ]
-#        cd (cygpath $dir)
-#    else
-#        cd $dir
-#    end
-#    exec fish
-#end
+function fbr -d "Fuzzy-find and checkout a branch"
+  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+end
 
-#function ghq_fzf_godoc
-#set dir (ghq root)/(ghq list | fzf)
-#  godoc $dir | less
-#end
-
-#function fbr -d "Fuzzy-find and checkout a branch"
-#  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
-#end
-#
 #function fci -d "Fuzzy-find and checkout a commit"
 #  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
 #end
