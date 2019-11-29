@@ -1,6 +1,6 @@
 #!/bin/sh
 
-DOTDIR=$(pwd)
+DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 
 if [ -L ~/.config/fish ]; then
