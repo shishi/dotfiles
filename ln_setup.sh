@@ -27,7 +27,7 @@ ln -sf $DOTDIR/.gitignore ~/.gitignore
 
 ln -sf $DOTDIR/.vimrc ~/.vimrc
 ln -sf $DOTDIR/.gvimrc ~/.gvimrc
-ln -sf $DOTDIR/.vim ~/.vim
+#ln -sf $DOTDIR/.vim ~/.vim
 
 ln -sf $DOTDIR/.gemrc ~/.gemrc
 ln -sf $DOTDIR/.rspec ~/.rspec
