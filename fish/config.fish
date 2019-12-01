@@ -177,8 +177,14 @@ function expose_rails
     ssh -o ServerAliveInterval=60 -R 80:localhost:3000 serveo.net
 end
 
+# WSL
+
 function cdw
     cd /mnt/c/Users/shishi
+end
+
+function ln_setup
+    bash ~/dev/src/github.com/shishi/dotfiles/ln_setup.sh
 end
 
 # fzf
