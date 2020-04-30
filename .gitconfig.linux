@@ -24,30 +24,32 @@
 	autocrlf = input
     safecrlf = true
     filemode = false
+[commit]
+    gpgsign = true
 [push]
     default = current
 [help]
     autocorrect = 1
 [branch]
     autosetuprebase = always
-[github]
-    user = shishi
-    token = hogehoge
-[heroku]
-    account = shishi
 [credential]
 	helper = cache --timeout=2419200
 	# helper = /usr/lib/git-core/git-credential-libsecret
-[magit]
-    hideCampaign = true
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
     process = git-lfs filter-process
     required = true
-[commit]
-    gpgsign = true
 [url "git@github.com:"]
     insteadOf = https://github.com/
 [url "ssh://git@heroku.com/"]
 	insteadOf = https://git.heroku.com/
+[github]
+    user = shishi
+    token = hogehoge
+[heroku]
+    account = shishi
+[magit]
+    hideCampaign = true
+[ghq]
+	root = ~/dev/src

@@ -2,15 +2,15 @@
 #########################################
 
 #set -x LANG ja_JP.UTF-8
-set uname (uname -a)
-if [ (echo $uname | grep -c "microsoft") -gt 0 ] && ! test -f /.dockerenv
-    set dev /mnt/c/Users/shishi/dev
-else
-    set dev ~/dev
-end
-set -x PATH $dev/bin /usr/local/sbin /usr/local/bin $PATH
-set -x GOPATH $dev
-set -x GHQ_ROOT $dev/src
+#set uname (uname -a)
+#if [ (echo $uname | grep -c "microsoft") -gt 0 ] && ! test -f /.dockerenv
+#    set dev /mnt/c/Users/shishi/dev
+#else
+#    set dev ~/dev
+#end
+set -x PATH ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+set -x GOPATH ~/dev
+#set -x GHQ_ROOT $dev/src
 set -x EDITOR vim
 set -x VISUAL vim
 set -x GPG_TTY (tty)
