@@ -154,8 +154,9 @@ end
 
 function __ghq_cd_repository -d "Change local repository directory"
     ghq list --full-path | fzf | read -l repo_path
-      cd $repo_path
+    cd $repo_path
 end
+alias ghc __ghq_cd_github
 
 function __ghq_browse_github -d "Browse remote repository on github"
     ghq list | fzf | read -l repo_path
@@ -173,10 +174,6 @@ function remove_orphan
     end
 end
 
-function expose_rails
-    ssh -o ServerAliveInterval=60 -R 80:localhost:3000 serveo.net
-end
-
 # WSL
 
 function cdw
@@ -190,7 +187,7 @@ end
 # fzf
 
 function fbr -d "Fuzzy-find and checkout a branch"
-  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+    git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
 end
 
 #function fci -d "Fuzzy-find and checkout a commit"
@@ -213,3 +210,9 @@ end
 #  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
 #end
 
+# etc
+#########################################
+
+if test -f ~/.config/fish/functions/pepabo.fish > /dev/null 2>&1
+    source ~/.config/fish/functions/pepabo.fish
+end
