@@ -293,3 +293,5 @@ $RECYCLE.BIN/
 
 
 # End of https://www.gitignore.io/api/go,vim,ruby,linux,macos,emacs,windows,intellij+all,visualstudiocode
+
+fish/functions/pepabo.fish

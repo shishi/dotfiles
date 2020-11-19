@@ -8,7 +8,7 @@
 #else
 #    set dev ~/dev
 #end
-set -x PATH ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 set -x GOPATH ~/dev
 #set -x GHQ_ROOT $dev/src
 set -x EDITOR vim
@@ -216,3 +216,6 @@ end
 if test -f ~/.config/fish/functions/pepabo.fish > /dev/null 2>&1
     source ~/.config/fish/functions/pepabo.fish
 end
+
+
+
