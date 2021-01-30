@@ -3,6 +3,7 @@
 DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 
+mkdir -p ~/.config/fish
 if [ -L ~/.config/fish ]; then
     rm ~/.config/fish
     ln -sf $DOTDIR/fish ~/.config/fish
@@ -15,12 +16,14 @@ fi
 
 if [ -L ~/.emacs.d ]; then
     rm ~/.emacs.d
-    ln -sf $DOTDIR/../emacs ~/.emacs.d
+    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 elif [ -d ~/.emacs.d ]; then
+    git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
     rm -fr ~/.emacs.d
-    ln -sf $DOTDIR/../emacs ~/.emacs.d
+    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 else
-    ln -sf $DOTDIR/../emacs ~/.emacs.d
+    git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
+    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 fi
 
 ln -sf $DOTDIR/.gitignore ~/.gitignore
