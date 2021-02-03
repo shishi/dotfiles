@@ -69,9 +69,11 @@ end
 # vagrant in wsl
 if type vagrant > /dev/null 2>&1
     if string match -q -- '*microsoft*' (uname -a)
-        set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
+        # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
         set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
-        set -x VAGRANT_HOME /mnt/c
+        # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
+        # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
+        # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
     end
 end
 
