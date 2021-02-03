@@ -66,6 +66,15 @@ if test -f ~/.cask/bin/cask > /dev/null 2>&1
     set -x PATH ~/.cask/bin $PATH
 end
 
+# vagrant in wsl
+if type vagrant > /dev/null 2>&1
+    if string match -q -- '*microsoft*' (uname -a)
+        set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
+        set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
+        set -x VAGRANT_HOME /mnt/c
+    end
+end
+
 # settings
 #########################################
 
@@ -135,7 +144,7 @@ switch (uname -a)
             alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
         end
     case "*Linux*"
-        if string match -q -- '*Microsoft*' (uname -a)
+        if string match -q -- '*microsoft*' (uname -a)
             alias docker 'docker.exe'
             alias docker-compose 'docker-compose.exe'
             alias docker-machine 'docker-machine.exe'
