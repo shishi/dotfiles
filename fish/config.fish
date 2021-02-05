@@ -9,11 +9,15 @@
 #    set dev ~/dev
 #end
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+
 set -x GOPATH ~/dev
 #set -x GHQ_ROOT $dev/src
+
 set -x EDITOR vim
 set -x VISUAL vim
 set -x GPG_TTY (tty)
+
+set -x LESS '--no-init --shift 4 --LONG-PROMPT'
 
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
@@ -28,32 +32,32 @@ set -x GPG_TTY (tty)
 #set -x RIOT_GAMES_API_KEY=""
 
 if [ (uname) = "Darwin" ]
-    if type gls > /dev/null 2>&1
-        set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
-        set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
-    end
+  if type gls >/dev/null 2>&1
+    set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
+    set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+  end
 
-    if type gfind > /dev/null 2>&1
-        set -x PATH /usr/local/opt/findutils/libexec/gnubin $PATH
-        set -x MANPATH /usr/local/opt/findutils/libexec/gnuman $MANPATH
-    end
+  if type gfind >/dev/null 2>&1
+    set -x PATH /usr/local/opt/findutils/libexec/gnubin $PATH
+    set -x MANPATH /usr/local/opt/findutils/libexec/gnuman $MANPATH
+  end
 
-    if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
-        set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
-    end
+  if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
+    set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
+  end
 end
 
-if type less > /dev/null 2>&1
-    set -x LESS '-R'
+if type less >/dev/null 2>&1
+  set -x LESS '-R'
 end
 
-if type lv > /dev/null 2>&1
-    set -x PAGER 'lv -c'
+if type lv >/dev/null 2>&1
+  set -x PAGER 'lv -c'
 end
 
 # rbenv
 if test -d ~/.rbenv/bin
-    set -x PATH ~/.rbenv/bin $PATH
+  set -x PATH ~/.rbenv/bin $PATH
 end
 
 # # ruby
@@ -62,8 +66,8 @@ end
 # end
 
 # cask
-if test -f ~/.cask/bin/cask > /dev/null 2>&1
-    set -x PATH ~/.cask/bin $PATH
+if test -f ~/.cask/bin/cask >/dev/null 2>&1
+  set -x PATH ~/.cask/bin $PATH
 end
 
 # settings
@@ -76,12 +80,12 @@ set default_user shishi
 
 # rbenv
 if test -d ~/.rbenv
-    status --is-interactive; and source (rbenv init -|psub)
+  status --is-interactive; and source (rbenv init -|psub)
 end
 
 # direnv
-if type direnv > /dev/null 2>&1
-    eval (direnv hook fish)
+if type direnv >/dev/null 2>&1
+  eval (direnv hook fish)
 end
 
 # alias
@@ -113,75 +117,75 @@ alias dcr 'docker-compose run --rm'
 alias dce 'docker-compose exec'
 
 switch (uname -a)
-    case "*MINGW64*"
-        alias ghq 'ghq.exe'
-        alias fzf 'fzf.exe'
-        alias docker 'docker.exe'
-        alias docker-compose 'docker-compose.exe'
-        alias docker-machine 'docker-machine.exe'
-    case "*Darwin*"
-        # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
+  case "*MINGW64*"
+    alias ghq 'ghq.exe'
+    alias fzf 'fzf.exe'
+    alias docker 'docker.exe'
+    alias docker-compose 'docker-compose.exe'
+    alias docker-machine 'docker-machine.exe'
+  case "*Darwin*"
+    # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
-        # ll
-        if type gls > /dev/null 2>&1
-            alias ll 'gls -la --color'
-        else
-            alias ll 'ls -laG'
-        end
+    # ll
+    if type gls >/dev/null 2>&1
+      alias ll 'gls -la --color'
+    else
+      alias ll 'ls -laG'
+    end
 
-        # macvim-kaoriya
-        if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
-            alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-            alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
-        end
-    case "*Linux*"
-        if string match -q -- '*Microsoft*' (uname -a)
-            alias docker 'docker.exe'
-            alias docker-compose 'docker-compose.exe'
-            alias docker-machine 'docker-machine.exe'
-        end
+    # macvim-kaoriya
+    if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
+      alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
+      alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
+    end
+  case "*Linux*"
+    if string match -q -- '*Microsoft*' (uname -a)
+      alias docker 'docker.exe'
+      alias docker-compose 'docker-compose.exe'
+      alias docker-machine 'docker-machine.exe'
+    end
 
-        alias ll 'ls -la --color'
-        # alias open 'xdg-open'
+    alias ll 'ls -la --color'
+    # alias open 'xdg-open'
 end
 
 # function
 #########################################
 
 function su
-    /bin/su --shell=/usr/bin/fish $argv
+  /bin/su --shell=/usr/bin/fish $argv
 end
 
 function __ghq_cd_repository -d "Change local repository directory"
-    ghq list --full-path | fzf | read -l repo_path
-    cd $repo_path
+  ghq list --full-path | fzf | read -l repo_path
+  cd $repo_path
 end
 alias ghc __ghq_cd_github
 
 function __ghq_browse_github -d "Browse remote repository on github"
-    ghq list | fzf | read -l repo_path
-    set -l repo_name (string split -m1 "/" $repo_path)[2]
-    hub browse $repo_name
+  ghq list | fzf | read -l repo_path
+  set -l repo_name (string split -m1 "/" $repo_path)[2]
+  hub browse $repo_name
 end
 
 alias ghb __ghq_browse_github
 
 function remove_orphan
-    if type yay > /dev/null 2>&1
-        yay -Yc
-    else
-        pacman -Rns (pacman -Qtdq)
-    end
+  if type yay >/dev/null 2>&1
+    yay -Yc
+  else
+    pacman -Rns (pacman -Qtdq)
+  end
+end
+
+function ln_setup
+  bash ~/dev/src/github.com/shishi/dotfiles/ln_setup.sh
 end
 
 # WSL
 
 function cdw
-    cd /mnt/c/Users/shishi
-end
-
-function ln_setup
-    bash ~/dev/src/github.com/shishi/dotfiles/ln_setup.sh
+  cd /mnt/c/Users/shishi
 end
 
 # fzf
@@ -213,8 +217,8 @@ end
 # etc
 #########################################
 
-if test -f ~/.config/fish/functions/pepabo.fish > /dev/null 2>&1
-    source ~/.config/fish/functions/pepabo.fish
+if test -f ~/.config/fish/functions/pepabo.fish >/dev/null 2>&1
+  source ~/.config/fish/functions/pepabo.fish
 end
 
 
