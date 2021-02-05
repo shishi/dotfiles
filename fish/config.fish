@@ -17,7 +17,7 @@ set -x EDITOR vim
 set -x VISUAL vim
 set -x GPG_TTY (tty)
 
-set -x LESS '--no-init --shift 4 --LONG-PROMPT'
+set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
@@ -71,14 +71,14 @@ if test -f ~/.cask/bin/cask >/dev/null 2>&1
 end
 
 # vagrant in wsl
-if type vagrant > /dev/null 2>&1
-    if string match -q -- '*microsoft*' (uname -a)
-        # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
-        set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
-        # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
-        # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
-        # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
-    end
+if type vagrant >/dev/null 2>&1
+  if string match -q -- '*microsoft*' (uname -a)
+    # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
+    set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
+    # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
+    # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
+    # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
+  end
 end
 
 # settings
@@ -128,7 +128,6 @@ alias dcr 'docker-compose run --rm'
 alias dce 'docker-compose exec'
 
 switch (uname -a)
-<<<<<<< HEAD
   case "*MINGW64*"
     alias ghq 'ghq.exe'
     alias fzf 'fzf.exe'
@@ -158,39 +157,7 @@ switch (uname -a)
     end
 
     alias ll 'ls -la --color'
-    # alias open 'xdg-open'
-=======
-    case "*MINGW64*"
-        alias ghq 'ghq.exe'
-        alias fzf 'fzf.exe'
-        alias docker 'docker.exe'
-        alias docker-compose 'docker-compose.exe'
-        alias docker-machine 'docker-machine.exe'
-    case "*Darwin*"
-        # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
-
-        # ll
-        if type gls > /dev/null 2>&1
-            alias ll 'gls -la --color'
-        else
-            alias ll 'ls -laG'
-        end
-
-        # macvim-kaoriya
-        if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
-            alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
-            alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
-        end
-    case "*Linux*"
-        if string match -q -- '*microsoft*' (uname -a)
-            alias docker 'docker.exe'
-            alias docker-compose 'docker-compose.exe'
-            alias docker-machine 'docker-machine.exe'
-        end
-
-        alias ll 'ls -la --color'
-        # alias open 'xdg-open'
->>>>>>> bece6781f4bfbc42c3c895130697b5dbd2be9daa
+# alias open 'xdg-open'
 end
 
 # function
@@ -235,7 +202,7 @@ end
 # fzf
 
 function fbr -d "Fuzzy-find and checkout a branch"
-    git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
 end
 
 #function fci -d "Fuzzy-find and checkout a commit"
