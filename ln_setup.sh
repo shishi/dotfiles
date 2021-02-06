@@ -26,7 +26,7 @@ else
     ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 fi
 
-ln -sf $DOTDIR/.gitignore ~/.gitignore
+ln -sf $DOTDIR/.gitignore.global ~/.gitignore
 
 ln -sf $DOTDIR/.vimrc ~/.vimrc
 ln -sf $DOTDIR/.gvimrc ~/.gvimrc
