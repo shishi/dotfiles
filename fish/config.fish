@@ -193,6 +193,10 @@ function ln_setup
   bash ~/dev/src/github.com/shishi/dotfiles/ln_setup.sh
 end
 
+function docker_run_with_current_user_and_dir
+  docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src $argv
+end
+
 # WSL
 
 function cdw
