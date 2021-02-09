@@ -81,6 +81,11 @@ if type vagrant >/dev/null 2>&1
   end
 end
 
+# use buildkit
+if type docker > /dev/null 2>&1
+  set -x DOCKER_BUILDKIT 1
+end 
+
 # settings
 #########################################
 
