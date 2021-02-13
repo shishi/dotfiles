@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
