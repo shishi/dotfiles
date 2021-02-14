@@ -1,4 +1,4 @@
-Pry.config.editor = 'emacsclient -n --alternate-editor vim'
+Pry.config.editor = 'vim'
 
 Pry.config.pager = false if ENV['INSIDE_EMACS']
 Pry.config.correct_indent = false if ENV['INSIDE_EMACS']
