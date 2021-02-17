@@ -32,12 +32,12 @@ set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 #set -x RIOT_GAMES_API_KEY=""
 
 if [ (uname) = "Darwin" ]
-  if type gls >/dev/null 2>&1
+  if type gls &> /dev/null
     set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
     set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
   end
 
-  if type gfind >/dev/null 2>&1
+  if type gfind &> /dev/null
     set -x PATH /usr/local/opt/findutils/libexec/gnubin $PATH
     set -x MANPATH /usr/local/opt/findutils/libexec/gnuman $MANPATH
   end
@@ -47,11 +47,11 @@ if [ (uname) = "Darwin" ]
   end
 end
 
-if type less >/dev/null 2>&1
+if type less &> /dev/null
   set -x LESS '-R'
 end
 
-if type lv >/dev/null 2>&1
+if type lv &> /dev/null
   set -x PAGER 'lv -c'
 end
 
@@ -66,7 +66,7 @@ end
 # end
 
 # cask
-if test -f ~/.cask/bin/cask >/dev/null 2>&1
+if test -f ~/.cask/bin/cask
   set -x PATH ~/.cask/bin $PATH
 end
 
@@ -76,7 +76,7 @@ if test -d ~/.cargo/bin
 end
 
 # vagrant in wsl
-if type vagrant >/dev/null 2>&1
+if type vagrant &> /dev/null
   if string match -q -- '*microsoft*' (uname -a)
     # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
     set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
@@ -84,6 +84,11 @@ if type vagrant >/dev/null 2>&1
     # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
     # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
   end
+end
+
+# use buildkit
+if type docker &> /dev/null
+  set -x DOCKER_BUILDKIT 1
 end
 
 # settings
@@ -100,7 +105,7 @@ if test -d ~/.rbenv
 end
 
 # direnv
-if type direnv >/dev/null 2>&1
+if type direnv &> /dev/null
   eval (direnv hook fish)
 end
 
@@ -143,7 +148,7 @@ switch (uname -a)
     # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
     # ll
-    if type gls >/dev/null 2>&1
+if type gls &> /dev/null
       alias ll 'gls -la --color'
     else
       alias ll 'ls -laG'
@@ -187,7 +192,7 @@ end
 alias ghb __ghq_browse_github
 
 function remove_orphan
-  if type yay >/dev/null 2>&1
+  if type yay &> /dev/null
     yay -Yc
   else
     pacman -Rns (pacman -Qtdq)
@@ -199,7 +204,11 @@ function ln_setup
 end
 
 function docker_run_with_current_user_and_dir
-  docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src $argv
+  docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
+end
+
+function ibus_restart
+  ibus-daemon -drx
 end
 
 # WSL
@@ -237,9 +246,6 @@ end
 # etc
 #########################################
 
-if test -f ~/.config/fish/functions/pepabo.fish >/dev/null 2>&1
+if test -f ~/.config/fish/functions/pepabo.fish
   source ~/.config/fish/functions/pepabo.fish
 end
-
-
-

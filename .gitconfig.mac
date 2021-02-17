@@ -22,9 +22,9 @@
     excludesfile = ~/.gitignore
     # pager = lv -c
     pager = less --no-init --RAW-CONTROL-CHARS --quit-if-one-screen
-    autocrlf = input
+    autocrlf = false
     safecrlf = true
-    filemode = false
+    filemode = true
 [push]
     default = current
 [help]

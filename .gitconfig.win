@@ -18,9 +18,9 @@
 [core]
     excludesfile = ~/.gitignore
     # pager = lv -c
-    autocrlf = input
+    autocrlf = false
     safecrlf = true
-    filemode = false
+    filemode = true
     preloadindex = true
     fscache = true
     symlinks = true
