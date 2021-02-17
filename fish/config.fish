@@ -70,6 +70,11 @@ if test -f ~/.cask/bin/cask >/dev/null 2>&1
   set -x PATH ~/.cask/bin $PATH
 end
 
+# rust
+if test -d ~/.cargo/bin
+  set -x PATH ~/.cargo/bin $PATH
+end
+
 # vagrant in wsl
 if type vagrant >/dev/null 2>&1
   if string match -q -- '*microsoft*' (uname -a)
