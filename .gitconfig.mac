@@ -1,7 +1,7 @@
 [user]
-    email = shishi.s.n@gmail.com
+    email = shishi@srevo.net
     name = Shigenobu Nishikawa
-	signingkey = 29079D0EF053084BFC2E4E0B8AB6DD1053ACF368
+	signingkey = BFAC44BC9A039131
 [color]
     ui = auto
 [alias]
@@ -47,7 +47,7 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
-[url "git@github.com:"]
+[url "ssh://git@github.com/"]
     insteadOf = https://github.com/
 [url "ssh://git@heroku.com/"]
 	insteadOf = https://git.heroku.com/

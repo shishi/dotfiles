@@ -73,6 +73,7 @@ end
 # rust
 if test -d ~/.cargo/bin
   set -x PATH ~/.cargo/bin $PATH
+  set -x CARGO_NET_GIT_FETCH_WITH_CLI true
 end
 
 # vagrant in wsl
