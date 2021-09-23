@@ -46,7 +46,7 @@
     process = git-lfs filter-process
     required = true
 [credential]
-    helper = cache --timeout=2419200
+	helper = manager-core
 	# helper = manager
 [commit]
     gpgsign = true
@@ -56,3 +56,4 @@
     insteadOf = https://github.com/
 [url "ssh://git@heroku.com/"]
 	insteadOf = https://git.heroku.com/
+
