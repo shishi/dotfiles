@@ -31,6 +31,10 @@ set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 #set -x CODECLIMATE_REPO_TOKEN=""
 #set -x RIOT_GAMES_API_KEY=""
 
+if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
+  set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh" 
+end
+
 if [ (uname) = "Darwin" ]
   if type gls &> /dev/null
     set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
@@ -149,7 +153,7 @@ switch (uname -a)
     # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
     # ll
-if type gls &> /dev/null
+    if type gls &> /dev/null
       alias ll 'gls -la --color'
     else
       alias ll 'ls -laG'
@@ -161,14 +165,8 @@ if type gls &> /dev/null
       alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
   case "*Linux*"
-    if string match -q -- '*Microsoft*' (uname -a)
-      alias docker 'docker.exe'
-      alias docker-compose 'docker-compose.exe'
-      alias docker-machine 'docker-machine.exe'
-    end
-
     alias ll 'ls -la --color'
-# alias open 'xdg-open'
+    # alias open 'xdg-open'
 end
 
 # function
