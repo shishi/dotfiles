@@ -31,9 +31,9 @@ set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 #set -x CODECLIMATE_REPO_TOKEN=""
 #set -x RIOT_GAMES_API_KEY=""
 
-if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-  set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh" 
-end
+# if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
+#   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh" 
+# end
 
 if [ (uname) = "Darwin" ]
   if type gls &> /dev/null
@@ -165,7 +165,11 @@ switch (uname -a)
       alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
   case "*Linux*"
-    alias ll 'ls -la --color'
+    if type exa &> /dev/null
+      alias ll 'exa -lah --git --icons --time-style=long-iso'
+    else
+      alias ll 'ls -la --color'
+    end
     # alias open 'xdg-open'
 end
 
@@ -199,7 +203,7 @@ function remove_orphan
 end
 
 function ln_setup
-  bash ~/dev/src/github.com/shishi/dotfiles/ln_setup.sh
+  bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
 end
 
 function docker_run_with_current_user_and_dir
