@@ -1,3 +1,5 @@
+set fish_color_command white
+
 # environment variables
 #########################################
 
@@ -32,7 +34,7 @@ set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 #set -x RIOT_GAMES_API_KEY=""
 
 # if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-#   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh" 
+#   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh"
 # end
 
 if [ (uname) = "Darwin" ]
@@ -80,16 +82,16 @@ if test -d ~/.cargo/bin
   set -x CARGO_NET_GIT_FETCH_WITH_CLI true
 end
 
-# vagrant in wsl
-if type vagrant &> /dev/null
-  if string match -q -- '*microsoft*' (uname -a)
-    # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
-    set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
-    # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
-    # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
-    # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
-  end
-end
+# # vagrant in wsl
+# if type vagrant &> /dev/null
+#   if string match -q -- '*microsoft*' (uname -a)
+#     # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
+#     set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
+#     # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
+#     # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
+#     # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
+#   end
+# end
 
 # use buildkit
 if type docker &> /dev/null
@@ -171,6 +173,11 @@ switch (uname -a)
       alias ll 'ls -la --color'
     end
     # alias open 'xdg-open'
+end
+
+# WSL
+if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
+  alias code '/mnt/c/Users/shishi/scoop/apps/vscode/current/bin/code'
 end
 
 # function
