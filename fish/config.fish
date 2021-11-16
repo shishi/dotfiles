@@ -19,7 +19,6 @@ set -x EDITOR vim
 set -x VISUAL vim
 set -x GPG_TTY (tty)
 
-set -x LESS '--no-init --shift 4 --LONG-PROMPT --RAW-CONTROL-CHARS'
 
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
@@ -57,8 +56,11 @@ if type less &> /dev/null
   set -x LESS '-R'
 end
 
+set -x LESS '-N --ignore-case --no-init --long-prompt --raw-control-chars'
 if type lv &> /dev/null
   set -x PAGER 'lv -c'
+else
+  set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
 end
 
 # rbenv
@@ -82,6 +84,9 @@ if test -d ~/.cargo/bin
   set -x CARGO_NET_GIT_FETCH_WITH_CLI true
 end
 
+if type bat &> /dev/null
+  set -x BAT_THEME ansi
+end
 # # vagrant in wsl
 # if type vagrant &> /dev/null
 #   if string match -q -- '*microsoft*' (uname -a)
@@ -129,6 +134,7 @@ alias gl 'git log --graph --decorate --name-status'
 alias gg 'git grep'
 alias gd 'git diff'
 alias ga 'git add'
+alias gb 'git branch'
 
 # rails
 alias be 'bundle exec'
@@ -167,11 +173,7 @@ switch (uname -a)
       alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
     end
   case "*Linux*"
-    if type exa &> /dev/null
-      alias ll 'exa -lah --git --icons --time-style=long-iso'
-    else
       alias ll 'ls -la --color'
-    end
     # alias open 'xdg-open'
 end
 
@@ -180,57 +182,85 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
   alias code '/mnt/c/Users/shishi/scoop/apps/vscode/current/bin/code'
 end
 
+# rust tools
+if type exa &> /dev/null
+  alias ll 'exa -lah --git --icons --time-style=long-iso'
+end
+
+if type bat &> /dev/null
+  alias bat 'bat --color always'
+  if type fzf &> /dev/null
+    alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+  end
+end
 # function
 #########################################
 
-function su
-  /bin/su --shell=/usr/bin/fish $argv
+
+
+switch (uname -a)
+  case "*MINGW64*"
+  case "*Linux*" "Darwin*"
+    function su
+      /bin/su --shell=/usr/bin/fish $argv
+    end
+
+    function ibus_restart
+      ibus-daemon -drx
+    end
+
+    # ghq
+    if type ghq &> /dev/null
+      function __ghq_cd_repository -d "Change local repository directory"
+        ghq list --full-path | fzf | read -l repo_path
+        cd $repo_path
+      end
+      alias ghc __ghq_cd_github
+
+      function __ghq_browse_github -d "Browse remote repository on github"
+        ghq list | fzf | read -l repo_path
+        set -l repo_name (string split -m1 "/" $repo_path)[2]
+        hub browse $repo_name
+      end
+      alias ghb __ghq_browse_github
+    end
+
+    # fzf
+    if type fzf &> /dev/null
+      function gb -d "Fuzzy-find and checkout a branch"
+        git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+      end
+    end
+
+    function ln_setup
+      bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
+    end
+
+    function docker_run_with_current_user_and_dir
+      docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
+    end
 end
 
-function __ghq_cd_repository -d "Change local repository directory"
-  ghq list --full-path | fzf | read -l repo_path
-  cd $repo_path
-end
-alias ghc __ghq_cd_github
 
-function __ghq_browse_github -d "Browse remote repository on github"
-  ghq list | fzf | read -l repo_path
-  set -l repo_name (string split -m1 "/" $repo_path)[2]
-  hub browse $repo_name
-end
+# Arch
 
-alias ghb __ghq_browse_github
-
-function remove_orphan
-  if type yay &> /dev/null
-    yay -Yc
-  else
-    pacman -Rns (pacman -Qtdq)
+if [ -f '/etc/arch-release' ]
+  function remove_orphan
+    if type yay &> /dev/null
+      yay -Yc
+    else
+      pacman -Rns (pacman -Qtdq)
+    end
   end
 end
 
-function ln_setup
-  bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
-end
-
-function docker_run_with_current_user_and_dir
-  docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
-end
-
-function ibus_restart
-  ibus-daemon -drx
-end
 
 # WSL
 
-function cdw
-  cd /mnt/c/Users/shishi
-end
-
-# fzf
-
-function fbr -d "Fuzzy-find and checkout a branch"
-  git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
+  function cdw
+    cd /mnt/c/Users/shishi
+  end
 end
 
 #function fci -d "Fuzzy-find and checkout a commit"
