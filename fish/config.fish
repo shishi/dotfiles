@@ -12,7 +12,8 @@ set fish_color_command white
 #end
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 
-set -x GOPATH ~/dev
+set -x GO111MODULE on
+set -x GOBIN ~/dev/bin
 #set -x GHQ_ROOT $dev/src
 
 set -x EDITOR vim
@@ -178,8 +179,8 @@ switch (uname -a)
 end
 
 # WSL
-if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-  alias code '/mnt/c/Users/shishi/scoop/apps/vscode/current/bin/code'
+if test -f '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft VS Code/bin/code'
+  alias code '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft\ VS\ Code/bin/code'
 end
 
 # rust tools
