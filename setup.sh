@@ -36,6 +36,8 @@ ln -sf $DOTDIR/.gemrc ~/.gemrc
 ln -sf $DOTDIR/.rspec ~/.rspec
 ln -sf $DOTDIR/.pryrc ~/.pryrc
 
+ln -sf $DOTDIR/.npmrc ~/.npmrc
+
 # ln -s $DOTDIR/.zsh ~/.zsh
 # ln -s $DOTDIR/.zshenv ~/.zshenv
 # ln -s $DOTDIR/.zshrc ~/.zshrc

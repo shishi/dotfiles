@@ -1,5 +1,7 @@
 #! /bin/sh
 
+# script for `cargo doc --open`
+
 # firefox
 # BROWSER="/mnt/c/Program Files/Mozilla Firefox/firefox.exe"
 
