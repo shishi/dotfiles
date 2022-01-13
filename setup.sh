@@ -38,6 +38,8 @@ ln -sf $DOTDIR/.pryrc ~/.pryrc
 
 ln -sf $DOTDIR/.npmrc ~/.npmrc
 
+ln -sf $DOTDIR/.bashrc ~/.bashrc
+
 # ln -s $DOTDIR/.zsh ~/.zsh
 # ln -s $DOTDIR/.zshenv ~/.zshenv
 # ln -s $DOTDIR/.zshrc ~/.zshrc

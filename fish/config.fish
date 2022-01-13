@@ -287,6 +287,3 @@ end
 # etc
 #########################################
 
-if test -f ~/.config/fish/functions/pepabo.fish
-  source ~/.config/fish/functions/pepabo.fish
-end
