@@ -147,9 +147,16 @@ alias rdmr 'bundle exec rake db:migrate:reset'
 alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 
 # docker
-alias dc 'docker-compose'
-alias dcr 'docker-compose run --rm'
-alias dce 'docker-compose exec'
+if type docker-compose &> /dev/null
+  alias dc 'docker-compose'
+  alias dcr 'docker-compose run --rm'
+  alias dce 'docker-compose exec'
+else
+  alias dc 'docker compose'
+  alias dcr 'docker compose run --rm'
+  alias dce 'docker compose exec'
+end
+
 
 switch (uname -a)
   case "*MINGW64*"
