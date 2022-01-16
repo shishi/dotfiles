@@ -162,5 +162,7 @@ alias gg='git grep'
 alias gd='git diff'
 alias ga='git add'
 alias gb='git branch'
-exec fish
-. "$HOME/.cargo/env"
+
+if type fish &> /dev/null; then
+  exec fish
+fi
