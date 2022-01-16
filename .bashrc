@@ -121,8 +121,9 @@ fi
 export PATH=~/.local/bin:~/dev/bin:/usr/local/sbin:/usr/local/bin:$PATH
 
 export GO111MODULE=on
-export GOBIN=~/dev/bin
-#set -x GHQ_ROOT $dev/src
+export GOBIN=~/.local/bin
+export GOPATH=~/dev/
+#export GHQ_R=OOT $dev/src
 
 export EDITOR=vim
 export VISUAL=vim
@@ -162,3 +163,4 @@ alias gd='git diff'
 alias ga='git add'
 alias gb='git branch'
 exec fish
+. "$HOME/.cargo/env"

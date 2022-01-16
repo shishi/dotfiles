@@ -13,7 +13,8 @@ set fish_color_command white
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 
 set -x GO111MODULE on
-set -x GOBIN ~/dev/bin
+set -x GOBIN ~/.local/bin
+set -x GOPATH ~/dev/
 #set -x GHQ_ROOT $dev/src
 
 set -x EDITOR vim
