@@ -34,6 +34,7 @@
     gpgsign = true
 [push]
     default = current
+    autoSetupRemote = true
 [help]
     autocorrect = 1
 [branch]

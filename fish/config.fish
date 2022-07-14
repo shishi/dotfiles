@@ -105,6 +105,12 @@ if type docker &> /dev/null
   set -x DOCKER_BUILDKIT 1
 end
 
+# flyio
+if test -d &> /dev/null
+  set -x FLYCTL_INSTALL ~/.fly
+  set -x PATH $FLYCTL_INSTALL/bin $PATH
+end
+
 # settings
 #########################################
 
