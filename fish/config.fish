@@ -17,10 +17,15 @@ set -x GOBIN ~/.local/bin
 set -x GOPATH ~/dev/
 #set -x GHQ_ROOT $dev/src
 
-set -x EDITOR vim
-set -x VISUAL vim
 set -x GPG_TTY (tty)
 
+if [ "$TERM_PROGRAM" = "vscode" ]
+  set -x EDITOR code
+  set -x VISUAL code
+else
+  set -x EDITOR vim
+  set -x VISUAL vim
+end
 
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
@@ -193,9 +198,9 @@ switch (uname -a)
 end
 
 # WSL
-if test -f '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft VS Code/bin/code'
-  alias code '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft\ VS\ Code/bin/code'
-end
+# if test -f '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft VS Code/bin/code'
+#   alias code '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft\ VS\ Code/bin/code'
+# end
 
 # rust tools
 if type exa &> /dev/null
@@ -210,8 +215,6 @@ if type bat &> /dev/null
 end
 # function
 #########################################
-
-
 
 switch (uname -a)
   case "*MINGW64*"
@@ -256,7 +259,6 @@ switch (uname -a)
     end
 end
 
-
 # Arch
 
 if [ -f '/etc/arch-release' ]
@@ -268,7 +270,6 @@ if [ -f '/etc/arch-release' ]
     end
   end
 end
-
 
 # WSL
 
