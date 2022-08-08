@@ -20,8 +20,8 @@ set -x GOPATH ~/dev/
 set -x GPG_TTY (tty)
 
 if [ "$TERM_PROGRAM" = "vscode" ]
-  set -x EDITOR code
-  set -x VISUAL code
+  set -x EDITOR code --wait
+  set -x VISUAL code --wait
 else
   set -x EDITOR vim
   set -x VISUAL vim
@@ -63,11 +63,12 @@ if type less &> /dev/null
   set -x LESS '-R'
 end
 
-set -x LESS '-N --ignore-case --no-init --long-prompt --raw-control-chars'
+set -x LESS '-q --ignore-case --no-init --long-prompt --raw-control-chars'
+# set -x LESS '-q -N --ignore-case --no-init --long-prompt --raw-control-chars'
 if type lv &> /dev/null
   set -x PAGER 'lv -c'
-else
-  set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
+# else
+#   set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
 end
 
 # rbenv
@@ -92,7 +93,8 @@ if test -d ~/.cargo/bin
 end
 
 if type bat &> /dev/null
-  set -x BAT_THEME ansi
+  set -x BAT_THEME zenburn
+  set -x BAT_STYLE auto
 end
 # # vagrant in wsl
 # if type vagrant &> /dev/null
@@ -207,12 +209,13 @@ if type exa &> /dev/null
   alias ll 'exa -lah --git --icons --time-style=long-iso'
 end
 
-if type bat &> /dev/null
-  alias bat 'bat --color always'
-  if type fzf &> /dev/null
-    alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
-  end
-end
+# if type bat &> /dev/null
+#   alias bat 'bat --color always'
+#   if type fzf &> /dev/null
+#     alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+#   end
+# end
+
 # function
 #########################################
 
@@ -302,3 +305,10 @@ end
 # etc
 #########################################
 
+if type batcat &> /dev/null
+  ln -fs (which batcat) ~/.local/bin/bat
+end
+
+if type fdfind &> /dev/null
+  ln -fs (which fdfind) ~/.local/bin/fd
+end
