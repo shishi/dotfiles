@@ -8,7 +8,6 @@ set fileencodings=iso-2022-jp,euc-jp,sjis,utf-8
 set fileformats=unix,dos,mac
 "set bomb
 set ttyfast
-set binary
 
 "" Fix backspace indent
 set backspace=indent,eol,start
@@ -67,8 +66,6 @@ syntax on
 set ruler
 set number
 
-let no_buffers_menu=1
-highlight BadWhitespace ctermbg=red guibg=red
 colorscheme desert
 
 set mousemodel=popup
@@ -81,7 +78,7 @@ if has("gui_running")
   if has("gui_mac") || has("gui_macvim")
     set guifont=Menlo:h12
     set transparency=7
-     endif
+  endif
 else
   let g:CSApprox_loaded = 1
 

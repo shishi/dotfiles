@@ -3,7 +3,6 @@
 DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 
-mkdir -p ~/.config/fish
 if [ -L ~/.config/fish ]; then
     rm ~/.config/fish
     ln -sf $DOTDIR/fish ~/.config/fish
@@ -12,6 +11,16 @@ elif [ -d ~/.config/fish ]; then
     ln -sf $DOTDIR/fish ~/.config/fish
 else
     ln -sf $DOTDIR/fish ~/.config/fish
+fi
+
+if [ -L ~/.config/nvim ]; then
+    rm ~/.config/nvim
+    ln -sf $DOTDIR/nvim ~/.config/nvim
+elif [ -d ~/.config/nvim ]; then
+    rm -fr ~/.config/nvim
+    ln -sf $DOTDIR/nvim ~/.config/nvim
+else
+    ln -sf $DOTDIR/nvim ~/.config/nvim
 fi
 
 if [ -L ~/.emacs.d ]; then

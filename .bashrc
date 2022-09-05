@@ -166,3 +166,5 @@ alias gb='git branch'
 if type fish &> /dev/null; then
   exec fish
 fi
+. "$HOME/.cargo/env"
+exec fish
