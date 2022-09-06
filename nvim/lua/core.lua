@@ -21,6 +21,9 @@ vim.api.nvim_command([[
 -- search
 vim.opt.hlsearch = true
 vim.opt.smartcase = true
+vim.opt.wildmenu = true
+vim.opt.wildmode = 'list:longest,full'
+vim.opt.wildignorecase = true
 
 -- indent
 vim.opt.cindent = true

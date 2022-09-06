@@ -12,6 +12,7 @@
 -- | 'c'                  | mapmode-c   | Command-line                             | :cmap                |
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
+vim.keymap.set('n', ';', ':')
 if vim.g.vscode then
   vim.keymap.set('', '<Leader>s', '<Cmd>Write<CR>')
   vim.keymap.set('', 'H', '<Cmd>Tabprevious<CR>')
