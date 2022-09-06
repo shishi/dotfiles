@@ -38,15 +38,8 @@ end
 -- Install your plugins here
 return packer.startup(function(use)
   -- My plugins here
-  use({"wbthomason/packer.nvim"})
+  use({'wbthomason/packer.nvim'})
   use({
-    "kylechui/nvim-surround",
-    tag = "*", -- Use for stability; omit to use `main` branch for the latest features
-    config = function()
-      require("nvim-surround").setup({})
-    end
-  })
-  use {
     'phaazon/hop.nvim',
     branch = 'v2', -- optional but strongly recommended
     config = function()
@@ -55,13 +48,26 @@ return packer.startup(function(use)
         keys = 'etovxqpdygfblzhckisuran'
       })
     end
-  }
-  use {
+  })
+  use({
+    'kylechui/nvim-surround',
+    tag = "*", -- Use for stability; omit to use `main` branch for the latest features
+    config = function()
+      require('nvim-surround').setup({})
+    end
+  })
+  use({
     'numToStr/Comment.nvim',
     config = function()
       require('Comment').setup({})
       local ft = require('Comment.ft')
       ft.set('sh', '//%s')
     end
-  }
+  })
+  use({
+    'mattn/vim-findroot',
+    config = function()
+      vim.g.findroot_not_for_subdir = 0
+    end
+  })
 end)

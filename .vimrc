@@ -69,7 +69,6 @@ set number
 colorscheme desert
 
 set mousemodel=popup
-set t_Co=256
 set nocursorline
 set guioptions=egmrti
 "set guifont=Monospace\ 8

@@ -21,8 +21,33 @@ else
   vim.keymap.set('', 'H', '<Cmd>tabprevious<CR>')
   vim.keymap.set('', 'L', '<Cmd>tabnext<CR>')
 end
-vim.keymap.set('', '<Leader>q', 'ZZ')
 vim.keymap.set('', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
+
+-- buffer
+vim.keymap.set('', '<Leader>q', '<Cmd>bdelete<CR>')
+vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
+vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
+
+-- split window
+vim.keymap.set('n', '<Leader>h', '<Cmd>split<CR>')
+vim.keymap.set('n', '<Leader>v', '<Cmd>vsplit<CR>')
+
+-- pairs
+if vim.g.vscode then
+else
+  vim.keymap.set('i', '{', '{}<LEFT>')
+  vim.keymap.set('i', '[', '[]<LEFT>')
+  vim.keymap.set('i', '(', '()<LEFT>')
+  vim.keymap.set('i', "'", "''<LEFT>")
+  vim.keymap.set('i', '"', '""<LEFT>')
+end
+
+-- set working directory is current editing file
+vim.keymap.set('n', '<Leader>.', '<Cmd>lcd %:p:h<CR>')
+
+-- open configs
+vim.keymap.set('n', '<Leader>`', '<Cmd>luafile $MYVIMRC<CR>')
+vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew $MYVIMRC<CR>')
 
 -- hop.nvim
 vim.keymap.set('', '<Leader>w', '<Cmd>HopWord<CR>')
