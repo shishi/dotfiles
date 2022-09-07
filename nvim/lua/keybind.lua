@@ -13,19 +13,23 @@
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
 vim.keymap.set('n', ';', ':')
+vim.keymap.set('i', 'jj', '<ESC>')
+vim.keymap.set('i', 'kk', '<ESC>')
+vim.keymap.set('n', 'x', '"_x')
+
 if vim.g.vscode then
-  vim.keymap.set('', '<Leader>s', '<Cmd>Write<CR>')
-  vim.keymap.set('', 'H', '<Cmd>Tabprevious<CR>')
-  vim.keymap.set('', 'L', '<Cmd>Tabnext<CR>')
+  vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
+  vim.keymap.set('n', 'H', '<Cmd>Tabprevious<CR>')
+  vim.keymap.set('n', 'L', '<Cmd>Tabnext<CR>')
 else
-  vim.keymap.set('', '<Leader>s', '<Cmd>write<CR>')
-  vim.keymap.set('', 'H', '<Cmd>tabprevious<CR>')
-  vim.keymap.set('', 'L', '<Cmd>tabnext<CR>')
+  vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
+  vim.keymap.set('n', 'H', '<Cmd>tabprevious<CR>')
+  vim.keymap.set('n', 'L', '<Cmd>tabnext<CR>')
 end
-vim.keymap.set('', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
+vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
 
 -- buffer
-vim.keymap.set('', '<Leader>q', '<Cmd>bdelete<CR>')
+vim.keymap.set('n', '<Leader>q', '<Cmd>bdelete<CR>')
 vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
 vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 
