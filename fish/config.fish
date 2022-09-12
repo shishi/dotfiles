@@ -113,9 +113,14 @@ if type docker &> /dev/null
 end
 
 # flyio
-if test -d &> /dev/null
+if test -d ~/.fly &> /dev/null
   set -x FLYCTL_INSTALL ~/.fly
   set -x PATH $FLYCTL_INSTALL/bin $PATH
+end
+
+# windows explorer
+if test /mnt/c/Windows/explorer.exe &> /dev/null
+  alias explorer /mnt/c/Windows/explorer.exe
 end
 
 # settings
@@ -207,6 +212,7 @@ end
 # rust tools
 if type exa &> /dev/null
   alias ll 'exa -lah --git --icons --time-style=long-iso'
+  alias lt 'exa -T --icons --git-ignore'
 end
 
 # if type bat &> /dev/null

@@ -77,6 +77,7 @@ return packer.startup(function(use)
 
   use({
     'akinsho/toggleterm.nvim',
+    disable = vscode,
     tag = 'v1.*',
     config = function()
       require('toggleterm').setup({
@@ -92,6 +93,9 @@ return packer.startup(function(use)
         silent = true
       })
       vim.keymap.set({'n', 't'}, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {
+        silent = true
+      })
+      vim.keymap.set({'n', 't'}, '<C-k>pt', '<Cmd>ToggleTerm direction=float<CR>', {
         silent = true
       })
 
@@ -329,7 +333,7 @@ return packer.startup(function(use)
             group = augroup,
             buffer = bufnr
           })
-          vim.api.nvim_create_autocmd("BufWritePre", {
+          vim.api.nvim_create_autocmd({"BufWritePre"}, {
             group = augroup,
             buffer = bufnr,
             callback = function()
@@ -436,6 +440,47 @@ return packer.startup(function(use)
         -- stylua: ignore end
         -- LuaFormatter on
       })
+    end
+  })
+
+  use({
+    'kyazdani42/nvim-tree.lua',
+    requires = {'kyazdani42/nvim-web-devicons'},
+    config = function()
+      require("nvim-tree").setup({
+        reload_on_bufenter = true
+        -- view = {
+        --   mappings = {
+        --     list = {{
+        --       key = "u",
+        --       action = "dir_up"
+        --     }}
+        --   }
+        -- }
+      })
+      vim.keymap.set('n', '<C-q>', function()
+        -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
+        require('nvim-tree').toggle(true, false)
+      end, {
+        desc = 'toggle nvim-tree'
+      })
+      vim.keymap.set('n', '<A-q>', function()
+        -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
+        require('nvim-tree').find_file()
+      end, {
+        desc = 'find_file in nvim-tree'
+      })
+      -- local augroup = vim.api.nvim_create_augroup('nvim-tree', {})
+      -- vim.api.nvim_create_autocmd({'BufEnter'}, {
+      --   group = augroup,
+      --   buffer = bufnr,
+      --   callback = function()
+      --     local view = require "nvim-tree.view"
+      --     if view.is_visible() then
+      --       require('nvim-tree').find_file(vim.api.nvim_buf_get_name(0))
+      --     end
+      --   end
+      -- })
     end
   })
 
@@ -563,11 +608,11 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
 
-      vim.api.nvim_create_augroup('indent-blankline', {
+      local augroup = vim.api.nvim_create_augroup('augroup_indent-blankline', {
         clear = true
       })
       vim.api.nvim_create_autocmd({'ColorScheme'}, {
-        group = 'indent-blankline',
+        group = augroup,
         pattern = {'*'},
         callback = function()
           vim.cmd [[highlight IndentBlanklineIndent1 guibg=#E06C75 gui=nocombine]]
@@ -666,6 +711,12 @@ return packer.startup(function(use)
     requires = {{'kyazdani42/nvim-web-devicons'}},
     config = function()
       require('lualine').setup({
+        sections = {
+          lualine_a = {{
+            'filename',
+            path = 3
+          }}
+        },
         options = {
           theme = 'gruvbox-material'
         }
@@ -746,11 +797,11 @@ return packer.startup(function(use)
                 {'nvim-telescope/telescope-ui-select.nvim'}, {'nvim-treesitter/nvim-treesitter'}},
     config = function()
       require('telescope').setup({
-        extensions = {
-          file_browser = {
-            hijack_netrw = true
-          }
-        }
+        -- extensions = {
+        --   file_browser = {
+        --     hijack_netrw = true
+        --   }
+        -- }
       })
       require('telescope').load_extension('fzf')
       require("telescope").load_extension('file_browser')

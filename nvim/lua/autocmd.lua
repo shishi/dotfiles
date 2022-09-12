@@ -1,12 +1,9 @@
 -- reload init.lua and requires
-vim.api.nvim_create_augroup('reload_lua_files', {
+local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
   clear = true
 })
--- vim.api.nvim_clear_autocmds({
---   group = 'reload_lua_files'
--- })
 vim.api.nvim_create_autocmd({'BufWritePost'}, {
-  group = 'reload_lua_files',
+  group = augroup_reload_inits,
   pattern = {'core.lua', 'keybind.lua', 'autocmd.lua', 'plugins.lua'},
   callback = function(table)
     -- print(vim.inspect(table))
@@ -25,11 +22,11 @@ vim.api.nvim_create_autocmd({'BufWritePost'}, {
 
 -- formatoptions
 -- because using autocmmd many plugins overwrite
-vim.api.nvim_create_augroup('formatoptions', {
+local augroup_formatoptions = vim.api.nvim_create_augroup('augroup_formatoptions', {
   clear = true
 })
-vim.api.nvim_create_autocmd('Filetype', {
-  group = 'formatoptions',
+vim.api.nvim_create_autocmd({'Filetype'}, {
+  group = augroup_formatoptions,
   pattern = {'*'},
   callback = function()
     vim.opt_local.formatoptions = 'tqj'
@@ -50,11 +47,11 @@ vim.api.nvim_create_autocmd('Filetype', {
 -- })
 
 -- json
-vim.api.nvim_create_augroup('json_autocmds', {
+local augroup_json = vim.api.nvim_create_augroup('augroup_json', {
   clear = true
 })
 vim.api.nvim_create_autocmd({'BufNewFile', 'BufRead'}, {
-  group = 'json_autocmds',
+  group = augroup_json,
   pattern = "*.json",
   callback = function()
     vim.opt_local.filetype = 'jsonc'
