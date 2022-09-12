@@ -19,12 +19,47 @@ else
   vim.cmd([[
     try
       colorscheme desert
+      set background=dark
     catch /^Vim\%((\a\+)\)\=:E185/
       colorscheme default
       set background=dark
     endtry
   ]])
 end
+
+local signs = {
+  Error = " ",
+  Warn = " ",
+  Hint = " ",
+  Info = " "
+}
+
+for type, icon in pairs(signs) do
+  local hl = "DiagnosticSign" .. type
+  vim.fn.sign_define(hl, {
+    icon = icon,
+    text = icon,
+    texthl = hl,
+    numhl = hl
+  })
+end
+
+vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
+  -- -- Enable underline, use default values
+  -- -- underline = true,
+  -- -- Enable virtual text, override spacing to 4
+  -- virtual_text = {
+  --   prefix = '◯'
+  --   -- spacing = 4
+  -- },
+  -- -- Use a function to dynamically turn signs off
+  -- -- and on, using buffer local variables
+  -- signs = function(namespace, bufnr)
+  --   return vim.b[bufnr].show_signs == true
+  -- end,
+  -- Disable a feature
+  update_in_insert = true
+})
 
 -- search
 vim.opt.hlsearch = true

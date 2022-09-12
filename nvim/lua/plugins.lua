@@ -49,11 +49,20 @@ local vscode = vim.g.vscode == 1
 return packer.startup(function(use)
   use({'wbthomason/packer.nvim'})
 
-  use({'kyazdani42/nvim-web-devicons'})
-  use({'nvim-lua/plenary.nvim'})
-  use({"nvim-telescope/telescope-file-browser.nvim"})
-  use({'nvim-telescope/telescope-ui-select.nvim'})
-  use({'rafamadriz/friendly-snippets'})
+  use({
+    "ahmedkhalf/project.nvim",
+    disable = vscode,
+    config = function()
+      require("project_nvim").setup({
+        patterns = {'.git', '_darcs', '.hg', '.bzr', '.svn', 'Makefile', 'package.json', 'Rakefile', 'selene.toml'}
+      })
+    end
+  })
+
+  use({
+    'andymass/vim-matchup',
+    disable = vscode
+  })
 
   use({
     'akinsho/bufferline.nvim',
@@ -63,6 +72,97 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
       require('bufferline').setup({})
+    end
+  })
+
+  use({
+    'akinsho/toggleterm.nvim',
+    tag = 'v1.*',
+    config = function()
+      require('toggleterm').setup({
+        size = function(term)
+          if term.direction == "horizontal" then
+            return 20
+          elseif term.direction == "vertical" then
+            return vim.o.columns * 0.4
+          end
+        end
+      })
+      vim.keymap.set({'n', 't'}, '<C-k>t', '<Cmd>execute v:count . "ToggleTerm"<CR>', {
+        silent = true
+      })
+      vim.keymap.set({'n', 't'}, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {
+        silent = true
+      })
+
+      local Terminal = require('toggleterm.terminal').Terminal
+      local lazygit = Terminal:new({
+        cmd = 'lazygit',
+        direction = 'float',
+        hidden = true,
+        count = 100
+      })
+
+      function _lazygit_toggle()
+        lazygit:toggle()
+      end
+
+      vim.keymap.set('n', 'lg', '<Cmd>lua _lazygit_toggle()<CR>', {
+        noremap = true,
+        silent = true
+      })
+
+    end
+  })
+
+  use({
+    'folke/trouble.nvim',
+    disable = vscode,
+    requires = {{'kyazdani42/nvim-web-devicons'}},
+    config = function()
+      require('trouble').setup({
+        icons = true
+      })
+
+      vim.keymap.set('n', '<Leader>xx', '<Cmd>TroubleToggle<CR>', {
+        silent = true,
+        noremap = true
+      })
+      vim.keymap.set('n', '<Leader>xw', '<Cmd>TroubleToggle workspace_diagnostics<CR>', {
+        silent = true,
+        noremap = true
+      })
+      vim.keymap.set('n', '<Leader>xd', '<Cmd>TroubleToggle document_diagnostics<CR>', {
+        silent = true,
+        noremap = true
+      })
+      vim.keymap.set('n', '<Leader>xl', '<Cmd>TroubleToggle loclist<CR>', {
+        silent = true,
+        noremap = true
+      })
+      vim.keymap.set('n', '<Leader>xq', '<Cmd>TroubleToggle quickfix<CR>', {
+        silent = true,
+        noremap = true
+      })
+      vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {
+        silent = true,
+        noremap = true
+      })
+    end
+  })
+
+  use({
+    'folke/which-key.nvim',
+    disable = vscode,
+    config = function()
+      -- vim.opt.timeoutlen = '500'
+      require('which-key').setup({
+        plugins = {
+          spelling = {
+            enabled = true
+          }
+        }
+      })
     end
   })
 
@@ -178,6 +278,21 @@ return packer.startup(function(use)
       vim.keymap.set('n', '<Leader>]', vim.diagnostic.goto_next, diagnostic_opts)
       vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, diagnostic_opts)
 
+      -- https://github.com/jose-elias-alvarez/null-ls.nvim/wiki/Avoiding-LSP-formatting-conflicts
+      local lsp_formatting = function(bufnr)
+        vim.lsp.buf.format({
+          filter = function(client)
+            -- apply whatever logic you want (in this example, we'll only use null-ls)
+            return client.name == "null-ls"
+          end,
+          bufnr = bufnr
+        })
+      end
+      -- if you want to set up formatting on save, you can use this as a callback
+      local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+
+      -- add to your shared on_attach callback
+
       -- Use an on_attach function to only map the following keys
       -- after the language server attaches to the current buffer
       local on_attach = function(client, bufnr)
@@ -206,6 +321,22 @@ return packer.startup(function(use)
         vim.keymap.set('n', '<Leader>ca', vim.lsp.buf.code_action, lsp_bufopts)
         vim.keymap.set('n', 'gr', vim.lsp.buf.references, lsp_bufopts)
         vim.keymap.set('n', '<Leader>gf', vim.lsp.buf.formatting, lsp_bufopts)
+
+        -- augroup == LspFormatting
+        -- from above `local augroup = vim.api.nvim_create_augroup("LspFormatting", {})`
+        if client.supports_method("textDocument/formatting") then
+          vim.api.nvim_clear_autocmds({
+            group = augroup,
+            buffer = bufnr
+          })
+          vim.api.nvim_create_autocmd("BufWritePre", {
+            group = augroup,
+            buffer = bufnr,
+            callback = function()
+              lsp_formatting(bufnr)
+            end
+          })
+        end
       end
 
       require('mason-lspconfig').setup_handlers({ --
@@ -234,8 +365,10 @@ return packer.startup(function(use)
       --   }
       -- end
       })
+
     end
   })
+
   use({
     'jose-elias-alvarez/null-ls.nvim',
     disable = vscode,
@@ -302,24 +435,13 @@ return packer.startup(function(use)
         },
         -- stylua: ignore end
         -- LuaFormatter on
-        on_attach = function(client, bufnr)
-          if client.supports_method("textDocument/formatting") then
-            vim.api.nvim_clear_autocmds({
-              group = augroup,
-              buffer = bufnr
-            })
-            vim.api.nvim_create_autocmd("BufWritePre", {
-              group = augroup,
-              buffer = bufnr,
-              callback = function()
-                -- on 0.8, you should use vim.lsp.buf.format({ bufnr = bufnr }) instead
-                vim.lsp.buf.formatting_sync()
-              end
-            })
-          end
-        end
       })
     end
+  })
+
+  use({
+    'kyazdani42/nvim-web-devicons',
+    disable = vscode
   })
 
   use({
@@ -341,6 +463,32 @@ return packer.startup(function(use)
       require('luasnip').filetype_extend('javascriptreact', {'html'})
       require('luasnip').filetype_extend('typescriptreact', {'html'})
 
+      -- vim.keymap.set('i', '<Tab>', function()
+      --   require('luasnip').expand_or_jump()
+      -- end, {
+      --   silent = true
+      -- })
+      --
+      -- vim.keymap.set('i', '<S-Tab>', function()
+      --   require('luasnip').jump(-1)
+      -- end, {
+      --   silent = true,
+      --   noremap = true
+      -- })
+      --
+      -- vim.keymap.set('s', '<Tab>', function()
+      --   require('luasnip').jump(1)
+      -- end, {
+      --   silent = true,
+      --   noremap = true
+      -- })
+      --
+      -- vim.keymap.set('s', '<S-Tab>', function()
+      --   require('luasnip').jump(-1)
+      -- end, {
+      --   silent = true,
+      --   noremap = true
+      -- })
     end
   })
 
@@ -410,10 +558,51 @@ return packer.startup(function(use)
   })
 
   use({
-    'mattn/vim-findroot',
+    'lukas-reineke/indent-blankline.nvim',
     disable = vscode,
     config = function()
-      vim.g.findroot_not_for_subdir = 0
+      vim.opt.termguicolors = true
+
+      vim.api.nvim_create_augroup('indent-blankline', {
+        clear = true
+      })
+      vim.api.nvim_create_autocmd({'ColorScheme'}, {
+        group = 'indent-blankline',
+        pattern = {'*'},
+        callback = function()
+          vim.cmd [[highlight IndentBlanklineIndent1 guibg=#E06C75 gui=nocombine]]
+          vim.cmd [[highlight IndentBlanklineIndent2 guibg=#E5C07B gui=nocombine]]
+          vim.cmd [[highlight IndentBlanklineIndent3 guibg=#98C379 gui=nocombine]]
+          vim.cmd [[highlight IndentBlanklineIndent4 guibg=#56B6C2 gui=nocombine]]
+          vim.cmd [[highlight IndentBlanklineIndent5 guibg=#61AFEF gui=nocombine]]
+          vim.cmd [[highlight IndentBlanklineIndent6 guibg=#C678DD gui=nocombine]]
+        end
+      })
+      -- vim.api.nvim_create_autocmd({'ColorScheme'}, {
+      --   group = 'indent-blankline',
+      --   pattern = {'*'},
+      --   callback = function()
+      --     vim.cmd [[highlight IndentBlanklineIndent1 guibg=none gui=nocombine]]
+      --     vim.cmd [[highlight IndentBlanklineIndent2 guibg=#1a1a1a gui=nocombine]]
+      --   end
+      -- })
+
+      vim.opt.list = true
+      vim.opt.listchars:append 'space:⋅'
+      vim.opt.listchars:append 'eol:↴'
+
+      require('indent_blankline').setup({
+        -- char = "",
+        -- char_highlight_list = {"IndentBlanklineIndent1", "IndentBlanklineIndent2"},
+        -- space_char_highlight_list = {"IndentBlanklineIndent1", "IndentBlanklineIndent2"}
+
+        -- show_current_context = true,
+        -- show_current_context_start = true,
+        char_highlight_list = {'IndentBlanklineIndent1', 'IndentBlanklineIndent2', 'IndentBlanklineIndent3',
+                               'IndentBlanklineIndent4', 'IndentBlanklineIndent5', 'IndentBlanklineIndent6'}
+        -- space_char_highlight_list = {'IndentBlanklineIndent1', 'IndentBlanklineIndent2', 'IndentBlanklineIndent3',
+        --                              'IndentBlanklineIndent4', 'IndentBlanklineIndent5', 'IndentBlanklineIndent6'}
+      })
     end
   })
 
@@ -469,6 +658,8 @@ return packer.startup(function(use)
     end
   })
 
+  use({'nvim-lua/plenary.nvim'})
+
   use({
     'nvim-lualine/lualine.nvim',
     disable = vscode,
@@ -476,7 +667,7 @@ return packer.startup(function(use)
     config = function()
       require('lualine').setup({
         options = {
-          theme = 'codedark'
+          theme = 'gruvbox-material'
         }
       })
     end
@@ -484,7 +675,7 @@ return packer.startup(function(use)
 
   use({
     'nvim-treesitter/nvim-treesitter',
-    requires = {{'p00f/nvim-ts-rainbow'}},
+    requires = {{'p00f/nvim-ts-rainbow'}, {'andymass/vim-matchup'}, {'RRethy/nvim-treesitter-endwise'}},
     run = function()
       require('nvim-treesitter.install').update({
         with_sync = true
@@ -517,6 +708,13 @@ return packer.startup(function(use)
           max_file_lines = nil -- Do not enable for files with more than n lines, int
           -- colors = {}, -- table of hex strings
           -- termcolors = {} -- table of colour name strings
+        },
+        matchup = {
+          enable = true
+          -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
+        },
+        endwise = {
+          enable = true
         }
       })
 
@@ -525,8 +723,18 @@ return packer.startup(function(use)
   })
 
   use({
+    'nvim-telescope/telescope-file-browser.nvim',
+    disasble = vscode
+  })
+
+  use({
     'nvim-telescope/telescope-fzf-native.nvim',
+    disable = vscode,
     run = 'make'
+  })
+  use({
+    'nvim-telescope/telescope-ui-select.nvim',
+    disable = vscode
   })
 
   use({
@@ -534,7 +742,7 @@ return packer.startup(function(use)
     disable = vscode,
     tag = '0.1.0',
     -- or branch = '0.1.x',
-    requires = {{'kyazdani42/nvim-web-devicons'}, {'nvim-lua/plenary.nvim'},
+    requires = {{'ahmedkhalf/project.nvim'}, {'kyazdani42/nvim-web-devicons'}, {'nvim-lua/plenary.nvim'},
                 {'nvim-telescope/telescope-ui-select.nvim'}, {'nvim-treesitter/nvim-treesitter'}},
     config = function()
       require('telescope').setup({
@@ -547,41 +755,82 @@ return packer.startup(function(use)
       require('telescope').load_extension('fzf')
       require("telescope").load_extension('file_browser')
       require("telescope").load_extension("ui-select")
+      require('telescope').load_extension('projects')
 
+      -- builtin
       vim.keymap.set('n', '<C-p>', function()
         require('telescope.builtin').find_files()
-      end)
-      vim.keymap.set('n', '<C-g>', function()
+      end, {
+        desc = 'telescope find files'
+      })
+      vim.keymap.set('n', '<C-k>g', function()
         require('telescope.builtin').live_grep()
-      end)
-      vim.keymap.set('n', '<Leader>tb', function()
+      end, {
+        desc = 'telescope live grep'
+      })
+      -- vim.keymap.set('n', '<Leader>tb', function()
+      --   require('telescope.builtin').buffers()
+      -- end)
+      vim.keymap.set('n', '<C-k>b', function()
         require('telescope.builtin').buffers()
-      end)
-      vim.keymap.set('n', '<C-A-b>', function()
-        require('telescope.builtin').buffers()
-      end)
-      vim.keymap.set('n', '<Leader>th', function()
+      end, {
+        desc = 'telescope buffers'
+      })
+      vim.keymap.set('n', '<C-k>r', function()
+        require('telescope.builtin').oldfiles()
+      end, {
+        desc = 'telescope old files'
+      })
+      vim.keymap.set('n', '<C-k>h', function()
         require('telescope.builtin').command_history()
-      end)
-      vim.keymap.set('n', '<Leader>tc', function()
+      end, {
+        desc = 'telescope command history'
+      })
+      -- vim.keymap.set('n', '<Leader>tc', function()
+      --   require('telescope.builtin').commands()
+      -- end)
+      vim.keymap.set('n', '<C-k>c', function()
         require('telescope.builtin').commands()
-      end)
-      vim.keymap.set('n', '<C-A-P>', function()
-        require('telescope.builtin').commands()
-      end)
-      vim.keymap.set('n', '<Leader>tf', function()
-        require('telescope').extensions.file_browser.file_browser()
-      end)
-      vim.keymap.set('n', '<Leader>tgb', function()
+      end, {
+        desc = 'telescope commands'
+      })
+      vim.keymap.set('n', '<Leader>tb', function()
         require('telescope.builtin').git_branches()
-      end)
+      end, {
+        desc = 'telescope git branches'
+      })
+      vim.keymap.set('n', '<Leader>ts', function()
+        require('telescope.builtin').git_status()
+      end, {
+        desc = 'telescope git status'
+      })
       vim.keymap.set('n', '<Leader>tq', function()
         require('telescope.builtin').quickfix()
-      end)
+      end, {
+        desc = 'telescope quickfix'
+      })
       vim.keymap.set('n', '<Leader>tt', function()
         require('telescope.builtin').treesitter()
-      end)
+      end, {
+        desc = 'telescope treesitter'
+      })
+      vim.keymap.set('n', '<Leader>tk', function()
+        require('telescope.builtin').keymaps()
+      end, {
+        desc = 'telescope keymaps'
+      })
 
+      -- extensions
+      vim.keymap.set('n', '<Leader>tf', function()
+        require('telescope').extensions.file_browser.file_browser()
+      end, {
+        desc = 'telescope file browser'
+      })
+      vim.keymap.set('n', '<Leader>tp', function()
+        require('telescope').extensions.projects.projects()
+      end, {
+        desc = 'telescop projects'
+      })
     end
   })
 
@@ -602,6 +851,24 @@ return packer.startup(function(use)
   })
 
   use({
+    'rafamadriz/friendly-snippets',
+    disable = vscode
+  })
+
+  use({
+    'RRethy/nvim-treesitter-endwise',
+    diasable = vscode
+  })
+
+  use({
+    'RRethy/vim-illuminate',
+    disable = vscode,
+    config = function()
+      require('illuminate').configure({})
+    end
+  })
+
+  use({
     'sainnhe/gruvbox-material',
     disable = vscode,
     requires = {
@@ -609,12 +876,64 @@ return packer.startup(function(use)
       opt = true
     },
     config = function()
+      vim.opt.termguicolors = true
+      vim.opt.background = 'dark'
+      vim.g.gruvbox_material_background = 'medium'
+      vim.g.gruvbox_material_better_performance = 1
+
+      -- already defined in core.lua
+      -- https://github.com/folke/lsp-colors.nvim/issues/14
+      -- vim.fn.sign_define("DiagnosticSignError", {
+      --   text = '¤',
+      --   texthl = 'red',
+      --   linehl = '',
+      --   numhl = ''
+      -- })
+      -- vim.fn.sign_define("DiagnosticSignWarn", {
+      --   text = '•',
+      --   texthl = 'yellow',
+      --   linehl = '',
+      --   numhl = ''
+      -- })
+      -- vim.fn.sign_define("DiagnosticSignHint", {
+      --   text = '»',
+      --   texthl = 'green',
+      --   linehl = '',
+      --   numhl = ''
+      -- })
+      -- vim.fn.sign_define("DiagnosticSignInfo", {
+      --   text = 'i',
+      --   texthl = 'gray',
+      --   linehl = '',
+      --   numhl = ''
+      -- })
+      --
+      vim.api.nvim_exec([[
+        augroup nord-theme-overrides
+          autocmd!
+          autocmd ColorScheme gruvbox-material highlight Folded ctermfg=LightGray guifg=#918d88
+          autocmd ColorScheme gruvbox-material highlight Folded ctermbg=235 guibg=#282828
+          autocmd ColorScheme gruvbox-material highlight Folded cterm=italic gui=italic
+          autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828
+          autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
+        augroup END
+      ]], false)
+      vim.g.gruvbox_material_diagnostic_text_highlight = 1
+      vim.g.gruvbox_material_diagnostic_line_highlight = 1
+      vim.g.gruvbox_material_diagnostic_virtual_text = 'colored'
+
       vim.cmd([[colorscheme gruvbox-material]])
     end
   })
 
   use({
+    'sindrets/diffview.nvim',
+    requires = {{'nvim-lua/plenary.nvim'}}
+  })
+
+  use({
     'ThePrimeagen/refactoring.nvim',
+    disable = vscode,
     requires = {{'nvim-lua/plenary.nvim'}, {'nvim-treesitter/nvim-treesitter'}},
     config = function()
       require('refactoring').setup({})
@@ -661,6 +980,7 @@ return packer.startup(function(use)
   -- packages except on github
   use({
     'https://codeberg.org/esensar/nvim-dev-container',
+    disable = vscode,
     requires = {'nvim-treesitter/nvim-treesitter'}
   })
 

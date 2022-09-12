@@ -25,8 +25,13 @@ else
   vim.keymap.set('i', 'jj', '<ESC>')
   vim.keymap.set('i', 'kk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
-  vim.keymap.set('n', 'H', '<Cmd>tabprevious<CR>')
-  vim.keymap.set('n', 'L', '<Cmd>tabnext<CR>')
+  vim.keymap.set({'n', 't'}, 'H', '<Cmd>tabprevious<CR>')
+  vim.keymap.set({'n', 't'}, 'L', '<Cmd>tabnext<CR>')
+  vim.keymap.set({'n', 't'}, '<A-h>', '<Cmd>wincmd h<CR>', opts)
+  vim.keymap.set({'n', 't'}, '<A-j>', '<Cmd>wincmd j<CR>', opts)
+  vim.keymap.set({'n', 't'}, '<A-k>', '<Cmd>wincmd k<CR>', opts)
+  vim.keymap.set({'n', 't'}, '<A-l>', '<Cmd>wincmd l<CR>', opts)
+
   -- set working directory is current editing file
   vim.keymap.set('n', '<Leader>~', '<Cmd>lcd %:p:h<CR>')
 end
@@ -59,6 +64,11 @@ vim.keymap.set('v', '=', '=gb')
 -- vim.keymap.set('n', '<Leader>`', '<Cmd>luafile $MYVIMRC<CR>')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 
+-- terminal
+vim.keymap.set('t', '<esc>', [[<C-\><C-n>]], opts)
+vim.keymap.set('t', 'jj', [[<C-\><C-n>]], opts)
+vim.keymap.set('t', 'jk', [[<C-\><C-n>]], opts)
+
 --  Packer
 vim.cmd([[
   cabbrev ps PackerSync
@@ -66,36 +76,3 @@ vim.cmd([[
   cabbrev pc PackerCompile
   cabbrev pcl PackerClean
 ]])
-
--- telescope
-
--- luasnip
--- use nvim-cmp
--- vim.keymap.set('i', '<Tab>', function()
---   require('luasnip').expand_or_jump()
--- end, {
---   silent = true
--- })
---
--- vim.keymap.set('i', '<S-Tab>', function()
---   require('luasnip').jump(-1)
--- end, {
---   silent = true,
---   noremap = true
--- })
---
--- vim.keymap.set('s', '<Tab>', function()
---   require('luasnip').jump(1)
--- end, {
---   silent = true,
---   noremap = true
--- })
---
--- vim.keymap.set('s', '<S-Tab>', function()
---   require('luasnip').jump(-1)
--- end, {
---   silent = true,
---   noremap = true
--- })
-
--- nvim-dap
