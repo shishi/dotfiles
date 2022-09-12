@@ -57,17 +57,3 @@ vim.api.nvim_create_autocmd({'BufNewFile', 'BufRead'}, {
     vim.opt_local.filetype = 'jsonc'
   end
 })
-
--- -- lsp
--- local augroup = vim.api.nvim_create_augroup("LspDocumentHighlight", {
---   clear = false
--- })
--- vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {
---   group = augroup,
---   buffer = bufnr,
---   callback = function()
---     vim.lsp.buf.clear_references()
---     vim.lsp.buf.document_highlight()
---   end
--- })
---

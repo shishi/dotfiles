@@ -57,7 +57,6 @@ vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(vim.lsp.diagn
   -- signs = function(namespace, bufnr)
   --   return vim.b[bufnr].show_signs == true
   -- end,
-  -- Disable a feature
   update_in_insert = true
 })
 

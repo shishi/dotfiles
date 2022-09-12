@@ -28,7 +28,6 @@ end
 if vim.g.vscode then
   packer.init({
     ensure_dependencies = true,
-    opt_default = false,
     display = {
       noninteractive = true
     }
@@ -81,6 +80,7 @@ return packer.startup(function(use)
     tag = 'v1.*',
     config = function()
       require('toggleterm').setup({
+        direction = 'horizontal',
         size = function(term)
           if term.direction == "horizontal" then
             return 20
@@ -95,7 +95,7 @@ return packer.startup(function(use)
       vim.keymap.set({'n', 't'}, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {
         silent = true
       })
-      vim.keymap.set({'n', 't'}, '<C-k>pt', '<Cmd>ToggleTerm direction=float<CR>', {
+      vim.keymap.set({'n', 't'}, '<C-k>pt', '<Cmd>10ToggleTerm direction=float<CR>', {
         silent = true
       })
 
