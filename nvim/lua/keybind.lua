@@ -24,6 +24,7 @@ if vim.g.vscode then
 else
   vim.keymap.set('i', 'jj', '<ESC>')
   vim.keymap.set('i', 'kk', '<ESC>')
+  vim.keymap.set('i', 'jk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
   vim.keymap.set({ 'n', 't' }, 'H', '<Cmd>tabprevious<CR>')
   vim.keymap.set({ 'n', 't' }, 'L', '<Cmd>tabnext<CR>')
@@ -71,7 +72,7 @@ vim.keymap.set('v', '=', '=gb')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 
 -- terminal
-vim.keymap.set('t', '<esc>', [[<C-\><C-n>]])
+-- vim.keymap.set('t', '<esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
 
