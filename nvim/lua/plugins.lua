@@ -60,12 +60,25 @@ return packer.startup(function(use)
   })
 
   use({
+    'f3fora/cmp-spell',
+    disable = vscode,
+    requires = { { 'hrsh7th/nvim-cmp' } },
+    config = function()
+      vim.opt.spell = true
+      vim.opt.spelllang = { 'en_us' }
+    end,
+  })
+
+  use({
     'tzachar/cmp-tabnine',
     disable = vscode,
     requires = { { 'hrsh7th/nvim-cmp' } },
     run = './install.sh',
     config = function()
-      require('cmp_tabnine.config').setup({})
+      require('cmp_tabnine.config').setup({
+        snippet_placeholder = '🚀',
+        show_prediction_strength = true,
+      })
     end,
   })
 
@@ -165,7 +178,7 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
       vim.opt.background = 'dark'
-      vim.g.gruvbox_material_background = 'medium'
+      vim.g.gruvbox_material_background = 'hard'
       vim.g.gruvbox_material_better_performance = 1
 
       -- already defined in core.lua
@@ -476,12 +489,23 @@ return packer.startup(function(use)
       { 'hrsh7th/cmp-nvim-lua' },
       { 'hrsh7th/cmp-nvim-lsp-signature-help' },
       { 'neovim/nvim-lspconfig' },
+      { 'nvim-telescope/telescope.nvim' },
       { 'onsails/lspkind-nvim' },
       { 'saadparwaiz1/cmp_luasnip' },
       { 'williamboman/mason-lspconfig.nvim' },
     },
     config = function()
       local cmp = require('cmp')
+      local lspkind = require('lspkind')
+
+      local source_mapping = {
+        buffer = '[Buffer]',
+        nvim_lsp = '[LSP]',
+        nvim_lua = '[Lua]',
+        cmp_tabnine = '[TN]',
+        path = '[Path]',
+      }
+
       cmp.setup({
         snippet = {
           expand = function(args)
@@ -518,14 +542,37 @@ return packer.startup(function(use)
         -- LuaFormatter off
         -- stylua: ignore start
         sources = cmp.config.sources({
+          { name = 'cmp_tabnine' },
           { name = 'nvim_lsp' },
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
           { name = 'buffer' },
-          { name = 'cmp_tabnine' },
+          { name = 'spell' },
         }),
         -- stylua: ignore end
         -- LuaFormatter on
+        formatting = {
+          format = function(entry, vim_item)
+            -- if you have lspkind installed, you can use it like
+            -- in the following line:
+            vim_item.kind = lspkind.symbolic(vim_item.kind, { mode = 'symbol' })
+            vim_item.menu = source_mapping[entry.source.name]
+            if entry.source.name == 'cmp_tabnine' then
+              local detail = (entry.completion_item.data or {}).detail
+              vim_item.kind = ''
+              if detail and detail:find('.*%%.*') then
+                vim_item.kind = vim_item.kind .. ' ' .. detail
+              end
+
+              if (entry.completion_item.data or {}).multiline then
+                vim_item.kind = vim_item.kind .. ' ' .. '[ML]'
+              end
+            end
+            local maxwidth = 80
+            vim_item.abbr = string.sub(vim_item.abbr, 1, maxwidth)
+            return vim_item
+          end,
+        },
       })
 
       -- Set configuration for specific filetype.
@@ -639,11 +686,13 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp delaration',
         })
-        vim.keymap.set('n', 'gd', vim.lsp.buf.definition, {
+        vim.keymap.set('n', 'gd', function()
+          require('telescope.builtin').lsp_definitions()
+        end, {
           noremap = true,
           silent = true,
           buffer = bufnr,
-          desc = 'vim.lsp definition',
+          desc = 'vim.lsp.buf.definition',
         })
         vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
           noremap = true,
@@ -651,13 +700,15 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp hover',
         })
-        vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, {
+        vim.keymap.set('n', 'gi', function()
+          require('telescope.builtin').lsp_implementations()
+        end, {
           noremap = true,
           silent = true,
           buffer = bufnr,
-          desc = 'vim.lsp implementation',
+          desc = 'vim.lsp.buf.implementation',
         })
-        vim.keymap.set('n', '<C-k>k', vim.lsp.buf.signature_help, {
+        vim.keymap.set('n', 'gk', vim.lsp.buf.signature_help, {
           noremap = true,
           silent = true,
           buffer = bufnr,
@@ -678,11 +729,13 @@ return packer.startup(function(use)
         vim.keymap.set('n', '<Leader>wl', function()
           print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
         end, { noremap = true, silent = true, buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
-        vim.keymap.set('n', '<Leader>D', vim.lsp.buf.type_definition, {
+        vim.keymap.set('n', '<Leader>D', function()
+          require('telescope.builtin').lsp_type_definitions()
+        end, {
           noremap = true,
           silent = true,
           buffer = bufnr,
-          desc = 'vim.lsp type_definition',
+          desc = 'vim.lsp.buf.type_definition',
         })
         vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
           noremap = true,
@@ -702,11 +755,13 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp code_action',
         })
-        vim.keymap.set('n', 'gr', vim.lsp.buf.references, {
+        vim.keymap.set('n', 'gr', function()
+          require('telescope.builtin').lsp_references()
+        end, {
           noremap = true,
           silent = true,
           buffer = bufnr,
-          desc = 'vim.lsp references',
+          desc = 'vim.lsp.buf.references',
         })
         vim.keymap.set(
           'n',
@@ -722,6 +777,22 @@ return packer.startup(function(use)
             desc = 'vim.lsp format',
           }
         )
+        vim.keymap.set('n', '<Leader>s', function()
+          require('telescope.builtin').lsp_dynamic_workspace_symbols()
+        end, {
+          noremap = true,
+          silent = true,
+          buffer = bufnr,
+          desc = 'vim.lsp lsp_dynamic_workspace_symbols',
+        })
+        vim.keymap.set('n', '<Leader><Leader>s', function()
+          require('telescope.builtin').lsp_document_symbols()
+        end, {
+          noremap = true,
+          silent = true,
+          buffer = bufnr,
+          desc = 'vim.lsp lsp_document_symbols',
+        })
       end
 
       local lspconfig = require('lspconfig')
