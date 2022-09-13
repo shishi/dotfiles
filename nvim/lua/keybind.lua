@@ -33,7 +33,7 @@ else
   vim.keymap.set({ 'n', 't' }, '<A-l>', '<Cmd>wincmd l<CR>')
 
   -- quickfix, grep
-  -- batch replace on quickfix list (:cl)
+  -- batch replace on quickfix list (:cl or :copen)
   -- :cdo s/hoge/huag/gc
   vim.keymap.set('n', '<F3>', '<Cmd>cnext<CR>')
   vim.keymap.set('n', '<F4>', '<Cmd>cprevious<CR>')
