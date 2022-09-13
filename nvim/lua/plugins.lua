@@ -239,6 +239,7 @@ return packer.startup(function(use)
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
           { name = 'buffer' },
+          { name = 'cmp_tabnine' },
         }),
         -- stylua: ignore end
         -- LuaFormatter on
@@ -1149,6 +1150,16 @@ return packer.startup(function(use)
     config = function()
       require('refactoring').setup({})
     end,
+  })
+
+  use({
+    'tzachar/cmp-tabnine',
+    disable = vscode,
+    requires = {{'hrsh7th/nvim-cmp'}},
+    run = './install.sh',
+    config = function()
+      require('cmp_tabnine.config').setup({})
+    end
   })
 
   use({
