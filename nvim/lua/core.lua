@@ -66,7 +66,7 @@ vim.opt.smartcase = true
 vim.opt.wildmenu = true
 vim.opt.wildmode = 'list:longest,full'
 vim.opt.wildignorecase = true
-vim.opt.completeopt = 'menu,menuone,preview,noinsert,noselect'
+vim.opt.completeopt = 'menu,menuone,preview,noinsert'
 
 -- indent
 vim.opt.cindent = true
