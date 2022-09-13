@@ -114,7 +114,7 @@ return packer.startup(function(use)
         lazygit:toggle()
       end
 
-      vim.keymap.set('n', '<C-g>', '<Cmd>lua _lazygit_toggle()<CR>', {
+      vim.keymap.set('n', '<A-g>', '<Cmd>lua _lazygit_toggle()<CR>', {
         noremap = true,
         silent = true,
         desc = 'lazygit',
@@ -401,6 +401,12 @@ return packer.startup(function(use)
           desc = 'vim.lsp type_definition',
         })
         vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
+          noremap = true,
+          silent = true,
+          buffer = bufnr,
+          desc = 'vim.lsp rename',
+        })
+        vim.keymap.set('n', '<F2>', vim.lsp.buf.rename, {
           noremap = true,
           silent = true,
           buffer = bufnr,

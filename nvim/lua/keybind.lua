@@ -12,7 +12,7 @@
 -- | 'c'                  | mapmode-c   | Command-line                             | :cmap                |
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
-vim.keymap.set({'n', 'v', 't'}, ';', ':')
+vim.keymap.set({ 'n', 'v', 't' }, ';', ':')
 vim.keymap.set('n', 'x', '"_x')
 vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
 
@@ -25,15 +25,21 @@ else
   vim.keymap.set('i', 'jj', '<ESC>')
   vim.keymap.set('i', 'kk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
-  vim.keymap.set({'n', 't'}, 'H', '<Cmd>tabprevious<CR>')
-  vim.keymap.set({'n', 't'}, 'L', '<Cmd>tabnext<CR>')
-  vim.keymap.set({'n', 't'}, '<A-h>', '<Cmd>wincmd h<CR>')
-  vim.keymap.set({'n', 't'}, '<A-j>', '<Cmd>wincmd j<CR>')
-  vim.keymap.set({'n', 't'}, '<A-k>', '<Cmd>wincmd k<CR>')
-  vim.keymap.set({'n', 't'}, '<A-l>', '<Cmd>wincmd l<CR>')
+  vim.keymap.set({ 'n', 't' }, 'H', '<Cmd>tabprevious<CR>')
+  vim.keymap.set({ 'n', 't' }, 'L', '<Cmd>tabnext<CR>')
+  vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
+  vim.keymap.set({ 'n', 't' }, '<A-j>', '<Cmd>wincmd j<CR>')
+  vim.keymap.set({ 'n', 't' }, '<A-k>', '<Cmd>wincmd k<CR>')
+  vim.keymap.set({ 'n', 't' }, '<A-l>', '<Cmd>wincmd l<CR>')
+
+  -- quickfix, grep
+  -- batch replace on quickfix list (:cl)
+  -- :cdo s/hoge/huag/gc
+  vim.keymap.set('n', '<F3>', '<Cmd>cnext<CR>')
+  vim.keymap.set('n', '<F4>', '<Cmd>cprevious<CR>')
 
   -- set working directory is current editing file
-  vim.keymap.set('n', '<Leader>~', '<Cmd>lcd %:p:h<CR>')
+  vim.keymap.set('n', "<Leader>'", '<Cmd>lcd %:p:h<CR>')
 end
 
 -- buffer
@@ -67,7 +73,7 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 -- terminal
 vim.keymap.set('t', '<esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
-vim.keymap.set('t', 'jk', [[<C-\><C-n>]] )
+vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
 
 --  Packer
 vim.cmd([[

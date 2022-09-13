@@ -3,7 +3,7 @@
 -- vim.bo: behaves like :let &l:{option-name} for buffer-local options
 -- vim.wo: behaves like :let &l:{option-name} for window-local options
 -- leader key
-vim.g.mapleader = ',';
+vim.g.mapleader = ','
 
 -- encodings
 -- vim.opt.fileencoding = "utf-8"
@@ -11,40 +11,45 @@ vim.opt.fileencodings = 'utf-8,sjis,iso-2022-jp,euc-jp'
 -- vim.opt.fileformat = "unix"
 vim.opt.fileformats = 'unix,dos,mac'
 
+-- undo
+vim.opt.undofile = true
+
 -- ui
 vim.opt.number = true
-if vim.g.vscode then
-else
-  -- vim.api.nvim_command
-  -- vim.cmd([[
-  --   try
-  --     colorscheme desert
-  --     set background=dark
-  --   catch /^Vim\%((\a\+)\)\=:E185/
-  --     colorscheme default
-  --     set background=dark
-  --   endtry
-  -- ]])
-end
+-- if vim.g.vscode then
+-- else
+--   vim.api.nvim_command
+--   vim.cmd([[
+--     try
+--       colorscheme desert
+--       set background=dark
+--     catch /^Vim\%((\a\+)\)\=:E185/
+--       colorscheme default
+--       set background=dark
+--     endtry
+--   ]])
+-- end
 
+-- lsp symbols
 local signs = {
-  Error = " ",
-  Warn = " ",
-  Hint = " ",
-  Info = " "
+  Error = ' ',
+  Warn = ' ',
+  Hint = ' ',
+  Info = ' ',
 }
 
 for type, icon in pairs(signs) do
-  local hl = "DiagnosticSign" .. type
+  local hl = 'DiagnosticSign' .. type
   vim.fn.sign_define(hl, {
     icon = icon,
     text = icon,
     texthl = hl,
-    numhl = hl
+    numhl = hl,
   })
 end
 
-vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
+-- lsp
+vim.lsp.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
   -- -- Enable underline, use default values
   -- -- underline = true,
   -- -- Enable virtual text, override spacing to 4
@@ -57,7 +62,7 @@ vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(vim.lsp.diagn
   -- signs = function(namespace, bufnr)
   --   return vim.b[bufnr].show_signs == true
   -- end,
-  update_in_insert = true
+  update_in_insert = true,
 })
 
 -- search
@@ -67,6 +72,11 @@ vim.opt.wildmenu = true
 vim.opt.wildmode = 'list:longest,full'
 vim.opt.wildignorecase = true
 vim.opt.completeopt = 'menu,menuone,preview'
+vim.cmd([[
+  if executable("rg")
+    set grepprg=rg\ --vimgrep
+  endif
+]])
 
 -- indent
 vim.opt.cindent = true
@@ -96,17 +106,16 @@ vim.g.clipboard = {
   name = 'win32yank_wsl',
   copy = {
     ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
-    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i'
+    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
   },
   paste = {
     ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
-    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf'
+    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
   },
-  cache_enable = 0
+  cache_enable = 0,
 }
 vim.opt.modeline = true
 vim.opt.modelines = 10
 
 -- gui
 vim.opt.guifont = 'UDEV Gothic NF:h12'
-

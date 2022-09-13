@@ -1,11 +1,11 @@
 -- reload init.lua and requires
 local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
-  clear = true
+  clear = true,
 })
-vim.api.nvim_create_autocmd({'BufWritePost'}, {
+vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
   group = augroup_reload_inits,
-  pattern = {'core.lua', 'keybind.lua', 'autocmd.lua', 'plugins.lua'},
-  callback = function(table)
+  pattern = { 'core.lua', 'keybind.lua', 'autocmd.lua', 'plugins.lua' },
+  callback = function()
     -- print(vim.inspect(table))
 
     package.loaded['core'] = nil
@@ -17,20 +17,20 @@ vim.api.nvim_create_autocmd({'BufWritePost'}, {
     require('autocmd')
     require('plugins')
     vim.api.nvim_command('PackerCompile')
-  end
+  end,
 })
 
 -- formatoptions
 -- because using autocmmd many plugins overwrite
 local augroup_formatoptions = vim.api.nvim_create_augroup('augroup_formatoptions', {
-  clear = true
+  clear = true,
 })
-vim.api.nvim_create_autocmd({'Filetype'}, {
+vim.api.nvim_create_autocmd({ 'Filetype' }, {
   group = augroup_formatoptions,
-  pattern = {'*'},
+  pattern = { '*' },
   callback = function()
     vim.opt_local.formatoptions = 'tqj'
-  end
+  end,
 })
 
 -- -- ruby
@@ -48,22 +48,24 @@ vim.api.nvim_create_autocmd({'Filetype'}, {
 
 -- json
 local augroup_json = vim.api.nvim_create_augroup('augroup_json', {
-  clear = true
+  clear = true,
 })
-vim.api.nvim_create_autocmd({'BufNewFile', 'BufRead'}, {
+vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
   group = augroup_json,
-  pattern = "*.json",
+  pattern = '*.json',
   callback = function()
     vim.opt_local.filetype = 'jsonc'
-  end
+  end,
 })
 
-local augroup_restore_cursor = vim.api.nvim_create_augroup('augroup_restore_cursor', {})
 -- Restore cursor position
-vim.api.nvim_create_autocmd({ "BufReadPost" }, {
+local augroup_restore_cursor = vim.api.nvim_create_augroup('augroup_restore_cursor', {})
+vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
   group = augroup_restore_cursor,
-    pattern = { "*" },
-    callback = function()
-        vim.api.nvim_exec('silent! normal! g`"zv', false)
-    end,
+  pattern = { '*' },
+  callback = function()
+    vim.api.nvim_exec('silent! normal! g`"zv', false)
+  end,
 })
+
+-- grep quickfix
