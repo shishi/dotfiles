@@ -16,15 +16,15 @@ vim.opt.number = true
 if vim.g.vscode then
 else
   -- vim.api.nvim_command
-  vim.cmd([[
-    try
-      colorscheme desert
-      set background=dark
-    catch /^Vim\%((\a\+)\)\=:E185/
-      colorscheme default
-      set background=dark
-    endtry
-  ]])
+  -- vim.cmd([[
+  --   try
+  --     colorscheme desert
+  --     set background=dark
+  --   catch /^Vim\%((\a\+)\)\=:E185/
+  --     colorscheme default
+  --     set background=dark
+  --   endtry
+  -- ]])
 end
 
 local signs = {
@@ -85,7 +85,7 @@ vim.opt.title = true
 -- '>' meaning right key when normal and visual mode
 -- '[' meaning left key when insert and replace mode
 -- ']' meaning right key when insert and replace mode
-vim.opt.whichwrap = '<,>,[,],b,s'
+-- vim.opt.whichwrap = '<,>,[,],b,s'
 
 -- integratiion
 vim.opt.mouse = 'a'
