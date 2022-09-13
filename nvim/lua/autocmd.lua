@@ -58,8 +58,10 @@ vim.api.nvim_create_autocmd({'BufNewFile', 'BufRead'}, {
   end
 })
 
+local augroup_restore_cursor = vim.api.nvim_create_augroup('augroup_restore_cursor', {})
 -- Restore cursor position
 vim.api.nvim_create_autocmd({ "BufReadPost" }, {
+  group = augroup_restore_cursor,
     pattern = { "*" },
     callback = function()
         vim.api.nvim_exec('silent! normal! g`"zv', false)
