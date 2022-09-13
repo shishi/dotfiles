@@ -67,6 +67,7 @@ vim.lsp.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagn
 
 -- search
 vim.opt.hlsearch = true
+vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.wildmenu = true
 vim.opt.wildmode = 'list:longest,full'
