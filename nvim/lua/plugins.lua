@@ -93,6 +93,7 @@ return packer.startup(function(use)
 
   use({
     'sindrets/diffview.nvim',
+    diable = vscode,
     requires = { { 'nvim-lua/plenary.nvim' } },
   })
 
@@ -884,6 +885,7 @@ return packer.startup(function(use)
 
   use({
     'rcarriga/nvim-dap-ui',
+    disable = vscode,
     requires = { 'mfussenegger/nvim-dap' },
   })
 
@@ -909,6 +911,7 @@ return packer.startup(function(use)
 
   use({
     'kyazdani42/nvim-tree.lua',
+    disable = vscode,
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
@@ -956,6 +959,7 @@ return packer.startup(function(use)
 
   use({
     'nvim-treesitter/nvim-treesitter',
+    disable = vscode,
     requires = { { 'p00f/nvim-ts-rainbow' }, { 'andymass/vim-matchup' }, { 'RRethy/nvim-treesitter-endwise' } },
     run = function()
       require('nvim-treesitter.install').update({
