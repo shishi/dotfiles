@@ -813,6 +813,8 @@ return packer.startup(function(use)
         -- end
         ['sumneko_lua'] = function()
           lspconfig.sumneko_lua.setup({
+            capabilitiies = capabilities,
+            on_attach = on_attach,
             settings = {
               Lua = {
                 diagnostics = {
