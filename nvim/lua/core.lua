@@ -74,11 +74,10 @@ vim.opt.wildmenu = true
 vim.opt.wildmode = 'list:longest,full'
 vim.opt.wildignorecase = true
 vim.opt.completeopt = 'menu,menuone,preview'
-vim.cmd([[
-  if executable("rg")
-    set grepprg=rg\ --vimgrep
-  endif
-]])
+
+if vim.fn.executable('rg') then
+  vim.opt.grepprg = 'rg --vimgrep'
+end
 
 -- indent
 vim.opt.cindent = true
