@@ -336,7 +336,7 @@ return packer.startup(function(use)
         history = false,
       })
       require('luasnip.loaders.from_vscode').lazy_load()
-      require('luasnip.loaders.from_vscode').lazy_load('../snippets')
+      require('luasnip.loaders.from_vscode').lazy_load('./snippets')
 
       require('luasnip').filetype_extend('ruby', { 'rails' })
       require('luasnip').filetype_extend('javascriptreact', { 'html' })
@@ -1004,6 +1004,14 @@ return packer.startup(function(use)
           enable = true,
         },
       })
+    end,
+  })
+
+  use({
+    'gen740/SmoothCursor.nvim',
+    disable = vscode,
+    config = function()
+      require('smoothcursor').setup()
     end,
   })
 

@@ -81,10 +81,16 @@ _G.packer_plugins = {
     url = "https://github.com/numToStr/Comment.nvim"
   },
   LuaSnip = {
-    config = { "\27LJ\2\2Ó\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\16../snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0" },
+    config = { "\27LJ\2\2Ò\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\15./snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
+  },
+  ["SmoothCursor.nvim"] = {
+    config = { "\27LJ\2\2:\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\17smoothcursor\frequire\0" },
+    loaded = true,
+    path = "/home/shishi/.local/share/nvim/site/pack/packer/start/SmoothCursor.nvim",
+    url = "https://github.com/gen740/SmoothCursor.nvim"
   },
   ["cmp-buffer"] = {
     loaded = true,
@@ -342,10 +348,10 @@ _G.packer_plugins = {
 }
 
 time([[Defining packer_plugins]], false)
--- Config for: hop.nvim
-time([[Config for hop.nvim]], true)
-try_loadstring("\27LJ\2\2Ô\1\0\0\4\0\f\0\0216\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\1K\0\1\0\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0", "config", "hop.nvim")
-time([[Config for hop.nvim]], false)
+-- Config for: mason.nvim
+time([[Config for mason.nvim]], true)
+try_loadstring("\27LJ\2\0023\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\nmason\frequire\0", "config", "mason.nvim")
+time([[Config for mason.nvim]], false)
 -- Config for: nvim-treesitter
 time([[Config for nvim-treesitter]], true)
 try_loadstring("\27LJ\2\2Ñ\3\0\0\4\0\20\0\0236\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\0015\2\6\0005\3\a\0=\3\b\2=\2\t\0015\2\n\0=\2\v\0015\2\f\0=\2\r\0015\2\14\0=\2\15\0015\2\16\0=\2\17\0015\2\18\0=\2\19\1B\0\2\1K\0\1\0\26context_commentstring\1\0\1\venable\2\fendwise\1\0\1\venable\2\fmatchup\1\0\1\venable\2\frainbow\1\0\2\18extended_mode\2\venable\2\vindent\1\0\1\venable\2\26incremental_selection\fkeymaps\1\0\4\19init_selection\t<CR>\21node_incremental\t<CR>\22scope_incremental\n<TAB>\21node_decremental\t<BS>\1\0\1\venable\2\14highlight\1\0\2&additional_vim_regex_highlighting\1\venable\2\1\0\1\17auto_install\2\nsetup\28nvim-treesitter.configs\frequire\0", "config", "nvim-treesitter")
@@ -362,10 +368,10 @@ time([[Config for which-key.nvim]], false)
 time([[Config for indent-blankline.nvim]], true)
 try_loadstring("\27LJ\2\2€\2\0\0\3\0\v\0\0226\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0+\1\2\0=\1\3\0006\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\6\0B\0\3\0016\0\a\0'\1\b\0B\0\2\0029\0\t\0005\1\n\0B\0\2\1K\0\1\0\1\0\3\25show_current_context\2\25space_char_blankline\6 \31show_current_context_start\2\nsetup\21indent_blankline\frequire\14space:â‹…\vappend\14listchars\tlist\18termguicolors\bopt\bvim\0", "config", "indent-blankline.nvim")
 time([[Config for indent-blankline.nvim]], false)
--- Config for: cmp-spell
-time([[Config for cmp-spell]], true)
-try_loadstring("\27LJ\2\2M\0\0\2\0\5\0\t6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0005\1\4\0=\1\3\0K\0\1\0\1\2\0\0\nen_us\14spelllang\nspell\bopt\bvim\0", "config", "cmp-spell")
-time([[Config for cmp-spell]], false)
+-- Config for: SmoothCursor.nvim
+time([[Config for SmoothCursor.nvim]], true)
+try_loadstring("\27LJ\2\2:\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\17smoothcursor\frequire\0", "config", "SmoothCursor.nvim")
+time([[Config for SmoothCursor.nvim]], false)
 -- Config for: trouble.nvim
 time([[Config for trouble.nvim]], true)
 try_loadstring("\27LJ\2\2£\4\0\0\5\0\20\00076\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0004\4\0\0B\0\5\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0004\4\0\0B\0\5\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\f\0'\3\r\0004\4\0\0B\0\5\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\14\0'\3\15\0004\4\0\0B\0\5\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\16\0'\3\17\0004\4\0\0B\0\5\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\18\0'\3\19\0004\4\0\0B\0\5\1K\0\1\0*<Cmd>TroubleToggle lsp_references<CR>\agR$<Cmd>TroubleToggle quickfix<CR>\15<Leader>xq#<Cmd>TroubleToggle loclist<CR>\15<Leader>xl0<Cmd>TroubleToggle document_diagnostics<CR>\15<Leader>xd1<Cmd>TroubleToggle workspace_diagnostics<CR>\15<Leader>xw\27<Cmd>TroubleToggle<CR>\15<Leader>xx\6n\bset\vkeymap\bvim\1\0\1\nicons\2\nsetup\ftrouble\frequire\0", "config", "trouble.nvim")
@@ -406,14 +412,18 @@ time([[Config for mason-lspconfig.nvim]], false)
 time([[Config for nvim-surround]], true)
 try_loadstring("\27LJ\2\2?\0\0\2\0\3\0\a6\0\0\0'\1\1\0B\0\2\0029\0\2\0004\1\0\0B\0\2\1K\0\1\0\nsetup\18nvim-surround\frequire\0", "config", "nvim-surround")
 time([[Config for nvim-surround]], false)
+-- Config for: cmp-spell
+time([[Config for cmp-spell]], true)
+try_loadstring("\27LJ\2\2M\0\0\2\0\5\0\t6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0005\1\4\0=\1\3\0K\0\1\0\1\2\0\0\nen_us\14spelllang\nspell\bopt\bvim\0", "config", "cmp-spell")
+time([[Config for cmp-spell]], false)
 -- Config for: toggleterm.nvim
 time([[Config for toggleterm.nvim]], true)
 try_loadstring("\27LJ\2\2y\0\1\2\0\6\1\0159\1\0\0\a\1\1\0X\1\3€)\1\20\0L\1\2\0X\1\b€9\1\0\0\a\1\2\0X\1\5€6\1\3\0009\1\4\0019\1\5\1\24\1\0\1L\1\2\0K\0\1\0\fcolumns\6o\bvim\rvertical\15horizontal\14directionµæÌ™\19™³æþ\3$\0\0\2\1\1\0\5-\0\0\0\18\1\0\0009\0\0\0B\0\2\1K\0\1\0\1À\vtoggleÌ\4\1\0\a\0\28\00046\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0003\2\4\0=\2\5\1B\0\2\0016\0\6\0009\0\a\0009\0\b\0005\1\t\0'\2\n\0'\3\v\0004\4\0\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0005\1\f\0'\2\r\0'\3\14\0004\4\0\0B\0\5\0016\0\6\0009\0\a\0009\0\b\0005\1\15\0'\2\16\0'\3\17\0004\4\0\0B\0\5\0016\0\0\0'\1\18\0B\0\2\0029\0\19\0\18\2\0\0009\1\20\0005\3\21\0B\1\3\0023\2\22\0007\2\23\0006\2\6\0009\2\a\0029\2\b\2'\3\24\0'\4\25\0'\5\26\0005\6\27\0B\2\5\0012\0\0€K\0\1\0\1\0\1\tdesc\flazygit#<Cmd>lua _lazygit_toggle()<CR>\n<A-g>\6n\20_lazygit_toggle\0\1\0\4\vhidden\2\bcmd\flazygit\14direction\nfloat\ncount\3d\bnew\rTerminal\24toggleterm.terminal*<Cmd>10ToggleTerm direction=float<CR>\f<C-k>pt\1\3\0\0\6n\6t!<Cmd>ToggleTermToggleAll<CR>\f<C-k>at\1\3\0\0\6n\6t)<Cmd>exe v:count1 . \"ToggleTerm\"<CR>\v<C-k>t\1\3\0\0\6n\6t\bset\vkeymap\bvim\tsize\0\1\0\1\14direction\15horizontal\nsetup\15toggleterm\frequire\0", "config", "toggleterm.nvim")
 time([[Config for toggleterm.nvim]], false)
--- Config for: gruvbox-material
-time([[Config for gruvbox-material]], true)
-try_loadstring("\27LJ\2\2ì\a\0\0\3\0\18\0'6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0'\1\4\0=\1\3\0006\0\0\0009\0\5\0'\1\a\0=\1\6\0006\0\0\0009\0\5\0)\1\1\0=\1\b\0006\0\0\0009\0\t\0009\0\n\0'\1\v\0+\2\1\0B\0\3\0016\0\0\0009\0\5\0)\1\1\0=\1\f\0006\0\0\0009\0\5\0)\1\1\0=\1\r\0006\0\0\0009\0\5\0'\1\15\0=\1\14\0006\0\0\0009\0\16\0'\1\17\0B\0\2\1K\0\1\0!colorscheme gruvbox-material\bcmd\fcolored-gruvbox_material_diagnostic_virtual_text/gruvbox_material_diagnostic_line_highlight/gruvbox_material_diagnostic_text_highlight©\4        augroup nord-theme-overrides\n          autocmd!\n          autocmd ColorScheme gruvbox-material highlight Folded ctermfg=LightGray guifg=#918d88\n          autocmd ColorScheme gruvbox-material highlight Folded ctermbg=235 guibg=#282828\n          autocmd ColorScheme gruvbox-material highlight Folded cterm=italic gui=italic\n          autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828\n          autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828\n        augroup END\n      \14nvim_exec\bapi(gruvbox_material_better_performance\thard gruvbox_material_background\6g\tdark\15background\18termguicolors\bopt\bvim\0", "config", "gruvbox-material")
-time([[Config for gruvbox-material]], false)
+-- Config for: lualine.nvim
+time([[Config for lualine.nvim]], true)
+try_loadstring("\27LJ\2\2Ý\1\0\0\5\0\f\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\6\0005\2\4\0004\3\3\0005\4\3\0>\4\1\3=\3\5\2=\2\a\0015\2\b\0=\2\t\0015\2\n\0=\2\v\1B\0\2\1K\0\1\0\15extensions\1\4\0\0\14nvim-tree\rquickfix\15toggleterm\foptions\1\0\1\ntheme\21gruvbox-material\rsections\1\0\0\14lualine_a\1\0\0\1\2\1\0\rfilename\tpath\3\3\nsetup\flualine\frequire\0", "config", "lualine.nvim")
+time([[Config for lualine.nvim]], false)
 -- Config for: vim-illuminate
 time([[Config for vim-illuminate]], true)
 try_loadstring("\27LJ\2\2@\0\0\2\0\3\0\a6\0\0\0'\1\1\0B\0\2\0029\0\2\0004\1\0\0B\0\2\1K\0\1\0\14configure\15illuminate\frequire\0", "config", "vim-illuminate")
@@ -422,14 +432,14 @@ time([[Config for vim-illuminate]], false)
 time([[Config for gitsigns.nvim]], true)
 try_loadstring("\27LJ\2\2W\0\4\t\1\4\0\14\14\0\3\0X\4\1€4\3\0\0-\4\0\0=\4\0\0036\4\1\0009\4\2\0049\4\3\4\18\5\0\0\18\6\1\0\18\a\2\0\18\b\3\0B\4\5\1K\0\1\0\0À\bset\vkeymap\bvim\vbuffer#\0\0\1\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0\0\14next_hunkg\1\0\2\1\a\0\0156\0\0\0009\0\1\0009\0\2\0\15\0\0\0X\1\2€'\0\3\0002\0\a€6\0\0\0009\0\4\0003\1\5\0B\0\2\1'\0\6\0002\0\0€L\0\2\0L\0\2\0\1À\r<Ignore>\0\rschedule\a]c\tdiff\awo\bvim#\0\0\1\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0\0\14prev_hunkg\1\0\2\1\a\0\0156\0\0\0009\0\1\0009\0\2\0\15\0\0\0X\1\2€'\0\3\0002\0\a€6\0\0\0009\0\4\0003\1\5\0B\0\2\1'\0\6\0002\0\0€L\0\2\0L\0\2\0\1À\r<Ignore>\0\rschedule\a[c\tdiff\awo\bvimð\1\1\1\b\0\14\0\0236\1\0\0009\1\1\0019\1\2\0013\2\3\0\18\3\2\0'\4\4\0'\5\5\0003\6\6\0005\a\a\0B\3\5\1\18\3\2\0'\4\4\0'\5\b\0003\6\t\0005\a\n\0B\3\5\1\18\3\2\0005\4\v\0'\5\f\0'\6\r\0B\3\4\0012\0\0€K\0\1\0#:<C-U>Gitsigns select_hunk<CR>\aih\1\3\0\0\6o\6x\1\0\2\texpr\2\tdesc\22gitsign prev_hunk\0\a[c\1\0\2\texpr\2\tdesc\22gitsign next_hunk\0\a]c\6n\0\rgitsigns\vloaded\fpackageP\1\0\3\0\6\0\t6\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0003\2\3\0=\2\5\1B\0\2\1K\0\1\0\14on_attach\1\0\0\0\nsetup\rgitsigns\frequire\0", "config", "gitsigns.nvim")
 time([[Config for gitsigns.nvim]], false)
--- Config for: lualine.nvim
-time([[Config for lualine.nvim]], true)
-try_loadstring("\27LJ\2\2Ý\1\0\0\5\0\f\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\6\0005\2\4\0004\3\3\0005\4\3\0>\4\1\3=\3\5\2=\2\a\0015\2\b\0=\2\t\0015\2\n\0=\2\v\1B\0\2\1K\0\1\0\15extensions\1\4\0\0\14nvim-tree\rquickfix\15toggleterm\foptions\1\0\1\ntheme\21gruvbox-material\rsections\1\0\0\14lualine_a\1\0\0\1\2\1\0\rfilename\tpath\3\3\nsetup\flualine\frequire\0", "config", "lualine.nvim")
-time([[Config for lualine.nvim]], false)
--- Config for: mason.nvim
-time([[Config for mason.nvim]], true)
-try_loadstring("\27LJ\2\0023\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\nmason\frequire\0", "config", "mason.nvim")
-time([[Config for mason.nvim]], false)
+-- Config for: gruvbox-material
+time([[Config for gruvbox-material]], true)
+try_loadstring("\27LJ\2\2ì\a\0\0\3\0\18\0'6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0'\1\4\0=\1\3\0006\0\0\0009\0\5\0'\1\a\0=\1\6\0006\0\0\0009\0\5\0)\1\1\0=\1\b\0006\0\0\0009\0\t\0009\0\n\0'\1\v\0+\2\1\0B\0\3\0016\0\0\0009\0\5\0)\1\1\0=\1\f\0006\0\0\0009\0\5\0)\1\1\0=\1\r\0006\0\0\0009\0\5\0'\1\15\0=\1\14\0006\0\0\0009\0\16\0'\1\17\0B\0\2\1K\0\1\0!colorscheme gruvbox-material\bcmd\fcolored-gruvbox_material_diagnostic_virtual_text/gruvbox_material_diagnostic_line_highlight/gruvbox_material_diagnostic_text_highlight©\4        augroup nord-theme-overrides\n          autocmd!\n          autocmd ColorScheme gruvbox-material highlight Folded ctermfg=LightGray guifg=#918d88\n          autocmd ColorScheme gruvbox-material highlight Folded ctermbg=235 guibg=#282828\n          autocmd ColorScheme gruvbox-material highlight Folded cterm=italic gui=italic\n          autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828\n          autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828\n        augroup END\n      \14nvim_exec\bapi(gruvbox_material_better_performance\thard gruvbox_material_background\6g\tdark\15background\18termguicolors\bopt\bvim\0", "config", "gruvbox-material")
+time([[Config for gruvbox-material]], false)
+-- Config for: hop.nvim
+time([[Config for hop.nvim]], true)
+try_loadstring("\27LJ\2\2Ô\1\0\0\4\0\f\0\0216\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\1K\0\1\0\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0", "config", "hop.nvim")
+time([[Config for hop.nvim]], false)
 -- Config for: Comment.nvim
 time([[Config for Comment.nvim]], true)
 try_loadstring("\27LJ\2\2k\0\0\4\0\a\0\0146\0\0\0'\1\1\0B\0\2\0029\0\2\0004\1\0\0B\0\2\0016\0\0\0'\1\3\0B\0\2\0029\1\4\0'\2\5\0'\3\6\0B\1\3\1K\0\1\0\b#%s\ash\bset\15Comment.ft\nsetup\fComment\frequire\0", "config", "Comment.nvim")
@@ -440,7 +450,7 @@ try_loadstring("\27LJ\2\2I\0\0\3\1\6\0\t6\0\0\0009\0\1\0009\0\2\0009\0\3\0005\1\
 time([[Config for null-ls.nvim]], false)
 -- Config for: LuaSnip
 time([[Config for LuaSnip]], true)
-try_loadstring("\27LJ\2\2Ó\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\16../snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0", "config", "LuaSnip")
+try_loadstring("\27LJ\2\2Ò\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\15./snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0", "config", "LuaSnip")
 time([[Config for LuaSnip]], false)
 
 _G._packer.inside_compile = false
