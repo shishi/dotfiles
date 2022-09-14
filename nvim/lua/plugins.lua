@@ -343,28 +343,21 @@ return packer.startup(function(use)
       -- vim.keymap.set('i', '<Tab>', function()
       --   require('luasnip').expand_or_jump()
       -- end, {
-      --   silent = true
       -- })
       --
       -- vim.keymap.set('i', '<S-Tab>', function()
       --   require('luasnip').jump(-1)
       -- end, {
-      --   silent = true,
-      --   noremap = true
       -- })
       --
       -- vim.keymap.set('s', '<Tab>', function()
       --   require('luasnip').jump(1)
       -- end, {
-      --   silent = true,
-      --   noremap = true
       -- })
       --
       -- vim.keymap.set('s', '<S-Tab>', function()
       --   require('luasnip').jump(-1)
       -- end, {
-      --   silent = true,
-      --   noremap = true
       -- })
     end,
   })
@@ -654,25 +647,17 @@ return packer.startup(function(use)
       -- Mappings.
       -- See `:help vim.diagnostic.*` for documentation on any of the below functions
       -- local diagnostic_opts = {
-      -- 	noremap = true,
-      -- 	silent = true,
       -- }
       vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
-        noremap = true,
-        silent = true,
         desc = 'diagnose open_float',
       })
       vim.keymap.set('n', '<Leader>[', vim.diagnostic.goto_prev, {
-        noremap = true,
-        silent = true,
         desc = 'diagnose goto_prev',
       })
       vim.keymap.set('n', '<Leader>]', vim.diagnostic.goto_next, {
-        noremap = true,
-        silent = true,
         desc = 'diagnose goto_next',
       })
-      -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { noremap = true, silent = true, desc = 'diagnose set_loclist'})
+      -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
 
       -- https://github.com/jose-elias-alvarez/null-ls.nvim/wiki/Avoiding-LSP-formatting-conflicts
       local lsp_formatting = function(bufnr)
@@ -713,41 +698,29 @@ return packer.startup(function(use)
         -- Mappings.
         -- See `:help vim.lsp.*` for documentation on any of the below functions
         -- local lsp_bufopts = {
-        -- 	noremap = true,
-        -- 	silent = true,
         -- 	buffer = bufnr,
         -- }
         vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp delaration',
         })
         vim.keymap.set('n', 'gd', function()
           require('telescope.builtin').lsp_definitions()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp.buf.definition',
         })
         vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp hover',
         })
         vim.keymap.set('n', 'gi', function()
           require('telescope.builtin').lsp_implementations()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp.buf.implementation',
         })
         vim.keymap.set('n', 'gk', vim.lsp.buf.signature_help, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp signature_help',
         })
@@ -755,48 +728,38 @@ return packer.startup(function(use)
           'n',
           '<Leader>wa',
           vim.lsp.buf.add_workspace_folder,
-          { noremap = true, silent = true, buffer = bufnr, desc = 'vim.lsp add_workspace_folder' }
+          { buffer = bufnr, desc = 'vim.lsp add_workspace_folder' }
         )
         vim.keymap.set(
           'n',
           '<Leader>wr',
           vim.lsp.buf.remove_workspace_folder,
-          { noremap = true, silent = true, buffer = bufnr, desc = 'vim.lsp remove_workspace_folder' }
+          { buffer = bufnr, desc = 'vim.lsp remove_workspace_folder' }
         )
         vim.keymap.set('n', '<Leader>wl', function()
           print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-        end, { noremap = true, silent = true, buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
+        end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
         vim.keymap.set('n', '<Leader>D', function()
           require('telescope.builtin').lsp_type_definitions()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp.buf.type_definition',
         })
         vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp rename',
         })
         vim.keymap.set('n', '<F2>', vim.lsp.buf.rename, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp rename',
         })
         vim.keymap.set('n', '<Leader>ca', vim.lsp.buf.code_action, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp code_action',
         })
         vim.keymap.set('n', 'gr', function()
           require('telescope.builtin').lsp_references()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp.buf.references',
         })
@@ -808,8 +771,6 @@ return packer.startup(function(use)
           -- 0.8
           vim.lsp.buf.format,
           {
-            noremap = true,
-            silent = true,
             buffer = bufnr,
             desc = 'vim.lsp format',
           }
@@ -817,16 +778,12 @@ return packer.startup(function(use)
         vim.keymap.set('n', '<Leader>s', function()
           require('telescope.builtin').lsp_dynamic_workspace_symbols()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp lsp_dynamic_workspace_symbols',
         })
         vim.keymap.set('n', '<Leader><Leader>s', function()
           require('telescope.builtin').lsp_document_symbols()
         end, {
-          noremap = true,
-          silent = true,
           buffer = bufnr,
           desc = 'vim.lsp lsp_document_symbols',
         })
@@ -1227,15 +1184,9 @@ return packer.startup(function(use)
           end
         end,
       })
-      vim.keymap.set({ 'n', 't' }, '<C-k>t', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {
-        silent = true,
-      })
-      vim.keymap.set({ 'n', 't' }, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {
-        silent = true,
-      })
-      vim.keymap.set({ 'n', 't' }, '<C-k>pt', '<Cmd>10ToggleTerm direction=float<CR>', {
-        silent = true,
-      })
+      vim.keymap.set({ 'n', 't' }, '<C-k>t', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {})
+      vim.keymap.set({ 'n', 't' }, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {})
+      vim.keymap.set({ 'n', 't' }, '<C-k>pt', '<Cmd>10ToggleTerm direction=float<CR>', {})
 
       local Terminal = require('toggleterm.terminal').Terminal
       local lazygit = Terminal:new({
@@ -1251,8 +1202,6 @@ return packer.startup(function(use)
       end
 
       vim.keymap.set('n', '<A-g>', '<Cmd>lua _lazygit_toggle()<CR>', {
-        noremap = true,
-        silent = true,
         desc = 'lazygit',
       })
     end,
@@ -1267,30 +1216,12 @@ return packer.startup(function(use)
         icons = true,
       })
 
-      vim.keymap.set('n', '<Leader>xx', '<Cmd>TroubleToggle<CR>', {
-        silent = true,
-        noremap = true,
-      })
-      vim.keymap.set('n', '<Leader>xw', '<Cmd>TroubleToggle workspace_diagnostics<CR>', {
-        silent = true,
-        noremap = true,
-      })
-      vim.keymap.set('n', '<Leader>xd', '<Cmd>TroubleToggle document_diagnostics<CR>', {
-        silent = true,
-        noremap = true,
-      })
-      vim.keymap.set('n', '<Leader>xl', '<Cmd>TroubleToggle loclist<CR>', {
-        silent = true,
-        noremap = true,
-      })
-      vim.keymap.set('n', '<Leader>xq', '<Cmd>TroubleToggle quickfix<CR>', {
-        silent = true,
-        noremap = true,
-      })
-      vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {
-        silent = true,
-        noremap = true,
-      })
+      vim.keymap.set('n', '<Leader>xx', '<Cmd>TroubleToggle<CR>', {})
+      vim.keymap.set('n', '<Leader>xw', '<Cmd>TroubleToggle workspace_diagnostics<CR>', {})
+      vim.keymap.set('n', '<Leader>xd', '<Cmd>TroubleToggle document_diagnostics<CR>', {})
+      vim.keymap.set('n', '<Leader>xl', '<Cmd>TroubleToggle loclist<CR>', {})
+      vim.keymap.set('n', '<Leader>xq', '<Cmd>TroubleToggle quickfix<CR>', {})
+      vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {})
     end,
   })
 
