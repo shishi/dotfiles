@@ -81,7 +81,7 @@ _G.packer_plugins = {
     url = "https://github.com/numToStr/Comment.nvim"
   },
   LuaSnip = {
-    config = { "\27LJ\2\2¯\2\0\0\3\0\14\0\"6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\b\0005\2\t\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\n\0005\2\v\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\f\0005\2\r\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0" },
+    config = { "\27LJ\2\2Ó\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\16../snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
@@ -440,7 +440,7 @@ try_loadstring("\27LJ\2\2I\0\0\3\1\6\0\t6\0\0\0009\0\1\0009\0\2\0009\0\3\0005\1\
 time([[Config for null-ls.nvim]], false)
 -- Config for: LuaSnip
 time([[Config for LuaSnip]], true)
-try_loadstring("\27LJ\2\2¯\2\0\0\3\0\14\0\"6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\b\0005\2\t\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\n\0005\2\v\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\a\0'\1\f\0005\2\r\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0", "config", "LuaSnip")
+try_loadstring("\27LJ\2\2Ó\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\0005\1\4\0B\0\2\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0B\0\1\0016\0\0\0'\1\5\0B\0\2\0029\0\6\0'\1\a\0B\0\2\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\t\0005\2\n\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\v\0005\2\f\0B\0\3\0016\0\0\0'\1\1\0B\0\2\0029\0\b\0'\1\r\0005\2\14\0B\0\3\1K\0\1\0\1\2\0\0\thtml\20typescriptreact\1\2\0\0\thtml\20javascriptreact\1\2\0\0\nrails\truby\20filetype_extend\16../snippets\14lazy_load luasnip.loaders.from_vscode\1\0\1\fhistory\1\nsetup\vconfig\fluasnip\frequire\0", "config", "LuaSnip")
 time([[Config for LuaSnip]], false)
 
 _G._packer.inside_compile = false

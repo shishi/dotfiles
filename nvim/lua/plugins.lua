@@ -336,6 +336,8 @@ return packer.startup(function(use)
         history = false,
       })
       require('luasnip.loaders.from_vscode').lazy_load()
+      require('luasnip.loaders.from_vscode').lazy_load('../snippets')
+
       require('luasnip').filetype_extend('ruby', { 'rails' })
       require('luasnip').filetype_extend('javascriptreact', { 'html' })
       require('luasnip').filetype_extend('typescriptreact', { 'html' })
