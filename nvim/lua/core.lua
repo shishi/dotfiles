@@ -15,7 +15,8 @@ vim.opt.fileformats = 'unix,dos,mac'
 vim.opt.undofile = true
 
 -- ui
-vim.opt.number = true
+vim.opt.relativenumber = true
+-- vim.opt.number = true
 -- if vim.g.vscode then
 -- else
 --   vim.api.nvim_command

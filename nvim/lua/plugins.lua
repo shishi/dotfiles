@@ -332,6 +332,9 @@ return packer.startup(function(use)
     disable = vscode,
     requires = { { 'rafamadriz/friendly-snippets' } },
     config = function()
+      require('luasnip').config.setup({
+        history = false,
+      })
       require('luasnip.loaders.from_vscode').lazy_load()
       require('luasnip').filetype_extend('ruby', { 'rails' })
       require('luasnip').filetype_extend('javascriptreact', { 'html' })
@@ -507,6 +510,43 @@ return packer.startup(function(use)
         path = '[Path]',
       }
 
+      -- local fn = vim.fn
+      --
+      -- local function t(str)
+      --   return vim.api.nvim_replace_termcodes(str, true, true, true)
+      -- end
+      --
+      local has_words_before = function()
+        local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+        return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match('%s') == nil
+      end
+
+      local function tab(fallback)
+        local luasnip = require('luasnip')
+        if cmp.visible() then
+          cmp.select_next_item()
+          -- fn.feedkeys(t('<C-n>'), 'n')
+        elseif luasnip.expand_or_locally_jumpable() then
+          require('luasnip').expand_or_jump()
+        elseif has_words_before() then
+          cmp.complete()
+        else
+          fallback()
+        end
+      end
+
+      local function shift_tab(fallback)
+        local luasnip = require('luasnip')
+        if cmp.visible() then
+          cmp.select_prev_item()
+          -- fn.feedkeys(t('<C-p>'), 'n')
+        elseif luasnip.locally_jumpable(-1) then
+          require('luasnip').jump_prev()
+        else
+          fallback()
+        end
+      end
+
       cmp.setup({
         snippet = {
           expand = function(args)
@@ -520,15 +560,11 @@ return packer.startup(function(use)
         mapping = cmp.mapping.preset.insert({
           ['<C-b>'] = cmp.mapping.scroll_docs(-4),
           ['<C-f>'] = cmp.mapping.scroll_docs(4),
-          ['<Tab>'] = function(fallback)
-            if cmp.visible() then
-              cmp.select_next_item()
-            else
-              fallback()
-            end
-          end,
+          ['<Tab>'] = cmp.mapping(tab),
+          ['<S-Tab>'] = cmp.mapping(shift_tab),
           ['<C-Space>'] = cmp.mapping.complete(),
           ['<C-e>'] = cmp.mapping.abort(),
+          ['<Esc>'] = cmp.mapping.abort(),
           ['<CR>'] = function(fallback)
             if cmp.visible() then
               cmp.confirm({
@@ -917,7 +953,9 @@ return packer.startup(function(use)
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
-        -- sync_root_with_cwd = true,
+        open_on_setup = true,
+        open_on_setup_file = true,
+        sync_root_with_cwd = true,
         respect_buf_cwd = true,
         update_focused_file = {
           enable = true,
