@@ -425,7 +425,7 @@ return packer.startup(function(use)
           null_ls.builtins.code_actions.eslint_d,
           null_ls.builtins.code_actions.gitrebase,
           null_ls.builtins.code_actions.gitsigns,
-          null_ls.builtins.code_actions.refactoring,
+          -- null_ls.builtins.code_actions.refactoring,
           -- null_ls.builtins.code_actions.xo,
           -- completion
           null_ls.builtins.completion.spell,
