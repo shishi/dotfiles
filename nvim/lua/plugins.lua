@@ -49,6 +49,29 @@ return packer.startup(function(use)
   use({ 'wbthomason/packer.nvim' })
 
   use({
+    'rmagatti/auto-session',
+    config = function()
+      require('auto-session').setup({
+        log_level = 'error',
+        auto_session_enabled = true,
+        auto_session_create_enabled = true,
+        auto_save_enabled = true,
+        auto_resore_enabled = true,
+        -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
+        -- auto_session_allowed_dirs = {},
+        -- auto_session_use_git_branch = true,
+        cwd_change_handling = {
+          restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
+          pre_cwd_changed_hook = nil, -- already the default, no need to specify like this, only here as an example
+          post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
+            require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
+          end,
+        },
+      })
+    end,
+  })
+
+  use({
     'akinsho/bufferline.nvim',
     tag = 'v2.*',
     disable = true,
@@ -389,6 +412,7 @@ return packer.startup(function(use)
       -- })
     end,
   })
+
   use({
     'williamboman/mason-lspconfig.nvim',
     disable = vscode,
