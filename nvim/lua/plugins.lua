@@ -84,6 +84,7 @@ return packer.startup(function(use)
 
   use({
     'numToStr/Comment.nvim',
+    disable = vscode,
     config = function()
       require('Comment').setup({})
       local ft = require('Comment.ft')
@@ -604,9 +605,9 @@ return packer.startup(function(use)
           { name = 'nvim_lsp' },
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
+          { name = 'spell' },
           {
             { name = 'buffer' },
-            { name = 'spell' },
           },
         }),
         -- stylua: ignore end
