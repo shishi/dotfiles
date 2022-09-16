@@ -181,13 +181,13 @@ _G.packer_plugins = {
     url = "https://github.com/sainnhe/gruvbox-material"
   },
   ["hop.nvim"] = {
-    config = { "\27LJ\2\2‘\1\0\0\4\0\f\0\0216\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\1K\0\1\0\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0" },
+    config = { "\27LJ\2\2ç\a\0\0\5\0\22\00056\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\14\0'\3\15\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\16\0'\3\17\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\18\0'\3\19\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\20\0'\3\21\0004\4\0\0B\0\5\1K\0\1\0ì\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>\6Tì\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>\6tÇ\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>\6FÅ\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>\6f\20nvim_set_keymap\bapi\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/hop.nvim",
     url = "https://github.com/phaazon/hop.nvim"
   },
   ["indent-blankline.nvim"] = {
-    config = { "\27LJ\2\2Ä\2\0\0\3\0\v\0\0226\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0+\1\2\0=\1\3\0006\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\6\0B\0\3\0016\0\a\0'\1\b\0B\0\2\0029\0\t\0005\1\n\0B\0\2\1K\0\1\0\1\0\3\25show_current_context\2\25space_char_blankline\6 \31show_current_context_start\2\nsetup\21indent_blankline\frequire\14space:‚ãÖ\vappend\14listchars\tlist\18termguicolors\bopt\bvim\0" },
+    config = { "\27LJ\2\2§\2\0\0\3\0\f\0\0296\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0+\1\2\0=\1\3\0006\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\6\0B\0\3\0016\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\a\0B\0\3\0016\0\b\0'\1\t\0B\0\2\0029\0\n\0005\1\v\0B\0\2\1K\0\1\0\1\0\3\25show_current_context\2\25space_char_blankline\6 \31show_current_context_start\2\nsetup\21indent_blankline\frequire\feol:‚Ü¥\14space:‚ãÖ\vappend\14listchars\tlist\18termguicolors\bopt\bvim\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/indent-blankline.nvim",
     url = "https://github.com/lukas-reineke/indent-blankline.nvim"
@@ -396,7 +396,7 @@ try_loadstring("\27LJ\2\2n\0\0\4\0\b\0\v6\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\6\00
 time([[Config for which-key.nvim]], false)
 -- Config for: indent-blankline.nvim
 time([[Config for indent-blankline.nvim]], true)
-try_loadstring("\27LJ\2\2Ä\2\0\0\3\0\v\0\0226\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0+\1\2\0=\1\3\0006\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\6\0B\0\3\0016\0\a\0'\1\b\0B\0\2\0029\0\t\0005\1\n\0B\0\2\1K\0\1\0\1\0\3\25show_current_context\2\25space_char_blankline\6 \31show_current_context_start\2\nsetup\21indent_blankline\frequire\14space:‚ãÖ\vappend\14listchars\tlist\18termguicolors\bopt\bvim\0", "config", "indent-blankline.nvim")
+try_loadstring("\27LJ\2\2§\2\0\0\3\0\f\0\0296\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\0\0009\0\1\0+\1\2\0=\1\3\0006\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\6\0B\0\3\0016\0\0\0009\0\1\0009\0\4\0\18\1\0\0009\0\5\0'\2\a\0B\0\3\0016\0\b\0'\1\t\0B\0\2\0029\0\n\0005\1\v\0B\0\2\1K\0\1\0\1\0\3\25show_current_context\2\25space_char_blankline\6 \31show_current_context_start\2\nsetup\21indent_blankline\frequire\feol:‚Ü¥\14space:‚ãÖ\vappend\14listchars\tlist\18termguicolors\bopt\bvim\0", "config", "indent-blankline.nvim")
 time([[Config for indent-blankline.nvim]], false)
 -- Config for: SmoothCursor.nvim
 time([[Config for SmoothCursor.nvim]], true)
@@ -472,7 +472,7 @@ try_loadstring("\27LJ\2\2W\0\4\t\1\4\0\14\14\0\3\0X\4\1Ä4\3\0\0-\4\0\0=\4\0\0036
 time([[Config for gitsigns.nvim]], false)
 -- Config for: hop.nvim
 time([[Config for hop.nvim]], true)
-try_loadstring("\27LJ\2\2‘\1\0\0\4\0\f\0\0216\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\1K\0\1\0\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0", "config", "hop.nvim")
+try_loadstring("\27LJ\2\2ç\a\0\0\5\0\22\00056\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0B\0\2\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\b\0'\3\t\0B\0\4\0016\0\4\0009\0\5\0009\0\6\0'\1\a\0'\2\n\0'\3\v\0B\0\4\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\14\0'\3\15\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\16\0'\3\17\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\18\0'\3\19\0004\4\0\0B\0\5\0016\0\4\0009\0\f\0009\0\r\0'\1\a\0'\2\20\0'\3\21\0004\4\0\0B\0\5\1K\0\1\0ì\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>\6Tì\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>\6tÇ\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>\6FÅ\1<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>\6f\20nvim_set_keymap\bapi\22<Cmd>HopChar1<CR>\14<Leader>f\21<Cmd>HopWord<CR>\14<Leader>w\5\bset\vkeymap\bvim\1\0\1\tkeys\28etovxqpdygfblzhckisuran\nsetup\bhop\frequire\0", "config", "hop.nvim")
 time([[Config for hop.nvim]], false)
 -- Config for: nvim-treesitter
 time([[Config for nvim-treesitter]], true)

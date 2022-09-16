@@ -291,6 +291,31 @@ return packer.startup(function(use)
       vim.keymap.set('', '<Leader>f', '<Cmd>HopChar1<CR>')
       -- vim.keymap.set('', '<Leader>l', '<Cmd>HopLine<CR>')
       -- vim.keymap.set('', '<Leader>c', '<Cmd>HopChar1CurrentLine<CR>')
+
+      vim.api.nvim_set_keymap(
+        '',
+        'f',
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
+        {}
+      )
+      vim.api.nvim_set_keymap(
+        '',
+        'F',
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
+        {}
+      )
+      vim.api.nvim_set_keymap(
+        '',
+        't',
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
+        {}
+      )
+      vim.api.nvim_set_keymap(
+        '',
+        'T',
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
+        {}
+      )
     end,
   })
 
@@ -326,7 +351,7 @@ return packer.startup(function(use)
 
       vim.opt.list = true
       vim.opt.listchars:append('space:⋅')
-      -- vim.opt.listchars:append('eol:↴')
+      vim.opt.listchars:append('eol:↴')
 
       require('indent_blankline').setup({
         -- char = '',
