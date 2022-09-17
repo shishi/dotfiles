@@ -50,7 +50,7 @@ return packer.startup(function(use)
 
   use({
     'rmagatti/auto-session',
-    disable = true,
+    disable = vscode,
     config = function()
       require('auto-session').setup({
         -- log_level = 'error',
@@ -61,6 +61,7 @@ return packer.startup(function(use)
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
+        pre_save_cmds = { "lua require'nvim-tree'.setup({})", 'tabdo NvimTreeClose' },
         cwd_change_handling = {
           restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
           pre_cwd_changed_hook = nil, -- already the default, no need to specify like this, only here as an example
@@ -69,6 +70,7 @@ return packer.startup(function(use)
           end,
         },
       })
+      vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
     end,
   })
 
@@ -926,6 +928,13 @@ return packer.startup(function(use)
     end,
   })
 
+  -- use({
+  --   'Shatur/neovim-session-manager',
+  --   config = function()
+  --     require('session_manager').setup({})
+  --   end,
+  -- })
+
   use({
     'mfussenegger/nvim-dap',
     disable = vscode,
@@ -1019,7 +1028,7 @@ return packer.startup(function(use)
 
   use({
     'kyazdani42/nvim-tree.lua',
-    disable = vscode,
+    -- disable = true,
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
@@ -1064,6 +1073,20 @@ return packer.startup(function(use)
       --     end
       --   end
       -- })
+      vim.api.nvim_create_autocmd('BufEnter', {
+        group = vim.api.nvim_create_augroup('NvimTreeClose', { clear = true }),
+        pattern = 'NvimTree_*',
+        callback = function()
+          local layout = vim.api.nvim_call_function('winlayout', {})
+          if
+            layout[1] == 'leaf'
+            and vim.api.nvim_buf_get_option(vim.api.nvim_win_get_buf(layout[2]), 'filetype') == 'NvimTree'
+            and layout[3] == nil
+          then
+            vim.cmd('confirm quit')
+          end
+        end,
+      })
     end,
   })
 
