@@ -50,13 +50,14 @@ return packer.startup(function(use)
 
   use({
     'rmagatti/auto-session',
+    disable = true,
     config = function()
       require('auto-session').setup({
-        log_level = 'error',
-        auto_session_enabled = true,
-        auto_session_create_enabled = true,
-        auto_save_enabled = true,
-        auto_resore_enabled = true,
+        -- log_level = 'error',
+        -- auto_session_enabled = true,
+        -- auto_session_create_enabled = true,
+        -- auto_save_enabled = true,
+        -- auto_resore_enabled = true,
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
@@ -126,10 +127,10 @@ return packer.startup(function(use)
     end,
   })
 
-  use({
-    'github/copilot.vim',
-    disable = vscode,
-  })
+  -- use({
+  --   'github/copilot.vim',
+  --   disable = vscode,
+  -- })
 
   use({
     'zbirenbaum/copilot-cmp',
@@ -141,9 +142,27 @@ return packer.startup(function(use)
   })
 
   use({
+    'saecki/crates.nvim',
+    disable = vscode,
+    tag = 'v0.2.1',
+    requires = { { 'nvim-lua/plenary.nvim' } },
+    config = function()
+      require('crates').setup()
+    end,
+  })
+
+  use({
     'sindrets/diffview.nvim',
     diable = vscode,
     requires = { { 'nvim-lua/plenary.nvim' } },
+  })
+
+  use({
+    'j-hui/fidget.nvim',
+    disable = vscode,
+    config = function()
+      require('fidget').setup({})
+    end,
   })
 
   use({
@@ -655,6 +674,7 @@ return packer.startup(function(use)
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
           { name = 'spell' },
+          { name = 'crates' },
           {
             { name = 'buffer' },
           },
@@ -981,6 +1001,14 @@ return packer.startup(function(use)
     requires = { { 'williamboman/mason-lspconfig.nvim' } },
   })
 
+  -- use({
+  --   'rcarriga/nvim-notify',
+  --   disable = vscode,
+  --   config = function()
+  --     require('notify').setup({})
+  --   end,
+  -- })
+
   use({
     'kylechui/nvim-surround',
     tag = '*', -- Use for stability; omit to use `main` branch for the latest features
@@ -1121,6 +1149,15 @@ return packer.startup(function(use)
     'kyazdani42/nvim-web-devicons',
     disable = vscode,
   })
+
+  -- use({
+  --   'folke/persistence.nvim',
+  --   event = 'BufReadPre', -- this will only start session saving when an actual file was opened
+  --   module = 'persistence',
+  --   config = function()
+  --     require('persistence').setup()
+  --   end,
+  -- })
 
   use({ 'nvim-lua/plenary.nvim' })
 
