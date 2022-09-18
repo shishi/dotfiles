@@ -63,7 +63,10 @@ return packer.startup(function(use)
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
+        -- nvim-tree
         pre_save_cmds = { "lua require('nvim-tree').setup({})", 'tabdo NvimTreeClose' },
+        -- for neo-tree cmds
+        -- https://github.com/nvim-neo-tree/neo-tree.nvim/issues/128
         cwd_change_handling = {
           restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
           pre_cwd_changed_hook = nil, -- already the default, no need to specify like this, only here as an example
