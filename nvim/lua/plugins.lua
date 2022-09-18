@@ -48,7 +48,6 @@ local vscode = vim.g.vscode == 1
 return packer.startup(function(use)
   use({
     'wbthomason/packer.nvim',
-    opt = true,
   })
 
   use({
@@ -85,6 +84,8 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
       require('bufferline').setup({})
+      vim.keymap.set({ 'n', 't' }, 'H', '<Cmd>bprevious<CR>')
+      vim.keymap.set({ 'n', 't' }, 'L', '<Cmd>bnext<CR>')
     end,
   })
 
@@ -244,7 +245,6 @@ return packer.startup(function(use)
 
   use({
     'sainnhe/gruvbox-material',
-    opt = true,
     disable = vscode,
     requires = {
       'nvim-treesitter/nvim-treesitter',
@@ -293,7 +293,7 @@ return packer.startup(function(use)
           autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828
           autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
         augroup END
-      ]],
+      ]] ,
         false
       )
       vim.g.gruvbox_material_diagnostic_text_highlight = 1
@@ -320,25 +320,29 @@ return packer.startup(function(use)
       vim.api.nvim_set_keymap(
         '',
         'f',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>"
+        ,
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         'F',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>"
+        ,
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         't',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>"
+        ,
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         'T',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>"
+        ,
         {}
       )
     end,
@@ -1438,7 +1442,6 @@ return packer.startup(function(use)
 
   use({
     'glepnir/zephyr-nvim',
-    opt = true,
     disable = true,
     requires = {
       'nvim-treesitter/nvim-treesitter',

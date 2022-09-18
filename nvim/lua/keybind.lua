@@ -50,7 +50,7 @@ vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 
 -- split window
 -- vim.keymap.set('n', '<Leader>h', '<Cmd>split<CR>')
-vim.keymap.set('n', '<Leader>v', '<Cmd>vsplit<CR>')
+vim.keymap.set('n', '<Leader><Leader>v', '<Cmd>vsplit<CR>')
 
 -- keep selection after indent
 vim.keymap.set('v', '<', '<gv')
