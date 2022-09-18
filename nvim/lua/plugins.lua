@@ -46,7 +46,10 @@ end
 
 local vscode = vim.g.vscode == 1
 return packer.startup(function(use)
-  use({ 'wbthomason/packer.nvim' })
+  use({
+    'wbthomason/packer.nvim',
+    opt = true,
+  })
 
   use({
     'rmagatti/auto-session',
@@ -241,6 +244,7 @@ return packer.startup(function(use)
 
   use({
     'sainnhe/gruvbox-material',
+    opt = true,
     disable = vscode,
     requires = {
       'nvim-treesitter/nvim-treesitter',
@@ -1434,6 +1438,7 @@ return packer.startup(function(use)
 
   use({
     'glepnir/zephyr-nvim',
+    opt = true,
     disable = true,
     requires = {
       'nvim-treesitter/nvim-treesitter',
