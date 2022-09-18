@@ -93,13 +93,13 @@ _G.packer_plugins = {
     url = "https://github.com/gen740/SmoothCursor.nvim"
   },
   ["auto-session"] = {
-    config = { "\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequireÎ\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0%lua require'nvim-tree'.setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0" },
+    config = { "\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequireÐ\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/auto-session",
     url = "https://github.com/rmagatti/auto-session"
   },
   ["bufferline.nvim"] = {
-    config = { "\27LJ\2\2Û\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\3\0\0\6n\6t\23<Cmd>bprevious<CR>\6H\1\3\0\0\6n\6t\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0" },
+    config = { "\27LJ\2\2×\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\2\0\0\6n\23<Cmd>bprevious<CR>\6H\1\2\0\0\6n\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/bufferline.nvim",
     url = "https://github.com/akinsho/bufferline.nvim"
@@ -401,7 +401,7 @@ try_loadstring("\27LJ\2\2Ñ\3\0\0\4\0\20\0\0236\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1
 time([[Config for nvim-treesitter]], false)
 -- Config for: auto-session
 time([[Config for auto-session]], true)
-try_loadstring("\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequireÎ\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0%lua require'nvim-tree'.setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0", "config", "auto-session")
+try_loadstring("\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequireÐ\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0", "config", "auto-session")
 time([[Config for auto-session]], false)
 -- Config for: which-key.nvim
 time([[Config for which-key.nvim]], true)
@@ -501,7 +501,7 @@ try_loadstring("\27LJ\2\2@\0\0\2\0\3\0\a6\0\0\0'\1\1\0B\0\2\0029\0\2\0004\1\0\0B
 time([[Config for nvim-autopairs]], false)
 -- Config for: bufferline.nvim
 time([[Config for bufferline.nvim]], true)
-try_loadstring("\27LJ\2\2Û\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\3\0\0\6n\6t\23<Cmd>bprevious<CR>\6H\1\3\0\0\6n\6t\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0", "config", "bufferline.nvim")
+try_loadstring("\27LJ\2\2×\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\2\0\0\6n\23<Cmd>bprevious<CR>\6H\1\2\0\0\6n\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0", "config", "bufferline.nvim")
 time([[Config for bufferline.nvim]], false)
 -- Config for: Comment.nvim
 time([[Config for Comment.nvim]], true)

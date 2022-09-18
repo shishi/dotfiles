@@ -63,7 +63,7 @@ return packer.startup(function(use)
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
-        pre_save_cmds = { "lua require'nvim-tree'.setup({})", 'tabdo NvimTreeClose' },
+        pre_save_cmds = { "lua require('nvim-tree').setup({})", 'tabdo NvimTreeClose' },
         cwd_change_handling = {
           restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
           pre_cwd_changed_hook = nil, -- already the default, no need to specify like this, only here as an example
@@ -84,8 +84,8 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
       require('bufferline').setup({})
-      vim.keymap.set({ 'n', 't' }, 'H', '<Cmd>bprevious<CR>')
-      vim.keymap.set({ 'n', 't' }, 'L', '<Cmd>bnext<CR>')
+      vim.keymap.set({ 'n' }, 'H', '<Cmd>bprevious<CR>')
+      vim.keymap.set({ 'n' }, 'L', '<Cmd>bnext<CR>')
     end,
   })
 
@@ -293,7 +293,7 @@ return packer.startup(function(use)
           autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828
           autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
         augroup END
-      ]] ,
+      ]],
         false
       )
       vim.g.gruvbox_material_diagnostic_text_highlight = 1
@@ -320,29 +320,25 @@ return packer.startup(function(use)
       vim.api.nvim_set_keymap(
         '',
         'f',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>"
-        ,
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         'F',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>"
-        ,
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         't',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>"
-        ,
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
         {}
       )
       vim.api.nvim_set_keymap(
         '',
         'T',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>"
-        ,
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
         {}
       )
     end,
@@ -600,14 +596,6 @@ return packer.startup(function(use)
     config = function()
       local cmp = require('cmp')
       local lspkind = require('lspkind')
-
-      -- local source_mapping = {
-      --   buffer = '[Buffer]',
-      --   nvim_lsp = '[LSP]',
-      --   nvim_lua = '[Lua]',
-      --   cmp_tabnine = '[TN]',
-      --   path = '[Path]',
-      -- }
 
       -- local fn = vim.fn
       --
@@ -936,13 +924,6 @@ return packer.startup(function(use)
     end,
   })
 
-  -- use({
-  --   'Shatur/neovim-session-manager',
-  --   config = function()
-  --     require('session_manager').setup({})
-  --   end,
-  -- })
-
   use({
     'mfussenegger/nvim-dap',
     disable = vscode,
@@ -1155,15 +1136,6 @@ return packer.startup(function(use)
     'kyazdani42/nvim-web-devicons',
     disable = vscode,
   })
-
-  -- use({
-  --   'folke/persistence.nvim',
-  --   event = 'BufReadPre', -- this will only start session saving when an actual file was opened
-  --   module = 'persistence',
-  --   config = function()
-  --     require('persistence').setup()
-  --   end,
-  -- })
 
   use({ 'nvim-lua/plenary.nvim' })
 
