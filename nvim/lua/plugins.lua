@@ -77,7 +77,7 @@ return packer.startup(function(use)
   use({
     'akinsho/bufferline.nvim',
     tag = 'v2.*',
-    disable = true,
+    disable = vscode,
     requires = { { 'kyazdani42/nvim-web-devicons' } },
     config = function()
       vim.opt.termguicolors = true
@@ -1032,8 +1032,8 @@ return packer.startup(function(use)
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
-        open_on_setup = true,
-        open_on_setup_file = true,
+        -- open_on_setup = true,
+        -- open_on_setup_file = true,
         sync_root_with_cwd = true,
         respect_buf_cwd = true,
         update_focused_file = {
@@ -1056,37 +1056,12 @@ return packer.startup(function(use)
       end, {
         desc = 'toggle nvim-tree',
       })
-      vim.keymap.set('n', '<A-q>', function()
-        -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
-        require('nvim-tree').find_file()
-      end, {
-        desc = 'find_file in nvim-tree',
-      })
-      -- local augroup = vim.api.nvim_create_augroup('nvim-tree', {})
-      -- vim.api.nvim_create_autocmd({'BufEnter'}, {
-      --   group = augroup,
-      --   buffer = bufnr,
-      --   callback = function()
-      --     local view = require "nvim-tree.view"
-      --     if view.is_visible() then
-      --       require('nvim-tree').find_file(vim.api.nvim_buf_get_name(0))
-      --     end
-      --   end
+      -- vim.keymap.set('n', '<A-q>', function()
+      --   -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
+      --   require('nvim-tree').find_file()
+      -- end, {
+      --   desc = 'find_file in nvim-tree',
       -- })
-      vim.api.nvim_create_autocmd('BufEnter', {
-        group = vim.api.nvim_create_augroup('NvimTreeClose', { clear = true }),
-        pattern = 'NvimTree_*',
-        callback = function()
-          local layout = vim.api.nvim_call_function('winlayout', {})
-          if
-            layout[1] == 'leaf'
-            and vim.api.nvim_buf_get_option(vim.api.nvim_win_get_buf(layout[2]), 'filetype') == 'NvimTree'
-            and layout[3] == nil
-          then
-            vim.cmd('confirm quit')
-          end
-        end,
-      })
     end,
   })
 
@@ -1234,6 +1209,12 @@ return packer.startup(function(use)
     },
     config = function()
       require('telescope').setup({
+        -- defaults = {
+        --   layout_strategies = { 'horizontal' },
+        --   layout_config = {
+        --     prompt_position = 'top',
+        --   },
+        -- },
         -- extensions = {
         --   file_browser = {
         --     hijack_netrw = true
@@ -1251,7 +1232,7 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope find files',
       })
-      vim.keymap.set('n', '<C-k>g', function()
+      vim.keymap.set('n', '<C-g>', function()
         require('telescope.builtin').live_grep()
       end, {
         desc = 'telescope live grep',
@@ -1282,27 +1263,27 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope commands',
       })
-      vim.keymap.set('n', '<Leader>tb', function()
+      vim.keymap.set('n', '<C-k>gb', function()
         require('telescope.builtin').git_branches()
       end, {
         desc = 'telescope git branches',
       })
-      vim.keymap.set('n', '<Leader>ts', function()
+      vim.keymap.set('n', '<C-k>gs', function()
         require('telescope.builtin').git_status()
       end, {
         desc = 'telescope git status',
       })
-      vim.keymap.set('n', '<Leader>tq', function()
+      vim.keymap.set('n', '<C-k>q', function()
         require('telescope.builtin').quickfix()
       end, {
         desc = 'telescope quickfix',
       })
-      vim.keymap.set('n', '<Leader>tt', function()
-        require('telescope.builtin').treesitter()
-      end, {
-        desc = 'telescope treesitter',
-      })
-      vim.keymap.set('n', '<Leader>tk', function()
+      -- vim.keymap.set('n', '<Leader>tt', function()
+      --   require('telescope.builtin').treesitter()
+      -- end, {
+      --   desc = 'telescope treesitter',
+      -- })
+      vim.keymap.set('n', '<C-k>m', function()
         require('telescope.builtin').keymaps()
       end, {
         desc = 'telescope keymaps',
