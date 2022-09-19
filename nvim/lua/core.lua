@@ -119,4 +119,9 @@ vim.opt.modeline = true
 vim.opt.modelines = 10
 
 -- gui
-vim.opt.guifont = 'UDEV Gothic NF:h12'
+
+if vim.g.neovide then
+  vim.opt.guifont = 'UDEV Gothic NF:h13'
+  vim.g.neovide_refresh_rate = 120
+  vim.g.neovide_cursor_animation_length = 0
+end

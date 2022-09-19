@@ -123,6 +123,10 @@ if test /mnt/c/Windows/explorer.exe &>/dev/null
     alias explorer /mnt/c/Windows/explorer.exe
 end
 
+# neovide
+if test /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/null
+    alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
+end
 # settings
 #########################################
 

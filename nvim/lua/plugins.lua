@@ -59,7 +59,7 @@ return packer.startup(function(use)
         -- auto_session_enabled = true,
         -- auto_session_create_enabled = true,
         -- auto_save_enabled = true,
-        -- auto_resore_enabled = true,
+        -- auto_restore_enabled = false,
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
@@ -94,7 +94,7 @@ return packer.startup(function(use)
 
   use({
     'f3fora/cmp-spell',
-    disable = vscode,
+    disable = true,
     requires = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       vim.opt.spell = true
@@ -102,18 +102,18 @@ return packer.startup(function(use)
     end,
   })
 
-  -- use({
-  --   'tzachar/cmp-tabnine',
-  --   disable = vscode,
-  --   requires = { { 'hrsh7th/nvim-cmp' } },
-  --   run = './install.sh',
-  --   config = function()
-  --     require('cmp_tabnine.config').setup({
-  --       snippet_placeholder = '🚀',
-  --       show_prediction_strength = true,
-  --     })
-  --   end,
-  -- })
+  use({
+    'tzachar/cmp-tabnine',
+    disable = true,
+    requires = { { 'hrsh7th/nvim-cmp' } },
+    run = './install.sh',
+    config = function()
+      require('cmp_tabnine.config').setup({
+        snippet_placeholder = '🚀',
+        show_prediction_strength = true,
+      })
+    end,
+  })
 
   use({
     'numToStr/Comment.nvim',
@@ -674,7 +674,7 @@ return packer.startup(function(use)
           { name = 'nvim_lsp' },
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
-          { name = 'spell' },
+          -- { name = 'spell' },
           { name = 'crates' },
           {
             { name = 'buffer' },
@@ -928,6 +928,13 @@ return packer.startup(function(use)
   })
 
   use({
+    'NvChad/nvim-colorizer.lua',
+    config = function()
+      require('colorizer').setup()
+    end,
+  })
+
+  use({
     'mfussenegger/nvim-dap',
     disable = vscode,
     config = function()
@@ -1147,9 +1154,20 @@ return packer.startup(function(use)
     disable = vscode,
     config = function()
       require('project_nvim').setup({
-        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', 'Makefile', 'package.json', 'Rakefile', 'selene.toml' },
-        exclude_dirs = { '~/.config/nvim', '~/dev/src/github.com/shishi/dotfiles/nvim' },
+        detection_methods = { 'pattern', 'lsp' },
+        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', 'Makefile', 'Rakefile', 'package.json', 'selene.toml' },
+        -- exclude_dirs = { '~/.config/nvim', '~/dev/src/github.com/shishi/dotfiles/nvim' },
+        show_hidden = false,
         silent_chdir = false,
+        scope_chdir = 'global',
+      })
+
+      require('telescope').load_extension('projects')
+
+      vim.keymap.set('n', '<C-k>p', function()
+        require('telescope').extensions.projects.projects()
+      end, {
+        desc = 'telescope projects',
       })
     end,
   })
@@ -1166,16 +1184,48 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope-file-browser.nvim',
     disasble = vscode,
+    require = { { 'nvim-telescope/telescope.nvim' } },
+    config = function()
+      require('telescope').load_extension('file_browser')
+
+      vim.keymap.set('n', '<C-k>z', function()
+        require('telescope').extensions.file_browser.file_browser()
+      end, {
+        desc = 'telescope file browser',
+      })
+    end,
   })
 
   use({
     'nvim-telescope/telescope-fzf-native.nvim',
     disable = vscode,
+    require = { { 'nvim-telescope/telescope.nvim' } },
     run = 'make',
+    config = function()
+      require('telescope').load_extension('fzf')
+    end,
   })
+
+  use({
+    'nvim-telescope/telescope-ghq.nvim',
+    disable = true,
+    require = { { 'nvim-telescope/telescope.nvim' } },
+    config = function()
+      require('telescope').load_extension('ghq')
+
+      vim.keymap.set('n', '<C-k>g', '<Cmd>Telescope ghq list<CR>', {
+        desc = 'telescope ghq',
+      })
+    end,
+  })
+
   use({
     'nvim-telescope/telescope-ui-select.nvim',
     disable = vscode,
+    require = { { 'nvim-telescope/telescope.nvim' } },
+    config = function()
+      require('telescope').load_extension('ui-select')
+    end,
   })
 
   use({
@@ -1184,10 +1234,8 @@ return packer.startup(function(use)
     tag = '0.1.0',
     -- or branch = '0.1.x',
     requires = {
-      { 'ahmedkhalf/project.nvim' },
       { 'kyazdani42/nvim-web-devicons' },
       { 'nvim-lua/plenary.nvim' },
-      { 'nvim-telescope/telescope-ui-select.nvim' },
       { 'nvim-treesitter/nvim-treesitter' },
     },
     config = function()
@@ -1204,10 +1252,6 @@ return packer.startup(function(use)
         --   }
         -- }
       })
-      require('telescope').load_extension('fzf')
-      require('telescope').load_extension('file_browser')
-      require('telescope').load_extension('ui-select')
-      require('telescope').load_extension('projects')
 
       -- builtin
       vim.keymap.set('n', '<C-p>', function()
@@ -1273,16 +1317,6 @@ return packer.startup(function(use)
       })
 
       -- extensions
-      vim.keymap.set('n', '<Leader>tf', function()
-        require('telescope').extensions.file_browser.file_browser()
-      end, {
-        desc = 'telescope file browser',
-      })
-      vim.keymap.set('n', '<Leader>tp', function()
-        require('telescope').extensions.projects.projects()
-      end, {
-        desc = 'telescop projects',
-      })
     end,
   })
 
