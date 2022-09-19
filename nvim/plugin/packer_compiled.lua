@@ -93,7 +93,7 @@ _G.packer_plugins = {
     url = "https://github.com/gen740/SmoothCursor.nvim"
   },
   ["auto-session"] = {
-    config = { "\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequire–\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0" },
+    config = { "\27LJ\2\2\v\0\0\1\0\0\0\1K\0\1\0\v\0\0\1\0\0\0\1K\0\1\0–\3\1\0\4\0\21\0\0266\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\0015\2\6\0003\3\a\0=\3\b\0023\3\t\0=\3\n\2=\2\v\1B\0\2\0016\0\f\0009\0\r\0'\1\15\0=\1\14\0006\0\f\0009\0\16\0009\0\17\0'\1\18\0'\2\19\0'\3\20\0B\0\4\1K\0\1\0\29<Cmd>RestoreSession<<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\25pre_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\1\25auto_restore_enabled\1\nsetup\17auto-session\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/auto-session",
     url = "https://github.com/rmagatti/auto-session"
@@ -500,7 +500,7 @@ try_loadstring("\27LJ\2\2?\0\0\2\0\3\0\a6\0\0\0'\1\1\0B\0\2\0029\0\2\0004\1\0\0B
 time([[Config for nvim-surround]], false)
 -- Config for: auto-session
 time([[Config for auto-session]], true)
-try_loadstring("\27LJ\2\0027\0\0\2\0\3\0\0066\0\0\0'\1\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\frefresh\flualine\frequire–\2\1\0\4\0\14\0\0176\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\4\0005\2\3\0=\2\5\0015\2\6\0003\3\a\0=\3\b\2=\2\t\1B\0\2\0016\0\n\0009\0\v\0'\1\r\0=\1\f\0K\0\1\0Eblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\0\0\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\nsetup\17auto-session\frequire\0", "config", "auto-session")
+try_loadstring("\27LJ\2\2\v\0\0\1\0\0\0\1K\0\1\0\v\0\0\1\0\0\0\1K\0\1\0–\3\1\0\4\0\21\0\0266\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\0015\2\6\0003\3\a\0=\3\b\0023\3\t\0=\3\n\2=\2\v\1B\0\2\0016\0\f\0009\0\r\0'\1\15\0=\1\14\0006\0\f\0009\0\16\0009\0\17\0'\1\18\0'\2\19\0'\3\20\0B\0\4\1K\0\1\0\29<Cmd>RestoreSession<<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\24cwd_change_handling\26post_cwd_changed_hook\0\25pre_cwd_changed_hook\0\1\0\1\29restore_upcoming_session\2\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\1\25auto_restore_enabled\1\nsetup\17auto-session\frequire\0", "config", "auto-session")
 time([[Config for auto-session]], false)
 -- Config for: nvim-autopairs
 time([[Config for nvim-autopairs]], true)

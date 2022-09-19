@@ -59,7 +59,7 @@ return packer.startup(function(use)
         -- auto_session_enabled = true,
         -- auto_session_create_enabled = true,
         -- auto_save_enabled = true,
-        -- auto_restore_enabled = false,
+        auto_restore_enabled = false,
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
         -- auto_session_allowed_dirs = {},
         -- auto_session_use_git_branch = true,
@@ -69,13 +69,18 @@ return packer.startup(function(use)
         -- https://github.com/nvim-neo-tree/neo-tree.nvim/issues/128
         cwd_change_handling = {
           restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
-          pre_cwd_changed_hook = nil, -- already the default, no need to specify like this, only here as an example
+          pre_cwd_changed_hook = function()
+            -- vim.api.nvim_feedkeys('<C-c>', 'n', true)
+          end,
           post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
-            require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
+            -- require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
           end,
         },
       })
+
       vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
+
+      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<<CR>')
     end,
   })
 
