@@ -868,6 +868,10 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp code_action',
         })
+        vim.keymap.set('n', '<F7>', vim.lsp.buf.code_action, {
+          buffer = bufnr,
+          desc = 'vim.lsp code_action',
+        })
         vim.keymap.set('n', 'gr', function()
           require('telescope.builtin').lsp_references()
         end, {
@@ -876,7 +880,7 @@ return packer.startup(function(use)
         })
         vim.keymap.set(
           'n',
-          '<C-k>f',
+          '<F8>',
           -- 0.7
           -- vim.lsp.buf.formatting,
           -- 0.8
@@ -1213,7 +1217,7 @@ return packer.startup(function(use)
 
   use({
     'nvim-telescope/telescope-ghq.nvim',
-    disable = true,
+    disable = vscode,
     require = { { 'nvim-telescope/telescope.nvim' } },
     config = function()
       require('telescope').load_extension('ghq')
@@ -1265,6 +1269,11 @@ return packer.startup(function(use)
       })
 
       -- builtin
+      vim.keymap.set('n', '<F1>', function()
+        require('telescope.builtin').help_tags()
+      end, {
+        desc = 'telescope help_tags',
+      })
       vim.keymap.set('n', '<C-p>', function()
         require('telescope.builtin').find_files()
       end, {
@@ -1278,7 +1287,7 @@ return packer.startup(function(use)
       -- vim.keymap.set('n', '<Leader>tb', function()
       --   require('telescope.builtin').buffers()
       -- end)
-      vim.keymap.set('n', '<C-k>b', function()
+      vim.keymap.set('n', 'q', function()
         require('telescope.builtin').buffers()
       end, {
         desc = 'telescope buffers',
@@ -1301,12 +1310,12 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope commands',
       })
-      vim.keymap.set('n', '<C-k>gb', function()
+      vim.keymap.set('n', '<C-k><C-k>b', function()
         require('telescope.builtin').git_branches()
       end, {
         desc = 'telescope git branches',
       })
-      vim.keymap.set('n', '<C-k>gs', function()
+      vim.keymap.set('n', '<C-k>s', function()
         require('telescope.builtin').git_status()
       end, {
         desc = 'telescope git status',

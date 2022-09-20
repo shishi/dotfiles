@@ -15,6 +15,8 @@
 vim.keymap.set({ 'n', 'v', 't' }, ';', ':')
 vim.keymap.set('n', 'x', '"_x')
 vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
+vim.keymap.set('n', '<Leader>q', 'q')
+vim.keymap.set('n', 'q', '<Nop>')
 
 if vim.g.vscode then
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
