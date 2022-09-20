@@ -28,8 +28,8 @@ else
   vim.keymap.set('i', 'kk', '<ESC>')
   vim.keymap.set('i', 'jk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
-  vim.keymap.set({ 'n' }, 'H', '<Cmd>tabprevious<CR>')
-  vim.keymap.set({ 'n' }, 'L', '<Cmd>tabnext<CR>')
+  vim.keymap.set('n', 'H', '<Cmd>bprevious<CR>')
+  vim.keymap.set('n', 'L', '<Cmd>bnext<CR>')
   vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
   vim.keymap.set({ 'n', 't' }, '<A-j>', '<Cmd>wincmd j<CR>')
   vim.keymap.set({ 'n', 't' }, '<A-k>', '<Cmd>wincmd k<CR>')
@@ -46,7 +46,7 @@ else
 end
 
 -- buffer
-vim.keymap.set('n', '<Leader>b', '<Cmd>bdelete<CR>')
+vim.keymap.set('n', '<Leader>d', '<Cmd>bdelete<CR>')
 vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
 vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 

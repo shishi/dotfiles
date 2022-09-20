@@ -92,8 +92,6 @@ return packer.startup(function(use)
     config = function()
       vim.opt.termguicolors = true
       require('bufferline').setup({})
-      vim.keymap.set({ 'n' }, 'H', '<Cmd>bprevious<CR>')
-      vim.keymap.set({ 'n' }, 'L', '<Cmd>bnext<CR>')
     end,
   })
 

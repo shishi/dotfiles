@@ -99,7 +99,7 @@ _G.packer_plugins = {
     url = "https://github.com/rmagatti/auto-session"
   },
   ["bufferline.nvim"] = {
-    config = { "\27LJ\2\2×\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\2\0\0\6n\23<Cmd>bprevious<CR>\6H\1\2\0\0\6n\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0" },
+    config = { "\27LJ\2\2b\0\0\2\0\6\0\v6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\1K\0\1\0\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/bufferline.nvim",
     url = "https://github.com/akinsho/bufferline.nvim"
@@ -448,7 +448,7 @@ try_loadstring("\27LJ\2\2W\0\4\t\1\4\0\14\14\0\3\0X\4\1€4\3\0\0-\4\0\0=\4\0\0036
 time([[Config for gitsigns.nvim]], false)
 -- Config for: bufferline.nvim
 time([[Config for bufferline.nvim]], true)
-try_loadstring("\27LJ\2\2×\1\0\0\4\0\14\0\0256\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\0016\0\0\0009\0\6\0009\0\a\0005\1\b\0'\2\t\0'\3\n\0B\0\4\0016\0\0\0009\0\6\0009\0\a\0005\1\v\0'\2\f\0'\3\r\0B\0\4\1K\0\1\0\19<Cmd>bnext<CR>\6L\1\2\0\0\6n\23<Cmd>bprevious<CR>\6H\1\2\0\0\6n\bset\vkeymap\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0", "config", "bufferline.nvim")
+try_loadstring("\27LJ\2\2b\0\0\2\0\6\0\v6\0\0\0009\0\1\0+\1\2\0=\1\2\0006\0\3\0'\1\4\0B\0\2\0029\0\5\0004\1\0\0B\0\2\1K\0\1\0\nsetup\15bufferline\frequire\18termguicolors\bopt\bvim\0", "config", "bufferline.nvim")
 time([[Config for bufferline.nvim]], false)
 -- Config for: vim-ripgrep
 time([[Config for vim-ripgrep]], true)
