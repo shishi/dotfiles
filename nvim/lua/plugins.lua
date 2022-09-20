@@ -1229,6 +1229,15 @@ return packer.startup(function(use)
   })
 
   use({
+    'nvim-telescope/telescope-live-grep-args.nvim',
+    disable = vscode,
+    require = { { 'nvim-telescope/telescope.nvim' } },
+    config = function()
+      require('telescope').load_extension('live_grep_args')
+    end,
+  })
+
+  use({
     'nvim-telescope/telescope-ui-select.nvim',
     disable = vscode,
     require = { { 'nvim-telescope/telescope.nvim' } },
@@ -1248,6 +1257,7 @@ return packer.startup(function(use)
       { 'nvim-treesitter/nvim-treesitter' },
     },
     config = function()
+      local lga_actions = require('telescope-live-grep-args.actions')
       require('telescope').setup({
         -- defaults = {
         --   layout_strategies = { 'horizontal' },
@@ -1261,6 +1271,16 @@ return packer.startup(function(use)
             override_file_sorter = true, -- override the file sorter
             case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
+          },
+          live_grep_args = {
+            auto_quoting = true, -- enable/disable auto-quoting
+            -- override default mappings
+            -- default_mappings = {},
+            mappings = { -- extend mappings
+              i = {
+                ['<C-k>'] = lga_actions.quote_prompt(),
+              },
+            },
           },
           --   file_browser = {
           --     hijack_netrw = true
@@ -1280,7 +1300,8 @@ return packer.startup(function(use)
         desc = 'telescope find files',
       })
       vim.keymap.set('n', '<C-g>', function()
-        require('telescope.builtin').live_grep()
+        -- require('telescope.builtin').live_grep()
+        require('telescope').extensions.live_grep_args.live_grep_args()
       end, {
         desc = 'telescope live grep',
       })
