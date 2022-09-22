@@ -43,7 +43,7 @@ vim.api.nvim_create_autocmd({ 'Filetype' }, {
   group = augroup_formatoptions,
   pattern = { '*' },
   callback = function()
-    vim.opt_local.formatoptions = 'tqj'
+    vim.opt_local.formatoptions = 'troqj'
   end,
 })
 

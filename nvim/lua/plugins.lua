@@ -56,26 +56,26 @@ return packer.startup(function(use)
     config = function()
       require('auto-session').setup({
         -- log_level = 'error',
-        -- auto_session_enabled = true,
-        -- auto_session_create_enabled = true,
-        -- auto_save_enabled = true,
+        auto_session_enabled = true,
+        auto_session_create_enabled = true,
+        auto_save_enabled = true,
         auto_restore_enabled = false,
         -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
-        -- auto_session_allowed_dirs = {},
+        -- auto_session_allowed_dirs = { '~/*', '/mnt/*' },
         -- auto_session_use_git_branch = true,
         -- nvim-tree
         pre_save_cmds = { "lua require('nvim-tree').setup({})", 'tabdo NvimTreeClose' },
         -- for neo-tree cmds
         -- https://github.com/nvim-neo-tree/neo-tree.nvim/issues/128
-        cwd_change_handling = {
-          restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
-          pre_cwd_changed_hook = function()
-            -- vim.api.nvim_feedkeys('<C-c>', 'n', true)
-          end,
-          post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
-            -- require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
-          end,
-        },
+        -- cwd_change_handling = {
+        --   restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
+        --   pre_cwd_changed_hook = function()
+        --     -- vim.api.nvim_feedkeys('<C-c>', 'n', true)
+        --   end,
+        --   post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
+        --     -- require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
+        --   end,
+        -- },
       })
 
       vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
@@ -197,9 +197,9 @@ return packer.startup(function(use)
           end
 
           -- Navigation
-          map('n', ']c', function()
+          map('n', ']g', function()
             if vim.wo.diff then
-              return ']c'
+              return ']g'
             end
             vim.schedule(function()
               gs.next_hunk()
@@ -210,9 +210,9 @@ return packer.startup(function(use)
             desc = 'gitsign next_hunk',
           })
 
-          map('n', '[c', function()
+          map('n', '[g', function()
             if vim.wo.diff then
-              return '[c'
+              return '[g'
             end
             vim.schedule(function()
               gs.prev_hunk()
@@ -753,20 +753,6 @@ return packer.startup(function(use)
 
       -- Set up lspconfig.
       local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
-      -- Mappings.
-      -- See `:help vim.diagnostic.*` for documentation on any of the below functions
-      -- local diagnostic_opts = {
-      -- }
-      vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
-        desc = 'diagnose open_float',
-      })
-      vim.keymap.set('n', '<Leader>[', vim.diagnostic.goto_prev, {
-        desc = 'diagnose goto_prev',
-      })
-      vim.keymap.set('n', '<Leader>]', vim.diagnostic.goto_next, {
-        desc = 'diagnose goto_next',
-      })
-      -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
 
       -- https://github.com/jose-elias-alvarez/null-ls.nvim/wiki/Avoiding-LSP-formatting-conflicts
       local lsp_formatting = function(bufnr)
@@ -835,17 +821,17 @@ return packer.startup(function(use)
         })
         vim.keymap.set(
           'n',
-          '<Leader>wa',
+          '<Leader><Leader>wa',
           vim.lsp.buf.add_workspace_folder,
           { buffer = bufnr, desc = 'vim.lsp add_workspace_folder' }
         )
         vim.keymap.set(
           'n',
-          '<Leader>wr',
+          '<Leader><Leader>wr',
           vim.lsp.buf.remove_workspace_folder,
           { buffer = bufnr, desc = 'vim.lsp remove_workspace_folder' }
         )
-        vim.keymap.set('n', '<Leader>wl', function()
+        vim.keymap.set('n', '<Leader><Leader>wl', function()
           print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
         end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
         vim.keymap.set('n', '<Leader>D', function()
@@ -900,6 +886,24 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp lsp_document_symbols',
         })
+        -- See `:help vim.diagnostic.*` for documentation on any of the below functions
+        -- local diagnostic_opts = {
+        -- }
+        vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
+          desc = 'diagnostic open_float',
+        })
+        vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
+          desc = 'diagnostic goto_prev',
+        })
+        vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
+          desc = 'diagnostic goto_next',
+        })
+        vim.keymap.set('n', '<Leader>E', function()
+          require('telescope.builtin').diagnostics()
+        end, {
+          desc = 'telescope diagnostics',
+        })
+        -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
       end
 
       local lspconfig = require('lspconfig')
@@ -1094,7 +1098,7 @@ return packer.startup(function(use)
             init_selection = '<CR>',
             scope_incremental = '<TAB>',
             node_incremental = '<CR>',
-            node_decremental = '<BS>',
+            node_decremental = '<Leader><CR>',
           },
         },
         indent = {
@@ -1255,13 +1259,19 @@ return packer.startup(function(use)
       { 'nvim-treesitter/nvim-treesitter' },
     },
     config = function()
+      local trouble = require('trouble.providers.telescope')
       local lga_actions = require('telescope-live-grep-args.actions')
       require('telescope').setup({
-        -- defaults = {
-        --   layout_strategies = { 'horizontal' },
-        --   layout_config = {
-        --     prompt_position = 'top',
-        --   },
+        defaults = {
+          --   layout_strategies = { 'horizontal' },
+          --   layout_config = {
+          --     prompt_position = 'top',
+          --   },
+          mappings = {
+            i = { ['<c-t>'] = trouble.open_with_trouble },
+            n = { ['<c-t>'] = trouble.open_with_trouble },
+          },
+        },
         extensions = {
           fzf = {
             fuzzy = true, -- false will only do exact matching
@@ -1311,7 +1321,7 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope buffers',
       })
-      vim.keymap.set('n', '<C-k>r', function()
+      vim.keymap.set('n', '<C-k>o', function()
         require('telescope.builtin').oldfiles()
       end, {
         desc = 'telescope old files',
@@ -1339,10 +1349,30 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope git status',
       })
+      vim.keymap.set('n', '<C-k>r', function()
+        require('telescope.builtin').marks()
+      end, {
+        desc = 'telescope marks',
+      })
       vim.keymap.set('n', '<C-k>q', function()
         require('telescope.builtin').quickfix()
       end, {
         desc = 'telescope quickfix',
+      })
+      vim.keymap.set('n', '<C-k>w', function()
+        require('telescope.builtin').quickfixhistory()
+      end, {
+        desc = 'telescope quickfix history',
+      })
+      vim.keymap.set('n', '<C-k>l', function()
+        require('telescope.builtin').loclist()
+      end, {
+        desc = 'telescope loclist',
+      })
+      vim.keymap.set('n', '<C-k>j', function()
+        require('telescope.builtin').jumplist()
+      end, {
+        desc = 'telescope jumplist',
       })
       -- vim.keymap.set('n', '<Leader>tt', function()
       --   require('telescope.builtin').treesitter()
@@ -1374,9 +1404,10 @@ return packer.startup(function(use)
           end
         end,
       })
-      vim.keymap.set({ 'n', 't' }, '<C-k>t', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {})
-      vim.keymap.set({ 'n', 't' }, '<C-k>at', '<Cmd>ToggleTermToggleAll<CR>', {})
-      vim.keymap.set({ 'n', 't' }, '<C-k>pt', '<Cmd>10ToggleTerm direction=float<CR>', {})
+      vim.keymap.set({ 'n' }, '<Leader>t', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {})
+      vim.keymap.set({ 'n' }, '<Leader>at', '<Cmd>ToggleTermToggleAll<CR>', {})
+      vim.keymap.set({ 'n' }, '<Leader>y', '<Cmd>10ToggleTerm direction=float<CR>', {})
+      vim.keymap.set({ 'n', 't' }, '<F6>', '<Cmd>10ToggleTerm direction=float<CR>', {})
 
       local Terminal = require('toggleterm.terminal').Terminal
       local lazygit = Terminal:new({
@@ -1411,7 +1442,7 @@ return packer.startup(function(use)
       vim.keymap.set('n', '<Leader>xd', '<Cmd>TroubleToggle document_diagnostics<CR>', {})
       vim.keymap.set('n', '<Leader>xl', '<Cmd>TroubleToggle loclist<CR>', {})
       vim.keymap.set('n', '<Leader>xq', '<Cmd>TroubleToggle quickfix<CR>', {})
-      vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {})
+      -- vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {})
     end,
   })
 

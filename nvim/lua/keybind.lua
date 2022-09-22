@@ -46,7 +46,7 @@ else
 end
 
 -- buffer
-vim.keymap.set('n', '<Leader>d', '<Cmd>bdelete<CR>')
+vim.keymap.set('n', '<Leader>;', '<Cmd>bdelete<CR>')
 vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
 vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 
@@ -74,7 +74,7 @@ vim.keymap.set('v', '=', '=gb')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 
 -- terminal
--- vim.keymap.set('t', '<esc>', [[<C-\><C-n>]])
+-- vim.keymap.set('t', '<Esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
 

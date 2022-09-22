@@ -3,7 +3,8 @@
 -- vim.bo: behaves like :let &l:{option-name} for buffer-local options
 -- vim.wo: behaves like :let &l:{option-name} for window-local options
 -- leader key
-vim.g.mapleader = ','
+vim.g.mapleader = ' '
+vim.keymap.set('', '<BS>', '<Leader>', { remap = true, desc = 'second <Leader>' })
 
 -- encodings
 -- vim.opt.fileencoding = "utf-8"
@@ -15,8 +16,8 @@ vim.opt.fileformats = 'unix,dos,mac'
 vim.opt.undofile = true
 
 -- ui
-vim.opt.relativenumber = true
--- vim.opt.number = true
+vim.opt.number = true
+-- vim.opt.relativenumber = true
 -- if vim.g.vscode then
 -- else
 --   vim.api.nvim_command
@@ -76,7 +77,7 @@ vim.opt.wildignorecase = true
 vim.opt.completeopt = 'menu,menuone,preview'
 
 if vim.fn.executable('rg') == 1 then
-  vim.opt.grepprg = 'rg --vimgrep'
+  vim.opt.grepprg = 'rg --vimgrep  --smart-case'
 end
 
 -- indent
