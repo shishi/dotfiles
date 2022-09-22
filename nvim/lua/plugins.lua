@@ -979,25 +979,25 @@ return packer.startup(function(use)
       end, {
         desc = 'nvim-dap toggle_breakpoint',
       })
-      vim.keymap.set('n', '<Leader>dbb', function()
+      vim.keymap.set('n', '<Leader>dbc', function()
         require('dap').set_breakpoint(vim.fn.input('Breakpoint condition: '))
       end, {
         desc = 'nvim-dap set_breakpoint with condition',
       })
-      vim.keymap.set('n', '<Leader>dlp', function()
+      vim.keymap.set('n', '<Leader>dbm', function()
         require('dap').set_breakpoint(nil, nil, vim.fn.input('Log point message: '))
       end, {
         desc = 'nvim-dap set_breakpoint with log point message',
       })
-      vim.keymap.set('n', '<Leader>ddr', function()
+      vim.keymap.set('n', '<Leader>do', function()
         require('dap').repl_open()
       end, {
         desc = 'nvim-dap repl_open()',
       })
-      vim.keymap.set('n', '<Leader>ddl', function()
+      vim.keymap.set('n', '<Leader>dr', function()
         require('dap').run_last()
       end, {
-        desc = 'nvim-dap run_last{}',
+        desc = 'nvim-dap run_last()',
       })
     end,
   })
@@ -1006,6 +1006,19 @@ return packer.startup(function(use)
     'rcarriga/nvim-dap-ui',
     disable = vscode,
     requires = { 'mfussenegger/nvim-dap' },
+    config = function()
+      require('dapui').setup({})
+      local dap, dapui = require('dap'), require('dapui')
+      dap.listeners.after.event_initialized['dapui_config'] = function()
+        dapui.open()
+      end
+      dap.listeners.before.event_terminated['dapui_config'] = function()
+        dapui.close()
+      end
+      dap.listeners.before.event_exited['dapui_config'] = function()
+        dapui.close()
+      end
+    end,
   })
 
   use({
