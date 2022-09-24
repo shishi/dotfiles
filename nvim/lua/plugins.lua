@@ -91,7 +91,16 @@ return packer.startup(function(use)
     requires = { { 'kyazdani42/nvim-web-devicons' } },
     config = function()
       vim.opt.termguicolors = true
-      require('bufferline').setup({})
+      require('bufferline').setup({
+        options = {
+          mode = 'buffers',
+          diagnostics = 'nvim_lsp',
+          diagnostics_indicator = function(count, level, _diagnostics_dict, _context)
+            local icon = level:match('error') and ' ' or ' '
+            return ' ' .. icon .. count
+          end,
+        },
+      })
     end,
   })
 
@@ -466,6 +475,16 @@ return packer.startup(function(use)
       --   require('luasnip').jump(-1)
       -- end, {
       -- })
+    end,
+  })
+
+  use({
+    'glepnir/lspsaga.nvim',
+    branch = 'main',
+    config = function()
+      local saga = require('lspsaga')
+
+      saga.init_lsp_saga({})
     end,
   })
 
@@ -1148,6 +1167,12 @@ return packer.startup(function(use)
   })
 
   use({
+    'kevinhwang91/nvim-bqf',
+    disable = vscode,
+    requires = { { 'nvim-treesitter/nvim-treesitter' } },
+  })
+
+  use({
     'RRethy/nvim-treesitter-endwise',
     diasable = vscode,
   })
@@ -1202,6 +1227,28 @@ return packer.startup(function(use)
     requires = { { 'nvim-lua/plenary.nvim' }, { 'nvim-treesitter/nvim-treesitter' } },
     config = function()
       require('refactoring').setup({})
+    end,
+  })
+
+  use({
+    'simrat39/rust-tools.nvim',
+    diaable = vscode,
+    requires = { { 'nvim-lua/plenary.nvim' }, { 'neovim/nvim-lspconfig' }, { 'mfussenegger/nvim-dap' } },
+    config = function()
+      local rt = require('rust-tools')
+
+      rt.setup({
+        hover_with_actions = true,
+        server = {
+          on_attach = function(_, bufnr)
+            -- Hover actions
+            vim.keymap.set('n', '<C-space>', rt.hover_actions.hover_actions, { buffer = bufnr })
+            -- Code action groups
+            vim.keymap.set('n', '<Leader>a', rt.code_action_group.code_action_group, { buffer = bufnr })
+          end,
+        },
+      })
+      -- rt.inlay_hints.enable()
     end,
   })
 
@@ -1442,6 +1489,14 @@ return packer.startup(function(use)
   })
 
   use({
+    'WhoIsSethDaniel/toggle-lsp-diagnostics.nvim',
+    diable = vscode,
+    config = function()
+      require('toggle_lsp_diagnostics').init({ start_on = false })
+    end,
+  })
+
+  use({
     'folke/trouble.nvim',
     disable = vscode,
     requires = { { 'kyazdani42/nvim-web-devicons' } },
@@ -1456,6 +1511,10 @@ return packer.startup(function(use)
       vim.keymap.set('n', '<Leader>xl', '<Cmd>TroubleToggle loclist<CR>', {})
       vim.keymap.set('n', '<Leader>xq', '<Cmd>TroubleToggle quickfix<CR>', {})
       -- vim.keymap.set('n', 'gR', '<Cmd>TroubleToggle lsp_references<CR>', {})
+      --
+      vim.cmd([[
+        cnoreabbrev copen TroubleToggle quickfix
+      ]])
     end,
   })
 
