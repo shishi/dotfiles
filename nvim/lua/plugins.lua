@@ -548,7 +548,7 @@ return packer.startup(function(use)
           null_ls.builtins.diagnostics.trail_space,
           -- null_ls.builtins.diagnostics.xo,
           null_ls.builtins.diagnostics.yamllint,
-          null_ls.builtins.diagnostics.zsh,
+          -- null_ls.builtins.diagnostics.zsh,
           -- formatting
           null_ls.builtins.formatting.beautysh,
           -- null_ls.builtins.formatting.deno_fmt,
@@ -558,7 +558,7 @@ return packer.startup(function(use)
           null_ls.builtins.formatting.fish_indent,
           -- null_ls.builtins.formatting.prettier,
           null_ls.builtins.formatting.prettierd,
-          null_ls.builtins.formatting.prismaFmt,
+          -- null_ls.builtins.formatting.prismaFmt,
           null_ls.builtins.formatting.rubocop,
           null_ls.builtins.formatting.rustfmt,
           null_ls.builtins.formatting.sqlfluff.with({
