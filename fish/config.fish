@@ -11,12 +11,6 @@ set fish_color_command white
 #    set dev ~/dev
 #end
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
-
-set -x GO111MODULE on
-set -x GOBIN ~/.local/bin
-set -x GOPATH ~/dev/
-#set -x GHQ_ROOT $dev/src
-
 set -x GPG_TTY (tty)
 
 if [ "$TERM_PROGRAM" = vscode ]
@@ -35,6 +29,11 @@ end
 #     set -x VISUAL vim
 # end
 
+set -x GO111MODULE on
+set -x GOBIN ~/.local/bin
+set -x GOPATH ~/dev/
+
+#set -x GHQ_ROOT $dev/src
 #set -x HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
 #set -x CODECLIMATE_REPO_TOKEN=""
 #set -x RIOT_GAMES_API_KEY=""
