@@ -239,7 +239,7 @@ return packer.startup(function(use)
           map('n', '<leader>hu', gs.undo_stage_hunk, { desc = 'gitsigns undo_stage_stage_hunk' })
           map('n', '<leader>hR', gs.reset_buffer, { desc = 'gitsigns reset_buffer' })
           map('n', '<leader>hp', gs.preview_hunk, { desc = 'gitsigns preview_hunk' })
-          map('n', '<leader>hl', function()
+          map('n', '<leader>hf', function()
             gs.blame_line({
               full = true,
             })
@@ -250,6 +250,7 @@ return packer.startup(function(use)
             gs.diffthis('~')
           end, { desc = 'gitsigns diffthis(~)' })
           map('n', '<leader>ht', gs.toggle_deleted, { desc = 'gitsigns toggle_deleted' })
+          map('n', '<leader>hl', gs.setloclist, { desc = 'gitsigns setloclist' })
 
           -- Text object
           map({ 'o', 'x' }, 'ih', ':<C-U>Gitsigns select_hunk<CR>')
