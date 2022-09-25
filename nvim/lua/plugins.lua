@@ -480,11 +480,23 @@ return packer.startup(function(use)
 
   use({
     'glepnir/lspsaga.nvim',
+    disable = vscode,
     branch = 'main',
+    requires = { { 'neovim/nvim-lspconfig' } },
     config = function()
       local saga = require('lspsaga')
 
-      saga.init_lsp_saga({})
+      saga.init_lsp_saga({
+        code_action_lightbulb = {
+          -- enable = true,
+          -- enable_in_insert = true,
+          -- cache_code_action = true,
+          sign = false,
+          -- update_time = 150,
+          -- sign_priority = 20,
+          virtual_text = false,
+        },
+      })
     end,
   })
 
@@ -1042,7 +1054,7 @@ return packer.startup(function(use)
 
   use({
     'https://codeberg.org/esensar/nvim-dev-container',
-    disable = vscode,
+    disable = true,
     requires = { 'nvim-treesitter/nvim-treesitter' },
   })
 
@@ -1050,6 +1062,42 @@ return packer.startup(function(use)
     'neovim/nvim-lspconfig',
     disable = vscode,
     requires = { { 'williamboman/mason-lspconfig.nvim' } },
+    config = function()
+      -- lsp symbols
+      local signs = {
+        Error = ' ',
+        Warn = ' ',
+        Hint = ' ',
+        Info = ' ',
+      }
+
+      for type, icon in pairs(signs) do
+        local hl = 'DiagnosticSign' .. type
+        vim.fn.sign_define(hl, {
+          icon = icon,
+          text = icon,
+          texthl = hl,
+          numhl = hl,
+        })
+      end
+
+      -- lsp
+      vim.lsp.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
+        -- -- Enable underline, use default values
+        -- -- underline = true,
+        -- -- Enable virtual text, override spacing to 4
+        -- virtual_text = {
+        --   prefix = '◯'
+        --   -- spacing = 4
+        -- },
+        -- -- Use a function to dynamically turn signs off
+        -- -- and on, using buffer local variables
+        -- signs = function(namespace, bufnr)
+        --   return vim.b[bufnr].show_signs == true
+        -- end,
+        update_in_insert = true,
+      })
+    end,
   })
 
   -- use({
@@ -1162,7 +1210,7 @@ return packer.startup(function(use)
     'gen740/SmoothCursor.nvim',
     disable = vscode,
     config = function()
-      require('smoothcursor').setup()
+      require('smoothcursor').setup({})
     end,
   })
 
@@ -1242,7 +1290,7 @@ return packer.startup(function(use)
         server = {
           on_attach = function(_, bufnr)
             -- Hover actions
-            vim.keymap.set('n', '<C-space>', rt.hover_actions.hover_actions, { buffer = bufnr })
+            -- vim.keymap.set('n', '<C-space>', rt.hover_actions.hover_actions, { buffer = bufnr })
             -- Code action groups
             vim.keymap.set('n', '<Leader>a', rt.code_action_group.code_action_group, { buffer = bufnr })
           end,

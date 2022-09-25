@@ -32,41 +32,6 @@ vim.opt.number = true
 --   ]])
 -- end
 
--- lsp symbols
-local signs = {
-  Error = ' ',
-  Warn = ' ',
-  Hint = ' ',
-  Info = ' ',
-}
-
-for type, icon in pairs(signs) do
-  local hl = 'DiagnosticSign' .. type
-  vim.fn.sign_define(hl, {
-    icon = icon,
-    text = icon,
-    texthl = hl,
-    numhl = hl,
-  })
-end
-
--- lsp
-vim.lsp.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
-  -- -- Enable underline, use default values
-  -- -- underline = true,
-  -- -- Enable virtual text, override spacing to 4
-  -- virtual_text = {
-  --   prefix = '◯'
-  --   -- spacing = 4
-  -- },
-  -- -- Use a function to dynamically turn signs off
-  -- -- and on, using buffer local variables
-  -- signs = function(namespace, bufnr)
-  --   return vim.b[bufnr].show_signs == true
-  -- end,
-  update_in_insert = true,
-})
-
 -- search
 vim.opt.hlsearch = true
 vim.opt.ignorecase = true
@@ -74,7 +39,7 @@ vim.opt.smartcase = true
 vim.opt.wildmenu = true
 vim.opt.wildmode = 'list:longest,full'
 vim.opt.wildignorecase = true
-vim.opt.completeopt = 'menu,menuone,preview'
+vim.opt.completeopt = 'menu,menuone,preview,noinsert'
 
 if vim.fn.executable('rg') == 1 then
   vim.opt.grepprg = 'rg --vimgrep  --smart-case'
