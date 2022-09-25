@@ -178,6 +178,7 @@ else
     alias dc 'docker compose'
     alias dcr 'docker compose run --rm'
     alias dce 'docker compose exec'
+    alias docker-compose "docker compose"
 end
 
 
