@@ -328,34 +328,38 @@ return packer.startup(function(use)
       require('hop').setup({
         keys = 'etovxqpdygfblzhckisuran',
       })
-      vim.keymap.set('', '<Leader>w', '<Cmd>HopWord<CR>')
-      vim.keymap.set('', '<Leader>f', '<Cmd>HopChar1<CR>')
+      vim.keymap.set({ 'n', 'v' }, '<Leader>w', '<Cmd>HopWord<CR>')
+      -- vim.keymap.set({ 'n', 'v' }, '<Leader>b', '<Cmd>HopWordBC<CR>')
+      vim.keymap.set({ 'n', 'v' }, '<Leader>l', '<Cmd>HopLineStart<CR>')
+      -- vim.keymap.set({ 'n', 'v' }, '<Leader>k', '<Cmd>HopLineStartAC<CR>')
+      vim.keymap.set({ 'n', 'v' }, '<Leader>f', '<Cmd>HopChar1<CR>')
       -- vim.keymap.set('', '<Leader>l', '<Cmd>HopLine<CR>')
       -- vim.keymap.set('', '<Leader>c', '<Cmd>HopChar1CurrentLine<CR>')
+      vim.keymap.set({ 'n', 'v' }, '<Leader>o', '<Cmd>HopChar2<CR>')
 
       vim.api.nvim_set_keymap(
         '',
         'f',
         "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
-        {}
+        { desc = 'hop f' }
       )
       vim.api.nvim_set_keymap(
         '',
         'F',
         "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
-        {}
+        { desc = 'hop F' }
       )
       vim.api.nvim_set_keymap(
         '',
         't',
         "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
-        {}
+        { desc = 'hop t' }
       )
       vim.api.nvim_set_keymap(
         '',
         'T',
         "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
-        {}
+        { desc = 'hop T' }
       )
     end,
   })
