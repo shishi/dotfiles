@@ -106,11 +106,11 @@ return packer.startup(function(use)
 
   use({
     'f3fora/cmp-spell',
-    disable = true,
+    disable = vscode,
     requires = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       vim.opt.spell = true
-      vim.opt.spelllang = { 'en_us' }
+      vim.opt.spelllang = { 'en_us', 'cjk' }
     end,
   })
 
@@ -233,23 +233,23 @@ return packer.startup(function(use)
           })
 
           -- -- Actions
-          -- map({'n', 'v'}, '<leader>hs', ':Gitsigns stage_hunk<CR>')
-          -- map({'n', 'v'}, '<leader>hr', ':Gitsigns reset_hunk<CR>')
-          -- map('n', '<leader>hS', gs.stage_buffer)
-          -- map('n', '<leader>hu', gs.undo_stage_hunk)
-          -- map('n', '<leader>hR', gs.reset_buffer)
-          -- map('n', '<leader>hp', gs.preview_hunk)
-          -- map('n', '<leader>hb', function()
-          --   gs.blame_line {
-          --     full = true
-          --   }
-          -- end)
-          -- map('n', '<leader>tb', gs.toggle_current_line_blame)
-          -- map('n', '<leader>hd', gs.diffthis)
-          -- map('n', '<leader>hD', function()
-          --   gs.diffthis('~')
-          -- end)
-          -- map('n', '<leader>td', gs.toggle_deleted)
+          map({ 'n', 'v' }, '<leader>hs', ':Gitsigns stage_hunk<CR>')
+          map({ 'n', 'v' }, '<leader>hr', ':Gitsigns reset_hunk<CR>')
+          map('n', '<leader>hS', gs.stage_buffer, { desc = 'gitsigns stage_buffer' })
+          map('n', '<leader>hu', gs.undo_stage_hunk, { desc = 'gitsigns undo_stage_stage_hunk' })
+          map('n', '<leader>hR', gs.reset_buffer, { desc = 'gitsigns reset_buffer' })
+          map('n', '<leader>hp', gs.preview_hunk, { desc = 'gitsigns preview_hunk' })
+          map('n', '<leader>hl', function()
+            gs.blame_line({
+              full = true,
+            })
+          end, { desc = 'gitsigns blame_line full=true' })
+          map('n', '<leader>hb', gs.toggle_current_line_blame, { desc = 'gitsigns toggle_current_line_blame' })
+          map('n', '<leader>hd', gs.diffthis, { desc = 'gitsigns diffthis' })
+          map('n', '<leader>hD', function()
+            gs.diffthis('~')
+          end, { desc = 'gitsigns diffthis(~)' })
+          map('n', '<leader>ht', gs.toggle_deleted, { desc = 'gitsigns toggle_deleted' })
 
           -- Text object
           map({ 'o', 'x' }, 'ih', ':<C-U>Gitsigns select_hunk<CR>')
@@ -491,7 +491,7 @@ return packer.startup(function(use)
           -- enable = true,
           -- enable_in_insert = true,
           -- cache_code_action = true,
-          sign = false,
+          sign = true,
           -- update_time = 150,
           -- sign_priority = 20,
           virtual_text = false,
@@ -535,11 +535,11 @@ return packer.startup(function(use)
           -- null_ls.builtins.code_actions.eslint,
           null_ls.builtins.code_actions.eslint_d,
           null_ls.builtins.code_actions.gitrebase,
-          null_ls.builtins.code_actions.gitsigns,
+          -- null_ls.builtins.code_actions.gitsigns,
           -- null_ls.builtins.code_actions.refactoring,
           -- null_ls.builtins.code_actions.xo,
           -- completion
-          null_ls.builtins.completion.spell,
+          -- null_ls.builtins.completion.spell,
           -- null_ls.builtins.completion.tags,
           -- diagnostics
           null_ls.builtins.diagnostics.actionlint,
@@ -708,7 +708,7 @@ return packer.startup(function(use)
           { name = 'nvim_lsp' },
           { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
-          -- { name = 'spell' },
+          { name = 'spell' },
           { name = 'crates' },
           {
             { name = 'buffer' },
@@ -1540,7 +1540,7 @@ return packer.startup(function(use)
     'WhoIsSethDaniel/toggle-lsp-diagnostics.nvim',
     diable = vscode,
     config = function()
-      require('toggle_lsp_diagnostics').init({ start_on = false })
+      require('toggle_lsp_diagnostics').init({ start_on = true })
     end,
   })
 

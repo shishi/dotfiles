@@ -13,6 +13,7 @@
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
 vim.keymap.set({ 'n', 'v', 't' }, ';', ':')
+vim.keymap.set({ 'n', 'v', 't' }, ':', ';')
 vim.keymap.set('n', 'x', '"_x')
 vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
 vim.keymap.set('n', '<Leader>q', 'q')

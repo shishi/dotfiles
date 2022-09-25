@@ -16,6 +16,9 @@ set -x GPG_TTY (tty)
 if [ "$TERM_PROGRAM" = vscode ]
     set -x EDITOR code --wait
     set -x VISUAL code --wait
+else if type nvim &>/dev/null
+    set -x EDITOR nvim
+    set -x VISUAL nvim
 else
     set -x EDITOR vim
     set -x VISUAL vim
