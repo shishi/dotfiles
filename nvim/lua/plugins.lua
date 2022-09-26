@@ -180,7 +180,7 @@ return packer.startup(function(use)
 
   use({
     'j-hui/fidget.nvim',
-    disable = vscode,
+    disable = true,
     config = function()
       require('fidget').setup({})
     end,
@@ -428,9 +428,8 @@ return packer.startup(function(use)
     config = function()
       require('lualine').setup({
         sections = {
-          lualine_a = { {
-            'filename',
-            path = 3,
+          lualine_c = { {
+            'lsp_progress',
           } },
         },
         options = {
@@ -443,6 +442,12 @@ return packer.startup(function(use)
         },
       })
     end,
+  })
+
+  use({
+    'arkav/lualine-lsp-progress',
+    disable = vscode,
+    requires = { { 'nvim-lualine/lualine.nvim' } },
   })
 
   use({
@@ -1123,17 +1128,32 @@ return packer.startup(function(use)
 
   use({
     'kyazdani42/nvim-tree.lua',
-    -- disable = true,
+    disable = vscode,
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
-        -- open_on_setup = true,
-        -- open_on_setup_file = true,
+        open_on_setup = true,
+        open_on_setup_file = true,
         sync_root_with_cwd = true,
         respect_buf_cwd = true,
         update_focused_file = {
           enable = true,
           update_root = true,
+        },
+        renderer = {
+          highlight_git = true,
+          highlight_opened_files = 'all',
+          indent_markers = {
+            enable = false,
+            inline_arrows = true,
+            icons = {
+              corner = '└',
+              edge = '│',
+              item = '│',
+              bottom = '─',
+              none = ' ',
+            },
+          },
         },
         -- reload_on_bufenter = true
         -- view = {
@@ -1213,7 +1233,7 @@ return packer.startup(function(use)
 
   use({
     'gen740/SmoothCursor.nvim',
-    disable = vscode,
+    disable = true,
     config = function()
       require('smoothcursor').setup({})
     end,
