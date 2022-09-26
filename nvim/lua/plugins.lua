@@ -1364,8 +1364,8 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope.nvim',
     disable = vscode,
-    tag = '0.1.0',
-    -- or branch = '0.1.x',
+    -- tag = '0.1.0',
+    branch = '0.1.x',
     requires = {
       { 'kyazdani42/nvim-web-devicons' },
       { 'nvim-lua/plenary.nvim' },
@@ -1425,6 +1425,12 @@ return packer.startup(function(use)
         require('telescope').extensions.live_grep_args.live_grep_args()
       end, {
         desc = 'telescope live grep',
+      })
+      vim.keymap.set('n', '<C-s>', function()
+        -- require('telescope.builtin').live_grep()
+        require('telescope.builtin').current_buffer_fuzzy_find()
+      end, {
+        desc = 'telescope current_buffer_fuzzy_find',
       })
       -- vim.keymap.set('n', '<Leader>tb', function()
       --   require('telescope.builtin').buffers()
