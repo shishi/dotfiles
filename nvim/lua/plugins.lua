@@ -619,6 +619,7 @@ return packer.startup(function(use)
   use({
     'windwp/nvim-autopairs',
     disable = vscode,
+    requires = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       require('nvim-autopairs').setup({})
     end,
@@ -639,17 +640,17 @@ return packer.startup(function(use)
       { 'onsails/lspkind-nvim' },
       { 'saadparwaiz1/cmp_luasnip' },
       { 'williamboman/mason-lspconfig.nvim' },
+      { 'windwp/nvim-autopairs' },
     },
     config = function()
       local cmp = require('cmp')
       local lspkind = require('lspkind')
 
-      -- local fn = vim.fn
-      --
-      -- local function t(str)
-      --   return vim.api.nvim_replace_termcodes(str, true, true, true)
-      -- end
-      --
+      -- for autopairs
+      local cmp_autopairs = require('nvim-autopairs.completion.cmp')
+      cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
+
+      -- for integrate luasnip
       local has_words_before = function()
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
         return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match('%s') == nil
@@ -715,11 +716,11 @@ return packer.startup(function(use)
         sources = cmp.config.sources({
           { name = 'copilot' },
           -- { name = 'cmp_tabnine' },
-          { name = 'nvim_lsp' },
-          { name = 'nvim_lsp_signature_help' },
           { name = 'luasnip' },
-          { name = 'spell' },
+          { name = 'nvim_lsp_signature_help' },
+          { name = 'nvim_lsp' },
           { name = 'crates' },
+          { name = 'spell' },
           {
             { name = 'buffer' },
           },
