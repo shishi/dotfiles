@@ -19,6 +19,12 @@ vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
 vim.keymap.set('n', '<Leader>q', 'q')
 vim.keymap.set('n', 'q', '<Nop>')
 
+vim.cmd([[
+  cabbrev Q qa
+  cabbrev Q! qa!
+  cabbrev W wa
+]])
+
 if vim.g.vscode then
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
   vim.keymap.set('n', 'H', '<Cmd>Tabprevious<CR>')

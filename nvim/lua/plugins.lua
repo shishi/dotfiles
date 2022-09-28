@@ -105,25 +105,25 @@ return packer.startup(function(use)
   })
 
   use({
+    'uga-rosa/ccc.nvim',
+    disable = vscode,
+    cofnig = function()
+      require('ccc').setup({
+        highlighter = {
+          auto_enable = true,
+          lsp = true,
+        },
+      })
+    end,
+  })
+
+  use({
     'f3fora/cmp-spell',
     disable = vscode,
     requires = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       vim.opt.spell = true
       vim.opt.spelllang = { 'en_us', 'cjk' }
-    end,
-  })
-
-  use({
-    'tzachar/cmp-tabnine',
-    disable = true,
-    requires = { { 'hrsh7th/nvim-cmp' } },
-    run = './install.sh',
-    config = function()
-      require('cmp_tabnine.config').setup({
-        snippet_placeholder = '🚀',
-        show_prediction_strength = true,
-      })
     end,
   })
 
@@ -516,7 +516,9 @@ return packer.startup(function(use)
     requires = { { 'williamboman/mason.nvim' } },
     config = function()
       require('mason-lspconfig').setup({
-        ensure_installed = {},
+        -- ensure_installed = {
+        --   "sumneko_lua", "rust_analyzer"
+        -- },
         automatic_installation = true,
       })
     end,
@@ -981,13 +983,6 @@ return packer.startup(function(use)
   })
 
   use({
-    'NvChad/nvim-colorizer.lua',
-    config = function()
-      require('colorizer').setup()
-    end,
-  })
-
-  use({
     'mfussenegger/nvim-dap',
     disable = vscode,
     config = function()
@@ -1064,6 +1059,46 @@ return packer.startup(function(use)
   })
 
   use({
+    'mxsdev/nvim-dap-vscode-js',
+    requires = { { 'mfussenegger/nvim-dap' } },
+    config = function()
+      require('dap-vscode-js').setup({
+        -- node_path = "node", -- Path of node executable. Defaults to $NODE_PATH, and then "node"
+        -- debugger_path = "(runtimedir)/site/pack/packer/opt/vscode-js-debug", -- Path to vscode-js-debug installation.
+        -- debugger_cmd = { "js-debug-adapter" }, -- Command to use to launch the debug server. Takes precedence over `node_path` and `debugger_path`.
+        adapters = { 'pwa-node', 'pwa-chrome', 'pwa-msedge', 'node-terminal', 'pwa-extensionHost' }, -- which adapters to register in nvim-dap
+      })
+      for _, language in ipairs({ 'typescript', 'javascript', 'typescriptreact', 'javascriptreact' }) do
+        require('dap').configurations[language] = {
+          -- https://github.com/mxsdev/nvim-dap-vscode-js
+          {
+            type = 'pwa-node',
+            request = 'launch',
+            name = 'Launch',
+            -- program = '${file}',
+            program = 'npm run dev',
+            cwd = '${workspaceFolder}',
+          },
+          {
+            type = 'pwa-node',
+            request = 'attach',
+            name = 'Attach',
+            processId = require('dap.utils').pick_process,
+            cwd = '${workspaceFolder}',
+          },
+          -- https://nextjs.org/docs/advanced-features/debugging
+          {
+            name = 'Next.js: debug client-side',
+            type = 'pwa-chrome',
+            request = 'launch',
+            url = 'http://localhost:3000',
+          },
+        }
+      end
+    end,
+  })
+
+  use({
     'https://codeberg.org/esensar/nvim-dev-container',
     disable = true,
     requires = { 'nvim-treesitter/nvim-treesitter' },
@@ -1134,7 +1169,7 @@ return packer.startup(function(use)
     config = function()
       require('nvim-tree').setup({
         open_on_setup = true,
-        open_on_setup_file = true,
+        open_on_setup_file = false,
         sync_root_with_cwd = true,
         respect_buf_cwd = true,
         update_focused_file = {
@@ -1263,6 +1298,18 @@ return packer.startup(function(use)
   use({
     'JoosepAlviste/nvim-ts-context-commentstring',
     disable = vscode,
+    requires = { { 'numToStr/Comment.nvim', 'nvim-treesitter/nvim-treesitter' } },
+    config = function()
+      require('nvim-treesitter.configs').setup({
+        context_commentstring = {
+          enable = true,
+          enable_autocmd = false,
+        },
+        require('Comment').setup({
+          pre_hook = require('ts_context_commentstring.integrations.comment_nvim').create_pre_hook(),
+        }),
+      })
+    end,
   })
 
   use({
@@ -1447,7 +1494,7 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope live grep',
       })
-      vim.keymap.set('n', '<C-s>', function()
+      vim.keymap.set('n', 's', function()
         -- require('telescope.builtin').live_grep()
         require('telescope.builtin').current_buffer_fuzzy_find()
       end, {
@@ -1456,7 +1503,7 @@ return packer.startup(function(use)
       -- vim.keymap.set('n', '<Leader>tb', function()
       --   require('telescope.builtin').buffers()
       -- end)
-      vim.keymap.set('n', 'q', function()
+      vim.keymap.set('n', 'S', function()
         require('telescope.builtin').buffers()
       end, {
         desc = 'telescope buffers',
@@ -1654,6 +1701,13 @@ return packer.startup(function(use)
         complete = 'file',
       })
     end,
+  })
+
+  use({
+    'microsoft/vscode-js-debug',
+    disable = vscode,
+    opt = true,
+    run = 'npm install --legacy-peer-deps && npm run compile',
   })
 
   use({
