@@ -53,7 +53,7 @@ else
 end
 
 -- buffer
-vim.keymap.set('n', '<Leader>;', '<Cmd>bdelete<CR>')
+vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd #<CR>')
 vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
 vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 
