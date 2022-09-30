@@ -87,7 +87,7 @@ _G.packer_plugins = {
     url = "https://github.com/L3MON4D3/LuaSnip"
   },
   ["auto-session"] = {
-    config = { "\27LJ\2\2 \3\0\0\4\0\15\0\0206\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\1B\0\2\0016\0\6\0009\0\a\0'\1\t\0=\1\b\0006\0\6\0009\0\n\0009\0\v\0'\1\f\0'\2\r\0'\3\14\0B\0\4\1K\0\1\0\29<Cmd>RestoreSession<<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\4\22auto_save_enabled\2 auto_session_create_enabled\2\25auto_restore_enabled\1\25auto_session_enabled\2\nsetup\17auto-session\frequire\0" },
+    config = { "\27LJ\2\2Ÿ\3\0\0\4\0\15\0\0206\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\1B\0\2\0016\0\6\0009\0\a\0'\1\t\0=\1\b\0006\0\6\0009\0\n\0009\0\v\0'\1\f\0'\2\r\0'\3\14\0B\0\4\1K\0\1\0\28<Cmd>RestoreSession<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\4\22auto_save_enabled\2 auto_session_create_enabled\2\25auto_restore_enabled\1\25auto_session_enabled\2\nsetup\17auto-session\frequire\0" },
     loaded = true,
     path = "/home/shishi/.local/share/nvim/site/pack/packer/start/auto-session",
     url = "https://github.com/rmagatti/auto-session"
@@ -511,7 +511,7 @@ try_loadstring("\27LJ\2\2Ò\2\0\0\3\0\15\0(6\0\0\0'\1\1\0B\0\2\0029\0\2\0009\0\3\
 time([[Config for LuaSnip]], false)
 -- Config for: auto-session
 time([[Config for auto-session]], true)
-try_loadstring("\27LJ\2\2 \3\0\0\4\0\15\0\0206\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\1B\0\2\0016\0\6\0009\0\a\0'\1\t\0=\1\b\0006\0\6\0009\0\n\0009\0\v\0'\1\f\0'\2\r\0'\3\14\0B\0\4\1K\0\1\0\29<Cmd>RestoreSession<<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\4\22auto_save_enabled\2 auto_session_create_enabled\2\25auto_restore_enabled\1\25auto_session_enabled\2\nsetup\17auto-session\frequire\0", "config", "auto-session")
+try_loadstring("\27LJ\2\2Ÿ\3\0\0\4\0\15\0\0206\0\0\0'\1\1\0B\0\2\0029\0\2\0005\1\3\0005\2\4\0=\2\5\1B\0\2\0016\0\6\0009\0\a\0'\1\t\0=\1\b\0006\0\6\0009\0\n\0009\0\v\0'\1\f\0'\2\r\0'\3\14\0B\0\4\1K\0\1\0\28<Cmd>RestoreSession<CR>\14<Leader>r\6n\bset\vkeymapEblank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal\19sessionoptions\6o\bvim\18pre_save_cmds\1\3\0\0'lua require('nvim-tree').setup({})\24tabdo NvimTreeClose\1\0\4\22auto_save_enabled\2 auto_session_create_enabled\2\25auto_restore_enabled\1\25auto_session_enabled\2\nsetup\17auto-session\frequire\0", "config", "auto-session")
 time([[Config for auto-session]], false)
 -- Config for: which-key.nvim
 time([[Config for which-key.nvim]], true)

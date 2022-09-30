@@ -80,7 +80,7 @@ return packer.startup(function(use)
 
       vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
 
-      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<<CR>')
+      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<CR>')
     end,
   })
 
@@ -1323,6 +1323,16 @@ return packer.startup(function(use)
         },
       })
     end,
+  })
+
+  use({
+    'RRethy/nvim-treesitter-endwise',
+    disable = vscode,
+  })
+
+  use({
+    'p00f/nvim-ts-rainbow',
+    disable = vscode,
   })
 
   use({
