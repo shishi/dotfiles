@@ -80,7 +80,7 @@ return packer.startup(function(use)
 
       vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
 
-      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<CR>')
+      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<<CR>')
     end,
   })
 
@@ -94,11 +94,16 @@ return packer.startup(function(use)
       require('bufferline').setup({
         options = {
           mode = 'buffers',
+          indicator = {
+            style = 'icon',
+            icon = '  📝',
+          },
           diagnostics = 'nvim_lsp',
           diagnostics_indicator = function(count, level, _diagnostics_dict, _context)
             local icon = level:match('error') and ' ' or ' '
             return ' ' .. icon .. count
           end,
+          -- underline = true,
         },
       })
     end,
@@ -1201,7 +1206,7 @@ return packer.startup(function(use)
     requires = { 'kyazdani42/nvim-web-devicons' },
     config = function()
       require('nvim-tree').setup({
-        open_on_setup = true,
+        open_on_setup = false,
         open_on_setup_file = false,
         sync_root_with_cwd = true,
         respect_buf_cwd = true,
@@ -1323,11 +1328,6 @@ return packer.startup(function(use)
         },
       })
     end,
-  })
-
-  use({
-    'RRethy/nvim-treesitter-endwise',
-    disable = vscode,
   })
 
   use({
@@ -1513,10 +1513,10 @@ return packer.startup(function(use)
       local lga_actions = require('telescope-live-grep-args.actions')
       require('telescope').setup({
         defaults = {
-          --   layout_strategies = { 'horizontal' },
-          --   layout_config = {
-          --     prompt_position = 'top',
-          --   },
+          -- layout_strategy = 'vertical',
+          -- layout_config = {
+          --   prompt_position = 'top',
+          -- },
           mappings = {
             i = { ['<c-t>'] = trouble.open_with_trouble },
             n = { ['<c-t>'] = trouble.open_with_trouble },
@@ -1789,6 +1789,48 @@ return packer.startup(function(use)
           spelling = {
             enabled = true,
           },
+        },
+      })
+    end,
+  })
+
+  use({
+    'fgheng/winbar.nvim',
+    disable = vscode,
+    config = function()
+      require('winbar').setup({
+        enabled = true,
+
+        show_file_path = true,
+        show_symbols = true,
+
+        colors = {
+          path = '', -- You can customize colors like #c946fd
+          file_name = '',
+          symbols = '',
+        },
+
+        icons = {
+          file_icon_default = '',
+          seperator = '>',
+          editor_state = '●',
+          lock_icon = '',
+        },
+
+        exclude_filetype = {
+          'help',
+          'startify',
+          'dashboard',
+          'packer',
+          'neogitstatus',
+          'NvimTree',
+          'Trouble',
+          'alpha',
+          'lir',
+          'Outline',
+          'spectre_panel',
+          'toggleterm',
+          'qf',
         },
       })
     end,
