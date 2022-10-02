@@ -515,19 +515,19 @@ return packer.startup(function(use)
       })
 
       -- code definitions, references
-      vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<cr>')
-      vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<cr>')
-      vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<cr>')
+      vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>')
+      vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>')
+      vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>')
 
       -- code actions
-      vim.keymap.set('n', '<Leader>rn', '<Cmd>Lspsaga rename<cr>')
-      vim.keymap.set('n', '<F2>', '<Cmd>Lspsaga rename<cr>')
-      vim.keymap.set('n', '<Leader>ca', '<Cmd>Lspsaga code_action<cr>')
-      vim.keymap.set('n', '<F7>', '<Cmd>Lspsaga code_action<cr>')
+      vim.keymap.set('n', '<Leader>rn', '<Cmd>Lspsaga rename<CR>')
+      vim.keymap.set('n', '<F2>', '<Cmd>Lspsaga rename<CR>')
+      vim.keymap.set('n', '<Leader>ca', '<Cmd>Lspsaga code_action<CR>')
+      vim.keymap.set('n', '<F7>', '<Cmd>Lspsaga code_action<CR>')
 
       -- diagnostic
-      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<cr>')
-      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<cr>')
+      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<CR>')
+      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<CR>')
       -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
       --   desc = 'diagnostic goto_prev',
       -- })
@@ -954,7 +954,16 @@ return packer.startup(function(use)
     requires = { { 'williamboman/mason-lspconfig.nvim' } },
     after = 'mason-lspconfig.nvim',
     config = function()
-      -- lsp symbols
+      -- lsp diagnostics setting
+      vim.diagnostic.config({
+        virtual_text = true,
+        signs = true,
+        underline = true,
+        update_in_insert = true,
+        severity_sort = true,
+      })
+
+      -- lsp diagnostics symbols
       local signs = {
         Error = ' ',
         Warn = ' ',
@@ -972,22 +981,35 @@ return packer.startup(function(use)
         })
       end
 
-      -- lsp
-      vim.lsp.handlers['textDocument/publishDiagnostics'] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
-        -- -- Enable underline, use default values
-        -- -- underline = true,
-        -- -- Enable virtual text, override spacing to 4
-        -- virtual_text = {
-        --   prefix = '◯'
-        --   -- spacing = 4
-        -- },
-        -- -- Use a function to dynamically turn signs off
-        -- -- and on, using buffer local variables
-        -- signs = function(namespace, bufnr)
-        --   return vim.b[bufnr].show_signs == true
-        -- end,
-        update_in_insert = true,
-      })
+      -- https://github.com/neovim/nvim-lspconfig/wiki/UI-Customization#show-line-diagnostics-automatically-in-hover-window
+      -- show diagnostics message in message area
+      -- function PrintDiagnostics(opts, bufnr, line_nr, client_id)
+      --   bufnr = bufnr or 0
+      --   line_nr = line_nr or (vim.api.nvim_win_get_cursor(0)[1] - 1)
+      --   opts = opts or { ['lnum'] = line_nr }
+      --
+      --   local line_diagnostics = vim.diagnostic.get(bufnr, opts)
+      --   if vim.tbl_isempty(line_diagnostics) then
+      --     return
+      --   end
+      --
+      --   local diagnostic_message = ''
+      --   for i, diagnostic in ipairs(line_diagnostics) do
+      --     diagnostic_message = diagnostic_message .. string.format('%d: %s', i, diagnostic.message or '')
+      --     print(diagnostic_message)
+      --     if i ~= #line_diagnostics then
+      --       diagnostic_message = diagnostic_message .. '\n'
+      --     end
+      --   end
+      --   vim.api.nvim_echo({ { diagnostic_message, 'Normal' } }, false, {})
+      -- end
+
+      -- vim.cmd([[ autocmd! CursorHold * lua PrintDiagnostics() ]])
+
+      --- You will likely want to reduce updatetime which affects CursorHold
+      -- note: this setting is global and should be set only once
+      vim.o.updatetime = 150
+      vim.cmd([[autocmd! CursorHold,CursorHoldI * Lspsaga show_line_diagnostics]])
 
       -- Set up lspconfig.
       local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
@@ -1038,16 +1060,16 @@ return packer.startup(function(use)
           buffer = bufnr,
           desc = 'vim.lsp delaration',
         })
-        vim.keymap.set('n', 'gd', function()
-          require('telescope.builtin').lsp_definitions()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.definition',
-        })
-        vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
-          buffer = bufnr,
-          desc = 'vim.lsp hover',
-        })
+        -- vim.keymap.set('n', 'gd', function()
+        --   require('telescope.builtin').lsp_definitions()
+        -- end, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp.buf.definition',
+        -- })
+        -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp hover',
+        -- })
         vim.keymap.set('n', 'gi', function()
           require('telescope.builtin').lsp_implementations()
         end, {
@@ -1089,22 +1111,22 @@ return packer.startup(function(use)
         end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
 
         -- code actions
-        vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
-          buffer = bufnr,
-          desc = 'vim.lsp rename',
-        })
-        vim.keymap.set('n', '<F2>', vim.lsp.buf.rename, {
-          buffer = bufnr,
-          desc = 'vim.lsp rename',
-        })
-        vim.keymap.set('n', '<Leader>ca', vim.lsp.buf.code_action, {
-          buffer = bufnr,
-          desc = 'vim.lsp code_action',
-        })
-        vim.keymap.set('n', '<F7>', vim.lsp.buf.code_action, {
-          buffer = bufnr,
-          desc = 'vim.lsp code_action',
-        })
+        -- vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp rename',
+        -- })
+        -- vim.keymap.set('n', '<F2>', vim.lsp.buf.rename, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp rename',
+        -- })
+        -- vim.keymap.set('n', '<Leader>ca', vim.lsp.buf.code_action, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp code_action',
+        -- })
+        -- vim.keymap.set('n', '<F7>', vim.lsp.buf.code_action, {
+        --   buffer = bufnr,
+        --   desc = 'vim.lsp code_action',
+        -- })
 
         -- format
         vim.keymap.set(
@@ -1135,9 +1157,9 @@ return packer.startup(function(use)
         })
 
         -- diagnostic
-        vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
-          desc = 'diagnostic open_float',
-        })
+        -- vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
+        --   desc = 'diagnostic open_float',
+        -- })
         vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
           desc = 'diagnostic goto_prev',
         })
