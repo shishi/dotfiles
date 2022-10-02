@@ -184,6 +184,11 @@ return packer.startup(function(use)
   })
 
   use({
+    'stevearc/dressing.nvim',
+    disable = vscode,
+  })
+
+  use({
     'j-hui/fidget.nvim',
     disable = true,
     config = function()
@@ -517,23 +522,27 @@ return packer.startup(function(use)
       -- code definitions, references
       vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>')
       vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>')
-      vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>')
+      -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>')
 
       -- code actions
-      vim.keymap.set('n', '<Leader>rn', '<Cmd>Lspsaga rename<CR>')
-      vim.keymap.set('n', '<F2>', '<Cmd>Lspsaga rename<CR>')
-      vim.keymap.set('n', '<Leader>ca', '<Cmd>Lspsaga code_action<CR>')
-      vim.keymap.set('n', '<F7>', '<Cmd>Lspsaga code_action<CR>')
+      -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>')
+      -- vim.keymap.set({ 'n', 'v'}, '<F2>', '<Cmd>Lspsaga rename<CR>')
+      -- vim.keymap.set({ 'n', 'v'}, '<Leader>ca', '<Cmd>Lspsaga code_action<CR>')
+      -- vim.keymap.set({ 'n', 'v'}, '<F7>', '<Cmd>Lspsaga code_action<CR>')
 
       -- diagnostic
       vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<CR>')
       vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<CR>')
-      -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
-      --   desc = 'diagnostic goto_prev',
-      -- })
-      -- vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
-      --   desc = 'diagnostic goto_next',
-      -- })
+      vim.keymap.set('n', '[e', '<Cmd>Lspsaga diagnostic_jump_prev<CR>')
+      vim.keymap.set('n', ']e', '<Cmd>Lspsaga diagnostic_jump_next<CR>')
+      -- -- Only jump to error
+      -- vim.keymap.set('n', '[E', function()
+      --   require('lspsaga.diagnostic').goto_prev({ severity = vim.diagnostic.severity.ERROR })
+      -- end, { silent = true })
+      -- vim.keymap.set('n', ']E', function()
+      --   require('lspsaga.diagnostic').goto_next({ severity = vim.diagnostic.severity.ERROR })
+      -- end, { silent = true })
+
       -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
     end,
   })
@@ -1008,8 +1017,8 @@ return packer.startup(function(use)
 
       --- You will likely want to reduce updatetime which affects CursorHold
       -- note: this setting is global and should be set only once
-      vim.o.updatetime = 150
-      vim.cmd([[autocmd! CursorHold,CursorHoldI * Lspsaga show_line_diagnostics]])
+      -- vim.o.updatetime = 150
+      -- vim.cmd([[autocmd! CursorHold,CursorHoldI * Lspsaga show_line_diagnostics]])
 
       -- Set up lspconfig.
       local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
@@ -1111,22 +1120,22 @@ return packer.startup(function(use)
         end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
 
         -- code actions
-        -- vim.keymap.set('n', '<Leader>rn', vim.lsp.buf.rename, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp rename',
-        -- })
-        -- vim.keymap.set('n', '<F2>', vim.lsp.buf.rename, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp rename',
-        -- })
-        -- vim.keymap.set('n', '<Leader>ca', vim.lsp.buf.code_action, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp code_action',
-        -- })
-        -- vim.keymap.set('n', '<F7>', vim.lsp.buf.code_action, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp code_action',
-        -- })
+        vim.keymap.set({ 'n', 'v' }, '<Leader>rn', vim.lsp.buf.rename, {
+          buffer = bufnr,
+          desc = 'vim.lsp rename',
+        })
+        vim.keymap.set({ 'n', 'v' }, '<F2>', vim.lsp.buf.rename, {
+          buffer = bufnr,
+          desc = 'vim.lsp rename',
+        })
+        vim.keymap.set({ 'n', 'v' }, '<Leader>ca', vim.lsp.buf.code_action, {
+          buffer = bufnr,
+          desc = 'vim.lsp code_action',
+        })
+        vim.keymap.set({ 'n', 'v' }, '<F7>', vim.lsp.buf.code_action, {
+          buffer = bufnr,
+          desc = 'vim.lsp code_action',
+        })
 
         -- format
         vim.keymap.set(
@@ -1160,12 +1169,12 @@ return packer.startup(function(use)
         -- vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
         --   desc = 'diagnostic open_float',
         -- })
-        vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
-          desc = 'diagnostic goto_prev',
-        })
-        vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
-          desc = 'diagnostic goto_next',
-        })
+        -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
+        --   desc = 'diagnostic goto_prev',
+        -- })
+        -- vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
+        --   desc = 'diagnostic goto_next',
+        -- })
         vim.keymap.set('n', '<Leader>E', function()
           require('telescope.builtin').diagnostics()
         end, {
@@ -1467,7 +1476,7 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope-file-browser.nvim',
     disasble = vscode,
-    require = { { 'nvim-telescope/telescope.nvim' } },
+    requiress = { { 'nvim-telescope/telescope.nvim' } },
     config = function()
       require('telescope').load_extension('file_browser')
 
@@ -1482,7 +1491,7 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope-fzf-native.nvim',
     disable = vscode,
-    require = { { 'nvim-telescope/telescope.nvim' } },
+    requires = { { 'nvim-telescope/telescope.nvim' } },
     run = 'make',
     config = function()
       require('telescope').load_extension('fzf')
@@ -1492,7 +1501,7 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope-ghq.nvim',
     disable = vscode,
-    require = { { 'nvim-telescope/telescope.nvim' } },
+    requires = { { 'nvim-telescope/telescope.nvim' } },
     config = function()
       require('telescope').load_extension('ghq')
 
@@ -1505,7 +1514,7 @@ return packer.startup(function(use)
   use({
     'nvim-telescope/telescope-live-grep-args.nvim',
     disable = vscode,
-    require = { { 'nvim-telescope/telescope.nvim' } },
+    requires = { { 'nvim-telescope/telescope.nvim' } },
     config = function()
       require('telescope').load_extension('live_grep_args')
     end,
@@ -1513,8 +1522,8 @@ return packer.startup(function(use)
 
   use({
     'nvim-telescope/telescope-ui-select.nvim',
-    disable = vscode,
-    require = { { 'nvim-telescope/telescope.nvim' } },
+    disable = true,
+    requires = { { 'nvim-telescope/telescope.nvim' } },
     config = function()
       require('telescope').load_extension('ui-select')
     end,
