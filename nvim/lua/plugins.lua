@@ -207,63 +207,39 @@ return packer.startup(function(use)
     config = function()
       require('gitsigns').setup({
         on_attach = function(bufnr)
-          local gs = package.loaded.gitsigns
-
-          local function map(mode, l, r, opts)
-            opts = opts or {}
-            opts.buffer = bufnr
-            vim.keymap.set(mode, l, r, opts)
+          local function map(mode, lhs, rhs, opts)
+            opts = vim.tbl_extend('force', { noremap = true, silent = true }, opts or {})
+            vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, opts)
           end
 
           -- Navigation
-          map('n', ']g', function()
-            if vim.wo.diff then
-              return ']g'
-            end
-            vim.schedule(function()
-              gs.next_hunk()
-            end)
-            return '<Ignore>'
-          end, {
-            expr = true,
-            desc = 'gitsign next_hunk',
-          })
+          map('n', ']g', "&diff ? ']g' : '<cmd>Gitsigns next_hunk<CR>'", { expr = true })
+          map('n', '[g', "&diff ? '[g' : '<cmd>Gitsigns prev_hunk<CR>'", { expr = true })
 
-          map('n', '[g', function()
-            if vim.wo.diff then
-              return '[g'
-            end
-            vim.schedule(function()
-              gs.prev_hunk()
-            end)
-            return '<Ignore>'
-          end, {
-            expr = true,
-            desc = 'gitsign prev_hunk',
-          })
-
-          -- -- Actions
-          map({ 'n', 'v' }, '<leader>hs', ':Gitsigns stage_hunk<CR>')
-          map({ 'n', 'v' }, '<leader>hr', ':Gitsigns reset_hunk<CR>')
-          map('n', '<leader>hS', gs.stage_buffer, { desc = 'gitsigns stage_buffer' })
-          map('n', '<leader>hu', gs.undo_stage_hunk, { desc = 'gitsigns undo_stage_stage_hunk' })
-          map('n', '<leader>hR', gs.reset_buffer, { desc = 'gitsigns reset_buffer' })
-          map('n', '<leader>hp', gs.preview_hunk, { desc = 'gitsigns preview_hunk' })
-          map('n', '<leader>hf', function()
-            gs.blame_line({
-              full = true,
-            })
-          end, { desc = 'gitsigns blame_line full=true' })
-          map('n', '<leader>hb', gs.toggle_current_line_blame, { desc = 'gitsigns toggle_current_line_blame' })
-          map('n', '<leader>hd', gs.diffthis, { desc = 'gitsigns diffthis' })
-          map('n', '<leader>hD', function()
-            gs.diffthis('~')
-          end, { desc = 'gitsigns diffthis(~)' })
-          map('n', '<leader>ht', gs.toggle_deleted, { desc = 'gitsigns toggle_deleted' })
-          map('n', '<leader>hl', gs.setloclist, { desc = 'gitsigns setloclist' })
+          -- Actions
+          map('n', '<leader>hs', ':Gitsigns stage_hunk<CR>')
+          map('v', '<leader>hs', ':Gitsigns stage_hunk<CR>')
+          map('n', '<leader>hr', ':Gitsigns reset_hunk<CR>')
+          map('v', '<leader>hr', ':Gitsigns reset_hunk<CR>')
+          map('n', '<leader>hS', '<Cmd>Gitsigns stage_buffer<CR>')
+          map('n', '<leader>hu', '<Cmd>Gitsigns undo_stage_hunk<CR>')
+          map('n', '<leader>hR', '<Cmd>Gitsigns reset_buffer<CR>')
+          map('n', '<leader>hp', '<Cmd>Gitsigns preview_hunk<CR>')
+          map(
+            'n',
+            '<leader>hf',
+            '<Cmd>lua require"gitsigns".blame_line{full=true}<CR>',
+            { desc = 'Gitsigns blame_line full=true' }
+          )
+          map('n', '<leader>hb', '<Cmd>Gitsigns toggle_current_line_blame<CR>')
+          map('n', '<leader>hd', '<Cmd>Gitsigns diffthis<CR>')
+          map('n', '<leader>hD', '<Cmd>lua require"gitsigns".diffthis("~")<CR>', { desc = 'Gitsigns diffthis(~)' })
+          map('n', '<leader>ht', '<Cmd>Gitsigns toggle_deleted<CR>')
+          map('n', '<leader>hl', '<Cmd>Gitsitngs setloclist<CR>')
 
           -- Text object
-          map({ 'o', 'x' }, 'ih', ':<C-U>Gitsigns select_hunk<CR>')
+          map('o', 'ih', ':<C-U>Gitsigns select_hunk<CR>')
+          map('x', 'ih', ':<C-U>Gitsigns select_hunk<CR>')
         end,
       })
     end,
@@ -319,7 +295,7 @@ return packer.startup(function(use)
           autocmd ColorScheme gruvbox-material highlight SignColumn ctermbg=235 guibg=#282828
           autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
         augroup END
-      ]],
+      ]] ,
         false
       )
       vim.g.gruvbox_material_diagnostic_text_highlight = 1
@@ -350,25 +326,29 @@ return packer.startup(function(use)
       vim.api.nvim_set_keymap(
         '',
         'f',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>"
+        ,
         { desc = 'hop f' }
       )
       vim.api.nvim_set_keymap(
         '',
         'F',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>"
+        ,
         { desc = 'hop F' }
       )
       vim.api.nvim_set_keymap(
         '',
         't',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>"
+        ,
         { desc = 'hop t' }
       )
       vim.api.nvim_set_keymap(
         '',
         'T',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
+        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>"
+        ,
         { desc = 'hop T' }
       )
     end,
@@ -1288,10 +1268,9 @@ return packer.startup(function(use)
       vim.api.nvim_create_autocmd('BufEnter', {
         nested = true,
         callback = function()
-          if
-            #vim.api.nvim_list_wins() == 1
-            and vim.api.nvim_buf_get_name(0):match('NvimTree_') ~= nil
-            and modifiedBufs(vim.fn.getbufinfo({ bufmodified = 1 })) == 0
+          if #vim.api.nvim_list_wins() == 1
+              and vim.api.nvim_buf_get_name(0):match('NvimTree_') ~= nil
+              and modifiedBufs(vim.fn.getbufinfo({ bufmodified = 1 })) == 0
           then
             vim.cmd('quit')
           end
