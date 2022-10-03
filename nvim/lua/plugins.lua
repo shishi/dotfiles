@@ -519,31 +519,41 @@ return packer.startup(function(use)
         },
       })
 
-      -- code definitions, references
-      vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>')
-      vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>')
-      -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>')
+      local augroup_lspsaga = vim.api.nvim_create_augroup('augroup_lspsaga', {})
+      vim.api.nvim_create_autocmd({ 'LspAttach' }, {
+        group = augroup_lspsaga,
+        pattern = { '*' },
+        callback = function(args)
+          local bufnr = args.buf
+          -- local client = vim.lsp.get_client_by_id(args.data.client_id)
 
-      -- code actions
-      -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>')
-      -- vim.keymap.set({ 'n', 'v'}, '<F2>', '<Cmd>Lspsaga rename<CR>')
-      -- vim.keymap.set({ 'n', 'v'}, '<Leader>ca', '<Cmd>Lspsaga code_action<CR>')
-      -- vim.keymap.set({ 'n', 'v'}, '<F7>', '<Cmd>Lspsaga code_action<CR>')
+          -- code definitions, references
+          vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>', { buffer = bufnr })
+          vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>', { buffer = bufnr })
+          -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>' { buffer = bufnr })
 
-      -- diagnostic
-      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<CR>')
-      vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<CR>')
-      vim.keymap.set('n', '[e', '<Cmd>Lspsaga diagnostic_jump_prev<CR>')
-      vim.keymap.set('n', ']e', '<Cmd>Lspsaga diagnostic_jump_next<CR>')
-      -- -- Only jump to error
-      -- vim.keymap.set('n', '[E', function()
-      --   require('lspsaga.diagnostic').goto_prev({ severity = vim.diagnostic.severity.ERROR })
-      -- end, { silent = true })
-      -- vim.keymap.set('n', ']E', function()
-      --   require('lspsaga.diagnostic').goto_next({ severity = vim.diagnostic.severity.ERROR })
-      -- end, { silent = true })
+          -- code actions
+          -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
+          -- vim.keymap.set({ 'n', 'v'}, '<F2>', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
+          -- vim.keymap.set({ 'n', 'v'}, '<Leader>ca', '<Cmd>Lspsaga code_action<CR>', { buffer = bufnr })
+          -- vim.keymap.set({ 'n', 'v'}, '<F7>', '<Cmd>Lspsaga code_action<CR>', { buffer = bufnr })
 
-      -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
+          -- diagnostic
+          vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<CR>', { buffer = bufnr })
+          vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<CR>', { buffer = bufnr })
+          vim.keymap.set('n', '[e', '<Cmd>Lspsaga diagnostic_jump_prev<CR>', { buffer = bufnr })
+          vim.keymap.set('n', ']e', '<Cmd>Lspsaga diagnostic_jump_next<CR>', { buffer = bufnr })
+          -- -- Only jump to error
+          -- vim.keymap.set('n', '[E', function()
+          --   require('lspsaga.diagnostic').goto_prev({ severity = vim.diagnostic.severity.ERROR })
+          -- end, { buffer = bufnr })
+          -- vim.keymap.set('n', ']E', function()
+          --   require('lspsaga.diagnostic').goto_next({ severity = vim.diagnostic.severity.ERROR })
+          -- end, { buffer = bufnr })
+
+          -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist', buffer = bufnr })
+        end,
+      })
     end,
   })
 
@@ -990,200 +1000,180 @@ return packer.startup(function(use)
         })
       end
 
-      -- https://github.com/neovim/nvim-lspconfig/wiki/UI-Customization#show-line-diagnostics-automatically-in-hover-window
-      -- show diagnostics message in message area
-      -- function PrintDiagnostics(opts, bufnr, line_nr, client_id)
-      --   bufnr = bufnr or 0
-      --   line_nr = line_nr or (vim.api.nvim_win_get_cursor(0)[1] - 1)
-      --   opts = opts or { ['lnum'] = line_nr }
-      --
-      --   local line_diagnostics = vim.diagnostic.get(bufnr, opts)
-      --   if vim.tbl_isempty(line_diagnostics) then
-      --     return
-      --   end
-      --
-      --   local diagnostic_message = ''
-      --   for i, diagnostic in ipairs(line_diagnostics) do
-      --     diagnostic_message = diagnostic_message .. string.format('%d: %s', i, diagnostic.message or '')
-      --     print(diagnostic_message)
-      --     if i ~= #line_diagnostics then
-      --       diagnostic_message = diagnostic_message .. '\n'
-      --     end
-      --   end
-      --   vim.api.nvim_echo({ { diagnostic_message, 'Normal' } }, false, {})
+      -- Set up lspconfig.
+      local augroup_lsp_keybind = vim.api.nvim_create_augroup('augroup_lsp_keybind', {})
+      vim.api.nvim_create_autocmd({ 'LspAttach' }, {
+        group = augroup_lsp_keybind,
+        pattern = { '*' },
+        callback = function(args)
+          local bufnr = args.buf
+          -- local client = vim.lsp.get_client_by_id(args.data.client_id)
+          vim.api.nvim_buf_set_option(0, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+
+          -- code definitions, references
+          vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
+            buffer = bufnr,
+            desc = 'vim.lsp delaration',
+          })
+          -- vim.keymap.set('n', 'gd', function()
+          --   require('telescope.builtin').lsp_definitions()
+          -- end, {
+          --   buffer = bufnr,
+          --   desc = 'vim.lsp.buf.definition',
+          -- })
+          -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
+          --   buffer = bufnr,
+          --   desc = 'vim.lsp hover',
+          -- })
+          vim.keymap.set('n', 'gi', function()
+            require('telescope.builtin').lsp_implementations()
+          end, {
+            buffer = bufnr,
+            desc = 'vim.lsp.buf.implementation',
+          })
+          vim.keymap.set('n', 'gk', vim.lsp.buf.signature_help, {
+            buffer = bufnr,
+            desc = 'vim.lsp signature_help',
+          })
+          vim.keymap.set('n', 'gr', function()
+            require('telescope.builtin').lsp_references()
+          end, {
+            buffer = bufnr,
+            desc = 'vim.lsp.buf.references',
+          })
+          vim.keymap.set('n', '<Leader>D', function()
+            require('telescope.builtin').lsp_type_definitions()
+          end, {
+            buffer = bufnr,
+            desc = 'vim.lsp.buf.type_definition',
+          })
+
+          -- workspace
+          vim.keymap.set(
+            'n',
+            '<Leader><Leader>wa',
+            vim.lsp.buf.add_workspace_folder,
+            { buffer = bufnr, desc = 'vim.lsp add_workspace_folder' }
+          )
+          vim.keymap.set(
+            'n',
+            '<Leader><Leader>wr',
+            vim.lsp.buf.remove_workspace_folder,
+            { buffer = bufnr, desc = 'vim.lsp remove_workspace_folder' }
+          )
+          vim.keymap.set('n', '<Leader><Leader>wl', function()
+            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+          end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
+
+          -- code actions
+          vim.keymap.set({ 'n', 'v' }, '<Leader>rn', vim.lsp.buf.rename, {
+            buffer = bufnr,
+            desc = 'vim.lsp rename',
+          })
+          vim.keymap.set({ 'n', 'v' }, '<F2>', vim.lsp.buf.rename, {
+            buffer = bufnr,
+            desc = 'vim.lsp rename',
+          })
+          vim.keymap.set({ 'n', 'v' }, '<Leader>ca', vim.lsp.buf.code_action, {
+            buffer = bufnr,
+            desc = 'vim.lsp code_action',
+          })
+          vim.keymap.set({ 'n', 'v' }, '<F7>', vim.lsp.buf.code_action, {
+            buffer = bufnr,
+            desc = 'vim.lsp code_action',
+          })
+
+          -- format
+          vim.keymap.set(
+            'n',
+            '<F8>',
+            -- 0.7
+            -- vim.lsp.buf.formatting,
+            -- 0.8
+            vim.lsp.buf.format,
+            {
+              buffer = bufnr,
+              desc = 'vim.lsp format',
+            }
+          )
+
+          -- symbols through by treesitter
+          vim.keymap.set('n', '<Leader>s', function()
+            require('telescope.builtin').lsp_dynamic_workspace_symbols()
+          end, {
+            buffer = bufnr,
+            desc = 'vim.lsp lsp_dynamic_workspace_symbols',
+          })
+          vim.keymap.set('n', '<Leader><Leader>s', function()
+            require('telescope.builtin').lsp_document_symbols()
+          end, {
+            buffer = bufnr,
+            desc = 'vim.lsp lsp_document_symbols',
+          })
+
+          -- diagnostic
+          -- vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
+          --   buffer = bufnr,
+          --   desc = 'diagnostic open_float',
+          -- })
+          -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
+          --   buffer = bufnr,
+          --   desc = 'diagnostic goto_prev',
+          -- })
+          -- vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
+          --   buffer = bufnr,
+          --   desc = 'diagnostic goto_next',
+          -- })
+          vim.keymap.set('n', '<Leader>E', function()
+            require('telescope.builtin').diagnostics()
+          end, {
+            buffer = bufnr,
+            desc = 'telescope diagnostics',
+          })
+          -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
+        end,
+      })
+
+      local augroup_lsp_format = vim.api.nvim_create_augroup('augroup_lsp_format', {})
+      vim.api.nvim_create_autocmd({ 'LspAttach' }, {
+        group = augroup_lsp_format,
+        pattern = { '*' },
+        callback = function(args)
+          local bufnr = args.buf
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+
+          if client.supports_method('textDocument/formatting') then
+            vim.api.nvim_clear_autocmds({
+              group = augroup_lsp_format,
+              buffer = bufnr,
+            })
+            vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
+              group = augroup_lsp_format,
+              buffer = bufnr,
+              callback = function()
+                vim.lsp.buf.format({
+                  filter = function()
+                    -- apply whatever logic you want (in this example, we'll only use null-ls)
+                    return client.name == 'null-ls'
+                  end,
+                  bufnr = bufnr,
+                })
+              end,
+            })
+          end
+        end,
+      })
+
+      -- -- Use an on_attach function to only map the following keys
+      -- -- after the language server attaches to the current buffer
+      -- local on_attach = function(client, bufnr)
+      --   -- from above `local augroup = vim.api.nvim_create_augroup("LspFormatting", {})`
+      --   -- Enable completion triggered by <c-x><c-o>
       -- end
 
-      -- vim.cmd([[ autocmd! CursorHold * lua PrintDiagnostics() ]])
-
-      --- You will likely want to reduce updatetime which affects CursorHold
-      -- note: this setting is global and should be set only once
-      -- vim.o.updatetime = 150
-      -- vim.cmd([[autocmd! CursorHold,CursorHoldI * Lspsaga show_line_diagnostics]])
-
-      -- Set up lspconfig.
+      local lspconfig = require('lspconfig')
       local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
 
-      -- https://github.com/jose-elias-alvarez/null-ls.nvim/wiki/Avoiding-LSP-formatting-conflicts
-      local lsp_formatting = function(bufnr)
-        vim.lsp.buf.format({
-          filter = function(client)
-            -- apply whatever logic you want (in this example, we'll only use null-ls)
-            return client.name == 'null-ls'
-          end,
-          bufnr = bufnr,
-        })
-      end
-      -- if you want to set up formatting on save, you can use this as a callback
-      local augroup = vim.api.nvim_create_augroup('LspFormatting', {})
-
-      -- add to your shared on_attach callback
-
-      -- Use an on_attach function to only map the following keys
-      -- after the language server attaches to the current buffer
-      local on_attach = function(client, bufnr)
-        -- from above `local augroup = vim.api.nvim_create_augroup("LspFormatting", {})`
-        if client.supports_method('textDocument/formatting') then
-          vim.api.nvim_clear_autocmds({
-            group = augroup,
-            buffer = bufnr,
-          })
-          vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
-            group = augroup,
-            buffer = bufnr,
-            callback = function()
-              lsp_formatting(bufnr)
-            end,
-          })
-        end
-        -- Enable completion triggered by <c-x><c-o>
-        vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
-
-        -- Mappings.
-        -- See `:help vim.lsp.*` for documentation on any of the below functions
-        -- local lsp_bufopts = {
-        -- 	buffer = bufnr,
-        -- }
-
-        -- code definitions, references
-        vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
-          buffer = bufnr,
-          desc = 'vim.lsp delaration',
-        })
-        -- vim.keymap.set('n', 'gd', function()
-        --   require('telescope.builtin').lsp_definitions()
-        -- end, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp.buf.definition',
-        -- })
-        -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
-        --   buffer = bufnr,
-        --   desc = 'vim.lsp hover',
-        -- })
-        vim.keymap.set('n', 'gi', function()
-          require('telescope.builtin').lsp_implementations()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.implementation',
-        })
-        vim.keymap.set('n', 'gk', vim.lsp.buf.signature_help, {
-          buffer = bufnr,
-          desc = 'vim.lsp signature_help',
-        })
-        vim.keymap.set('n', 'gr', function()
-          require('telescope.builtin').lsp_references()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.references',
-        })
-        vim.keymap.set('n', '<Leader>D', function()
-          require('telescope.builtin').lsp_type_definitions()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.type_definition',
-        })
-
-        -- workspace
-        vim.keymap.set(
-          'n',
-          '<Leader><Leader>wa',
-          vim.lsp.buf.add_workspace_folder,
-          { buffer = bufnr, desc = 'vim.lsp add_workspace_folder' }
-        )
-        vim.keymap.set(
-          'n',
-          '<Leader><Leader>wr',
-          vim.lsp.buf.remove_workspace_folder,
-          { buffer = bufnr, desc = 'vim.lsp remove_workspace_folder' }
-        )
-        vim.keymap.set('n', '<Leader><Leader>wl', function()
-          print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-        end, { buffer = bufnr, desc = 'vim.lsp list_workspace_folders' })
-
-        -- code actions
-        vim.keymap.set({ 'n', 'v' }, '<Leader>rn', vim.lsp.buf.rename, {
-          buffer = bufnr,
-          desc = 'vim.lsp rename',
-        })
-        vim.keymap.set({ 'n', 'v' }, '<F2>', vim.lsp.buf.rename, {
-          buffer = bufnr,
-          desc = 'vim.lsp rename',
-        })
-        vim.keymap.set({ 'n', 'v' }, '<Leader>ca', vim.lsp.buf.code_action, {
-          buffer = bufnr,
-          desc = 'vim.lsp code_action',
-        })
-        vim.keymap.set({ 'n', 'v' }, '<F7>', vim.lsp.buf.code_action, {
-          buffer = bufnr,
-          desc = 'vim.lsp code_action',
-        })
-
-        -- format
-        vim.keymap.set(
-          'n',
-          '<F8>',
-          -- 0.7
-          -- vim.lsp.buf.formatting,
-          -- 0.8
-          vim.lsp.buf.format,
-          {
-            buffer = bufnr,
-            desc = 'vim.lsp format',
-          }
-        )
-
-        -- symbols through by treesitter
-        vim.keymap.set('n', '<Leader>s', function()
-          require('telescope.builtin').lsp_dynamic_workspace_symbols()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp lsp_dynamic_workspace_symbols',
-        })
-        vim.keymap.set('n', '<Leader><Leader>s', function()
-          require('telescope.builtin').lsp_document_symbols()
-        end, {
-          buffer = bufnr,
-          desc = 'vim.lsp lsp_document_symbols',
-        })
-
-        -- diagnostic
-        -- vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
-        --   desc = 'diagnostic open_float',
-        -- })
-        -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
-        --   desc = 'diagnostic goto_prev',
-        -- })
-        -- vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
-        --   desc = 'diagnostic goto_next',
-        -- })
-        vim.keymap.set('n', '<Leader>E', function()
-          require('telescope.builtin').diagnostics()
-        end, {
-          desc = 'telescope diagnostics',
-        })
-        -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist'})
-      end
-
-      local lspconfig = require('lspconfig')
       require('mason-lspconfig').setup_handlers({ --
         -- The first entry (without a key) will be the default handler
         -- and will be called for each installed server that doesn't have
@@ -1191,7 +1181,7 @@ return packer.startup(function(use)
         function(server_name) -- default handler (optional)
           lspconfig[server_name].setup({
             capabilitiies = capabilities,
-            on_attach = on_attach,
+            -- on_attach = on_attach,
           })
         end, --
         -- Next, you can provide targeted overrides for specific servers.
@@ -1201,7 +1191,7 @@ return packer.startup(function(use)
         ['sumneko_lua'] = function()
           lspconfig.sumneko_lua.setup({
             capabilitiies = capabilities,
-            on_attach = on_attach,
+            -- on_attach = on_attach,
             settings = {
               Lua = {
                 diagnostics = {
