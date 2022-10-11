@@ -497,6 +497,10 @@ return packer.startup(function(use)
           -- sign_priority = 20,
           virtual_text = false,
         },
+        symbol_in_winbar = {
+          in_custom = false,
+          enable = false,
+        },
       })
 
       local augroup_lspsaga = vim.api.nvim_create_augroup('augroup_lspsaga', {})
