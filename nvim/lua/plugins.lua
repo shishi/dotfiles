@@ -595,9 +595,9 @@ return packer.startup(function(use)
           null_ls.builtins.diagnostics.mdl,
           null_ls.builtins.diagnostics.rubocop,
           null_ls.builtins.diagnostics.selene,
-          null_ls.builtins.diagnostics.sqlfluff.with({
-            extra_args = { '--dialect', 'postgres' },
-          }),
+          -- null_ls.builtins.diagnostics.sqlfluff.with({
+          --   extra_args = { '--dialect', 'postgres' },
+          -- }),
           null_ls.builtins.diagnostics.tidy,
           null_ls.builtins.diagnostics.stylelint,
           null_ls.builtins.diagnostics.todo_comments,
@@ -617,9 +617,10 @@ return packer.startup(function(use)
           -- null_ls.builtins.formatting.prismaFmt,
           null_ls.builtins.formatting.rubocop,
           null_ls.builtins.formatting.rustfmt,
-          null_ls.builtins.formatting.sqlfluff.with({
-            extra_args = { '--dialect', 'postgres' },
-          }),
+          -- null_ls.builtins.formatting.sql_formatter,
+          -- null_ls.builtins.formatting.sqlfluff.with({
+          --   extra_args = { '--dialect', 'postgres' },
+          -- }),
           null_ls.builtins.formatting.stylelint,
           null_ls.builtins.formatting.stylua,
           null_ls.builtins.formatting.taplo,
@@ -954,7 +955,7 @@ return packer.startup(function(use)
   use({
     'neovim/nvim-lspconfig',
     disable = vscode,
-    requires = { { 'williamboman/mason-lspconfig.nvim' } },
+    requires = { { 'williamboman/mason-lspconfig.nvim', 'nanotee/sqls.nvim' } },
     after = 'mason-lspconfig.nvim',
     config = function()
       -- lsp diagnostics setting
@@ -1180,6 +1181,28 @@ return packer.startup(function(use)
               Lua = {
                 diagnostics = {
                   globals = { 'vim' },
+                },
+              },
+            },
+          })
+        end,
+        ['sqls'] = function()
+          lspconfig.sqls.setup({
+            capabilitiies = capabilities,
+            on_attach = function(client, bufnr)
+              require('sqls').on_attch(client, bufnr)
+            end,
+            settings = {
+              sqls = {
+                connections = {
+                  -- {
+                  --   driver = 'mysql',
+                  --   dataSourceName = 'root:root@tcp(127.0.0.1:3306)/world',
+                  -- },
+                  {
+                    driver = 'postgresql',
+                    dataSourceName = 'host=localhost port=5432 user=postgres password=password dbname=memie_dev sslmode=disable',
+                  },
                 },
               },
             },
@@ -1444,6 +1467,11 @@ return packer.startup(function(use)
       })
       -- rt.inlay_hints.enable()
     end,
+  })
+
+  use({
+    'nanotee/sqls.nvim',
+    disable = vscode,
   })
 
   use({
