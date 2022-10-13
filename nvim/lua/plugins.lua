@@ -1242,6 +1242,17 @@ return packer.startup(function(use)
           enable = true,
           update_root = true,
         },
+        filters = {
+          dotfiles = false,
+          custom = {},
+          exclude = {},
+        },
+        git = {
+          enable = true,
+          ignore = false,
+          show_on_dirs = true,
+          timeout = 400,
+        },
         renderer = {
           highlight_git = true,
           highlight_opened_files = 'all',
