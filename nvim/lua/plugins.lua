@@ -94,10 +94,18 @@ return packer.startup(function(use)
       require('bufferline').setup({
         options = {
           mode = 'buffers',
+          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
+          middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           indicator = {
             style = 'icon',
-            icon = '  📝',
+            icon = '📝',
           },
+          name_formatter = function(_buf)
+            return vim.fn.expand('%:~:.')
+          end,
+          max_name_length = 30,
           diagnostics = 'nvim_lsp',
           diagnostics_indicator = function(count, level, _diagnostics_dict, _context)
             local icon = level:match('error') and ' ' or ' '
@@ -442,10 +450,8 @@ return packer.startup(function(use)
           lualine_b = { 'branch', 'diff', 'diagnostics' },
           lualine_c = {
             {
-              'buffers',
-              show_filename_only = false,
-              mode = 0,
-              max_length = 100,
+              'filename',
+              path = 1,
             },
           },
           lualine_x = { 'encoding', 'fileformat', 'filetype' },
@@ -457,10 +463,8 @@ return packer.startup(function(use)
           lualine_b = {},
           lualine_c = {
             {
-              'buffers',
-              show_filename_only = false,
-              mode = 0,
-              max_length = 100,
+              'filename',
+              path = 1,
             },
           },
           lualine_x = { 'location' },
@@ -669,9 +673,9 @@ return packer.startup(function(use)
           null_ls.builtins.diagnostics.mdl,
           null_ls.builtins.diagnostics.rubocop,
           null_ls.builtins.diagnostics.selene,
-          -- null_ls.builtins.diagnostics.sqlfluff.with({
-          --   extra_args = { '--dialect', 'postgres' },
-          -- }),
+          null_ls.builtins.diagnostics.sqlfluff.with({
+            extra_args = { '--dialect', 'postgres' },
+          }),
           null_ls.builtins.diagnostics.tidy,
           null_ls.builtins.diagnostics.stylelint,
           null_ls.builtins.diagnostics.todo_comments,
@@ -692,9 +696,9 @@ return packer.startup(function(use)
           null_ls.builtins.formatting.rubocop,
           null_ls.builtins.formatting.rustfmt,
           -- null_ls.builtins.formatting.sql_formatter,
-          -- null_ls.builtins.formatting.sqlfluff.with({
-          --   extra_args = { '--dialect', 'postgres' },
-          -- }),
+          null_ls.builtins.formatting.sqlfluff.with({
+            extra_args = { '--dialect', 'postgres' },
+          }),
           null_ls.builtins.formatting.stylelint,
           null_ls.builtins.formatting.stylua,
           null_ls.builtins.formatting.taplo,
@@ -1638,6 +1642,7 @@ return packer.startup(function(use)
             '--vimgrep',
             '--smart-case',
             '--hidden',
+            '--glob "!.git"',
           },
           -- layout_strategy = 'vertical',
           -- layout_config = {
@@ -1725,6 +1730,11 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope command history',
       })
+      vim.keymap.set('n', '<C-k>/', function()
+        require('telescope.builtin').search_history()
+      end, {
+        desc = 'telescope search history',
+      })
       -- vim.keymap.set('n', '<Leader>tc', function()
       --   require('telescope.builtin').commands()
       -- end)
@@ -1733,16 +1743,16 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope commands',
       })
-      vim.keymap.set('n', '<C-k><C-k>b', function()
-        require('telescope.builtin').git_branches()
-      end, {
-        desc = 'telescope git branches',
-      })
-      vim.keymap.set('n', '<C-k>s', function()
-        require('telescope.builtin').git_status()
-      end, {
-        desc = 'telescope git status',
-      })
+      -- vim.keymap.set('n', '<C-k>b', function()
+      --   require('telescope.builtin').git_branches()
+      -- end, {
+      --   desc = 'telescope git branches',
+      -- })
+      -- vim.keymap.set('n', '<C-k>s', function()
+      --   require('telescope.builtin').git_status()
+      -- end, {
+      --   desc = 'telescope git status',
+      -- })
       vim.keymap.set('n', '<C-k>r', function()
         require('telescope.builtin').marks()
       end, {
@@ -1777,6 +1787,11 @@ return packer.startup(function(use)
         require('telescope.builtin').keymaps()
       end, {
         desc = 'telescope keymaps',
+      })
+      vim.keymap.set('n', '<C-k>;', function()
+        require('telescope.builtin').resume()
+      end, {
+        desc = 'telescope resume',
       })
 
       -- extensions
@@ -1890,7 +1905,7 @@ return packer.startup(function(use)
       -- end
       --
       vim.api.nvim_create_user_command('G', function(opt)
-        local args = '--vimgrep --smart-case --hidden ' .. opt.args
+        local args = '--vimgrep --smart-case --hidden --glob "!.git"' .. opt.args
         -- local args = split(args_s, ' ')
 
         vim.fn['ripgrep#search'](args)
@@ -1899,7 +1914,7 @@ return packer.startup(function(use)
         complete = 'file',
       })
       vim.api.nvim_create_user_command('Gi', function(opt)
-        local args = '--vimgrep --smart-case --hidden --no-ignore ' .. opt.args
+        local args = '--vimgrep --smart-case --hidden --glob "!.git" --no-ignore ' .. opt.args
         -- local args = split(args_s, ' ')
 
         vim.fn['ripgrep#search'](args)
