@@ -72,9 +72,9 @@ return packer.startup(function(use)
         --   pre_cwd_changed_hook = function()
         --     -- vim.api.nvim_feedkeys('<C-c>', 'n', true)
         --   end,
-        --   post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
-        --     -- require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
-        --   end,
+        post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
+          require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
+        end,
         -- },
       })
 
@@ -414,30 +414,104 @@ return packer.startup(function(use)
   use({
     'nvim-lualine/lualine.nvim',
     disable = vscode,
-    requires = { { 'kyazdani42/nvim-web-devicons' } },
+    requires = { { 'kyazdani42/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
     config = function()
+      local navic = require('nvim-navic')
+
       require('lualine').setup({
-        sections = {
-          lualine_c = { {
-            'lsp_progress',
-          } },
-        },
         options = {
+          icons_enabled = true,
           theme = 'gruvbox-material',
+          component_separators = { left = '', right = '' },
+          section_separators = { left = '', right = '' },
+          disabled_filetypes = {
+            statusline = {},
+            winbar = {},
+          },
+          ignore_focus = {},
+          always_divide_middle = true,
+          globalstatus = false,
+          refresh = {
+            statusline = 1000,
+            tabline = 1000,
+            winbar = 1000,
+          },
+        },
+        sections = {
+          lualine_a = { 'mode' },
+          lualine_b = { 'branch', 'diff', 'diagnostics' },
+          lualine_c = {
+            {
+              'buffers',
+              show_filename_only = false,
+              mode = 0,
+              max_length = 100,
+            },
+          },
+          lualine_x = { 'encoding', 'fileformat', 'filetype' },
+          lualine_y = { 'progress' },
+          lualine_z = { 'location' },
+        },
+        inactive_sections = {
+          lualine_a = {},
+          lualine_b = {},
+          lualine_c = {
+            {
+              'buffers',
+              show_filename_only = false,
+              mode = 0,
+              max_length = 100,
+            },
+          },
+          lualine_x = { 'location' },
+          lualine_y = {},
+          lualine_z = {},
+        },
+        tabline = {},
+        winbar = {
+          lualine_a = {},
+          lualine_b = {
+            {
+              'filename',
+              path = 1,
+            },
+          },
+          lualine_c = {
+            {
+              navic.get_location,
+              cond = navic.is_available,
+            },
+          },
+          lualine_x = {},
+          lualine_y = {},
+          lualine_z = {},
+        },
+        inactive_winbar = {
+          lualine_a = {},
+          lualine_b = {
+            {
+              'filename',
+              path = 1,
+            },
+          },
+          lualine_c = {
+            {
+              navic.get_location,
+              cond = navic.is_available,
+            },
+          },
+          lualine_x = {},
+          lualine_y = {},
+          lualine_z = {},
         },
         extensions = {
+          'nvim-dap-ui',
           'nvim-tree',
           'quickfix',
           'toggleterm',
         },
       })
     end,
-  })
-
-  use({
-    'arkav/lualine-lsp-progress',
-    disable = vscode,
-    requires = { { 'nvim-lualine/lualine.nvim' } },
   })
 
   use({
@@ -489,11 +563,11 @@ return packer.startup(function(use)
 
       saga.init_lsp_saga({
         code_action_lightbulb = {
-          -- enable = true,
-          -- enable_in_insert = true,
-          -- cache_code_action = true,
+          enable = true,
+          enable_in_insert = true,
+          cache_code_action = true,
           sign = true,
-          -- update_time = 150,
+          update_time = 150,
           -- sign_priority = 20,
           virtual_text = false,
         },
@@ -514,7 +588,7 @@ return packer.startup(function(use)
           -- code definitions, references
           vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>', { buffer = bufnr })
           vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>', { buffer = bufnr })
-          -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>' { buffer = bufnr })
+          vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>', { buffer = bufnr })
 
           -- code actions
           -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
@@ -955,7 +1029,7 @@ return packer.startup(function(use)
   use({
     'neovim/nvim-lspconfig',
     disable = vscode,
-    requires = { { 'williamboman/mason-lspconfig.nvim', 'nanotee/sqls.nvim' } },
+    requires = { { 'williamboman/mason-lspconfig.nvim', 'SmiteshP/nvim-navic', 'nanotee/sqls.nvim' } },
     after = 'mason-lspconfig.nvim',
     config = function()
       -- lsp diagnostics setting
@@ -1158,6 +1232,10 @@ return packer.startup(function(use)
 
       local lspconfig = require('lspconfig')
       local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
+      local navic = require('nvim-navic')
+      local on_attach = function(client, bufnr)
+        navic.attach(client, bufnr)
+      end
 
       require('mason-lspconfig').setup_handlers({ --
         -- The first entry (without a key) will be the default handler
@@ -1166,7 +1244,7 @@ return packer.startup(function(use)
         function(server_name) -- default handler (optional)
           lspconfig[server_name].setup({
             capabilitiies = capabilities,
-            -- on_attach = on_attach,
+            on_attach = on_attach,
           })
         end, --
         -- Next, you can provide targeted overrides for specific servers.
@@ -1176,7 +1254,7 @@ return packer.startup(function(use)
         ['sumneko_lua'] = function()
           lspconfig.sumneko_lua.setup({
             capabilitiies = capabilities,
-            -- on_attach = on_attach,
+            on_attach = on_attach,
             settings = {
               Lua = {
                 diagnostics = {
@@ -1190,6 +1268,7 @@ return packer.startup(function(use)
           lspconfig.sqls.setup({
             capabilitiies = capabilities,
             on_attach = function(client, bufnr)
+              navic.attach(client, bufnr)
               require('sqls').on_attch(client, bufnr)
             end,
             settings = {
@@ -1212,13 +1291,11 @@ return packer.startup(function(use)
     end,
   })
 
-  -- use({
-  --   'rcarriga/nvim-notify',
-  --   disable = vscode,
-  --   config = function()
-  --     require('notify').setup({})
-  --   end,
-  -- })
+  use({
+    'SmiteshP/nvim-navic',
+    disable = vscode,
+    requires = 'neovim/nvim-lspconfig',
+  })
 
   use({
     'kylechui/nvim-surround',
@@ -1853,57 +1930,6 @@ return packer.startup(function(use)
         },
       })
     end,
-  })
-
-  use({
-    'fgheng/winbar.nvim',
-    disable = vscode,
-    config = function()
-      require('winbar').setup({
-        enabled = true,
-
-        show_file_path = true,
-        show_symbols = true,
-
-        colors = {
-          path = '', -- You can customize colors like #c946fd
-          file_name = '',
-          symbols = '',
-        },
-
-        icons = {
-          file_icon_default = '',
-          seperator = '>',
-          editor_state = '●',
-          lock_icon = '',
-        },
-
-        exclude_filetype = {
-          'help',
-          'startify',
-          'dashboard',
-          'packer',
-          'neogitstatus',
-          'NvimTree',
-          'Trouble',
-          'alpha',
-          'lir',
-          'Outline',
-          'spectre_panel',
-          'toggleterm',
-          'qf',
-        },
-      })
-    end,
-  })
-
-  use({
-    'glepnir/zephyr-nvim',
-    disable = true,
-    requires = {
-      'nvim-treesitter/nvim-treesitter',
-      opt = true,
-    },
   })
 
   -- packages except on github

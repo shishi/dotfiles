@@ -19,7 +19,7 @@ vim.opt.undofile = true
 -- ui
 vim.opt.number = true
 vim.opt.cursorline = true
--- vim.opt.winbar = '%F'
+vim.opt.winbar = '%F'
 
 -- vim.opt.relativenumber = true
 -- if vim.g.vscode then
