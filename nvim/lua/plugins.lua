@@ -1431,7 +1431,7 @@ return packer.startup(function(use)
     config = function()
       require('project_nvim').setup({
         detection_methods = { 'pattern', 'lsp' },
-        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', 'Makefile', 'Rakefile', 'package.json', 'selene.toml' },
+        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn' },
         -- exclude_dirs = { '~/.config/nvim', '~/dev/src/github.com/shishi/dotfiles/nvim' },
         show_hidden = false,
         silent_chdir = false,
@@ -1556,6 +1556,12 @@ return packer.startup(function(use)
       local lga_actions = require('telescope-live-grep-args.actions')
       require('telescope').setup({
         defaults = {
+          vimgrep_arguments = {
+            'rg',
+            '--vimgrep',
+            '--smart-case',
+            '--hidden',
+          },
           -- layout_strategy = 'vertical',
           -- layout_config = {
           --   prompt_position = 'top',
@@ -1563,6 +1569,18 @@ return packer.startup(function(use)
           mappings = {
             i = { ['<c-t>'] = trouble.open_with_trouble },
             n = { ['<c-t>'] = trouble.open_with_trouble },
+          },
+        },
+        pickers = {
+          find_files = {
+            find_command = {
+              'fd',
+              '--type',
+              'file',
+              '--hidden',
+              '--no-ignore',
+              '--strip-cwd-prefix',
+            },
           },
         },
         extensions = {
@@ -1795,7 +1813,7 @@ return packer.startup(function(use)
       -- end
       --
       vim.api.nvim_create_user_command('G', function(opt)
-        local args = '--vimgrep --smart-case ' .. opt.args
+        local args = '--vimgrep --smart-case --hidden ' .. opt.args
         -- local args = split(args_s, ' ')
 
         vim.fn['ripgrep#search'](args)
@@ -1804,7 +1822,7 @@ return packer.startup(function(use)
         complete = 'file',
       })
       vim.api.nvim_create_user_command('Gi', function(opt)
-        local args = '--vimgrep --smart-case --no-ignore-vcs' .. opt.args
+        local args = '--vimgrep --smart-case --hidden --no-ignore ' .. opt.args
         -- local args = split(args_s, ' ')
 
         vim.fn['ripgrep#search'](args)
