@@ -21,7 +21,7 @@ vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
   end,
 })
 
--- create user command
+-- create user command for reload config
 vim.api.nvim_create_user_command('ReloadInits', function()
   for name, _ in pairs(package.loaded) do
     if name:match('^cnull') then
@@ -44,6 +44,18 @@ vim.api.nvim_create_autocmd({ 'Filetype' }, {
   pattern = { '*' },
   callback = function()
     vim.opt_local.formatoptions = 'troqj'
+  end,
+})
+
+-- autosave when lost focus
+local augroup_autosave = vim.api.nvim_create_augroup('augroup_autosave', {
+  clear = true,
+})
+vim.api.nvim_create_autocmd({ 'FocusLost' }, {
+  group = augroup_autosave,
+  pattern = { '*' },
+  callback = function()
+    vim.cmd('silent! wa')
   end,
 })
 

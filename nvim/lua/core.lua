@@ -13,6 +13,7 @@ vim.opt.fileencodings = 'utf-8,sjis,iso-2022-jp,euc-jp'
 vim.opt.fileformats = 'unix,dos,mac'
 
 -- undo
+vim.opt.autowrite = true
 vim.opt.undofile = true
 
 -- ui
