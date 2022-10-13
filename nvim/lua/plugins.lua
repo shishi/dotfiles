@@ -422,6 +422,14 @@ return packer.startup(function(use)
   })
 
   use({
+    'ggandor/leap.nvim',
+    disable = vscode,
+    config = function ()
+      require('leap').add_default_mappings()
+    end
+  })
+
+  use({
     'nvim-lualine/lualine.nvim',
     disable = vscode,
     requires = { { 'kyazdani42/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
@@ -628,9 +636,9 @@ return packer.startup(function(use)
     after = 'mason.nvim',
     config = function()
       require('mason-lspconfig').setup({
-        -- ensure_installed = {
-        --   "sumneko_lua", "rust_analyzer"
-        -- },
+        ensure_installed = {
+          'sumneko_lua', --, "rust_analyzer"
+        },
         automatic_installation = true,
       })
     end,
@@ -1708,7 +1716,7 @@ return packer.startup(function(use)
       end, {
         desc = 'telescope live grep',
       })
-      vim.keymap.set('n', 's', function()
+      vim.keymap.set('n', 'q', function()
         -- require('telescope.builtin').live_grep()
         require('telescope.builtin').current_buffer_fuzzy_find()
       end, {
@@ -1717,7 +1725,7 @@ return packer.startup(function(use)
       -- vim.keymap.set('n', '<Leader>tb', function()
       --   require('telescope.builtin').buffers()
       -- end)
-      vim.keymap.set('n', 'S', function()
+      vim.keymap.set('n', 'Q', function()
         require('telescope.builtin').buffers()
       end, {
         desc = 'telescope buffers',

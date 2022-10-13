@@ -220,6 +220,7 @@ end
 
 # rust tools
 if type exa &>/dev/null
+    alias ls exa
     alias ll 'exa -lah --git --icons --time-style=long-iso'
     alias lt 'exa -T --icons --git-ignore'
 end
