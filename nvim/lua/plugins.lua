@@ -98,12 +98,14 @@ return packer.startup(function(use)
           right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
-          indicator = {
-            style = 'icon',
-            icon = '📝',
-          },
-          name_formatter = function(_buf)
-            return vim.fn.expand('%:~:.')
+          -- indicator = {
+          --   style = 'icon',
+          --   icon = '📝',
+          -- },
+          name_formatter = function(buf)
+            local filepath = vim.fn.system({ 'realpath', '--relative-base', vim.fn.getcwd(), buf.path })
+            local filepath_trim = vim.fn.trim(filepath)
+            return filepath_trim
           end,
           max_name_length = 30,
           diagnostics = 'nvim_lsp',
