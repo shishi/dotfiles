@@ -98,10 +98,11 @@ return packer.startup(function(use)
           right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
-          -- indicator = {
-          --   style = 'icon',
-          --   icon = '📝',
-          -- },
+          show_tab_indicators = true,
+          indicator = {
+            style = 'underline',
+            -- icon = '📝',
+          },
           name_formatter = function(buf)
             local filepath = vim.fn.system({ 'realpath', '--relative-base', vim.fn.getcwd(), buf.path })
             local filepath_trim = vim.fn.trim(filepath)
@@ -113,8 +114,24 @@ return packer.startup(function(use)
             local icon = level:match('error') and ' ' or ' '
             return ' ' .. icon .. count
           end,
-          -- underline = true,
         },
+        -- highlights = {
+        --   buffer_selected = {
+        --     -- fg = 'red',
+        --     -- bg = 'red',
+        --     bold = true,
+        --     -- italic = true,
+        --     special = '#FF0000',
+        --     sp = '#FF0000',
+        --   },
+        --   indicator_selected = {
+        --     -- fg = 'red',
+        --     -- bg = 'red',
+        --     bold = true,
+        --     special = '#FF0000',
+        --     sp = '#FF0000',
+        --   },
+        -- },
       })
     end,
   })
@@ -134,7 +151,7 @@ return packer.startup(function(use)
 
   use({
     'f3fora/cmp-spell',
-    disable = vscode,
+    disable = true,
     requires = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       vim.opt.spell = true
@@ -199,10 +216,10 @@ return packer.startup(function(use)
   })
 
   use({
-    'j-hui/fidget.nvim',
-    disable = true,
+    'ggandor/flit.nvim',
+    disable = false,
     config = function()
-      require('fidget').setup({})
+      require('flit').setup({})
     end,
   })
 
@@ -297,7 +314,7 @@ return packer.startup(function(use)
       --
       vim.api.nvim_exec(
         [[
-        augroup nord-theme-overrides
+        augroup gruvbox-material-theme-overrides
           autocmd!
           autocmd ColorScheme gruvbox-material highlight Folded ctermfg=LightGray guifg=#918d88
           autocmd ColorScheme gruvbox-material highlight Folded ctermbg=235 guibg=#282828
@@ -318,6 +335,7 @@ return packer.startup(function(use)
 
   use({
     'phaazon/hop.nvim',
+    disable = true,
     branch = 'v2', -- optional but strongly recommended
     config = function()
       -- you can configure Hop the way you like here; see :h hop-config
@@ -395,8 +413,8 @@ return packer.startup(function(use)
       -- })
 
       vim.opt.list = true
-      vim.opt.listchars:append('space:⋅')
-      vim.opt.listchars:append('eol:↴')
+      -- vim.opt.listchars:append('space:⋅')
+      -- vim.opt.listchars:append('eol:↴')
 
       require('indent_blankline').setup({
         -- char = '',
@@ -424,9 +442,9 @@ return packer.startup(function(use)
   use({
     'ggandor/leap.nvim',
     disable = vscode,
-    config = function ()
+    config = function()
       require('leap').add_default_mappings()
-    end
+    end,
   })
 
   use({
@@ -843,7 +861,7 @@ return packer.startup(function(use)
           { name = 'nvim_lsp_signature_help' },
           { name = 'nvim_lsp' },
           { name = 'crates' },
-          { name = 'spell' },
+          -- { name = 'spell' },
           {
             { name = 'buffer' },
           },
@@ -1273,6 +1291,16 @@ return packer.startup(function(use)
               Lua = {
                 diagnostics = {
                   globals = { 'vim' },
+                },
+                runtime = {
+                  version = 'LuaJIT',
+                  path = vim.split(package.path, ';'),
+                },
+                workspace = {
+                  library = {
+                    [vim.fn.expand('$VIMRUNTIME/lua')] = true,
+                    [vim.fn.expand('$VIMRUNTIME/lua/vim/lsp')] = true,
+                  },
                 },
               },
             },

@@ -12,8 +12,8 @@
 -- | 'c'                  | mapmode-c   | Command-line                             | :cmap                |
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
-vim.keymap.set({ 'n', 'v', 't' }, ';', ':')
-vim.keymap.set({ 'n', 'v', 't' }, ':', ';')
+vim.keymap.set({ 'n', 'v' }, ';', ':')
+vim.keymap.set({ 'n', 'v' }, ':', ';')
 vim.keymap.set('n', 'x', '"_x')
 vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
 vim.keymap.set('n', '<Leader>q', 'q')
@@ -81,8 +81,8 @@ vim.keymap.set('v', '=', '=gb')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 
 -- terminal
--- vim.keymap.set('t', '<Esc>', [[<C-\><C-n>]])
--- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
+vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
+vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
 
 --  Packer
