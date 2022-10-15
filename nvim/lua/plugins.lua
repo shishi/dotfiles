@@ -88,7 +88,7 @@ return packer.startup(function(use)
     'akinsho/bufferline.nvim',
     tag = 'v2.*',
     disable = vscode,
-    requires = { { 'kyazdani42/nvim-web-devicons' } },
+    requires = { { 'kyazdani42/nvim-web-devicons' }, { 'nvim-lua/plenary.nvim' } },
     config = function()
       vim.opt.termguicolors = true
       require('bufferline').setup({
@@ -104,9 +104,11 @@ return packer.startup(function(use)
             -- icon = '📝',
           },
           name_formatter = function(buf)
-            local filepath = vim.fn.system({ 'realpath', '--relative-base', vim.fn.getcwd(), buf.path })
-            local filepath_trim = vim.fn.trim(filepath)
-            return filepath_trim
+            local Path = require('plenary.path')
+            local filename = Path:new(buf.path):make_relative(vim.fn.getcwd())
+            -- local filepath = vim.fn.system({ 'realpath', '--relative-base', vim.fn.getcwd(), buf.path })
+            -- local filepath_trim = vim.fn.trim(filepath)
+            return filename
           end,
           max_name_length = 30,
           diagnostics = 'nvim_lsp',
@@ -1601,15 +1603,6 @@ return packer.startup(function(use)
   })
 
   use({
-    'ThePrimeagen/refactoring.nvim',
-    disable = true,
-    requires = { { 'nvim-lua/plenary.nvim' }, { 'nvim-treesitter/nvim-treesitter' } },
-    config = function()
-      require('refactoring').setup({})
-    end,
-  })
-
-  use({
     'simrat39/rust-tools.nvim',
     diaable = vscode,
     requires = { { 'nvim-lua/plenary.nvim' }, { 'neovim/nvim-lspconfig' }, { 'mfussenegger/nvim-dap' } },
@@ -1630,11 +1623,6 @@ return packer.startup(function(use)
       })
       -- rt.inlay_hints.enable()
     end,
-  })
-
-  use({
-    'nanotee/sqls.nvim',
-    disable = vscode,
   })
 
   use({
@@ -1713,7 +1701,8 @@ return packer.startup(function(use)
             '--vimgrep',
             '--smart-case',
             '--hidden',
-            '--glob "!.git"',
+            '--glob',
+            '!.git',
           },
           -- layout_strategy = 'vertical',
           -- layout_config = {
@@ -1728,10 +1717,14 @@ return packer.startup(function(use)
           find_files = {
             find_command = {
               'fd',
+              '--color',
+              'never',
               '--type',
               'file',
               '--hidden',
               '--no-ignore',
+              '--exclude',
+              '.git',
               '--strip-cwd-prefix',
             },
           },

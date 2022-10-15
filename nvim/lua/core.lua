@@ -17,7 +17,7 @@ vim.opt.autowrite = true
 vim.opt.undofile = true
 
 -- ui
-vim.opt.number = true
+vim.opt.number = false
 vim.opt.cursorline = true
 vim.opt.winbar = '%F'
 
@@ -89,7 +89,6 @@ vim.opt.modeline = true
 vim.opt.modelines = 10
 
 -- gui
-
 vim.opt.guifont = 'UDEV Gothic NF:h13'
 
 if vim.g.neovide then

@@ -1,37 +1,28 @@
 -- reload init.lua and requires
+-- create user command for reload config
+vim.api.nvim_create_user_command('ReloadInits', function()
+  package.loaded['core'] = nil
+  package.loaded['keybind'] = nil
+  package.loaded['autocmd'] = nil
+  -- for name, _ in pairs(package.loaded) do
+  --   if name:match('^cnull') then
+  --     package.loaded[name] = nil
+  --   end
+  -- end
+
+  dofile(vim.env.MYVIMRC)
+end, {})
+
+-- auto reload when edit plugins.lua
 local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
   clear = true,
 })
 vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
   group = augroup_reload_inits,
-  pattern = { 'core.lua', 'keybind.lua', 'autocmd.lua', 'plugins.lua' },
+  pattern = { 'plugins.lua' },
   callback = function()
-    -- print(vim.inspect(table))
-
-    package.loaded['core'] = nil
-    package.loaded['keybind'] = nil
-    package.loaded['autocmd'] = nil
-    package.loaded['plugins'] = nil
-    require('core')
-    require('keybind')
-    require('autocmd')
-    require('plugins')
-
     vim.api.nvim_command('PackerSync')
   end,
-})
-
--- create user command for reload config
-vim.api.nvim_create_user_command('ReloadInits', function()
-  for name, _ in pairs(package.loaded) do
-    if name:match('^cnull') then
-      package.loaded[name] = nil
-    end
-  end
-
-  dofile(vim.fn.stdpath('config') .. '/init.lua')
-end, {
-  nargs = 0,
 })
 
 -- formatoptions
@@ -93,5 +84,3 @@ vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
     vim.api.nvim_exec('silent! normal! g`"zv', false)
   end,
 })
-
--- grep quickfix
