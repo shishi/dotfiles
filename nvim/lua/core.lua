@@ -90,11 +90,12 @@ vim.opt.modelines = 10
 
 -- gui
 
+vim.opt.guifont = 'UDEV Gothic NF:h13'
+
 if vim.g.neovide then
-  vim.opt.guifont = 'UDEV Gothic NF:h13'
   vim.g.neovide_hide_mouse_when_typing = true
   vim.g.neovide_underline_automatic_scaling = true
-  vim.g.neovide_refresh_rate = 144
+  vim.g.neovide_refresh_rate = 120
   vim.g.neovide_remember_window_size = true
   vim.g.neovide_input_use_logo = true
   vim.g.neovide_cursor_animation_length = 0
