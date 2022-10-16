@@ -142,7 +142,9 @@ return packer.startup(function(use)
     'uga-rosa/ccc.nvim',
     disable = vscode,
     cofnig = function()
-      require('ccc').setup({
+      local ccc = require('ccc')
+      -- local mapping = ccc.mapping
+      ccc.setup({
         highlighter = {
           auto_enable = true,
           lsp = true,
@@ -1585,9 +1587,9 @@ return packer.startup(function(use)
     config = function()
       require('project_nvim').setup({
         detection_methods = { 'pattern', 'lsp' },
-        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn' },
-        -- exclude_dirs = { '~/.config/nvim', '~/dev/src/github.com/shishi/dotfiles/nvim' },
-        show_hidden = false,
+        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', '.gitignore' },
+        exclude_dirs = { '~/', '/mnt/c/Users/shishi/scoop/*' },
+        show_hidden = true,
         silent_chdir = false,
         scope_chdir = 'global',
       })
