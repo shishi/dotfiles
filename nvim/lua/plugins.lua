@@ -1587,7 +1587,17 @@ return packer.startup(function(use)
     config = function()
       require('project_nvim').setup({
         detection_methods = { 'pattern', 'lsp' },
-        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', '.gitignore' },
+        patterns = {
+          '.git',
+          '_darcs',
+          '.hg',
+          '.bzr',
+          '.svn',
+          '!^www',
+          '!^docker',
+          '!^signaling-server',
+          '!^peer-server',
+        },
         exclude_dirs = { '~/', '/mnt/c/Users/shishi/scoop/*' },
         show_hidden = true,
         silent_chdir = false,
