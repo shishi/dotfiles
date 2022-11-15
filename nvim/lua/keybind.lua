@@ -82,7 +82,7 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 
 -- terminal
 vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
-vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
+-- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
 
 --  Packer

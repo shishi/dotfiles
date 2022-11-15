@@ -14,16 +14,17 @@ vim.api.nvim_create_user_command('ReloadInits', function()
 end, {})
 
 -- auto reload when edit plugins.lua
-local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
-  clear = true,
-})
-vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
-  group = augroup_reload_inits,
-  pattern = { 'plugins.lua' },
-  callback = function()
-    vim.api.nvim_command('PackerSync')
-  end,
-})
+-- local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
+--   clear = true,
+-- })
+-- vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
+--   group = augroup_reload_inits,
+--   pattern = { 'plugins.lua' },
+--   callback = function(arg)
+--     -- require('packer').sync(arg.file)
+--     -- vim.api.nvim_command('PackerSync')
+--   end,
+-- })
 
 -- formatoptions
 -- because using autocmmd many plugins overwrite
@@ -34,7 +35,7 @@ vim.api.nvim_create_autocmd({ 'Filetype' }, {
   group = augroup_formatoptions,
   pattern = { '*' },
   callback = function()
-    vim.opt_local.formatoptions = 'troqj'
+    vim.opt_local.formatoptions = 'tcro/qnjM'
   end,
 })
 
