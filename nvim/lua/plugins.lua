@@ -56,7 +56,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
     {
         'akinsho/bufferline.nvim',
-        tag = 'v2.*',
+        version = 'v2.*',
         cond = not_in_vscode,
         dependencies = { { 'nvim-tree/nvim-web-devicons' }, { 'nvim-lua/plenary.nvim' } },
         config = function()
@@ -164,7 +164,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
     {
         'saecki/crates.nvim',
-        tag = 'v0.2.1',
+        version = 'v0.2.1',
         cond = not_in_vscode,
         dependencies = { { 'nvim-lua/plenary.nvim' } },
         config = function()
@@ -465,7 +465,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
     {
         'L3MON4D3/LuaSnip',
-        tag = 'v1.*',
+        version = 'v1.*',
         cond = not_in_vscode,
         dependencies = { { 'rafamadriz/friendly-snippets' } },
         config = function()
@@ -1297,7 +1297,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
     {
         'kylechui/nvim-surround',
-        tag = '*', -- Use for stability; omit to use `main` branch for the latest features
+        version = '*', -- Use for stability; omit to use `main` branch for the latest features
         config = function()
           require('nvim-surround').setup({})
         end,
@@ -1604,7 +1604,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
     {
         'nvim-telescope/telescope.nvim',
-        -- tag = '0.1.0',
+        -- version = '0.1.0',
         branch = '0.1.x',
         cond = not_in_vscode,
         dependencies = {
