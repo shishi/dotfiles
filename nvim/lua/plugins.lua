@@ -1353,6 +1353,19 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     },
   },
   {
+    'windwp/nvim-spectre',
+    cond = not_in_vscode,
+    keys = {
+      {
+        '<Plug>(spectre-open)',
+        function()
+          require('spectre').open()
+        end,
+        desc = 'Replace in files (Spectre)',
+      },
+    },
+  },
+  {
     'kylechui/nvim-surround',
     version = '*', -- Use for stability; omit to use `main` branch for the latest features
     config = function()
