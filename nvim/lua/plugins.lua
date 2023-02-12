@@ -483,7 +483,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     dependencies = { { 'rafamadriz/friendly-snippets' } },
     config = function()
       require('luasnip').config.setup({
-        history = false,
+        history = true,
       })
       require('luasnip.loaders.from_vscode').lazy_load()
       require('luasnip.loaders.from_vscode').lazy_load('./snippets')
@@ -1328,6 +1328,29 @@ local plugins = { -- {'wbthomason/packer.nvim'},
       -- vim.api.nvim_set_hl(0, 'NavicText', { default = true, bg = '#000000', fg = '#ffffff' })
       -- vim.api.nvim_set_hl(0, 'NavicSeparator', { default = true, bg = '#000000', fg = '#ffffff' })
     end,
+  },
+  {
+    'rcarriga/nvim-notify',
+    config = function()
+      require('notify').setup({
+        timeout = 3000,
+        max_height = function()
+          return math.floor(vim.o.lines * 0.75)
+        end,
+        max_width = function()
+          return math.floor(vim.o.columns * 0.75)
+        end,
+      })
+    end,
+    keys = {
+      {
+        '<leader>un',
+        function()
+          require('notify').dismiss({ silent = true, pending = true })
+        end,
+        desc = 'Delete all Notifications',
+      },
+    },
   },
   {
     'kylechui/nvim-surround',
