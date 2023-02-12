@@ -20,40 +20,7 @@ vim.opt.rtp:prepend(lazypath)
 
 local not_in_vscode = vim.g.vscode == nil
 
-local plugins = { -- {'wbthomason/packer.nvim'},
-  {
-    'rmagatti/auto-session',
-    cond = not_in_vscode,
-    config = function()
-      require('auto-session').setup({
-        -- log_level = 'error',
-        auto_session_enabled = true,
-        auto_session_create_enabled = true,
-        auto_save_enabled = true,
-        auto_restore_enabled = false,
-        -- auto_session_suppress_dirs = { "~/", "~/Projects", "~/Downloads", "/"},
-        -- auto_session_allowed_dirs = { '~/*', '/mnt/*' },
-        -- auto_session_use_git_branch = true,
-        -- nvim-tree
-        pre_save_cmds = { "lua require('nvim-tree').setup({})", 'tabdo NvimTreeClose' },
-        -- for neo-tree cmds
-        -- https://github.com/nvim-neo-tree/neo-tree.nvim/issues/128
-        -- cwd_change_handling = {
-        --   restore_upcoming_session = true, -- already the default, no need to specify like this, only here as an example
-        --   pre_cwd_changed_hook = function()
-        --     -- vim.api.nvim_feedkeys('<C-c>', 'n', true)
-        --   end,
-        post_cwd_changed_hook = function() -- example refreshing the lualine status line _after_ the cwd changes
-          require('lualine').refresh() -- refresh lualine so the new session name is displayed in the status bar
-        end,
-        -- },
-      })
-
-      vim.o.sessionoptions = 'blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal'
-
-      vim.keymap.set('n', '<Leader>r', '<Cmd>RestoreSession<<CR>')
-    end,
-  },
+local plugins = {
   {
     'akinsho/bufferline.nvim',
     version = 'v2.*',
@@ -389,7 +356,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
     config = function()
-      local navic = require('nvim-navic')
+      -- local navic = require('nvim-navic')
 
       require('lualine').setup({
         options = {
@@ -440,38 +407,38 @@ local plugins = { -- {'wbthomason/packer.nvim'},
           lualine_z = {},
         },
         tabline = {},
-        winbar = {
-          lualine_a = {},
-          lualine_b = { {
-            'filename',
-            path = 1,
-          } },
-          lualine_c = {
-            {
-              navic.get_location,
-              cond = navic.is_available,
-            },
-          },
-          lualine_x = {},
-          lualine_y = {},
-          lualine_z = {},
-        },
-        inactive_winbar = {
-          lualine_a = {},
-          lualine_b = { {
-            'filename',
-            path = 1,
-          } },
-          lualine_c = {
-            {
-              navic.get_location,
-              cond = navic.is_available,
-            },
-          },
-          lualine_x = {},
-          lualine_y = {},
-          lualine_z = {},
-        },
+        -- winbar = {
+        --     lualine_a = {},
+        --     lualine_b = { {
+        --         'filename',
+        --         path = 1,
+        --     } },
+        --     lualine_c = {
+        --         {
+        --             navic.get_location,
+        --             cond = navic.is_available,
+        --         },
+        --     },
+        --     lualine_x = {},
+        --     lualine_y = {},
+        --     lualine_z = {},
+        -- },
+        -- inactive_winbar = {
+        --     lualine_a = {},
+        --     lualine_b = { {
+        --         'filename',
+        --         path = 1,
+        --     } },
+        --     lualine_c = {
+        --         {
+        --             navic.get_location,
+        --             cond = navic.is_available,
+        --         },
+        --     },
+        --     lualine_x = {},
+        --     lualine_y = {},
+        --     lualine_z = {},
+        -- },
         extensions = { 'nvim-dap-ui', 'nvim-tree', 'quickfix', 'toggleterm' },
       })
     end,
@@ -532,8 +499,8 @@ local plugins = { -- {'wbthomason/packer.nvim'},
           virtual_text = false,
         },
         symbol_in_winbar = {
-          in_custom = false,
-          enable = false,
+          -- in_custom = false,
+          enable = true,
         },
       })
 
@@ -596,7 +563,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     config = function()
       require('mason-lspconfig').setup({
         ensure_installed = {
-          'sumneko_lua', -- , "rust_analyzer"
+          'lua_ls', -- , "rust_analyzer"
         },
         automatic_installation = true,
       })
@@ -607,6 +574,105 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     cond = not_in_vscode,
     config = function()
       require('mason').setup()
+    end,
+  },
+  {
+    'nvim-neo-tree/neo-tree.nvim',
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-tree/nvim-web-devicons',
+      'MunifTanjim/nui.nvim',
+    },
+    cond = not_in_vscode,
+    cmd = 'Neotree',
+    -- keys = {
+    --   {
+    --     '<leader>fe',
+    --     function()
+    --       require('neo-tree.command').execute({ toggle = true, dir = require('lazyvim.util').get_root() })
+    --     end,
+    --     desc = 'Explorer NeoTree (root dir)',
+    --   },
+    --   {
+    --     '<leader>fE',
+    --     function()
+    --       require('neo-tree.command').execute({ toggle = true, dir = vim.loop.cwd() })
+    --     end,
+    --     desc = 'Explorer NeoTree (cwd)',
+    --   },
+    --   { '<leader>e', '<leader>fe', desc = 'Explorer NeoTree (root dir)', remap = true },
+    --   { '<leader>E', '<leader>fE', desc = 'Explorer NeoTree (cwd)', remap = true },
+    -- },
+    deactivate = function()
+      vim.cmd([[Neotree close]])
+    end,
+    init = function()
+      vim.g.neo_tree_remove_legacy_commands = 1
+      if vim.fn.argc() == 1 then
+        local stat = vim.loop.fs_stat(vim.fn.argv(0))
+        if stat and stat.type == 'directory' then
+          require('neo-tree')
+        end
+      end
+    end,
+    keys = {
+      {
+        '<Leader>fc',
+        function()
+          vim.cmd([[Neotree close]])
+        end,
+        desc = 'NeoTree close',
+        remap = true,
+      },
+      {
+        '<Leader>fe',
+        function()
+          vim.cmd([[Neotree filesystem]])
+        end,
+        desc = 'NeoTree filesystem',
+        remap = true,
+      },
+      {
+        '<Leader>fb',
+        function()
+          vim.cmd([[Neotree buffers]])
+        end,
+        desc = 'NeoTree buffers',
+        remap = true,
+      },
+      {
+        '<Leader>fg',
+        function()
+          vim.cmd([[Neotree git_status]])
+        end,
+        desc = 'NeoTree gitS',
+        remap = true,
+      },
+    },
+    config = function()
+      require('neo-tree').setup({
+        source_selector = {
+          winbar = true,
+          statusline = false,
+        },
+        filesystem = {
+          bind_to_cwd = false,
+          follow_current_file = true,
+          filtered_items = {
+            visible = true,
+            -- hide_dotfiles = false,
+            -- hide_gitignored = false,
+            -- hide_hidden = false,
+          },
+        },
+        buffers = {},
+        git_status = {},
+        -- window = {
+        --   mappings = {
+        --     ['<space>'] = 'none',
+        --   },
+        -- },
+      })
     end,
   },
   {
@@ -746,6 +812,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
       { 'williamboman/mason-lspconfig.nvim' },
       { 'windwp/nvim-autopairs' },
     },
+    event = 'InsertEnter',
     config = function()
       local cmp = require('cmp')
       local lspkind = require('lspkind')
@@ -902,6 +969,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
   {
     'mfussenegger/nvim-dap',
     cond = not_in_vscode,
+    lazy = true,
     config = function()
       vim.keymap.set('n', '<F5>', function()
         require('dap').continue()
@@ -959,6 +1027,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     'rcarriga/nvim-dap-ui',
     cond = not_in_vscode,
     dependencies = { 'mfussenegger/nvim-dap' },
+    lazy = true,
     config = function()
       require('dapui').setup({})
       local dap, dapui = require('dap'), require('dapui')
@@ -1023,6 +1092,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     cond = not_in_vscode,
     dependencies = { { 'williamboman/mason-lspconfig.nvim', 'SmiteshP/nvim-navic', 'nanotee/sqls.nvim' } },
     -- after = 'mason-lspconfig.nvim',
+    event = { 'BufReadPre', 'BufNewFile' },
     config = function()
       -- lsp diagnostics setting
       vim.diagnostic.config({
@@ -1242,8 +1312,8 @@ local plugins = { -- {'wbthomason/packer.nvim'},
         -- ['rust_analyzer'] = function()
         --   require('rust-tools').setup {}
         -- end
-        ['sumneko_lua'] = function()
-          lspconfig.sumneko_lua.setup({
+        ['lua_ls'] = function()
+          lspconfig.lua_ls.setup({
             capabilitiies = capabilities,
             on_attach = on_attach,
             settings = {
@@ -1294,7 +1364,7 @@ local plugins = { -- {'wbthomason/packer.nvim'},
   {
     'SmiteshP/nvim-navic',
     cond = not_in_vscode,
-    dependencies = 'neovim/nvim-lspconfig',
+    dependencies = { 'neovim/nvim-lspconfig' },
     config = function()
       require('nvim-navic').setup({
         -- highlight = true,
@@ -1373,97 +1443,6 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     end,
   },
   {
-    'nvim-tree/nvim-tree.lua',
-    cond = not_in_vscode,
-    dependencies = { 'nvim-tree/nvim-web-devicons' },
-    config = function()
-      require('nvim-tree').setup({
-        open_on_setup = false,
-        open_on_setup_file = false,
-        sync_root_with_cwd = true,
-        respect_buf_cwd = true,
-        update_focused_file = {
-          enable = true,
-          update_root = true,
-        },
-        filters = {
-          dotfiles = false,
-          custom = {},
-          exclude = {},
-        },
-        git = {
-          enable = true,
-          ignore = false,
-          show_on_dirs = true,
-          timeout = 400,
-        },
-        renderer = {
-          highlight_git = true,
-          highlight_opened_files = 'all',
-          indent_markers = {
-            enable = false,
-            inline_arrows = true,
-            icons = {
-              corner = '└',
-              edge = '│',
-              item = '│',
-              bottom = '─',
-              none = ' ',
-            },
-          },
-        },
-        -- reload_on_bufenter = true
-        -- view = {
-        --   mappings = {
-        --     list = {{
-        --       key = "u",
-        --       action = "dir_up"
-        --     }}
-        --   }
-        -- }
-      })
-      vim.keymap.set('n', '<C-q>', function()
-        -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
-        require('nvim-tree').toggle(true, false)
-      end, {
-        desc = 'toggle nvim-tree',
-      })
-      -- vim.keymap.set('n', '<A-q>', function()
-      --   -- toggle `(find_file?: bool, no_focus?: bool, path?: string)`
-      --   require('nvim-tree').find_file()
-      -- end, {
-      --   desc = 'find_file in nvim-tree',
-      -- })
-
-      -- https://github.com/nvim-tree/nvim-tree.lua/issues/1005
-      -- nvim-tree is also there in modified buffers so this function filter it out
-      local modifiedBufs = function(bufs)
-        local t = 0
-        for _, v in pairs(bufs) do
-          if v.name:match('NvimTree_') == nil then
-            t = t + 1
-          end
-        end
-        return t
-      end
-
-      vim.api.nvim_create_autocmd('BufEnter', {
-        nested = true,
-        callback = function()
-          if
-            #vim.api.nvim_list_wins() == 1
-            and vim.api.nvim_buf_get_name(0):match('NvimTree_') ~= nil
-            and modifiedBufs(vim.fn.getbufinfo({
-              bufmodified = 1,
-            })) == 0
-          then
-            vim.cmd('quit')
-          end
-        end,
-      })
-    end,
-  },
-  {
     'nvim-treesitter/nvim-treesitter',
     cond = not_in_vscode,
     dependencies = { { 'p00f/nvim-ts-rainbow' }, { 'andymass/vim-matchup' }, { 'RRethy/nvim-treesitter-endwise' } },
@@ -1518,6 +1497,10 @@ local plugins = { -- {'wbthomason/packer.nvim'},
     cond = not_in_vscode,
   },
   {
+    'MunifTanjim/nui.nvim',
+    lazy = true,
+  },
+  {
     'gen740/SmoothCursor.nvim',
     enable = false,
     cond = not_in_vscode,
@@ -1562,6 +1545,34 @@ local plugins = { -- {'wbthomason/packer.nvim'},
   {
     'nvim-tree/nvim-web-devicons',
     cond = not_in_vscode,
+  },
+  {
+    'folke/persistence.nvim',
+    event = 'BufReadPre',
+    opts = { options = { 'buffers', 'curdir', 'tabpages', 'winsize', 'help' } },
+    keys = {
+      {
+        '<leader>qs',
+        function()
+          require('persistence').load()
+        end,
+        desc = 'Restore Session',
+      },
+      {
+        '<leader>ql',
+        function()
+          require('persistence').load({ last = true })
+        end,
+        desc = 'Restore Last Session',
+      },
+      {
+        '<leader>qd',
+        function()
+          require('persistence').stop()
+        end,
+        desc = "Don't Save Current Session",
+      },
+    },
   },
   { 'nvim-lua/plenary.nvim' },
   {
