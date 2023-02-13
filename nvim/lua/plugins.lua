@@ -574,7 +574,7 @@ local plugins = {
         config = function()
           require('mason-lspconfig').setup({
               ensure_installed = {
-                  'lua_ls', -- , "rust_analyzer"
+                  'lua-lanuage-server', -- , "rust_analyzer"
               },
               automatic_installation = true,
           })
