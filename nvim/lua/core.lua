@@ -74,18 +74,32 @@ vim.opt.mouse = 'a'
 vim.opt.mousemodel = 'popup'
 vim.opt.shellslash = true
 vim.opt.clipboard = 'unnamed,unnamedplus'
-vim.g.clipboard = {
-  name = 'win32yank_wsl',
-  copy = {
-    ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
-    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
-  },
-  paste = {
-    ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
-    ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
-  },
-  cache_enable = 0,
-}
+
+function file_exists(name)
+  local f = io.open(name, 'r')
+  if f ~= nil then
+    io.close(f)
+    return true
+  else
+    return false
+  end
+end
+
+if file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
+  vim.g.clipboard = {
+    name = 'win32yank_wsl',
+    copy = {
+      ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
+      ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
+    },
+    paste = {
+      ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
+      ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
+    },
+    cache_enable = 0,
+  }
+end
+
 vim.opt.modeline = true
 vim.opt.modelines = 10
 
