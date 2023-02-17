@@ -83,6 +83,11 @@ end
 #   set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
 # end
 
+# tfenv
+if test -d ~/.tfenv/bin
+    set -x PATH ~/.tfenv/bin $PATH
+end
+
 # cask
 if test -f ~/.cask/bin/cask
     set -x PATH ~/.cask/bin $PATH
