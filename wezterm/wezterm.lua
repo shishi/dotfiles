@@ -60,6 +60,21 @@ local config = {
             mods = 'CTRL|SHIFT',
             action = act.ActivateCopyMode,
         },
+        {
+            key = 'f',
+            mods = 'CTRL|SHIFT',
+            action = act.Search({ CaseInSensitiveString = '' }),
+        },
+        {
+            key = 'PageUp',
+            mods = 'CTRL',
+            action = act.ScrollByPage( -1),
+        },
+        {
+            key = 'PageDown',
+            mods = 'CTRL',
+            action = act.ScrollByPage(1),
+        },
         -- tab & pane
         {
             key = 't',
