@@ -1,25 +1,30 @@
 local wezterm = require('wezterm')
 local act = wezterm.action
 
+local function append_table(table, other)
+  for k, v in pairs(other) do
+    table[k] = v
+  end
+end
+
 wezterm.on('gui-startup', function(cmd)
   local tab, pane, window = wezterm.mux.spawn_window(cmd or {})
   window:gui_window():set_position(850, 150)
 end)
 
-return {
-    front_end = 'WebGpu',
-    default_prog = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
-    -- default_prog = { "cmd.exe", "/c", "wsl.exe ~ -d Ubuntu" },
-    launch_menu = {
-        {
-            label = 'Command Prompt',
-            args = { 'cmd.exe' },
-        },
-        {
-            label = 'Powershell',
-            args = { 'C:/Program Files/PowerShell/7/pwsh.exe' },
-        },
-    },
+local config = {
+    -- default_prog = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
+    -- -- default_prog = { "cmd.exe", "/c", "wsl.exe ~ -d Ubuntu" },
+    -- launch_menu = {
+    --     {
+    --         label = 'Command Prompt',
+    --         args = { 'cmd.exe' },
+    --     },
+    --     {
+    --         label = 'Powershell',
+    --         args = { 'C:/Program Files/PowerShell/7/pwsh.exe' },
+    --     },
+    -- },
     -- seems this setting effect only QuitApplication
     window_close_confirmation = 'NeverPrompt',
     skip_close_confirmation_for_processes_named = {
@@ -262,3 +267,29 @@ return {
         },
     },
 }
+
+if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
+  local windows_config = {
+      front_end = 'WebGpu',
+      default_prog = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
+      -- default_prog = { "cmd.exe", "/c", "wsl.exe ~ -d Ubuntu" },
+      launch_menu = {
+          {
+              label = 'Command Prompt',
+              args = { 'cmd.exe' },
+          },
+          {
+              label = 'Powershell',
+              args = { 'C:/Program Files/PowerShell/7/pwsh.exe' },
+          },
+      },
+  }
+  append_table(config, windows_config)
+elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
+  local linux_config = {
+      front_end = 'OpenGL',
+  }
+  append_table(config, linux_config)
+end
+
+return config
