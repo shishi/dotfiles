@@ -23,6 +23,16 @@ else
     ln -sf $DOTDIR/nvim ~/.config/nvim
 fi
 
+if [ -L ~/.config/wezterm ]; then
+    rm ~/.config/wezterm
+    ln -sf $DOTDIR/wezterm ~/.config/wezterm
+elif [ -d ~/.config/wezterm ]; then
+    rm -fr ~/.config/wezterm
+    ln -sf $DOTDIR/wezterm ~/.config/wezterm
+else
+    ln -sf $DOTDIR/wezterm ~/.config/wezterm
+fi
+
 if [ -L ~/.emacs.d ]; then
     rm ~/.emacs.d
     ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
@@ -58,13 +68,13 @@ if [ `uname` = Darwin ]; then
     ln -sf $DOTDIR/Brewfile ~/Brewfile
 elif [ `uname` = Linux ]; then
     ln -sf $DOTDIR/.gitconfig.linux ~/.gitconfig
-#    ln -sf $DOTDIR/terminator ~/.config/terminator
-#    ln -sf $DOTDIR/.xprofile ~/.xprofile
-#    ln -sf $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
-#    ln -sf $DOTDIR/.imwheelrc ~/.imwheelrc
-#    ln -sf $DOTDIR/imwheel.desktop ~/.config/autostart/imwheel.desktop
-#    ln -sf $DOTDIR/fonts.conf ~/.config/fontconfig/fonts.conf
-#    fc-cache -fv
+    #    ln -sf $DOTDIR/terminator ~/.config/terminator
+    #    ln -sf $DOTDIR/.xprofile ~/.xprofile
+    #    ln -sf $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
+    #    ln -sf $DOTDIR/.imwheelrc ~/.imwheelrc
+    #    ln -sf $DOTDIR/imwheel.desktop ~/.config/autostart/imwheel.desktop
+    #    ln -sf $DOTDIR/fonts.conf ~/.config/fontconfig/fonts.conf
+    #    fc-cache -fv
 elif [ `uname` = MINGW64_NT-10.0 ]; then
     ln -sf $DOTDIR/.gitconfig.win ~/.gitconfig
 fi
