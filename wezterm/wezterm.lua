@@ -12,6 +12,7 @@ wezterm.on('gui-startup', function(cmd)
   window:gui_window():set_position(850, 150)
 end)
 
+-- common config
 local config = {
   -- seems this setting effect only QuitApplication
   window_close_confirmation = 'NeverPrompt',
@@ -271,6 +272,23 @@ local config = {
   },
 }
 
+-- ssh domains
+local ssh_config = {
+  ssh_domains = {
+    {
+      name = 'stafes',
+      remote_address = '192.168.10.110',
+      username = 'shishi',
+      -- connect_automatically = true,
+      ssh_option = {
+        identityfile = '~/.ssh/id_rsa',
+      },
+    },
+  },
+}
+append_table(config, ssh_config)
+
+-- per os config
 if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
   local wsl_domains = wezterm.default_wsl_domains()
 
@@ -279,8 +297,8 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
   end
 
   local windows_config = {
-    front_end = 'WebGpu',
     wsl_domains = wsl_domains,
+    front_end = 'WebGpu',
     -- this setting make cmd and powershell can't start
     -- default_domain = 'WSL:Ubuntu',
     default_prog = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
