@@ -281,7 +281,8 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
   local windows_config = {
     front_end = 'WebGpu',
     wsl_domains = wsl_domains,
-    default_domain = 'WSL:Ubuntu',
+    -- this setting make cmd and powershell can't start
+    -- default_domain = 'WSL:Ubuntu',
     default_prog = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
     launch_menu = {
       {
