@@ -240,7 +240,7 @@ local config = {
     top = 0,
   },
   -- tab
-  hide_tab_bar_if_only_one_tab = false,
+  hide_tab_bar_if_only_one_tab = true,
   window_frame = {
     -- The font used in the tab bar.
     -- Roboto Bold is the default; this font is bundled
