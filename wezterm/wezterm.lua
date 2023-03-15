@@ -36,22 +36,22 @@ local config = {
     -- applicaton
     {
       key = 'q',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.QuitApplication,
     },
     {
       key = 'l',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.ShowLauncher,
     },
     {
       key = 'Backspace',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.ActivateCopyMode,
     },
     {
       key = 'f',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.Search({ CaseInSensitiveString = '' }),
     },
     {
@@ -67,12 +67,12 @@ local config = {
     -- tab & pane
     {
       key = 't',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.SpawnCommandInNewTab,
     },
     {
       key = 'w',
-      mods = 'CTRL|SHIFT',
+      mods = 'CTRL|SHIFT|ALT',
       action = act.CloseCurrentPane({
         confirm = false,
       }),
@@ -93,104 +93,104 @@ local config = {
     },
     {
       key = 'UpArrow',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivatePaneDirection('Up'),
     },
     {
       key = 'DownArrow',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivatePaneDirection('Down'),
     },
     {
       key = 'RightArrow',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivatePaneDirection('Right'),
     },
     {
       key = 'LeftArrow',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivatePaneDirection('Left'),
     },
     {
       key = 'Tab',
-      mods = 'CTRL',
+      mods = 'CTRL|ALT',
       action = act.ActivateTabRelative(1),
     },
     {
       key = 'Tab',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTabRelative(-1),
     },
     {
       key = '1',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(0),
     },
     {
       key = '2',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(1),
     },
     {
       key = '3',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(2),
     },
     {
       key = '4',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(3),
     },
     {
       key = '5',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(4),
     },
     {
       key = '6',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(5),
     },
     {
       key = '7',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(6),
     },
     {
       key = '8',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(7),
     },
     {
       key = '9',
-      mods = 'SHIFT|CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ActivateTab(-1),
     },
     -- copy & paste
     {
       key = 'c',
-      mods = 'CTRL|SHIFT',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.CopyTo('Clipboard'),
     },
     {
       key = 'v',
-      mods = 'CTRL|SHIFT',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.PasteFrom('Clipboard'),
     },
     -- font size
     {
       key = '0',
-      mods = 'CTRL',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.ResetFontSize,
     },
     {
       key = '-',
-      mods = 'CTRL|SHIFT',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.DecreaseFontSize,
     },
     {
       key = '=',
-      mods = 'CTRL|SHIFT',
+      mods = 'SHIFT|CTRL|ALT',
       action = act.IncreaseFontSize,
     },
   },
@@ -240,6 +240,7 @@ local config = {
     top = 0,
   },
   -- tab
+  hide_tab_bar_if_only_one_tab = false,
   window_frame = {
     -- The font used in the tab bar.
     -- Roboto Bold is the default; this font is bundled
