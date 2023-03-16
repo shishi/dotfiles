@@ -574,7 +574,7 @@ local plugins = {
         config = function()
           require('mason-lspconfig').setup({
               ensure_installed = {
-                  'lua_ls', -- , "rust_analyzer"
+                  -- 'lua_ls',
               },
               automatic_installation = true,
           })
@@ -730,6 +730,7 @@ local plugins = {
                   -- null_ls.builtins.completion.tags,
                   -- diagnostics
                   null_ls.builtins.diagnostics.actionlint,
+                  null_ls.builtins.diagnostics.buf,
                   null_ls.builtins.diagnostics.erb_lint,
                   -- null_ls.builtins.diagnostics.eslint,
                   null_ls.builtins.diagnostics.eslint_d,
@@ -750,6 +751,7 @@ local plugins = {
                   -- null_ls.builtins.diagnostics.zsh,
                   -- formatting
                   null_ls.builtins.formatting.beautysh,
+                  null_ls.builtins.formatting.buf,
                   -- null_ls.builtins.formatting.deno_fmt,
                   null_ls.builtins.formatting.erb_lint,
                   -- null_ls.builtins.formatting.eslint,
