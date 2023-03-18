@@ -134,6 +134,7 @@ end
 # wezterm in windows
 if test /mnt/c/Users/shishi/scoop/shims/wezterm.exe &>/dev/null
     alias wezterm /mnt/c/Users/shishi/scoop/shims/wezterm.exe
+    alias wez /mnt/c/Users/shishi/scoop/shims/wezterm.exe
 end
 
 # neovide

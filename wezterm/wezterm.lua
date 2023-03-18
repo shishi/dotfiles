@@ -78,14 +78,14 @@ local config = {
       }),
     },
     {
-      key = "'",
+      key = '"',
       mods = 'CTRL|SHIFT|ALT',
       action = wezterm.action.SplitVertical({
         domain = 'CurrentPaneDomain',
       }),
     },
     {
-      key = ';',
+      key = ':',
       mods = 'CTRL|SHIFT|ALT',
       action = wezterm.action.SplitHorizontal({
         domain = 'CurrentPaneDomain',
