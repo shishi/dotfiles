@@ -131,6 +131,11 @@ if test /mnt/c/Windows/explorer.exe &>/dev/null
     alias open /mnt/c/Windows/explorer.exe
 end
 
+# wezterm in windows
+if test /mnt/c/Users/shishi/scoop/shims/wezterm.exe &>/dev/null
+    alias wezterm /mnt/c/Users/shishi/scoop/shims/wezterm.exe
+end
+
 # neovide
 if test /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/null
     alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
