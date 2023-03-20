@@ -1959,6 +1959,15 @@ local plugins = {
         cond = not_in_vscode,
     },
     {
+        'ojroques/nvim-osc52',
+        cond = not_in_vscode,
+        config = function()
+          vim.keymap.set('n', '<leader>c', require('osc52').copy_operator, { expr = true })
+          vim.keymap.set('n', '<leader>cc', '<leader>c_', { remap = true })
+          vim.keymap.set('v', '<leader>c', require('osc52').copy_visual)
+        end,
+    },
+    {
         'kyoh86/vim-ripgrep',
         cond = not_in_vscode,
         config = function()
