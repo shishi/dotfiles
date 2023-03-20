@@ -1466,7 +1466,7 @@ local plugins = {
         end,
         config = function()
           require('nvim-treesitter.configs').setup({
-              ensure_installed = { 'markdown', 'markdown_inline' },
+              -- ensure_installed = { 'markdown', 'markdown_inline' },
               auto_install = true,
               highlight = {
                   enable = true,
