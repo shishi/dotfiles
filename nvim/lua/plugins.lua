@@ -1348,6 +1348,36 @@ local plugins = {
                     },
                 })
               end,
+              ['vtsls'] = function()
+                lspconfig.vtsls.setup({
+                    capabilities = capabilities,
+                    on_attach = on_attach,
+                    settings = {
+                        typescript = {
+                            preferences = {
+                                importModuleSpecifier = 'relative',
+                            },
+                            -- format = {
+                            --     enable = false,
+                            -- },
+                            -- suggest = {
+                            --     completeFunctionCalls = true,
+                            -- },
+                        },
+                        javascript = {
+                            preferences = {
+                                importModuleSpecifier = 'relative',
+                            },
+                            -- format = {
+                            --     enable = false,
+                            -- },
+                            -- suggest = {
+                            --     completeFunctionCalls = true,
+                            -- },
+                        },
+                    },
+                })
+              end,
               -- ['sqls'] = function()
               --   lspconfig.sqls.setup({
               --     capabilitiies = capabilities,
