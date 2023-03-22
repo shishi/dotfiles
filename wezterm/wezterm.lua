@@ -198,7 +198,7 @@ local config = {
     mouse_bindings = {
         {
             event = {
-                Up = {
+                Down = {
                     streak = 1,
                     button = 'Middle',
                 },
@@ -208,7 +208,7 @@ local config = {
         },
         {
             event = {
-                Up = {
+                Down = {
                     streak = 1,
                     button = 'Right',
                 },
