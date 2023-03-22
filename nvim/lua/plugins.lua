@@ -22,6 +22,12 @@ local not_in_vscode = vim.g.vscode == nil
 
 local plugins = {
     {
+        'aznhe21/actions-preview.nvim',
+        config = function()
+          vim.keymap.set({ 'v', 'n' }, 'gf', require('actions-preview').code_actions)
+        end,
+    },
+    {
         'akinsho/bufferline.nvim',
         version = 'v2.*',
         cond = not_in_vscode,
