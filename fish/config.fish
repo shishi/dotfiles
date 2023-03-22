@@ -340,3 +340,8 @@ end
 if type fdfind &>/dev/null
     ln -fs (which fdfind) ~/.local/bin/fd
 end
+
+# source other file
+#########################################
+
+# source ~/.config/fish/functions/github_copilot_cli.fish

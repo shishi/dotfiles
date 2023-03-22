@@ -527,12 +527,12 @@ local plugins = {
                 vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>', {
                     buffer = bufnr,
                 })
-                vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>', {
-                    buffer = bufnr,
-                })
-                vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>', {
-                    buffer = bufnr,
-                })
+                -- vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>', {
+                --     buffer = bufnr,
+                -- })
+                -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>', {
+                --     buffer = bufnr,
+                -- })
 
                 -- code actions
                 -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
@@ -1147,18 +1147,18 @@ local plugins = {
                 -- code definitions, references
                 vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
                     buffer = bufnr,
-                    desc = 'vim.lsp delaration',
+                    desc = 'vim.lsp declaration',
                 })
-                -- vim.keymap.set('n', 'gd', function()
-                --   require('telescope.builtin').lsp_definitions()
-                -- end, {
-                --   buffer = bufnr,
-                --   desc = 'vim.lsp.buf.definition',
-                -- })
-                -- vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
-                --   buffer = bufnr,
-                --   desc = 'vim.lsp hover',
-                -- })
+                vim.keymap.set('n', 'gd', function()
+                  require('telescope.builtin').lsp_definitions()
+                end, {
+                    buffer = bufnr,
+                    desc = 'vim.lsp.buf.definition',
+                })
+                vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
+                    buffer = bufnr,
+                    desc = 'vim.lsp hover',
+                })
                 vim.keymap.set('n', 'gi', function()
                   require('telescope.builtin').lsp_implementations()
                 end, {
@@ -1175,7 +1175,7 @@ local plugins = {
                     buffer = bufnr,
                     desc = 'vim.lsp.buf.references',
                 })
-                vim.keymap.set('n', '<Leader>D', function()
+                vim.keymap.set('n', 'gt', function()
                   require('telescope.builtin').lsp_type_definitions()
                 end, {
                     buffer = bufnr,
@@ -1488,7 +1488,6 @@ local plugins = {
     {
         'nvim-treesitter/nvim-treesitter',
         cond = not_in_vscode,
-        dependencies = { { 'p00f/nvim-ts-rainbow' }, { 'andymass/vim-matchup' }, { 'RRethy/nvim-treesitter-endwise' } },
         build = function()
           require('nvim-treesitter.install').update({
               with_sync = true,
@@ -1497,7 +1496,7 @@ local plugins = {
         config = function()
           require('nvim-treesitter.configs').setup({
               -- ensure_installed = { 'markdown', 'markdown_inline' },
-              auto_install = true,
+              auto_install = false,
               highlight = {
                   enable = true,
                   -- disable = { "c", "rust" },
