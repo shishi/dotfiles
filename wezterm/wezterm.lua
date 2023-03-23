@@ -204,7 +204,7 @@ local config = {
                 },
             },
             mods = 'NONE',
-            action = act.Paste,
+            action = act.PasteFrom('Clipboard'),
         },
         {
             event = {
@@ -214,7 +214,7 @@ local config = {
                 },
             },
             mods = 'NONE',
-            action = act.Copy,
+            action = act.CopyTo('Clipboard'),
         },
     },
     -- GUI
