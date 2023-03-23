@@ -128,7 +128,18 @@ local plugins = {
         event = 'InsertEnter',
         config = function()
           require('copilot').setup({
-              suggestion = { enabled = false },
+              suggestion = {
+                  enabled = false,
+                  auto_trigger = true,
+                  keymap = {
+                      accept = '<M-l>',
+                      accept_word = false,
+                      accept_line = false,
+                      next = '<M-]>',
+                      prev = '<M-[>',
+                      dismiss = '<C-]>',
+                  },
+              },
               panel = { enabled = false },
           })
         end,
@@ -905,10 +916,10 @@ local plugins = {
               sources = cmp.config.sources({
                   { name = 'copilot' },
                   -- { name = 'cmp_tabnine' },
+                  { name = 'crates' },
                   { name = 'luasnip' },
                   { name = 'nvim_lsp_signature_help' },
                   { name = 'nvim_lsp' },
-                  { name = 'crates' },
                   -- { name = 'spell' },
                   {
                       { name = 'buffer' },
