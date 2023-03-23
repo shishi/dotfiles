@@ -45,6 +45,22 @@ else
     ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 fi
 
+if [ `uname` = Darwin ]; then
+    ln -sf $DOTDIR/.gitconfig.mac ~/.gitconfig
+    ln -sf $DOTDIR/Brewfile ~/Brewfile
+elif [ `uname` = Linux ]; then
+    ln -sf $DOTDIR/.gitconfig.linux ~/.gitconfig
+    #    ln -sf $DOTDIR/terminator ~/.config/terminator
+    #    ln -sf $DOTDIR/.xprofile ~/.xprofile
+    #    ln -sf $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
+    #    ln -sf $DOTDIR/.imwheelrc ~/.imwheelrc
+    #    ln -sf $DOTDIR/imwheel.desktop ~/.config/autostart/imwheel.desktop
+    #    ln -sf $DOTDIR/fonts.conf ~/.config/fontconfig/fonts.conf
+    #    fc-cache -fv
+elif [ `uname` = MINGW64_NT-10.0 ]; then
+    ln -sf $DOTDIR/.gitconfig.win ~/.gitconfig
+fi
+
 ln -sf $DOTDIR/.gitignore.global ~/.gitignore
 
 ln -sf $DOTDIR/.vimrc ~/.vimrc
@@ -63,20 +79,7 @@ ln -sf $DOTDIR/.bashrc ~/.bashrc
 # ln -s $DOTDIR/.zshenv ~/.zshenv
 # ln -s $DOTDIR/.zshrc ~/.zshrc
 
-if [ `uname` = Darwin ]; then
-    ln -sf $DOTDIR/.gitconfig.mac ~/.gitconfig
-    ln -sf $DOTDIR/Brewfile ~/Brewfile
-elif [ `uname` = Linux ]; then
-    ln -sf $DOTDIR/.gitconfig.linux ~/.gitconfig
-    #    ln -sf $DOTDIR/terminator ~/.config/terminator
-    #    ln -sf $DOTDIR/.xprofile ~/.xprofile
-    #    ln -sf $DOTDIR/.xbindkeysrc ~/.xbindkeysrc
-    #    ln -sf $DOTDIR/.imwheelrc ~/.imwheelrc
-    #    ln -sf $DOTDIR/imwheel.desktop ~/.config/autostart/imwheel.desktop
-    #    ln -sf $DOTDIR/fonts.conf ~/.config/fontconfig/fonts.conf
-    #    fc-cache -fv
-elif [ `uname` = MINGW64_NT-10.0 ]; then
-    ln -sf $DOTDIR/.gitconfig.win ~/.gitconfig
-fi
+ln -sf $DOTDIR/ssm ~/.local/bin/ssm
+
 
 echo "please reload shell"
