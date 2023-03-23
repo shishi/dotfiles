@@ -3,10 +3,10 @@ set -e
 
 usage() {
     echo "USAGE: `basename $0` [Options]"
-    echo "  ssm target selection using peco"
+    echo "  ssm target selection using fzf"
     echo ""
     echo "Optinal Arguments:"
-    echo "  All arguments excluded options pass to initial queries of peco"
+    echo "  All arguments excluded options pass to initial queries of fzf"
     echo ""
     echo "Options:"
     echo "  -h, --help          show this help."
@@ -15,7 +15,7 @@ usage() {
     echo "  --dry               dry run mode."
     echo ""
     echo "Dependent packages:"
-    echo "  aws-cli, ssm-plugin, peco"
+    echo "  aws-cli, ssm-plugin, fzf"
     exit 1;
 }
 
@@ -23,12 +23,12 @@ main() {
     declare -a argv=()
     while (( $# > 0 )); do
         case $1 in
-            -h|--help) usage;;
-            -p|--profile) readonly profile=$2; shift;;
-            -v|--verbose) readonly is_verbose=1;;
-            --dry) readonly is_dry=1;;
-            -*) fatal "Unkown option: $1"; usage;;
-            *) argv=("${argv[@]}" "$1");;
+            -h|--help) usage ;;
+            -p|--profile) readonly profile=$2; shift ;;
+            -v|--verbose) readonly is_verbose=1 ;;
+            --dry) readonly is_dry=1 ;;
+            -*) fatal "Unkown option: $1"; usage ;;
+            *) argv=("${argv[@]}" "$1") ;;
         esac
         shift
     done
@@ -38,14 +38,14 @@ main() {
 
     local params=""
     if [ "$profile" != "" ];then
-      params="$params --profile $profile"
+        params="$params --profile $profile"
     fi
 
-    local instance=$(aws ec2 describe-instances --query 'sort_by(Reservations[].Instances[].{Id:InstanceId,Name:Tags[?Key==`Name`].Value|[0]},&Name)' --output text $params | peco --prompt="ssm profile:${profile:-default}>" --query="$query")
+    local instance=$(aws ec2 describe-instances --query 'sort_by(Reservations[].Instances[].{Id:InstanceId,Name:Tags[?Key==`Name`].Value|[0]},&Name)' --output text $params | fzf --prompt="ssm profile:${profile:-default}>" --query="$query")
 
     if [ "$instance" == "" ]; then
-      echo "Instance is not choosed."
-      exit 1
+        echo "Instance is not choosed."
+        exit 1
     fi
 
     local instance_id=$(echo "$instance" | cut -f 1)
@@ -66,4 +66,3 @@ run() {
 
 # call main.
 main "$@"
-
