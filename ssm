@@ -1,0 +1,69 @@
+#!/bin/bash
+set -e
+
+usage() {
+    echo "USAGE: `basename $0` [Options]"
+    echo "  ssm target selection using peco"
+    echo ""
+    echo "Optinal Arguments:"
+    echo "  All arguments excluded options pass to initial queries of peco"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help          show this help."
+    echo "  -p, --profile       select aws profile.(default: 'default')"
+    echo "  -v, --verbose       show detail commands."
+    echo "  --dry               dry run mode."
+    echo ""
+    echo "Dependent packages:"
+    echo "  aws-cli, ssm-plugin, peco"
+    exit 1;
+}
+
+main() {
+    declare -a argv=()
+    while (( $# > 0 )); do
+        case $1 in
+            -h|--help) usage;;
+            -p|--profile) readonly profile=$2; shift;;
+            -v|--verbose) readonly is_verbose=1;;
+            --dry) readonly is_dry=1;;
+            -*) fatal "Unkown option: $1"; usage;;
+            *) argv=("${argv[@]}" "$1");;
+        esac
+        shift
+    done
+    set -- "${argv[@]}"
+
+    local query="$*"
+
+    local params=""
+    if [ "$profile" != "" ];then
+      params="$params --profile $profile"
+    fi
+
+    local instance=$(aws ec2 describe-instances --query 'sort_by(Reservations[].Instances[].{Id:InstanceId,Name:Tags[?Key==`Name`].Value|[0]},&Name)' --output text $params | peco --prompt="ssm profile:${profile:-default}>" --query="$query")
+
+    if [ "$instance" == "" ]; then
+      echo "Instance is not choosed."
+      exit 1
+    fi
+
+    local instance_id=$(echo "$instance" | cut -f 1)
+
+    run aws ssm "$params" start-session --target "$instance_id"
+}
+
+run() {
+    if [ $is_dry ]; then
+        echo "[dry run] $@"
+    else
+        if [ $is_verbose ];then
+            echo "[run] $@"
+        fi
+        eval "$@"
+    fi
+}
+
+# call main.
+main "$@"
+
