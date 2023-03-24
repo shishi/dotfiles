@@ -1395,6 +1395,13 @@ local plugins = {
                     },
                 })
               end,
+              ['ruby_ls'] = function()
+                lspconfig.ruby_ls.setup({
+                    capabilitiies = capabilities,
+                    on_attach = on_attach,
+                    cmd = { 'bundle', 'exec', 'ruby-lsp' },
+                })
+              end,
               -- ['sqls'] = function()
               --   lspconfig.sqls.setup({
               --     capabilitiies = capabilities,
