@@ -44,7 +44,7 @@
   "nvim-osc52": { "branch": "main", "commit": "47ce7ee2396fa3ee4fb6b0e0ef14ba06f9c9bd31" },
   "nvim-spectre": { "branch": "master", "commit": "2d7d23c1122bb2589880236e932d373933b07937" },
   "nvim-surround": { "branch": "main", "commit": "056f69ed494198ff6ea0070cfc66997cfe0a6c8b" },
-  "nvim-treesitter": { "branch": "master", "commit": "c7b9f68d0385274b4aa83671e6dcb02f301f9357" },
+  "nvim-treesitter": { "branch": "master", "commit": "90ead4ed588eb1c5b9b1cf93ab766d2efc0fd4c7" },
   "nvim-treesitter-endwise": { "branch": "master", "commit": "0cf4601c330cf724769a2394df555a57d5fd3f34" },
   "nvim-ts-autotag": { "branch": "main", "commit": "25698e4033cd6cd3745454bfc837dd670eba0480" },
   "nvim-ts-context-commentstring": { "branch": "main", "commit": "729d83ecb990dc2b30272833c213cc6d49ed5214" },
@@ -67,6 +67,6 @@
   "vim-illuminate": { "branch": "master", "commit": "a2907275a6899c570d16e95b9db5fd921c167502" },
   "vim-matchup": { "branch": "master", "commit": "f69d1ac5bd3c4e6ad349f64317000cc9a4a895cf" },
   "vim-ripgrep": { "branch": "main", "commit": "3e220e6c6376db090a481b77e2d4975884be511f" },
-  "vscode-js-debug": { "branch": "main", "commit": "2b2100d5aebaee7d45a6da7e8b8f3db7564e5981" },
+  "vscode-js-debug": { "branch": "main", "commit": "952df182387386f74e165901d96b70662d9e4610" },
   "which-key.nvim": { "branch": "main", "commit": "87b1459b3e0be0340da2183fc4ec8a00b2960678" }
 }
