@@ -125,6 +125,13 @@ if test -d ~/.fly &>/dev/null
     set -x PATH $FLYCTL_INSTALL/bin $PATH
 end
 
+# console-ninja
+if test -d ~/.console-ninja &>/dev/null
+    set -x PATH ~/.console-ninja/.bin $PATH
+end
+
+# Windows
+
 # windows explorer
 if test /mnt/c/Windows/explorer.exe &>/dev/null
     alias explorer /mnt/c/Windows/explorer.exe
@@ -137,10 +144,11 @@ if test /mnt/c/Users/shishi/scoop/shims/wezterm.exe &>/dev/null
     alias wez /mnt/c/Users/shishi/scoop/shims/wezterm.exe
 end
 
-# neovide
+# neovide in windows
 if test /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/null
     alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
 end
+
 # settings
 #########################################
 
@@ -236,6 +244,14 @@ if type exa &>/dev/null
     alias lt 'exa -T --icons --git-ignore'
 end
 
+if type batcat &>/dev/null
+    ln -fs (which batcat) ~/.local/bin/bat
+end
+
+if type fdfind &>/dev/null
+    ln -fs (which fdfind) ~/.local/bin/fd
+end
+
 # if type bat &> /dev/null
 #   alias bat 'bat --color always'
 #   if type fzf &> /dev/null
@@ -291,7 +307,6 @@ switch (uname -a)
 end
 
 # Arch
-
 if [ -f /etc/arch-release ]
     function remove_orphan
         if type yay &>/dev/null
@@ -303,7 +318,6 @@ if [ -f /etc/arch-release ]
 end
 
 # WSL
-
 if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
     function cdw
         cd /mnt/c/Users/shishi
@@ -330,16 +344,6 @@ end
 #  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
 #end
 
-# etc
-#########################################
-
-if type batcat &>/dev/null
-    ln -fs (which batcat) ~/.local/bin/bat
-end
-
-if type fdfind &>/dev/null
-    ln -fs (which fdfind) ~/.local/bin/fd
-end
 
 # source other file
 #########################################
