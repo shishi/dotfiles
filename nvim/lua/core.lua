@@ -8,7 +8,7 @@ vim.keymap.set('', '<BS>', '<Leader>', { remap = true, desc = 'second <Leader>' 
 
 -- encodings
 -- vim.opt.fileencoding = "utf-8"
-vim.opt.fileencodings = 'utf-8,sjis,iso-2022-jp,euc-jp'
+vim.opt.fileencodings = 'ucs-bom,utf-8,iso-2022-jp-3,euc-jp,cp932'
 -- vim.opt.fileformat = "unix"
 vim.opt.fileformats = 'unix,dos,mac'
 
@@ -88,16 +88,16 @@ end
 
 if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
   vim.g.clipboard = {
-      name = 'win32yank_wsl',
-      copy = {
-          ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
-          ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
-      },
-      paste = {
-          ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
-          ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
-      },
-      cache_enable = 0,
+    name = 'win32yank_wsl',
+    copy = {
+      ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
+      ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -i',
+    },
+    paste = {
+      ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
+      ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
+    },
+    cache_enable = 0,
   }
 end
 
