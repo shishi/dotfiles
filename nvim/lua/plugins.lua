@@ -1121,7 +1121,12 @@ local plugins = {
     'hrsh7th/nvim-linkedit',
     enabled = not_in_vscode,
     config = function()
-      require('linkedit').setup({})
+      require('linkedit').setup({
+        sources = {
+          { name = 'lsp_linked_editing_range' },
+          { name = 'lsp_document_highlight',  on = { 'operator' } },
+        },
+      })
     end,
   },
 
