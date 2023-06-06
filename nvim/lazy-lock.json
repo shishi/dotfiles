@@ -68,6 +68,6 @@
   "vim-illuminate": { "branch": "master", "commit": "a2907275a6899c570d16e95b9db5fd921c167502" },
   "vim-matchup": { "branch": "master", "commit": "3625e099b09bff2db5f04082cb09ba679525980c" },
   "vim-ripgrep": { "branch": "main", "commit": "0771a715ef7db975afa01fa927b5905410e78f51" },
-  "vscode-js-debug": { "branch": "main", "commit": "952df182387386f74e165901d96b70662d9e4610" },
+  "vscode-js-debug": { "branch": "main", "commit": "2b2100d5aebaee7d45a6da7e8b8f3db7564e5981" },
   "which-key.nvim": { "branch": "main", "commit": "e271c28118998c93a14d189af3395812a1aa646c" }
 }
