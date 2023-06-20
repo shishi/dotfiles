@@ -28,6 +28,18 @@ local plugins = {
     end,
   },
   {
+    'utilyre/barbecue.nvim',
+    name = 'barbecue',
+    version = '*',
+    dependencies = {
+      'SmiteshP/nvim-navic',
+      'nvim-tree/nvim-web-devicons', -- optional dependency
+    },
+    opts = {
+      -- configurations go here
+    },
+  },
+  {
     'akinsho/bufferline.nvim',
     version = 'v2.*',
     cond = not_in_vscode,
@@ -37,8 +49,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -82,6 +94,7 @@ local plugins = {
   },
   {
     'uga-rosa/ccc.nvim',
+    enabled = false,
     cond = not_in_vscode,
     cofnig = function()
       local ccc = require('ccc')
@@ -384,7 +397,7 @@ local plugins = {
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
     config = function()
-      -- local navic = require('nvim-navic')
+      local navic = require('nvim-navic')
 
       require('lualine').setup({
         options = {
@@ -442,8 +455,12 @@ local plugins = {
         --     } },
         --     lualine_c = {
         --         {
-        --             navic.get_location,
-        --             cond = navic.is_available,
+        --             function()
+        --               return navic.get_location()
+        --             end,
+        --             cond = function()
+        --               return navic.is_available()
+        --             end,
         --         },
         --     },
         --     lualine_x = {},
@@ -458,8 +475,12 @@ local plugins = {
         --     } },
         --     lualine_c = {
         --         {
-        --             navic.get_location,
-        --             cond = navic.is_available,
+        --             function()
+        --               return navic.get_location()
+        --             end,
+        --             cond = function()
+        --               return navic.is_available()
+        --             end,
         --         },
         --     },
         --     lualine_x = {},
@@ -510,7 +531,7 @@ local plugins = {
   {
     'glepnir/lspsaga.nvim',
     branch = 'main',
-    -- enabled = false,
+    enabled = false,
     cond = not_in_vscode,
     dependencies = { { 'neovim/nvim-lspconfig' }, { 'nvim-tree/nvim-web-devicons' } },
     -- after = 'nvim-lspconfig',
@@ -528,7 +549,7 @@ local plugins = {
         },
         symbol_in_winbar = {
           -- in_custom = false,
-          enable = true,
+          enable = false,
         },
       })
 
@@ -577,8 +598,6 @@ local plugins = {
           -- vim.keymap.set('n', ']E', function()
           --   require('lspsaga.diagnostic').goto_next({ severity = vim.diagnostic.severity.ERROR })
           -- end, { buffer = bufnr })
-
-          -- vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist', buffer = bufnr })
         end,
       })
     end,
@@ -719,7 +738,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
+        inc_rename = false, -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -1124,7 +1143,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight',  on = { 'operator' } },
+          { name = 'lsp_document_highlight', on = { 'operator' } },
         },
       })
     end,
@@ -1274,18 +1293,18 @@ local plugins = {
           })
 
           -- diagnostic
-          -- vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
-          --   buffer = bufnr,
-          --   desc = 'diagnostic open_float',
-          -- })
-          -- vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
-          --   buffer = bufnr,
-          --   desc = 'diagnostic goto_prev',
-          -- })
-          -- vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
-          --   buffer = bufnr,
-          --   desc = 'diagnostic goto_next',
-          -- })
+          vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float, {
+            buffer = bufnr,
+            desc = 'diagnostic open_float',
+          })
+          vim.keymap.set('n', '[e', vim.diagnostic.goto_prev, {
+            buffer = bufnr,
+            desc = 'diagnostic goto_prev',
+          })
+          vim.keymap.set('n', ']e', vim.diagnostic.goto_next, {
+            buffer = bufnr,
+            desc = 'diagnostic goto_next',
+          })
           vim.keymap.set('n', '<Leader>E', function()
             require('telescope.builtin').diagnostics()
           end, {
@@ -1337,7 +1356,9 @@ local plugins = {
       local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
       local navic = require('nvim-navic')
       local on_attach = function(client, bufnr)
-        navic.attach(client, bufnr)
+        if client.server_capabilities.documentSymbolProvider then
+          navic.attach(client, bufnr)
+        end
       end
 
       require('mason-lspconfig').setup_handlers({
@@ -1374,6 +1395,9 @@ local plugins = {
                     [vim.fn.expand('$VIMRUNTIME/lua/vim/lsp')] = true,
                   },
                 },
+                hint = {
+                  enable = true,
+                },
               },
             },
           })
@@ -1383,6 +1407,9 @@ local plugins = {
             capabilities = capabilities,
             on_attach = on_attach,
             settings = {
+              hint = {
+                enable = true,
+              },
               typescript = {
                 preferences = {
                   importModuleSpecifier = 'relative',
@@ -1447,7 +1474,7 @@ local plugins = {
     dependencies = { 'neovim/nvim-lspconfig' },
     config = function()
       require('nvim-navic').setup({
-        -- highlight = true,
+        highlight = true,
       })
       -- vim.api.nvim_set_hl(0, 'NavicIconsFile', { default = true, bg = '#000000', fg = '#ffffff' })
       -- vim.api.nvim_set_hl(0, 'NavicIconsModule', { default = true, bg = '#000000', fg = '#ffffff' })
@@ -1810,10 +1837,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true,                   -- false will only do exact matching
+            fuzzy = true, -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true,    -- override the file sorter
-            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
+            override_file_sorter = true, -- override the file sorter
+            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
