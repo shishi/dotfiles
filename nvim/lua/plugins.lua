@@ -41,7 +41,7 @@ local plugins = {
   },
   {
     'akinsho/bufferline.nvim',
-    version = 'v2.*',
+    version = '*',
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons' }, { 'nvim-lua/plenary.nvim' } },
     config = function()
@@ -49,8 +49,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -738,7 +738,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false, -- enables an input dialog for inc-rename.nvim
+        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -1143,7 +1143,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight', on = { 'operator' } },
+          { name = 'lsp_document_highlight',  on = { 'operator' } },
         },
       })
     end,
@@ -1837,10 +1837,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true, -- false will only do exact matching
+            fuzzy = true,                   -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true, -- override the file sorter
-            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
+            override_file_sorter = true,    -- override the file sorter
+            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
