@@ -27,20 +27,19 @@ vim.cmd([[
 
 if vim.g.vscode then
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
-  vim.keymap.set('n', 'H', '<Cmd>Tabprevious<CR>')
-  vim.keymap.set('n', 'L', '<Cmd>Tabnext<CR>')
+  vim.keymap.set('n', '<Leader>;', '<Cmd>Tabclose<CR>')
+  vim.keymap.set('n', '<Leader>n', '<Cmd>Tabprevious<CR>')
+  vim.keymap.set('n', '<Leader>p', '<Cmd>Tabnext<CR>')
   vim.keymap.set('n', '<Leader><Leader>r', '<Cmd>call VSCodeNotify("workbench.action.openRecent")<CR>')
 else
   vim.keymap.set('i', 'jj', '<ESC>')
   vim.keymap.set('i', 'kk', '<ESC>')
   vim.keymap.set('i', 'jk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
-  vim.keymap.set('n', 'H', '<Cmd>bprevious<CR>')
-  vim.keymap.set('n', 'L', '<Cmd>bnext<CR>')
-  vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
-  vim.keymap.set({ 'n', 't' }, '<A-j>', '<Cmd>wincmd j<CR>')
-  vim.keymap.set({ 'n', 't' }, '<A-k>', '<Cmd>wincmd k<CR>')
-  vim.keymap.set({ 'n', 't' }, '<A-l>', '<Cmd>wincmd l<CR>')
+  -- buffer
+  vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd #<CR>')
+  vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
+  vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
 
   -- quickfix, grep
   -- batch replace on quickfix list (:cl or :copen)
@@ -52,10 +51,15 @@ else
   vim.keymap.set('n', "<Leader>'", '<Cmd>lcd %:p:h<CR>')
 end
 
--- buffer
-vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd #<CR>')
-vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
-vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
+-- first, last
+vim.keymap.set('n', 'H', '^')
+vim.keymap.set('n', 'L', '$')
+
+-- Window
+vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-j>', '<Cmd>wincmd j<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-k>', '<Cmd>wincmd k<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-l>', '<Cmd>wincmd l<CR>')
 
 -- split window
 -- vim.keymap.set('n', '<Leader>h', '<Cmd>split<CR>')
@@ -84,11 +88,3 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
 vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', 'jk', [[<C-\><C-n>]])
-
---  Packer
-vim.cmd([[
-  cabbrev ps PackerSync
-  cabbrev pi PackerInstall
-  cabbrev pc PackerCompile
-  cabbrev pcl PackerClean
-]])
