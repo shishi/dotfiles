@@ -175,9 +175,9 @@ local plugins = {
     },
     {
         'saecki/crates.nvim',
-        version = 'v0.2.1',
         cond = not_in_vscode,
-        dependencies = { { 'nvim-lua/plenary.nvim' } },
+        dependencies = { { 'nvim-lua/plenary.nvim' }, { 'hrsh7th/nvim-cmp' } },
+        event = 'BufRead Cargo.toml',
         config = function()
           require('crates').setup()
         end,
