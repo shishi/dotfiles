@@ -19,6 +19,7 @@ vim.opt.undofile = true
 -- ui
 vim.opt.number = true
 vim.opt.signcolumn = 'yes'
+vim.opt.laststatus = 3
 vim.opt.cursorline = true
 vim.opt.winbar = '%F'
 
