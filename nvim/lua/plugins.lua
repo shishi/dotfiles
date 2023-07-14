@@ -1581,14 +1581,14 @@ local plugins = {
               indent = {
                   enable = true,
               },
-              rainbow = {
-                  enable = true,
-                  -- disable = { "jsx", "cpp" }, list of languages you want to disable the plugin for
-                  extended_mode = true, -- Also highlight non-bracket delimiters like html tags, boolean or table: lang -> boolean
-                  max_file_lines = nil, -- Do not enable for files with more than n lines, int
-                  -- colors = {}, -- table of hex strings
-                  -- termcolors = {} -- table of colour name strings
-              },
+              -- rainbow = {
+              --     enable = true,
+              --     -- disable = { "jsx", "cpp" }, list of languages you want to disable the plugin for
+              --     extended_mode = true, -- Also highlight non-bracket delimiters like html tags, boolean or table: lang -> boolean
+              --     max_file_lines = nil, -- Do not enable for files with more than n lines, int
+              --     -- colors = {}, -- table of hex strings
+              --     -- termcolors = {} -- table of colour name strings
+              -- },
               matchup = {
                   enable = true,
                   -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
@@ -1605,6 +1605,7 @@ local plugins = {
     {
         'p00f/nvim-ts-rainbow',
         cond = not_in_vscode,
+        enabled = false,
     },
     {
         'MunifTanjim/nui.nvim',
@@ -1713,6 +1714,37 @@ local plugins = {
           end, {
               desc = 'telescope projects',
           })
+        end,
+    },
+    {
+        'HiPhish/rainbow-delimiters.nvim',
+        url = 'https://gitlab.com/HiPhish/rainbow-delimiters.nvim.git',
+        dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
+        enabled = false,
+        cond = not_in_vscode,
+        config = function()
+          -- This module contains a number of default definitions
+          local rainbow_delimiters = require('rainbow-delimiters')
+
+          vim.g.rainbow_delimiters = {
+              strategy = {
+                  [''] = rainbow_delimiters.strategy['global'],
+                  vim = rainbow_delimiters.strategy['local'],
+              },
+              query = {
+                  [''] = 'rainbow-delimiters',
+                  lua = 'rainbow-blocks',
+              },
+              highlight = {
+                  'RainbowDelimiterRed',
+                  'RainbowDelimiterYellow',
+                  'RainbowDelimiterBlue',
+                  'RainbowDelimiterOrange',
+                  'RainbowDelimiterGreen',
+                  'RainbowDelimiterViolet',
+                  'RainbowDelimiterCyan',
+              },
+          }
         end,
     },
     {
