@@ -52,8 +52,8 @@ else
 end
 
 -- first, last
-vim.keymap.set('n', 'H', '^')
-vim.keymap.set('n', 'L', '$')
+vim.keymap.set({ 'n', 'v' }, 'H', '^')
+vim.keymap.set({ 'n', 'v' }, 'L', '$')
 
 -- Window
 vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
