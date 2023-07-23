@@ -60,6 +60,10 @@ vim.keymap.set({ 'n', 't' }, '<A-h>', '<Cmd>wincmd h<CR>')
 vim.keymap.set({ 'n', 't' }, '<A-j>', '<Cmd>wincmd j<CR>')
 vim.keymap.set({ 'n', 't' }, '<A-k>', '<Cmd>wincmd k<CR>')
 vim.keymap.set({ 'n', 't' }, '<A-l>', '<Cmd>wincmd l<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-H>', '<C-w><')
+vim.keymap.set({ 'n', 't' }, '<A-J>', '<C-w>-')
+vim.keymap.set({ 'n', 't' }, '<A-K>', '<C-w>+')
+vim.keymap.set({ 'n', 't' }, '<A-L>', '<C-w>>')
 
 -- split window
 -- vim.keymap.set('n', '<Leader>h', '<Cmd>split<CR>')

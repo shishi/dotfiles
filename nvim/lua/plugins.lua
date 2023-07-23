@@ -88,21 +88,6 @@ local plugins = {
     end,
   },
   {
-    'uga-rosa/ccc.nvim',
-    enabled = false,
-    cond = not_in_vscode,
-    cofnig = function()
-      local ccc = require('ccc')
-      -- local mapping = ccc.mapping
-      ccc.setup({
-        highlighter = {
-          auto_enable = true,
-          lsp = true,
-        },
-      })
-    end,
-  },
-  {
     'f3fora/cmp-spell',
     cond = not_in_vscode,
     enabled = false,
@@ -115,6 +100,7 @@ local plugins = {
   {
     'numToStr/Comment.nvim',
     -- cond = not_in_vscode,
+    enalbed = false,
     config = function()
       require('Comment').setup({})
       local ft = require('Comment.ft')
@@ -618,6 +604,31 @@ local plugins = {
     end,
   },
   {
+    'echasnovski/mini.nvim',
+    version = false,
+    config = function()
+      require('mini.cursorword').setup()
+      require('mini.comment').setup()
+
+      local hipatterns = require('mini.hipatterns')
+      hipatterns.setup({
+        highlighters = {
+          -- Highlight standalone 'FIXME', 'HACK', 'TODO', 'NOTE'
+          fixme = { pattern = '%f[%w]()FIXME()%f[%W]', group = 'MiniHipatternsFixme' },
+          hack = { pattern = '%f[%w]()HACK()%f[%W]', group = 'MiniHipatternsHack' },
+          todo = { pattern = '%f[%w]()TODO()%f[%W]', group = 'MiniHipatternsTodo' },
+          note = { pattern = '%f[%w]()NOTE()%f[%W]', group = 'MiniHipatternsNote' },
+
+          -- Highlight hex color strings (`#rrggbb`) using that color
+          hex_color = hipatterns.gen_highlighter.hex_color(),
+        },
+      })
+
+      require('mini.pairs').setup()
+      require('mini.surround').setup()
+    end,
+  },
+  {
     'nvim-neo-tree/neo-tree.nvim',
     dependencies = {
       'nvim-lua/plenary.nvim',
@@ -774,7 +785,7 @@ local plugins = {
           }),
           null_ls.builtins.diagnostics.tidy,
           null_ls.builtins.diagnostics.stylelint,
-          null_ls.builtins.diagnostics.todo_comments,
+          -- null_ls.builtins.diagnostics.todo_comments,
           null_ls.builtins.diagnostics.trail_space,
           -- null_ls.builtins.diagnostics.xo,
           null_ls.builtins.diagnostics.yamllint,
@@ -832,7 +843,8 @@ local plugins = {
   },
   {
     'windwp/nvim-autopairs',
-    cond = not_in_vscode,
+    -- cond = not_in_vscode,
+    enabled = false,
     dependencies = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       require('nvim-autopairs').setup({})
@@ -853,16 +865,16 @@ local plugins = {
       { 'onsails/lspkind-nvim' },
       { 'saadparwaiz1/cmp_luasnip' },
       { 'williamboman/mason-lspconfig.nvim' },
-      { 'windwp/nvim-autopairs' },
+      -- { 'windwp/nvim-autopairs' },
     },
     event = 'InsertEnter',
     config = function()
       local cmp = require('cmp')
       local lspkind = require('lspkind')
 
-      -- for autopairs
-      local cmp_autopairs = require('nvim-autopairs.completion.cmp')
-      cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
+      -- -- for autopairs
+
+      -- cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
 
       -- for integrate luasnip
       local has_words_before = function()
@@ -1526,6 +1538,7 @@ local plugins = {
   {
     'kylechui/nvim-surround',
     version = '*', -- Use for stability; omit to use `main` branch for the latest features
+    enabled = false,
     config = function()
       require('nvim-surround').setup({})
     end,
@@ -2055,6 +2068,7 @@ local plugins = {
   {
     'RRethy/vim-illuminate',
     cond = not_in_vscode,
+    enabled = false,
     config = function()
       require('illuminate').configure({})
     end,
