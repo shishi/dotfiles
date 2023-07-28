@@ -1667,21 +1667,21 @@ local plugins = {
     opts = { options = { 'buffers', 'curdir', 'tabpages', 'winsize', 'help' } },
     keys = {
       {
-        '<leader>qs',
+        '<Leader>ps',
         function()
           require('persistence').load()
         end,
         desc = 'Restore Session',
       },
       {
-        '<leader>ql',
+        '<Leader>pl',
         function()
           require('persistence').load({ last = true })
         end,
         desc = 'Restore Last Session',
       },
       {
-        '<leader>qd',
+        '<Leader>pd',
         function()
           require('persistence').stop()
         end,

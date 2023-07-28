@@ -106,7 +106,7 @@ vim.opt.modeline = true
 vim.opt.modelines = 10
 
 -- gui
-vim.opt.guifont = 'UDEV Gothic NF:h13'
+vim.opt.guifont = 'UDEV Gothic NF:h16'
 
 if vim.g.neovide then
   vim.g.neovide_hide_mouse_when_typing = true
