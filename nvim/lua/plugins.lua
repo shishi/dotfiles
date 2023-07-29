@@ -37,6 +37,7 @@ local plugins = {
   {
     'akinsho/bufferline.nvim',
     version = '*',
+    enabled = false,
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons' }, { 'nvim-lua/plenary.nvim' } },
     config = function()
