@@ -1214,21 +1214,21 @@ local plugins = {
           vim.api.nvim_buf_set_option(0, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
 
           -- code definitions, references
-          vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
-            buffer = bufnr,
-            desc = 'vim.lsp declaration',
-          })
           vim.keymap.set('n', 'gd', function()
             require('telescope.builtin').lsp_definitions()
           end, {
             buffer = bufnr,
             desc = 'vim.lsp.buf.definition',
           })
+          vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
+            buffer = bufnr,
+            desc = 'vim.lsp declaration',
+          })
           vim.keymap.set('n', 'K', vim.lsp.buf.hover, {
             buffer = bufnr,
             desc = 'vim.lsp hover',
           })
-          vim.keymap.set('n', 'gi', function()
+          vim.keymap.set('n', 'gI', function()
             require('telescope.builtin').lsp_implementations()
           end, {
             buffer = bufnr,
@@ -1244,7 +1244,7 @@ local plugins = {
             buffer = bufnr,
             desc = 'vim.lsp.buf.references',
           })
-          vim.keymap.set('n', 'gt', function()
+          vim.keymap.set('n', '<Leader>gt', function()
             require('telescope.builtin').lsp_type_definitions()
           end, {
             buffer = bufnr,
@@ -1299,13 +1299,13 @@ local plugins = {
           )
 
           -- symbols through by treesitter
-          vim.keymap.set('n', '<Leader>s', function()
+          vim.keymap.set('n', 'gs', function()
             require('telescope.builtin').lsp_dynamic_workspace_symbols()
           end, {
             buffer = bufnr,
             desc = 'vim.lsp lsp_dynamic_workspace_symbols',
           })
-          vim.keymap.set('n', '<Leader><Leader>s', function()
+          vim.keymap.set('n', 'gS', function()
             require('telescope.builtin').lsp_document_symbols()
           end, {
             buffer = bufnr,
