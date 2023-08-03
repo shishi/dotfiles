@@ -170,18 +170,9 @@ local plugins = {
   {
     'stevearc/dressing.nvim',
     cond = not_in_vscode,
-    lazy = true,
-    init = function()
-      ---@diagnostic disable-next-line: duplicate-set-field
-      vim.ui.select = function(...)
-        require('lazy').load({ plugins = { 'dressing.nvim' } })
-        return vim.ui.select(...)
-      end
-      ---@diagnostic disable-next-line: duplicate-set-field
-      vim.ui.input = function(...)
-        require('lazy').load({ plugins = { 'dressing.nvim' } })
-        return vim.ui.input(...)
-      end
+    opts = {},
+    config = function()
+      require('dressing').setup({})
     end,
   },
   {
@@ -245,6 +236,17 @@ local plugins = {
     end,
   },
   {
+    'dnlhc/glance.nvim',
+    cond = not_in_vscode,
+    config = function()
+      require('glance').setup({})
+      -- vim.keymap.set('n', 'gd', '<CMD>Glance definitions<CR>')
+      -- vim.keymap.set('n', 'gr', '<CMD>Glance references<CR>')
+      -- vim.keymap.set('n', '<Leader>gt', '<CMD>Glance type_definitions<CR>')
+      -- vim.keymap.set('n', 'gI', '<CMD>Glance implementations<CR>')
+    end,
+  },
+  {
     'sainnhe/gruvbox-material',
     cond = not_in_vscode,
     dependencies = { 'nvim-treesitter/nvim-treesitter' },
@@ -299,58 +301,6 @@ local plugins = {
       vim.g.gruvbox_material_diagnostic_virtual_text = 'colored'
 
       vim.cmd([[colorscheme gruvbox-material]])
-    end,
-  },
-  {
-    'phaazon/hop.nvim',
-    enabled = false,
-    branch = 'v2', -- optional but strongly recommended
-    config = function()
-      -- you can configure Hop the way you like here; see :h hop-config
-      require('hop').setup({
-        keys = 'etovxqpdygfblzhckisuran',
-      })
-      vim.keymap.set({ 'n', 'v' }, '<Leader>w', '<Cmd>HopWord<CR>')
-      -- vim.keymap.set({ 'n', 'v' }, '<Leader>b', '<Cmd>HopWordBC<CR>')
-      vim.keymap.set({ 'n', 'v' }, '<Leader>l', '<Cmd>HopLineStart<CR>')
-      -- vim.keymap.set({ 'n', 'v' }, '<Leader>k', '<Cmd>HopLineStartAC<CR>')
-      vim.keymap.set({ 'n', 'v' }, '<Leader>f', '<Cmd>HopChar1<CR>')
-      -- vim.keymap.set('', '<Leader>l', '<Cmd>HopLine<CR>')
-      -- vim.keymap.set('', '<Leader>c', '<Cmd>HopChar1CurrentLine<CR>')
-      vim.keymap.set({ 'n', 'v' }, '<Leader>o', '<Cmd>HopChar2<CR>')
-
-      vim.api.nvim_set_keymap(
-        '',
-        'f',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true })<CR>",
-        {
-          desc = 'hop f',
-        }
-      )
-      vim.api.nvim_set_keymap(
-        '',
-        'F',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true })<CR>",
-        {
-          desc = 'hop F',
-        }
-      )
-      vim.api.nvim_set_keymap(
-        '',
-        't',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.AFTER_CURSOR, current_line_only = true, hint_offset = -1 })<CR>",
-        {
-          desc = 'hop t',
-        }
-      )
-      vim.api.nvim_set_keymap(
-        '',
-        'T',
-        "<Cmd>lua require'hop'.hint_char1({ direction = require'hop.hint'.HintDirection.BEFORE_CURSOR, current_line_only = true, hint_offset = 1 })<CR>",
-        {
-          desc = 'hop T',
-        }
-      )
     end,
   },
   {
@@ -507,80 +457,6 @@ local plugins = {
       --   require('luasnip').jump(-1)
       -- end, {
       -- })
-    end,
-  },
-  {
-    'glepnir/lspsaga.nvim',
-    branch = 'main',
-    enabled = false,
-    cond = not_in_vscode,
-    dependencies = { { 'neovim/nvim-lspconfig' }, { 'nvim-tree/nvim-web-devicons' } },
-    -- after = 'nvim-lspconfig',
-    event = 'BufRead',
-    config = function()
-      local saga = require('lspsaga')
-
-      saga.setup({
-        lightbulb = {
-          enable = true,
-          enable_in_insert = true,
-          sign = true,
-          -- sign_priority = 20,
-          virtual_text = false,
-        },
-        symbol_in_winbar = {
-          -- in_custom = false,
-          enable = false,
-        },
-      })
-
-      local augroup_lspsaga = vim.api.nvim_create_augroup('augroup_lspsaga', {})
-      vim.api.nvim_create_autocmd({ 'LspAttach' }, {
-        group = augroup_lspsaga,
-        pattern = { '*' },
-        callback = function(args)
-          local bufnr = args.buf
-          -- local client = vim.lsp.get_client_by_id(args.data.client_id)
-
-          -- code definitions, references
-          vim.keymap.set('n', 'gh', '<Cmd>Lspsaga lsp_finder<CR>', {
-            buffer = bufnr,
-          })
-          -- vim.keymap.set('n', 'gd', '<Cmd>Lspsaga peek_definition<CR>', {
-          --     buffer = bufnr,
-          -- })
-          -- vim.keymap.set('n', 'K', '<Cmd>Lspsaga hover_doc<CR>', {
-          --     buffer = bufnr,
-          -- })
-
-          -- code actions
-          -- vim.keymap.set({ 'n', 'v'}, '<Leader>rn', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
-          -- vim.keymap.set({ 'n', 'v'}, '<F2>', '<Cmd>Lspsaga rename<CR>', { buffer = bufnr })
-          -- vim.keymap.set({ 'n', 'v'}, '<Leader>ca', '<Cmd>Lspsaga code_action<CR>', { buffer = bufnr })
-          -- vim.keymap.set({ 'n', 'v'}, '<F7>', '<Cmd>Lspsaga code_action<CR>', { buffer = bufnr })
-
-          -- diagnostic
-          vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_line_diagnostics<CR>', {
-            buffer = bufnr,
-          })
-          vim.keymap.set('n', '<Leader>e', '<Cmd>Lspsaga show_cursor_diagnostics<CR>', {
-            buffer = bufnr,
-          })
-          vim.keymap.set('n', '[e', '<Cmd>Lspsaga diagnostic_jump_prev<CR>', {
-            buffer = bufnr,
-          })
-          vim.keymap.set('n', ']e', '<Cmd>Lspsaga diagnostic_jump_next<CR>', {
-            buffer = bufnr,
-          })
-          -- -- Only jump to error
-          -- vim.keymap.set('n', '[E', function()
-          --   require('lspsaga.diagnostic').goto_prev({ severity = vim.diagnostic.severity.ERROR })
-          -- end, { buffer = bufnr })
-          -- vim.keymap.set('n', ']E', function()
-          --   require('lspsaga.diagnostic').goto_next({ severity = vim.diagnostic.severity.ERROR })
-          -- end, { buffer = bufnr })
-        end,
-      })
     end,
   },
   {

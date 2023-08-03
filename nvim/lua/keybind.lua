@@ -74,16 +74,6 @@ vim.keymap.set('v', '<', '<gv')
 vim.keymap.set('v', '>', '>gv')
 vim.keymap.set('v', '=', '=gb')
 
--- pairs
--- if vim.g.vscode then
--- else
---   vim.keymap.set('i', '{', '{}<LEFT>')
---   vim.keymap.set('i', '[', '[]<LEFT>')
---   vim.keymap.set('i', '(', '()<LEFT>')
---   vim.keymap.set('i', "'", "''<LEFT>")
---   vim.keymap.set('i', '"', '""<LEFT>')
--- end
-
 -- open configs
 -- vim.keymap.set('n', '<Leader>`', '<Cmd>luafile $MYVIMRC<CR>')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
