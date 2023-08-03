@@ -100,10 +100,12 @@ local plugins = {
   },
   {
     'numToStr/Comment.nvim',
-    -- cond = not_in_vscode,
     enalbed = false,
+    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     config = function()
-      require('Comment').setup({})
+      require('Comment').setup({
+        pre_hook = require('ts_context_commentstring.integrations.comment_nvim').create_pre_hook(),
+      })
       local ft = require('Comment.ft')
       ft.set('sh', '#%s')
     end,
@@ -483,9 +485,16 @@ local plugins = {
   {
     'echasnovski/mini.nvim',
     version = false,
+    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     config = function()
       require('mini.cursorword').setup()
-      require('mini.comment').setup()
+      require('mini.comment').setup({
+        options = {
+          custom_commentstring = function()
+            return require('ts_context_commentstring.internal').calculate_commentstring() or vim.bo.commentstring
+          end,
+        },
+      })
 
       local hipatterns = require('mini.hipatterns')
       hipatterns.setup({
@@ -1462,14 +1471,6 @@ local plugins = {
         indent = {
           enable = true,
         },
-        -- rainbow = {
-        --     enable = true,
-        --     -- disable = { "jsx", "cpp" }, list of languages you want to disable the plugin for
-        --     extended_mode = true, -- Also highlight non-bracket delimiters like html tags, boolean or table: lang -> boolean
-        --     max_file_lines = nil, -- Do not enable for files with more than n lines, int
-        --     -- colors = {}, -- table of hex strings
-        --     -- termcolors = {} -- table of colour name strings
-        -- },
         matchup = {
           enable = true,
           -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
@@ -1479,14 +1480,10 @@ local plugins = {
         },
         context_commentstring = {
           enable = true,
+          enable_autocmd = false,
         },
       })
     end,
-  },
-  {
-    'p00f/nvim-ts-rainbow',
-    cond = not_in_vscode,
-    enabled = false,
   },
   {
     'MunifTanjim/nui.nvim',
@@ -1521,18 +1518,8 @@ local plugins = {
   {
     'JoosepAlviste/nvim-ts-context-commentstring',
     cond = not_in_vscode,
-    dependencies = { { 'numToStr/Comment.nvim', 'nvim-treesitter/nvim-treesitter' } },
-    config = function()
-      require('nvim-treesitter.configs').setup({
-        context_commentstring = {
-          enable = true,
-          enable_autocmd = false,
-        },
-        require('Comment').setup({
-          pre_hook = require('ts_context_commentstring.integrations.comment_nvim').create_pre_hook(),
-        }),
-      })
-    end,
+    dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
+    config = function() end,
   },
   {
     'nvim-tree/nvim-web-devicons',
