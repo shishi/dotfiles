@@ -504,7 +504,6 @@ local plugins = {
           hack = { pattern = '%f[%w]()HACK()%f[%W]', group = 'MiniHipatternsHack' },
           todo = { pattern = '%f[%w]()TODO()%f[%W]', group = 'MiniHipatternsTodo' },
           note = { pattern = '%f[%w]()NOTE()%f[%W]', group = 'MiniHipatternsNote' },
-
           -- Highlight hex color strings (`#rrggbb`) using that color
           hex_color = hipatterns.gen_highlighter.hex_color(),
         },
@@ -520,7 +519,6 @@ local plugins = {
           highlight = '<Leader>sh', -- Highlight surrounding
           replace = '<Leader>sr', -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-
           suffix_last = 'l', -- Suffix to search with "prev" method
           suffix_next = 'n', -- Suffix to search with "next" method
         },
@@ -1517,7 +1515,6 @@ local plugins = {
   },
   {
     'JoosepAlviste/nvim-ts-context-commentstring',
-    cond = not_in_vscode,
     dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
     config = function() end,
   },
