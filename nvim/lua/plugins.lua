@@ -485,7 +485,7 @@ local plugins = {
   {
     'echasnovski/mini.nvim',
     version = false,
-    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
+    dependencies = { { 'nvim-treesitter/nvim-treesitter' }, { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     config = function()
       require('mini.cursorword').setup()
       require('mini.comment').setup({
@@ -1442,7 +1442,7 @@ local plugins = {
   },
   {
     'nvim-treesitter/nvim-treesitter',
-    cond = not_in_vscode,
+    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     build = function()
       require('nvim-treesitter.install').update({
         with_sync = true,
@@ -1579,37 +1579,6 @@ local plugins = {
       end, {
         desc = 'telescope projects',
       })
-    end,
-  },
-  {
-    'HiPhish/rainbow-delimiters.nvim',
-    url = 'https://gitlab.com/HiPhish/rainbow-delimiters.nvim.git',
-    dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
-    enabled = false,
-    cond = not_in_vscode,
-    config = function()
-      -- This module contains a number of default definitions
-      local rainbow_delimiters = require('rainbow-delimiters')
-
-      vim.g.rainbow_delimiters = {
-        strategy = {
-          [''] = rainbow_delimiters.strategy['global'],
-          vim = rainbow_delimiters.strategy['local'],
-        },
-        query = {
-          [''] = 'rainbow-delimiters',
-          lua = 'rainbow-blocks',
-        },
-        highlight = {
-          'RainbowDelimiterRed',
-          'RainbowDelimiterYellow',
-          'RainbowDelimiterBlue',
-          'RainbowDelimiterOrange',
-          'RainbowDelimiterGreen',
-          'RainbowDelimiterViolet',
-          'RainbowDelimiterCyan',
-        },
-      }
     end,
   },
   {
