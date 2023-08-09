@@ -487,7 +487,8 @@ local plugins = {
     version = false,
     dependencies = { { 'nvim-treesitter/nvim-treesitter' }, { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     config = function()
-      require('mini.cursorword').setup()
+      require('mini.cursorword').setup({})
+
       require('mini.comment').setup({
         options = {
           custom_commentstring = function()
@@ -509,7 +510,8 @@ local plugins = {
         },
       })
 
-      require('mini.pairs').setup()
+      require('mini.pairs').setup({})
+
       require('mini.surround').setup({
         mappings = {
           add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
@@ -534,24 +536,6 @@ local plugins = {
     },
     cond = not_in_vscode,
     cmd = 'Neotree',
-    -- keys = {
-    --   {
-    --     '<leader>fe',
-    --     function()
-    --       require('neo-tree.command').execute({ toggle = true, dir = require('lazyvim.util').get_root() })
-    --     end,
-    --     desc = 'Explorer NeoTree (root dir)',
-    --   },
-    --   {
-    --     '<leader>fE',
-    --     function()
-    --       require('neo-tree.command').execute({ toggle = true, dir = vim.loop.cwd() })
-    --     end,
-    --     desc = 'Explorer NeoTree (cwd)',
-    --   },
-    --   { '<leader>e', '<leader>fe', desc = 'Explorer NeoTree (root dir)', remap = true },
-    --   { '<leader>E', '<leader>fE', desc = 'Explorer NeoTree (cwd)', remap = true },
-    -- },
     deactivate = function()
       vim.cmd([[Neotree close]])
     end,
@@ -1443,7 +1427,6 @@ local plugins = {
   },
   {
     'nvim-treesitter/nvim-treesitter',
-    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     build = function()
       require('nvim-treesitter.install').update({
         with_sync = true,
