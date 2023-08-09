@@ -250,7 +250,7 @@ local plugins = {
   },
   {
     'sainnhe/gruvbox-material',
-    cond = not_in_vscode,
+    -- cond = not_in_vscode,
     dependencies = { 'nvim-treesitter/nvim-treesitter' },
     config = function()
       vim.opt.termguicolors = true
