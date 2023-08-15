@@ -1312,7 +1312,10 @@ local plugins = {
           })
         end,
         ['gopls'] = function()
-          lspconfig.gopls.setup({})
+          lspconfig.gopls.setup({
+            capabilitiies = capabilities,
+            on_attach = on_attach,
+          })
         end,
         -- ['ruby_ls'] = function()
         --   lspconfig.ruby_ls.setup({
