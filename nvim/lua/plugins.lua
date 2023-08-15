@@ -679,6 +679,8 @@ local plugins = {
           -- null_ls.builtins.formatting.eslint,
           null_ls.builtins.formatting.eslint_d,
           null_ls.builtins.formatting.fish_indent,
+          null_ls.builtins.formatting.gofmt,
+          null_ls.builtins.formatting.goimports,
           -- null_ls.builtins.formatting.prettier,
           -- null_ls.builtins.formatting.prettierd,
           -- null_ls.builtins.formatting.prismaFmt,
@@ -1308,6 +1310,9 @@ local plugins = {
               },
             },
           })
+        end,
+        ['gopls'] = function()
+          lspconfig.gopls.setup({})
         end,
         -- ['ruby_ls'] = function()
         --   lspconfig.ruby_ls.setup({
