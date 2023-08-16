@@ -64,7 +64,7 @@ local plugins = {
           max_name_length = 30,
           diagnostics = 'nvim_lsp',
           diagnostics_indicator = function(count, level, _diagnostics_dict, _context)
-            local icon = level:match('error') and ' ' or ' '
+            local icon = level:match('error') and '' or ''
             return ' ' .. icon .. count
           end,
         },
@@ -465,13 +465,12 @@ local plugins = {
     'williamboman/mason-lspconfig.nvim',
     cond = not_in_vscode,
     dependencies = { { 'williamboman/mason.nvim' }, { 'hrsh7th/cmp-nvim-lsp' }, { 'nvim-telescope/telescope.nvim' } },
-    -- after = 'mason.nvim',
     config = function()
       require('mason-lspconfig').setup({
         ensure_installed = {
           'lua_ls',
         },
-        automatic_installation = true,
+        automatic_installation = false,
       })
     end,
   },
@@ -510,7 +509,7 @@ local plugins = {
         },
       })
 
-      require('mini.pairs').setup({})
+      -- require('mini.pairs').setup({})
 
       require('mini.surround').setup({
         mappings = {
@@ -529,6 +528,7 @@ local plugins = {
   },
   {
     'nvim-neo-tree/neo-tree.nvim',
+    branch = 'v3.x',
     dependencies = {
       'nvim-lua/plenary.nvim',
       'nvim-tree/nvim-web-devicons',
@@ -727,7 +727,7 @@ local plugins = {
   {
     'windwp/nvim-autopairs',
     -- cond = not_in_vscode,
-    enabled = false,
+    -- enabled = false,
     dependencies = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       require('nvim-autopairs').setup({})
@@ -1056,10 +1056,10 @@ local plugins = {
 
       -- lsp diagnostics symbols
       local signs = {
-        Error = ' ',
-        Warn = ' ',
-        Hint = ' ',
-        Info = ' ',
+        Error = '',
+        Warn = '',
+        Hint = '',
+        Info = '',
       }
 
       for type, icon in pairs(signs) do
@@ -1237,6 +1237,13 @@ local plugins = {
 
       local lspconfig = require('lspconfig')
       local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
+
+      -- setting lsp which not under mason
+      lspconfig.gopls.setup({
+        capabilitiies = capabilities,
+        on_attach = on_attach,
+      })
+
       require('mason-lspconfig').setup_handlers({
         --
         -- The first entry (without a key) will be the default handler
