@@ -464,13 +464,19 @@ local plugins = {
   {
     'williamboman/mason-lspconfig.nvim',
     cond = not_in_vscode,
-    dependencies = { { 'williamboman/mason.nvim' }, { 'hrsh7th/cmp-nvim-lsp' }, { 'nvim-telescope/telescope.nvim' } },
+    dependencies = { { 'williamboman/mason.nvim' } },
     config = function()
       require('mason-lspconfig').setup({
+        -- nvim --headless -c "MasonInstall eslint_d prettierd actionlint buf erb-lint markdownlint markuplint rubocop selene sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
         ensure_installed = {
+          -- lsp
           'lua_ls',
+          'rust_analyzer',
+          'ruby_ls',
+          'gopls',
+          'vtsls',
         },
-        automatic_installation = false,
+        automatic_installation = true,
       })
     end,
   },
@@ -641,8 +647,8 @@ local plugins = {
         -- stylua: ignore start
         sources = {
           -- code actions
-          -- null_ls.builtins.code_actions.eslint,
-          null_ls.builtins.code_actions.eslint_d,
+          null_ls.builtins.code_actions.eslint,
+          -- null_ls.builtins.code_actions.eslint_d,
           null_ls.builtins.code_actions.gitrebase,
           -- null_ls.builtins.code_actions.gitsigns,
           -- null_ls.builtins.code_actions.refactoring,
@@ -658,13 +664,15 @@ local plugins = {
           null_ls.builtins.diagnostics.eslint_d,
           null_ls.builtins.diagnostics.fish,
           -- null_ls.builtins.diagnostics.haml_lint,
-          null_ls.builtins.diagnostics.mdl,
+          null_ls.builtins.diagnostics.markdownlint,
+          null_ls.builtins.diagnostics.markuplint,
+          -- null_ls.builtins.diagnostics.mdl,
           null_ls.builtins.diagnostics.rubocop,
           null_ls.builtins.diagnostics.selene,
           null_ls.builtins.diagnostics.sqlfluff.with({
             extra_args = { '--dialect', 'postgres' },
           }),
-          null_ls.builtins.diagnostics.tidy,
+          -- null_ls.builtins.diagnostics.tidy,
           null_ls.builtins.diagnostics.stylelint,
           -- null_ls.builtins.diagnostics.todo_comments,
           null_ls.builtins.diagnostics.trail_space,
@@ -681,7 +689,7 @@ local plugins = {
           null_ls.builtins.formatting.fish_indent,
           null_ls.builtins.formatting.gofmt,
           null_ls.builtins.formatting.goimports,
-          -- null_ls.builtins.formatting.prettier,
+          null_ls.builtins.formatting.prettier,
           -- null_ls.builtins.formatting.prettierd,
           -- null_ls.builtins.formatting.prismaFmt,
           null_ls.builtins.formatting.rubocop,
@@ -693,7 +701,7 @@ local plugins = {
           null_ls.builtins.formatting.stylelint,
           null_ls.builtins.formatting.stylua,
           null_ls.builtins.formatting.taplo,
-          null_ls.builtins.formatting.tidy,
+          -- null_ls.builtins.formatting.tidy,
           -- null_ls.builtins.formatting.trim_newlines,
           -- null_ls.builtins.formatting.trim_whitespace,
           -- hover
@@ -1584,7 +1592,6 @@ local plugins = {
     'simrat39/rust-tools.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-lua/plenary.nvim' }, { 'neovim/nvim-lspconfig' }, { 'mfussenegger/nvim-dap' } },
-    -- after = 'nvim-lspconfig',
     config = function()
       local rt = require('rust-tools')
 
