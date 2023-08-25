@@ -515,7 +515,7 @@ local plugins = {
         },
       })
 
-      -- require('mini.pairs').setup({})
+      require('mini.pairs').setup({})
 
       require('mini.surround').setup({
         mappings = {
@@ -735,7 +735,7 @@ local plugins = {
   {
     'windwp/nvim-autopairs',
     -- cond = not_in_vscode,
-    -- enabled = false,
+    enabled = false,
     dependencies = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       require('nvim-autopairs').setup({})
