@@ -1450,44 +1450,80 @@ local plugins = {
   },
   {
     'nvim-treesitter/nvim-treesitter',
+    -- enabled = false,
     build = function()
       require('nvim-treesitter.install').update({
         with_sync = true,
       })
     end,
     config = function()
-      require('nvim-treesitter.configs').setup({
-        -- ensure_installed = { 'markdown', 'markdown_inline' },
-        auto_install = false,
-        highlight = {
-          enable = true,
-          -- disable = { "c", "rust" },
-          additional_vim_regex_highlighting = false,
-        },
-        incremental_selection = {
-          enable = true,
-          keymaps = {
-            init_selection = '<CR>',
-            scope_incremental = '<TAB>',
-            node_incremental = '<CR>',
-            node_decremental = '<Leader><CR>',
+      if not_in_vscode then
+        require('nvim-treesitter.configs').setup({
+          -- ensure_installed = { 'markdown', 'markdown_inline' },
+          auto_install = false,
+          highlight = {
+            enable = true,
+            -- disable = { "c", "rust" },
+            additional_vim_regex_highlighting = false,
           },
-        },
-        indent = {
-          enable = true,
-        },
-        matchup = {
-          enable = true,
-          -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
-        },
-        endwise = {
-          enable = true,
-        },
-        context_commentstring = {
-          enable = true,
-          enable_autocmd = false,
-        },
-      })
+          incremental_selection = {
+            enable = true,
+            keymaps = {
+              init_selection = '<CR>',
+              scope_incremental = '<TAB>',
+              node_incremental = '<CR>',
+              node_decremental = '<Leader><CR>',
+            },
+          },
+          indent = {
+            enable = true,
+          },
+          matchup = {
+            enable = true,
+            -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
+          },
+          endwise = {
+            enable = true,
+          },
+          context_commentstring = {
+            enable = true,
+            enable_autocmd = false,
+          },
+        })
+      else
+        require('nvim-treesitter.configs').setup({
+          -- ensure_installed = { 'markdown', 'markdown_inline' },
+          auto_install = false,
+          highlight = {
+            enable = false,
+            -- disable = { "c", "rust" },
+            additional_vim_regex_highlighting = false,
+          },
+          incremental_selection = {
+            enable = true,
+            keymaps = {
+              init_selection = '<CR>',
+              scope_incremental = '<TAB>',
+              node_incremental = '<CR>',
+              node_decremental = '<Leader><CR>',
+            },
+          },
+          indent = {
+            enable = true,
+          },
+          matchup = {
+            enable = true,
+            -- disable = { "c", "ruby" },  -- optional, list of language that will be disabled
+          },
+          endwise = {
+            enable = true,
+          },
+          context_commentstring = {
+            enable = true,
+            enable_autocmd = false,
+          },
+        })
+      end
     end,
   },
   {
