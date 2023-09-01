@@ -100,7 +100,7 @@ local plugins = {
   },
   {
     'numToStr/Comment.nvim',
-    enalbed = false,
+    enabled = false,
     dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
     config = function()
       require('Comment').setup({
