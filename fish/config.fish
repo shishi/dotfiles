@@ -238,10 +238,10 @@ if test -f '/mnt/c/Users/shishi/AppData/Local/Programs/Microsoft VS Code/bin/cod
 end
 
 # rust tools
-if type exa &>/dev/null
-    alias ls exa
-    alias ll 'exa -lah --git --icons --time-style=long-iso'
-    alias lt 'exa -T --icons --git-ignore'
+if type eza &>/dev/null
+    alias ls eza
+    alias ll 'eza -lahg --git --icons --time-style=long-iso'
+    alias lt 'eza -T --icons --git-ignore'
 end
 
 if type batcat &>/dev/null
