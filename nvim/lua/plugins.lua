@@ -467,7 +467,6 @@ local plugins = {
     dependencies = { { 'williamboman/mason.nvim' } },
     config = function()
       require('mason-lspconfig').setup({
-        -- nvim --headless -c "MasonInstall eslint_d prettierd actionlint buf erb-lint markdownlint markuplint rubocop selene sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
         ensure_installed = {
           -- lsp
           'lua_ls',
@@ -485,6 +484,7 @@ local plugins = {
     cond = not_in_vscode,
     config = function()
       require('mason').setup()
+      -- nvim --headless -c "MasonInstall eslint_d prettierd actionlint buf erb-lint markdownlint markuplint rubocop selene sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
     end,
   },
   {
@@ -736,7 +736,6 @@ local plugins = {
     'windwp/nvim-autopairs',
     -- cond = not_in_vscode,
     enabled = false,
-    dependencies = { { 'hrsh7th/nvim-cmp' } },
     config = function()
       require('nvim-autopairs').setup({})
     end,
@@ -764,7 +763,6 @@ local plugins = {
       local lspkind = require('lspkind')
 
       -- -- for autopairs
-
       -- cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
 
       -- for integrate luasnip
@@ -986,6 +984,15 @@ local plugins = {
       dap.listeners.before.event_exited['dapui_config'] = function()
         dapui.close()
       end
+    end,
+  },
+  {
+    'theHamsta/nvim-dap-virtual-text',
+    cond = not_in_vscode,
+    dependencies = { 'mfussenegger/nvim-dap' },
+    lazy = true,
+    config = function()
+      require('nvim-dap-virtual-text').setup({})
     end,
   },
   {
@@ -1244,13 +1251,7 @@ local plugins = {
       end
 
       local lspconfig = require('lspconfig')
-      local capabilities = require('cmp_nvim_lsp').default_capabilities(vim.lsp.protocol.make_client_capabilities())
-
-      -- setting lsp which not under mason
-      lspconfig.gopls.setup({
-        capabilitiies = capabilities,
-        on_attach = on_attach,
-      })
+      local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
       require('mason-lspconfig').setup_handlers({
         --
@@ -1362,6 +1363,12 @@ local plugins = {
         --     },
         --   })
         -- end,
+      })
+
+      -- setting lsp which not under mason
+      lspconfig.gopls.setup({
+        capabilitiies = capabilities,
+        on_attach = on_attach,
       })
     end,
   },
