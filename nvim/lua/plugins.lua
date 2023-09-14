@@ -45,8 +45,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -519,15 +519,15 @@ local plugins = {
 
       require('mini.surround').setup({
         mappings = {
-          add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
-          delete = '<Leader>sd', -- Delete surrounding
-          find = '<Leader>sf', -- Find surrounding (to the right)
-          find_left = '<Leader>sF', -- Find surrounding (to the left)
-          highlight = '<Leader>sh', -- Highlight surrounding
-          replace = '<Leader>sr', -- Replace surrounding
+          add = '<Leader>sa',            -- Add surrounding in Normal and Visual modes
+          delete = '<Leader>sd',         -- Delete surrounding
+          find = '<Leader>sf',           -- Find surrounding (to the right)
+          find_left = '<Leader>sF',      -- Find surrounding (to the left)
+          highlight = '<Leader>sh',      -- Highlight surrounding
+          replace = '<Leader>sr',        -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-          suffix_last = 'l', -- Suffix to search with "prev" method
-          suffix_next = 'n', -- Suffix to search with "next" method
+          suffix_last = 'l',             -- Suffix to search with "prev" method
+          suffix_next = 'n',             -- Suffix to search with "next" method
         },
       })
     end,
@@ -630,7 +630,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false, -- enables an input dialog for inc-rename.nvim
+        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -1047,7 +1047,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight', on = { 'operator' } },
+          { name = 'lsp_document_highlight',  on = { 'operator' } },
         },
       })
     end,
@@ -1723,10 +1723,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true, -- false will only do exact matching
+            fuzzy = true,                   -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true, -- override the file sorter
-            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
+            override_file_sorter = true,    -- override the file sorter
+            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
@@ -1892,6 +1892,12 @@ local plugins = {
     end,
   },
   {
+    'johmsalas/text-case.nvim',
+    config = function()
+      require('textcase').setup({})
+    end,
+  },
+  {
     'WhoIsSethDaniel/toggle-lsp-diagnostics.nvim',
     cond = not_in_vscode,
     config = function()
@@ -1940,6 +1946,9 @@ local plugins = {
     config = function()
       vim.g.matchup_matchparen_offscreen = { method = 'popup' }
     end,
+  },
+  {
+    'chaoren/vim-wordmotion',
   },
   {
     'ojroques/nvim-osc52',
