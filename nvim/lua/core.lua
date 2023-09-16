@@ -73,7 +73,6 @@ vim.opt.title = true
 -- integratiion
 vim.opt.mouse = 'a'
 vim.opt.mousemodel = 'popup'
-vim.opt.shellslash = true
 vim.opt.clipboard = 'unnamed,unnamedplus'
 
 local m = {}
