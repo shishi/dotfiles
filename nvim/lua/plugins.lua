@@ -45,8 +45,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -135,7 +135,7 @@ local plugins = {
             accept_line = false,
             next = '<M-]>',
             prev = '<M-[>',
-            dismiss = '<C-]>',
+            dismiss = '<C-M-]>',
           },
         },
         panel = { enabled = false },
@@ -285,7 +285,7 @@ local plugins = {
       --   numhl = ''
       -- })
       --
-      vim.api.nvim_exec(
+      vim.api.nvim_exec2(
         [[
         augroup gruvbox-material-theme-overrides
           autocmd!
@@ -296,7 +296,7 @@ local plugins = {
           autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
         augroup END
       ]],
-        false
+        { output = false }
       )
       vim.g.gruvbox_material_diagnostic_text_highlight = 1
       vim.g.gruvbox_material_diagnostic_line_highlight = 1
@@ -309,16 +309,31 @@ local plugins = {
     'lukas-reineke/indent-blankline.nvim',
     cond = not_in_vscode,
     config = function()
-      vim.opt.termguicolors = true
-      vim.opt.list = true
-      -- vim.opt.listchars:append('space:⋅')
-      -- vim.opt.listchars:append('eol:↴')
+      local highlight = {
+        'RainbowRed',
+        'RainbowYellow',
+        'RainbowBlue',
+        'RainbowOrange',
+        'RainbowGreen',
+        'RainbowViolet',
+        'RainbowCyan',
+      }
+      local hooks = require('ibl.hooks')
+      -- create the highlight groups in the highlight setup hook, so they are reset
+      -- every time the colorscheme changes
+      hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
+        vim.api.nvim_set_hl(0, 'RainbowRed', { fg = '#E06C75' })
+        vim.api.nvim_set_hl(0, 'RainbowYellow', { fg = '#E5C07B' })
+        vim.api.nvim_set_hl(0, 'RainbowBlue', { fg = '#61AFEF' })
+        vim.api.nvim_set_hl(0, 'RainbowOrange', { fg = '#D19A66' })
+        vim.api.nvim_set_hl(0, 'RainbowGreen', { fg = '#98C379' })
+        vim.api.nvim_set_hl(0, 'RainbowViolet', { fg = '#C678DD' })
+        vim.api.nvim_set_hl(0, 'RainbowCyan', { fg = '#56B6C2' })
+      end)
 
-      require('indent_blankline').setup({
-        space_char_blankline = ' ',
-        show_current_context = true,
-        show_current_context_start = true,
-      })
+      require('ibl').setup({ scope = { highlight = highlight } })
+
+      hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
     end,
   },
   {
@@ -515,19 +530,17 @@ local plugins = {
         },
       })
 
-      require('mini.pairs').setup({})
-
       require('mini.surround').setup({
         mappings = {
-          add = '<Leader>sa',            -- Add surrounding in Normal and Visual modes
-          delete = '<Leader>sd',         -- Delete surrounding
-          find = '<Leader>sf',           -- Find surrounding (to the right)
-          find_left = '<Leader>sF',      -- Find surrounding (to the left)
-          highlight = '<Leader>sh',      -- Highlight surrounding
-          replace = '<Leader>sr',        -- Replace surrounding
+          add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
+          delete = '<Leader>sd', -- Delete surrounding
+          find = '<Leader>sf', -- Find surrounding (to the right)
+          find_left = '<Leader>sF', -- Find surrounding (to the left)
+          highlight = '<Leader>sh', -- Highlight surrounding
+          replace = '<Leader>sr', -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-          suffix_last = 'l',             -- Suffix to search with "prev" method
-          suffix_next = 'n',             -- Suffix to search with "next" method
+          suffix_last = 'l', -- Suffix to search with "prev" method
+          suffix_next = 'n', -- Suffix to search with "next" method
         },
       })
     end,
@@ -630,7 +643,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
+        inc_rename = false, -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -733,14 +746,6 @@ local plugins = {
     end,
   },
   {
-    'windwp/nvim-autopairs',
-    -- cond = not_in_vscode,
-    enabled = false,
-    config = function()
-      require('nvim-autopairs').setup({})
-    end,
-  },
-  {
     'hrsh7th/nvim-cmp',
     cond = not_in_vscode,
     dependencies = {
@@ -755,15 +760,11 @@ local plugins = {
       { 'onsails/lspkind-nvim' },
       { 'saadparwaiz1/cmp_luasnip' },
       { 'williamboman/mason-lspconfig.nvim' },
-      -- { 'windwp/nvim-autopairs' },
     },
     event = 'InsertEnter',
     config = function()
       local cmp = require('cmp')
       local lspkind = require('lspkind')
-
-      -- -- for autopairs
-      -- cmp.event:on('confirm_done', cmp_autopairs.on_confirm_done())
 
       -- for integrate luasnip
       local has_words_before = function()
@@ -1041,13 +1042,18 @@ local plugins = {
     dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
   },
   {
+    'hrsh7th/nvim-insx',
+    config = function()
+      require('insx.preset.standard').setup()
+    end,
+  },
+  {
     'hrsh7th/nvim-linkedit',
-    enabled = not_in_vscode,
     config = function()
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight',  on = { 'operator' } },
+          { name = 'lsp_document_highlight', on = { 'operator' } },
         },
       })
     end,
@@ -1172,7 +1178,8 @@ local plugins = {
           -- format
           vim.keymap.set(
             'n',
-            '<F8>', -- 0.7
+            '<F8>',
+            -- 0.7
             -- vim.lsp.buf.formatting,
             -- 0.8
             vim.lsp.buf.format,
@@ -1600,6 +1607,34 @@ local plugins = {
     end,
   },
   {
+    'HiPhish/rainbow-delimiters.nvim',
+    url = 'https://gitlab.com/HiPhish/rainbow-delimiters.nvim',
+    cond = not_in_vscode,
+    config = function()
+      local rainbow_delimiters = require('rainbow-delimiters')
+
+      vim.g.rainbow_delimiters = {
+        strategy = {
+          [''] = rainbow_delimiters.strategy['global'],
+          vim = rainbow_delimiters.strategy['local'],
+        },
+        query = {
+          [''] = 'rainbow-delimiters',
+          lua = 'rainbow-blocks',
+        },
+        highlight = {
+          'RainbowDelimiterRed',
+          'RainbowDelimiterYellow',
+          'RainbowDelimiterBlue',
+          'RainbowDelimiterOrange',
+          'RainbowDelimiterGreen',
+          'RainbowDelimiterViolet',
+          'RainbowDelimiterCyan',
+        },
+      }
+    end,
+  },
+  {
     'simrat39/rust-tools.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-lua/plenary.nvim' }, { 'neovim/nvim-lspconfig' }, { 'mfussenegger/nvim-dap' } },
@@ -1723,10 +1758,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true,                   -- false will only do exact matching
+            fuzzy = true, -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true,    -- override the file sorter
-            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
+            override_file_sorter = true, -- override the file sorter
+            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {

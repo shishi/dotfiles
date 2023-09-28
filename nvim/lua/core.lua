@@ -22,6 +22,7 @@ vim.opt.signcolumn = 'yes'
 vim.opt.laststatus = 3
 vim.opt.cursorline = true
 vim.opt.winbar = '%F'
+vim.opt.termguicolors = true
 
 -- vim.opt.relativenumber = true
 -- if vim.g.vscode then
