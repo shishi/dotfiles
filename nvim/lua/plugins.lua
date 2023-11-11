@@ -1354,13 +1354,12 @@ local plugins = {
             on_attach = on_attach,
           })
         end,
-        -- ['ruby_ls'] = function()
-        --   lspconfig.ruby_ls.setup({
-        --     capabilitiies = capabilities,
-        --     on_attach = on_attach,
-        --     cmd = { 'bundle', 'exec', 'ruby-lsp' },
-        --   })
-        -- end,
+        ['ruby_ls'] = function()
+          lspconfig.ruby_ls.setup({
+            capabilitiies = capabilities,
+            on_attach = on_attach,
+          })
+        end,
         -- ['sqls'] = function()
         --   lspconfig.sqls.setup({
         --     capabilitiies = capabilities,
@@ -1388,6 +1387,10 @@ local plugins = {
 
       -- setting lsp which not under mason
       lspconfig.gopls.setup({
+        capabilitiies = capabilities,
+        on_attach = on_attach,
+      })
+      lspconfig.ruby_ls.setup({
         capabilitiies = capabilities,
         on_attach = on_attach,
       })
@@ -1618,6 +1621,7 @@ local plugins = {
   {
     'HiPhish/rainbow-delimiters.nvim',
     url = 'https://gitlab.com/HiPhish/rainbow-delimiters.nvim',
+    enabled = false,
     cond = not_in_vscode,
     config = function()
       local rainbow_delimiters = require('rainbow-delimiters')
