@@ -1513,10 +1513,6 @@ local plugins = {
         endwise = {
           enable = true,
         },
-        context_commentstring = {
-          enable = true,
-          enable_autocmd = false,
-        },
       })
     end,
   },
@@ -1552,8 +1548,11 @@ local plugins = {
   },
   {
     'JoosepAlviste/nvim-ts-context-commentstring',
-    dependencies = { { 'nvim-treesitter/nvim-treesitter' } },
-    config = function() end,
+    config = function()
+      require('ts_context_commentstring').setup({
+        enable_autocmd = false,
+      })
+    end,
   },
   {
     'nvim-tree/nvim-web-devicons',
