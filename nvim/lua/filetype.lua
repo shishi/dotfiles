@@ -9,3 +9,20 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
     -- vim.cmd('setlocal noexpandtab tabstop=4')
   end,
 })
+
+--ruby
+vim.api.nvim_create_augroup('ft_ruby', { clear = true })
+vim.api.nvim_create_autocmd({ 'FileType' }, {
+  group = 'ft_ruby',
+  pattern = { 'ruby', 'rb', 'Gemfile', 'Rakefile' },
+  callback = function()
+    vim.opt_local.expandtab = true
+    vim.opt_local.tabstop = 2
+    vim.api.nvim_create_user_command('FormatWithRubocop', function()
+      vim.cmd('!rubocop -A -f quiet --stderr %')
+    end, {})
+    vim.api.nvim_create_user_command('FormatWithRufo', function()
+      vim.cmd('!rufo %')
+    end, {})
+  end,
+})

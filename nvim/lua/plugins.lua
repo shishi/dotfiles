@@ -45,8 +45,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -350,6 +350,17 @@ local plugins = {
     end,
   },
   {
+    'lukas-reineke/lsp-format.nvim',
+    cond = not_in_vscode,
+    config = function()
+      require('lsp-format').setup({
+        -- ruby = {
+        --   order = { 'rubocop' },
+        -- }
+      })
+    end,
+  },
+  {
     'nvim-lualine/lualine.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
@@ -494,6 +505,7 @@ local plugins = {
           'lua_ls',
           'rust_analyzer',
           'ruby_ls',
+          'rubocop',
           'gopls',
           'vtsls',
         },
@@ -506,7 +518,7 @@ local plugins = {
     cond = not_in_vscode,
     config = function()
       require('mason').setup()
-      -- nvim --headless -c "MasonInstall eslint_d prettierd actionlint buf erb-lint markdownlint markuplint rubocop selene sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
+      -- nvim --headless -c "MasonInstall actionlint buf sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
     end,
   },
   {
@@ -539,15 +551,15 @@ local plugins = {
 
       require('mini.surround').setup({
         mappings = {
-          add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
-          delete = '<Leader>sd', -- Delete surrounding
-          find = '<Leader>sf', -- Find surrounding (to the right)
-          find_left = '<Leader>sF', -- Find surrounding (to the left)
-          highlight = '<Leader>sh', -- Highlight surrounding
-          replace = '<Leader>sr', -- Replace surrounding
+          add = '<Leader>sa',            -- Add surrounding in Normal and Visual modes
+          delete = '<Leader>sd',         -- Delete surrounding
+          find = '<Leader>sf',           -- Find surrounding (to the right)
+          find_left = '<Leader>sF',      -- Find surrounding (to the left)
+          highlight = '<Leader>sh',      -- Highlight surrounding
+          replace = '<Leader>sr',        -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-          suffix_last = 'l', -- Suffix to search with "prev" method
-          suffix_next = 'n', -- Suffix to search with "next" method
+          suffix_last = 'l',             -- Suffix to search with "prev" method
+          suffix_next = 'n',             -- Suffix to search with "next" method
         },
       })
     end,
@@ -663,7 +675,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false, -- enables an input dialog for inc-rename.nvim
+        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -1074,7 +1086,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight', on = { 'operator' } },
+          { name = 'lsp_document_highlight',  on = { 'operator' } },
         },
       })
     end,
@@ -1083,8 +1095,7 @@ local plugins = {
   {
     'neovim/nvim-lspconfig',
     cond = not_in_vscode,
-    dependencies = { { 'williamboman/mason-lspconfig.nvim', 'SmiteshP/nvim-navic', 'nanotee/sqls.nvim' } },
-    -- after = 'mason-lspconfig.nvim',
+    dependencies = { { 'williamboman/mason-lspconfig.nvim', 'SmiteshP/nvim-navic', 'lukas-reineke/lsp-format.nvim' } },
     event = { 'BufReadPre', 'BufNewFile' },
     config = function()
       -- lsp diagnostics setting
@@ -1122,7 +1133,7 @@ local plugins = {
         callback = function(args)
           local bufnr = args.buf
           -- local client = vim.lsp.get_client_by_id(args.data.client_id)
-          vim.api.nvim_buf_set_option(0, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+          -- vim.api.nvim_set_option_value(0, 'omnifunc', 'v:lua.vim.lsp.omnifunc')plug
 
           -- code definitions, references
           vim.keymap.set('n', 'gd', function()
@@ -1247,32 +1258,9 @@ local plugins = {
         end,
       })
 
-      -- format using only through efm, inspired this way from null-ls
-      local lsp_formatting = function(bufnr)
-        vim.lsp.buf.format({
-          filter = function(client)
-            -- apply whatever logic you want (in this example, we'll only use efm)
-            return client.name == 'efm'
-          end,
-          bufnr = bufnr,
-        })
-      end
-
-      -- if you want to set up formatting on save, you can use this as a callback
-      local augroup = vim.api.nvim_create_augroup('LspFormatting', {})
-
       -- add to your shared on_attach callback
       local on_attach = function(client, bufnr)
-        if client.supports_method('textDocument/formatting') then
-          vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-          vim.api.nvim_create_autocmd('BufWritePre', {
-            group = augroup,
-            buffer = bufnr,
-            callback = function()
-              lsp_formatting(bufnr)
-            end,
-          })
-        end
+        require('lsp-format').on_attach(client, bufnr)
 
         if client.server_capabilities.documentSymbolProvider then
           require('nvim-navic').attach(client, bufnr)
@@ -1305,8 +1293,19 @@ local plugins = {
           local eslint = require('efmls-configs.linters.eslint')
           local goimports = require('efmls-configs.formatters.goimports')
           local prettier = require('efmls-configs.formatters.prettier')
-          local rubocop = require('efmls-configs.linters.rubocop')
           -- local selene = require('efmls-configs.linters.selene')
+          local sqlfluff = {
+            prefix = 'sqlfluff',
+            lintCommand =
+            'sqlfluff lint --dialect ansi --format github-annotation-native --annotation-level warning --nocolor --disable-progress-bar ${INPUT}',
+            lintIgnoreExitCode = true,
+            lintStdin = false,
+            lintFormats = {
+              '::%totice title=SQLFluff,file=%f,line=%l,col=%c::%m',
+              '::%tarning title=SQLFluff,file=%f,line=%l,col=%c::%m',
+              '::%trror title=SQLFluff,file=%f,line=%l,col=%c::%m',
+            },
+          }
           local sql_formatter = require('efmls-configs.formatters.sql-formatter')
           local stylelint = require('efmls-configs.linters.stylelint')
           local stylua = require('efmls-configs.formatters.stylua')
@@ -1326,12 +1325,15 @@ local plugins = {
             html = { prettier },
             javascript = { eslint, prettier },
             javascriptreact = { eslint, prettier },
+            json = { prettier },
+            jsonc = { prettier },
             lua = { stylua },
+            markdown = { prettier },
             proto = { buf_l, buf_f },
-            ruby = { rubocop },
+            -- ruby = { rufo },
             scss = { stylelint, prettier },
             sh = { beautysh },
-            sql = { sql_formatter },
+            sql = { sqlfluff, sql_formatter },
             toml = { taplo },
             typescript = { eslint, prettier },
             typescriptreact = { eslint, prettier },
@@ -1412,18 +1414,6 @@ local plugins = {
                 -- },
               },
             },
-          })
-        end,
-        ['gopls'] = function()
-          lspconfig.gopls.setup({
-            capabilitiies = capabilities,
-            on_attach = on_attach,
-          })
-        end,
-        ['ruby_ls'] = function()
-          lspconfig.ruby_ls.setup({
-            capabilitiies = capabilities,
-            on_attach = on_attach,
           })
         end,
         -- ['sqls'] = function()
@@ -1555,7 +1545,6 @@ local plugins = {
     end,
     config = function()
       require('nvim-treesitter.configs').setup({
-        -- ensure_installed = { 'markdown', 'markdown_inline' },
         auto_install = true,
         highlight = {
           enable = true,
@@ -1836,10 +1825,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true, -- false will only do exact matching
+            fuzzy = true,                   -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true, -- override the file sorter
-            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
+            override_file_sorter = true,    -- override the file sorter
+            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
