@@ -178,6 +178,11 @@ local plugins = {
     end,
   },
   {
+    'creativenull/efmls-configs-nvim',
+    -- version = 'v1.x.x', -- version is optional, but recommended
+    dependencies = { 'neovim/nvim-lspconfig' },
+  },
+  {
     'ggandor/flit.nvim',
     cond = not_in_vscode,
     config = function()
@@ -310,31 +315,32 @@ local plugins = {
     main = 'ibl',
     cond = not_in_vscode,
     config = function()
-      local highlight = {
-        'RainbowRed',
-        'RainbowYellow',
-        'RainbowBlue',
-        'RainbowOrange',
-        'RainbowGreen',
-        'RainbowViolet',
-        'RainbowCyan',
-      }
-      local hooks = require('ibl.hooks')
-      -- create the highlight groups in the highlight setup hook, so they are reset
-      -- every time the colorscheme changes
-      hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
-        vim.api.nvim_set_hl(0, 'RainbowRed', { fg = '#E06C75' })
-        vim.api.nvim_set_hl(0, 'RainbowYellow', { fg = '#E5C07B' })
-        vim.api.nvim_set_hl(0, 'RainbowBlue', { fg = '#61AFEF' })
-        vim.api.nvim_set_hl(0, 'RainbowOrange', { fg = '#D19A66' })
-        vim.api.nvim_set_hl(0, 'RainbowGreen', { fg = '#98C379' })
-        vim.api.nvim_set_hl(0, 'RainbowViolet', { fg = '#C678DD' })
-        vim.api.nvim_set_hl(0, 'RainbowCyan', { fg = '#56B6C2' })
-      end)
-
-      require('ibl').setup({ scope = { highlight = highlight } })
-
-      hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
+      require('ibl').setup({})
+      -- local highlight = {
+      --   'RainbowRed',
+      --   'RainbowYellow',
+      --   'RainbowBlue',
+      --   'RainbowOrange',
+      --   'RainbowGreen',
+      --   'RainbowViolet',
+      --   'RainbowCyan',
+      -- }
+      -- local hooks = require('ibl.hooks')
+      -- -- create the highlight groups in the highlight setup hook, so they are reset
+      -- -- every time the colorscheme changes
+      -- hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
+      --   vim.api.nvim_set_hl(0, 'RainbowRed', { fg = '#E06C75' })
+      --   vim.api.nvim_set_hl(0, 'RainbowYellow', { fg = '#E5C07B' })
+      --   vim.api.nvim_set_hl(0, 'RainbowBlue', { fg = '#61AFEF' })
+      --   vim.api.nvim_set_hl(0, 'RainbowOrange', { fg = '#D19A66' })
+      --   vim.api.nvim_set_hl(0, 'RainbowGreen', { fg = '#98C379' })
+      --   vim.api.nvim_set_hl(0, 'RainbowViolet', { fg = '#C678DD' })
+      --   vim.api.nvim_set_hl(0, 'RainbowCyan', { fg = '#56B6C2' })
+      -- end)
+      --
+      -- require('ibl').setup({ scope = { highlight = highlight } })
+      --
+      -- hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
     end,
   },
   {
@@ -664,6 +670,7 @@ local plugins = {
   },
   {
     'jose-elias-alvarez/null-ls.nvim',
+    enabled = false,
     cond = not_in_vscode,
     dependencies = { { 'nvim-lua/plenary.nvim' } },
     config = function()
@@ -1240,11 +1247,12 @@ local plugins = {
         end,
       })
 
+      -- format using only through efm, inspired this way from null-ls
       local lsp_formatting = function(bufnr)
         vim.lsp.buf.format({
           filter = function(client)
-            -- apply whatever logic you want (in this example, we'll only use null-ls)
-            return client.name == 'null-ls'
+            -- apply whatever logic you want (in this example, we'll only use efm)
+            return client.name == 'efm'
           end,
           bufnr = bufnr,
         })
@@ -1289,6 +1297,64 @@ local plugins = {
         -- ['rust_analyzer'] = function()
         --   require('rust-tools').setup {}
         -- end
+        ['efm'] = function()
+          local actionlint = require('efmls-configs.linters.actionlint')
+          local beautysh = require('efmls-configs.formatters.beautysh')
+          local buf_f = require('efmls-configs.formatters.buf')
+          local buf_l = require('efmls-configs.linters.buf')
+          local eslint = require('efmls-configs.linters.eslint')
+          local goimports = require('efmls-configs.formatters.goimports')
+          local prettier = require('efmls-configs.formatters.prettier')
+          local rubocop = require('efmls-configs.linters.rubocop')
+          -- local selene = require('efmls-configs.linters.selene')
+          local sql_formatter = require('efmls-configs.formatters.sql-formatter')
+          local stylelint = require('efmls-configs.linters.stylelint')
+          local stylua = require('efmls-configs.formatters.stylua')
+          local taplo = require('efmls-configs.formatters.taplo')
+
+          -- native efm way
+          -- languages = {
+          --   lua = {
+          --     { formatCommand = 'lua-format -i', formatStdin = true },
+          --     { lintCommand = 'luacheck', lintFormats = { '%f:%l:%c: %m' } },
+          --   },
+          -- }
+
+          local languages = {
+            css = { stylelint, prettier },
+            go = { goimports },
+            html = { prettier },
+            javascript = { eslint, prettier },
+            javascriptreact = { eslint, prettier },
+            lua = { stylua },
+            proto = { buf_l, buf_f },
+            ruby = { rubocop },
+            scss = { stylelint, prettier },
+            sh = { beautysh },
+            sql = { sql_formatter },
+            toml = { taplo },
+            typescript = { eslint, prettier },
+            typescriptreact = { eslint, prettier },
+            yml = { actionlint, prettier },
+          }
+          local efmls_config = {
+            filetypes = vim.tbl_keys(languages),
+            init_options = {
+              documentFormatting = true,
+              documentRangeFormatting = true,
+            },
+            settings = {
+              rootMarkers = { '.git/' },
+              languages = languages,
+            },
+          }
+          lspconfig.efm.setup(vim.tbl_extend('force', efmls_config, {
+            -- Pass your custom lsp config below like on_attach and capabilities
+            --
+            -- on_attach = on_attach,
+            -- capabilities = capabilities,
+          }))
+        end,
         ['lua_ls'] = function()
           lspconfig.lua_ls.setup({
             capabilitiies = capabilities,

@@ -14,6 +14,7 @@
   "crates.nvim": { "branch": "main", "commit": "406295abeb7eedae3bcee3f0db690ada605c629c" },
   "diffview.nvim": { "branch": "main", "commit": "d38c1b5266850f77f75e006bcc26213684e1e141" },
   "dressing.nvim": { "branch": "master", "commit": "fe3071330a0720ce3695ac915820c8134b22d1b0" },
+  "efmls-configs-nvim": { "branch": "main", "commit": "f628a60ad482fdbc7d3bcc787c3cfe66813c8718" },
   "flit.nvim": { "branch": "main", "commit": "f4e9af572a62c808c8de214da672f2a115a98c35" },
   "friendly-snippets": { "branch": "main", "commit": "43727c2ff84240e55d4069ec3e6158d74cb534b6" },
   "gitsigns.nvim": { "branch": "main", "commit": "0ccd5fb2316b3f8d8b2f775bc31cae7bc6a77a55" },
