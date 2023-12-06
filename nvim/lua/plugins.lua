@@ -2054,6 +2054,7 @@ local plugins = {
   },
   {
     'ojroques/nvim-osc52',
+    enabled = false,
     cond = not_in_vscode,
     config = function()
       vim.keymap.set('n', '<leader>c', require('osc52').copy_operator, { expr = true })

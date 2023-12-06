@@ -100,6 +100,18 @@ if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe
     },
     cache_enable = 0,
   }
+elseif (vim.fn.getenv("SSH_TTY") ~= nil) then
+  vim.g.clipboard = {
+    name = 'OSC 52',
+    copy = {
+      ['+'] = require('vim.clipboard.osc52').copy,
+      ['*'] = require('vim.clipboard.osc52').copy,
+    },
+    paste = {
+      ['+'] = require('vim.clipboard.osc52').paste,
+      ['*'] = require('vim.clipboard.osc52').paste,
+    },
+  }
 end
 
 vim.opt.modeline = true
