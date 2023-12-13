@@ -23,6 +23,7 @@ local plugins = {
   },
   {
     'utilyre/barbecue.nvim',
+    enabled = false,
     cond = not_in_vscode,
     name = 'barbecue',
     version = '*',
@@ -365,6 +366,7 @@ local plugins = {
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
     config = function()
+      local navic = require("nvim-navic")
       require('lualine').setup({
         options = {
           icons_enabled = true,
@@ -413,26 +415,20 @@ local plugins = {
           lualine_z = {},
         },
         tabline = {},
-        -- winbar = {
-        --     lualine_a = {},
-        --     lualine_b = { {
-        --         'filename',
-        --         path = 1,
-        --     } },
-        --     lualine_c = {
-        --         {
-        --             function()
-        --               return navic.get_location()
-        --             end,
-        --             cond = function()
-        --               return navic.is_available()
-        --             end,
-        --         },
-        --     },
-        --     lualine_x = {},
-        --     lualine_y = {},
-        --     lualine_z = {},
-        -- },
+        winbar = {
+          lualine_a = {},
+          lualine_b = {},
+          lualine_c = {
+            -- {
+            --   "navic",
+            --   color_correction = nil,
+            --   navic_opts = nil
+            -- }
+          },
+          lualine_x = {},
+          lualine_y = {},
+          lualine_z = {},
+        },
         -- inactive_winbar = {
         --     lualine_a = {},
         --     lualine_b = { {
@@ -1262,9 +1258,9 @@ local plugins = {
       local on_attach = function(client, bufnr)
         require('lsp-format').on_attach(client, bufnr)
 
-        -- if client.server_capabilities.documentSymbolProvider then
-        --   require('nvim-navic').attach(client, bufnr)
-        -- end
+        if client.server_capabilities.documentSymbolProvider then
+          -- require('nvim-navic').attach(client, bufnr)
+        end
       end
 
       local lspconfig = require('lspconfig')
