@@ -384,11 +384,11 @@ local plugins = {
           ignore_focus = {},
           always_divide_middle = true,
           globalstatus = true,
-          refresh = {
-            statusline = 1000,
-            tabline = 1000,
-            winbar = 1000,
-          },
+          -- refresh = {
+          --   statusline = 1000,
+          --   tabline = 1000,
+          --   winbar = 1000,
+          -- },
         },
         sections = {
           lualine_a = { 'mode' },
@@ -1262,9 +1262,9 @@ local plugins = {
       local on_attach = function(client, bufnr)
         require('lsp-format').on_attach(client, bufnr)
 
-        if client.server_capabilities.documentSymbolProvider then
-          require('nvim-navic').attach(client, bufnr)
-        end
+        -- if client.server_capabilities.documentSymbolProvider then
+        --   require('nvim-navic').attach(client, bufnr)
+        -- end
       end
 
       local lspconfig = require('lspconfig')
@@ -1416,29 +1416,6 @@ local plugins = {
             },
           })
         end,
-        -- ['sqls'] = function()
-        --   lspconfig.sqls.setup({
-        --     capabilitiies = capabilities,
-        --     on_attach = function(client, bufnr)
-        --       navic.attach(client, bufnr)
-        --       require('sqls').on_attch(client, bufnr)
-        --     end,
-        --     settings = {
-        --       sqls = {
-        --         connections = {
-        --           -- {
-        --           --   driver = 'mysql',
-        --           --   dataSourceName = 'root:root@tcp(127.0.0.1:3306)/world',
-        --           -- },
-        --           {
-        --             driver = 'postgresql',
-        --             dataSourceName = 'host=localhost port=5432 user=postgres password=password dbname=memie_dev sslmode=disable',
-        --           },
-        --         },
-        --       },
-        --     },
-        --   })
-        -- end,
       })
 
       -- setting lsp which not under mason
