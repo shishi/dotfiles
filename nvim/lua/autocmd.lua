@@ -51,31 +51,6 @@ vim.api.nvim_create_autocmd({ 'FocusLost' }, {
   end,
 })
 
--- -- ruby
--- vim.api.nvim_create_augroup('ruby_autocmds', {
---   clear = true
--- })
--- vim.api.nvim_create_autocmd({'BufNewFile', 'BufRead'}, {
---   group = 'ruby_autocmds',
---   pattern = {'*.rb', '*.rbw', '*.gemspec', 'Gemfile*', 'config.ru', 'Rakefile', 'Vagrantfile'},
---   callback = function()
---     vim.opt_local.filetype = 'ruby'
---     vim.opt_local.tapstop = 2
---   end
--- })
-
--- json
-local augroup_json = vim.api.nvim_create_augroup('augroup_json', {
-  clear = true,
-})
-vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
-  group = augroup_json,
-  pattern = '*.json',
-  callback = function()
-    vim.opt_local.filetype = 'jsonc'
-  end,
-})
-
 -- Restore cursor position
 local augroup_restore_cursor = vim.api.nvim_create_augroup('augroup_restore_cursor', {})
 vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
@@ -85,3 +60,4 @@ vim.api.nvim_create_autocmd({ 'BufReadPost' }, {
     vim.api.nvim_exec('silent! normal! g`"zv', false)
   end,
 })
+

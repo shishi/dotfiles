@@ -14,7 +14,7 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
 vim.api.nvim_create_augroup('ft_ruby', { clear = true })
 vim.api.nvim_create_autocmd({ 'FileType' }, {
   group = 'ft_ruby',
-  pattern = { 'ruby', 'rb', 'Gemfile', 'Rakefile' },
+  pattern = { 'ruby', 'rb', 'rbw', 'gemspec', 'config.ru', 'Gemfile', 'Rakefile', 'Vagrantfile' },
   callback = function()
     vim.opt_local.expandtab = true
     vim.opt_local.tabstop = 2
@@ -24,5 +24,17 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
     vim.api.nvim_create_user_command('FormatWithRufo', function()
       vim.cmd('!rufo %')
     end, {})
+  end,
+})
+
+-- json
+vim.api.nvim_create_augroup('ft_json', { clear = true })
+vim.api.nvim_create_autocmd({ 'FileType' }, {
+  group = 'ft_json',
+  pattern = { 'json', 'jsonc' },
+  callback = function()
+    vim.opt_local.expandtab = true
+    vim.opt_local.tabstop = 2
+    vim.opt_local.filetype = 'jsonc'
   end,
 })
