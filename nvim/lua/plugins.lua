@@ -46,8 +46,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -355,9 +355,38 @@ local plugins = {
     cond = not_in_vscode,
     config = function()
       require('lsp-format').setup({
+        -- go = {
+        --   sync = true,
+        --   order = { 'null-ls' },
+        -- },
+        javascript = {
+          sync = true,
+          exclude = { 'eslint' },
+          order = { 'null-ls' },
+        },
+        javascriptreact = {
+          sync = true,
+          exclude = { 'eslint' },
+          order = { 'null-ls' },
+        },
+        lua = {
+          sync = true,
+          exclude = { 'lua-ls' },
+          order = { 'null-ls' },
+        },
         -- ruby = {
-        --   order = { 'rubocop' },
-        -- }
+        --   order = { 'null-ls' },
+        -- },
+        typescript = {
+          sync = true,
+          exclude = { 'eslint' },
+          order = { 'null-ls' },
+        },
+        typescriptreact = {
+          sync = true,
+          exclude = { 'eslint' },
+          order = { 'null-ls' },
+        },
       })
     end,
   },
@@ -366,7 +395,7 @@ local plugins = {
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
     config = function()
-      local navic = require("nvim-navic")
+      -- local navic = require('nvim-navic')
       require('lualine').setup({
         options = {
           icons_enabled = true,
@@ -498,6 +527,7 @@ local plugins = {
       require('mason-lspconfig').setup({
         ensure_installed = {
           -- lsp
+          'bash-language-server',
           'lua_ls',
           'rust_analyzer',
           'ruby_ls',
@@ -514,7 +544,7 @@ local plugins = {
     cond = not_in_vscode,
     config = function()
       require('mason').setup()
-      -- nvim --headless -c "MasonInstall actionlint buf sqlfluff stylelint yamllint beautysh goimports taplo" -c qall
+      -- nvim --headless -c "MasonInstall actionlint buf eslint-lsp sqlfluff stylelint yamllint shfmt goimports taplo" -c qall
     end,
   },
   {
@@ -547,15 +577,15 @@ local plugins = {
 
       require('mini.surround').setup({
         mappings = {
-          add = '<Leader>sa',            -- Add surrounding in Normal and Visual modes
-          delete = '<Leader>sd',         -- Delete surrounding
-          find = '<Leader>sf',           -- Find surrounding (to the right)
-          find_left = '<Leader>sF',      -- Find surrounding (to the left)
-          highlight = '<Leader>sh',      -- Highlight surrounding
-          replace = '<Leader>sr',        -- Replace surrounding
+          add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
+          delete = '<Leader>sd', -- Delete surrounding
+          find = '<Leader>sf', -- Find surrounding (to the right)
+          find_left = '<Leader>sF', -- Find surrounding (to the left)
+          highlight = '<Leader>sh', -- Highlight surrounding
+          replace = '<Leader>sr', -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-          suffix_last = 'l',             -- Suffix to search with "prev" method
-          suffix_next = 'n',             -- Suffix to search with "next" method
+          suffix_last = 'l', -- Suffix to search with "prev" method
+          suffix_next = 'n', -- Suffix to search with "next" method
         },
       })
     end,
@@ -671,108 +701,10 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
+        inc_rename = false, -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
-  },
-  {
-    'jose-elias-alvarez/null-ls.nvim',
-    enabled = false,
-    cond = not_in_vscode,
-    dependencies = { { 'nvim-lua/plenary.nvim' } },
-    config = function()
-      local augroup = vim.api.nvim_create_augroup('LspFormatting', {})
-      local null_ls = require('null-ls')
-      null_ls.setup({
-        -- LuaFormatter off
-        -- stylua: ignore start
-        sources = {
-          -- code actions
-          null_ls.builtins.code_actions.eslint,
-          -- null_ls.builtins.code_actions.eslint_d,
-          null_ls.builtins.code_actions.gitrebase,
-          -- null_ls.builtins.code_actions.gitsigns,
-          -- null_ls.builtins.code_actions.refactoring,
-          -- null_ls.builtins.code_actions.xo,
-          -- completion
-          -- null_ls.builtins.completion.spell,
-          -- null_ls.builtins.completion.tags,
-          -- diagnostics
-          null_ls.builtins.diagnostics.actionlint,
-          null_ls.builtins.diagnostics.buf,
-          null_ls.builtins.diagnostics.erb_lint,
-          -- null_ls.builtins.diagnostics.eslint,
-          null_ls.builtins.diagnostics.eslint_d,
-          null_ls.builtins.diagnostics.fish,
-          -- null_ls.builtins.diagnostics.haml_lint,
-          null_ls.builtins.diagnostics.markdownlint,
-          null_ls.builtins.diagnostics.markuplint,
-          -- null_ls.builtins.diagnostics.mdl,
-          null_ls.builtins.diagnostics.rubocop,
-          null_ls.builtins.diagnostics.selene,
-          null_ls.builtins.diagnostics.sqlfluff.with({
-            extra_args = { '--dialect', 'postgres' },
-          }),
-          -- null_ls.builtins.diagnostics.tidy,
-          null_ls.builtins.diagnostics.stylelint,
-          -- null_ls.builtins.diagnostics.todo_comments,
-          null_ls.builtins.diagnostics.trail_space,
-          -- null_ls.builtins.diagnostics.xo,
-          null_ls.builtins.diagnostics.yamllint,
-          -- null_ls.builtins.diagnostics.zsh,
-          -- formatting
-          null_ls.builtins.formatting.beautysh,
-          null_ls.builtins.formatting.buf,
-          -- null_ls.builtins.formatting.deno_fmt,
-          null_ls.builtins.formatting.erb_lint,
-          -- null_ls.builtins.formatting.eslint,
-          null_ls.builtins.formatting.eslint_d,
-          null_ls.builtins.formatting.fish_indent,
-          null_ls.builtins.formatting.gofmt,
-          null_ls.builtins.formatting.goimports,
-          null_ls.builtins.formatting.prettier,
-          -- null_ls.builtins.formatting.prettierd,
-          -- null_ls.builtins.formatting.prismaFmt,
-          null_ls.builtins.formatting.rubocop,
-          null_ls.builtins.formatting.rustfmt,
-          -- null_ls.builtins.formatting.sql_formatter,
-          null_ls.builtins.formatting.sqlfluff.with({
-            extra_args = { '--dialect', 'postgres' },
-          }),
-          null_ls.builtins.formatting.stylelint,
-          null_ls.builtins.formatting.stylua,
-          null_ls.builtins.formatting.taplo,
-          -- null_ls.builtins.formatting.tidy,
-          -- null_ls.builtins.formatting.trim_newlines,
-          -- null_ls.builtins.formatting.trim_whitespace,
-          -- hover
-          null_ls.builtins.hover.printenv,
-        },
-        -- stylua: ignore end
-        -- LuaFormatter on
-        -- you can reuse a shared lspconfig on_attach callback here
-        on_attach = function(client, bufnr)
-          if client.supports_method('textDocument/formatting') then
-            vim.api.nvim_clear_autocmds({
-              group = augroup,
-              buffer = bufnr,
-            })
-            vim.api.nvim_create_autocmd('BufWritePre', {
-              group = augroup,
-              buffer = bufnr,
-              callback = function()
-                -- on 0.8, you should use vim.lsp.buf.format({ bufnr = bufnr }) instead
-                -- vim.lsp.buf.formatting_sync()
-                vim.lsp.buf.format({
-                  bufnr = bufnr,
-                })
-              end,
-            })
-          end
-        end,
-      })
-    end,
   },
   {
     'hrsh7th/nvim-cmp',
@@ -1082,7 +1014,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight',  on = { 'operator' } },
+          { name = 'lsp_document_highlight', on = { 'operator' } },
         },
       })
     end,
@@ -1257,10 +1189,9 @@ local plugins = {
       -- add to your shared on_attach callback
       local on_attach = function(client, bufnr)
         require('lsp-format').on_attach(client, bufnr)
-
-        if client.server_capabilities.documentSymbolProvider then
-          -- require('nvim-navic').attach(client, bufnr)
-        end
+        -- if client.server_capabilities.documentSymbolProvider then
+        --   require('nvim-navic').attach(client, bufnr)
+        -- end
       end
 
       local lspconfig = require('lspconfig')
@@ -1281,78 +1212,78 @@ local plugins = {
         -- ['rust_analyzer'] = function()
         --   require('rust-tools').setup {}
         -- end
-        ['efm'] = function()
-          local actionlint = require('efmls-configs.linters.actionlint')
-          local beautysh = require('efmls-configs.formatters.beautysh')
-          local buf_f = require('efmls-configs.formatters.buf')
-          local buf_l = require('efmls-configs.linters.buf')
-          local eslint = require('efmls-configs.linters.eslint')
-          local goimports = require('efmls-configs.formatters.goimports')
-          local prettier = require('efmls-configs.formatters.prettier')
-          -- local selene = require('efmls-configs.linters.selene')
-          local sqlfluff = {
-            prefix = 'sqlfluff',
-            lintCommand =
-            'sqlfluff lint --dialect ansi --format github-annotation-native --annotation-level warning --nocolor --disable-progress-bar ${INPUT}',
-            lintIgnoreExitCode = true,
-            lintStdin = false,
-            lintFormats = {
-              '::%totice title=SQLFluff,file=%f,line=%l,col=%c::%m',
-              '::%tarning title=SQLFluff,file=%f,line=%l,col=%c::%m',
-              '::%trror title=SQLFluff,file=%f,line=%l,col=%c::%m',
-            },
-          }
-          local sql_formatter = require('efmls-configs.formatters.sql-formatter')
-          local stylelint = require('efmls-configs.linters.stylelint')
-          local stylua = require('efmls-configs.formatters.stylua')
-          local taplo = require('efmls-configs.formatters.taplo')
-
-          -- native efm way
-          -- languages = {
-          --   lua = {
-          --     { formatCommand = 'lua-format -i', formatStdin = true },
-          --     { lintCommand = 'luacheck', lintFormats = { '%f:%l:%c: %m' } },
-          --   },
-          -- }
-
-          local languages = {
-            css = { stylelint, prettier },
-            go = { goimports },
-            html = { prettier },
-            javascript = { eslint, prettier },
-            javascriptreact = { eslint, prettier },
-            json = { prettier },
-            jsonc = { prettier },
-            lua = { stylua },
-            markdown = { prettier },
-            proto = { buf_l, buf_f },
-            -- ruby = { rufo },
-            scss = { stylelint, prettier },
-            sh = { beautysh },
-            sql = { sqlfluff, sql_formatter },
-            toml = { taplo },
-            typescript = { eslint, prettier },
-            typescriptreact = { eslint, prettier },
-            yml = { actionlint, prettier },
-          }
-          local efmls_config = {
-            filetypes = vim.tbl_keys(languages),
-            init_options = {
-              documentFormatting = true,
-              documentRangeFormatting = true,
-            },
-            settings = {
-              rootMarkers = { '.git/' },
-              languages = languages,
-            },
-          }
-          lspconfig.efm.setup(vim.tbl_extend('force', efmls_config, {
-            -- Pass your custom lsp config below like on_attach and capabilities
-            --
-            -- on_attach = on_attach,
-            -- capabilities = capabilities,
-          }))
-        end,
+        -- ['efm'] = function()
+        --   local actionlint = require('efmls-configs.linters.actionlint')
+        --   local beautysh = require('efmls-configs.formatters.beautysh')
+        --   local buf_f = require('efmls-configs.formatters.buf')
+        --   local buf_l = require('efmls-configs.linters.buf')
+        --   local eslint = require('efmls-configs.linters.eslint')
+        --   local goimports = require('efmls-configs.formatters.goimports')
+        --   local prettier = require('efmls-configs.formatters.prettier')
+        --   -- local selene = require('efmls-configs.linters.selene')
+        --   local sqlfluff = {
+        --     prefix = 'sqlfluff',
+        --     lintCommand =
+        --     'sqlfluff lint --dialect ansi --format github-annotation-native --annotation-level warning --nocolor --disable-progress-bar ${INPUT}',
+        --     lintIgnoreExitCode = true,
+        --     lintStdin = false,
+        --     lintFormats = {
+        --       '::%totice title=SQLFluff,file=%f,line=%l,col=%c::%m',
+        --       '::%tarning title=SQLFluff,file=%f,line=%l,col=%c::%m',
+        --       '::%trror title=SQLFluff,file=%f,line=%l,col=%c::%m',
+        --     },
+        --   }
+        --   local sql_formatter = require('efmls-configs.formatters.sql-formatter')
+        --   local stylelint = require('efmls-configs.linters.stylelint')
+        --   local stylua = require('efmls-configs.formatters.stylua')
+        --   local taplo = require('efmls-configs.formatters.taplo')
+        --
+        --   -- native efm way
+        --   -- languages = {
+        --   --   lua = {
+        --   --     { formatCommand = 'lua-format -i', formatStdin = true },
+        --   --     { lintCommand = 'luacheck', lintFormats = { '%f:%l:%c: %m' } },
+        --   --   },
+        --   -- }
+        --
+        --   local languages = {
+        --     css = { stylelint, prettier },
+        --     go = { goimports },
+        --     html = { prettier },
+        --     javascript = { eslint, prettier },
+        --     javascriptreact = { eslint, prettier },
+        --     json = { prettier },
+        --     jsonc = { prettier },
+        --     lua = { stylua },
+        --     markdown = { prettier },
+        --     proto = { buf_l, buf_f },
+        --     -- ruby = { rufo },
+        --     scss = { stylelint, prettier },
+        --     sh = { beautysh },
+        --     sql = { sqlfluff, sql_formatter },
+        --     toml = { taplo },
+        --     typescript = { eslint, prettier },
+        --     typescriptreact = { eslint, prettier },
+        --     yml = { actionlint, prettier },
+        --   }
+        --   local efmls_config = {
+        --     filetypes = vim.tbl_keys(languages),
+        --     init_options = {
+        --       documentFormatting = true,
+        --       documentRangeFormatting = true,
+        --     },
+        --     settings = {
+        --       rootMarkers = { '.git/' },
+        --       languages = languages,
+        --     },
+        --   }
+        --   lspconfig.efm.setup(vim.tbl_extend('force', efmls_config, {
+        --     -- Pass your custom lsp config below like on_attach and capabilities
+        --     --
+        --     -- on_attach = on_attach,
+        --     -- capabilities = capabilities,
+        --   }))
+        -- end,
         ['lua_ls'] = function()
           lspconfig.lua_ls.setup({
             capabilitiies = capabilities,
@@ -1427,6 +1358,7 @@ local plugins = {
   },
   {
     'SmiteshP/nvim-navic',
+    enable = false,
     cond = not_in_vscode,
     dependencies = { 'neovim/nvim-lspconfig' },
     config = function()
@@ -1585,6 +1517,88 @@ local plugins = {
   {
     'nvim-tree/nvim-web-devicons',
     cond = not_in_vscode,
+  },
+  {
+    'nvimtools/none-ls.nvim',
+    cond = not_in_vscode,
+    dependencies = { { 'nvim-lua/plenary.nvim' } },
+    config = function()
+      local lsp_formatting = function(bufnr)
+        vim.lsp.buf.format({
+          -- filter = function(client)
+          -- see lsp-format in my config
+          -- apply whatever logic you want (in this example, we'll only use null-ls)
+          -- return client.name == "null-ls"
+          -- end,
+          bufnr = bufnr,
+        })
+      end
+      local augroup = vim.api.nvim_create_augroup('LspFormatting', {})
+      local null_ls = require('null-ls')
+
+      null_ls.setup({
+        -- LuaFormatter off
+        -- stylua: ignore start
+        sources = {
+          -- code actions
+          -- null_ls.builtins.code_actions.gitrebase,
+          -- null_ls.builtins.code_actions.gitsigns,
+          -- diagnostics
+          null_ls.builtins.diagnostics.actionlint,
+          null_ls.builtins.diagnostics.buf,
+          null_ls.builtins.diagnostics.erb_lint,
+          null_ls.builtins.diagnostics.fish,
+          -- null_ls.builtins.diagnostics.haml_lint,
+          null_ls.builtins.diagnostics.markdownlint,
+          null_ls.builtins.diagnostics.markuplint,
+          -- null_ls.builtins.diagnostics.mdl,
+          null_ls.builtins.diagnostics.rubocop,
+          null_ls.builtins.diagnostics.selene,
+          null_ls.builtins.diagnostics.sqlfluff.with({
+            extra_args = { '--dialect', 'postgres' },
+          }),
+          -- null_ls.builtins.diagnostics.tidy,
+          null_ls.builtins.diagnostics.stylelint,
+          null_ls.builtins.diagnostics.todo_comments,
+          null_ls.builtins.diagnostics.trail_space,
+          null_ls.builtins.diagnostics.yamllint,
+          null_ls.builtins.diagnostics.zsh,
+          -- formatting
+          null_ls.builtins.formatting.buf,
+          null_ls.builtins.formatting.erb_lint,
+          null_ls.builtins.formatting.fish_indent,
+          null_ls.builtins.formatting.gofmt,
+          null_ls.builtins.formatting.goimports,
+          null_ls.builtins.formatting.prettier,
+          -- null_ls.builtins.formatting.prismaFmt,
+          null_ls.builtins.formatting.rubocop,
+          -- null_ls.builtins.formatting.sql_formatter,
+          null_ls.builtins.formatting.sqlfluff.with({
+            extra_args = { '--dialect', 'postgres' },
+          }),
+          null_ls.builtins.formatting.stylelint,
+          null_ls.builtins.formatting.stylua,
+          -- null_ls.builtins.formatting.tidy,
+          -- hover
+          null_ls.builtins.hover.printenv,
+        },
+        -- stylua: ignore end
+        -- LuaFormatter on
+        -- you can reuse a shared lspconfig on_attach callback here
+        on_attach = function(client, bufnr)
+          if client.supports_method('textDocument/formatting') then
+            vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+            vim.api.nvim_create_autocmd('BufWritePre', {
+              group = augroup,
+              buffer = bufnr,
+              callback = function()
+                lsp_formatting(bufnr)
+              end,
+            })
+          end
+        end,
+      })
+    end,
   },
   {
     'folke/persistence.nvim',
@@ -1798,10 +1812,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true,                   -- false will only do exact matching
+            fuzzy = true, -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true,    -- override the file sorter
-            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
+            override_file_sorter = true, -- override the file sorter
+            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
