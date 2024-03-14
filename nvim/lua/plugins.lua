@@ -527,7 +527,7 @@ local plugins = {
       require('mason-lspconfig').setup({
         ensure_installed = {
           -- lsp
-          'bash-language-server',
+          'bashls',
           'lua_ls',
           'rust_analyzer',
           'ruby_ls',
