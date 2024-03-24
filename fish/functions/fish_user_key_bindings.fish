@@ -7,9 +7,10 @@ function fish_user_key_bindings
 
     fish_vi_key_bindings
 
-    if test "$__fish_active_key_bindings" = fish_vi_key_bindings
-        bind -M insert -m default jj force-repaint
-    end
+    # use jj to escape from insert mode
+    # if test "$__fish_active_key_bindings" = fish_vi_key_bindings
+    #     bind -M insert -m default jj force-repaint
+    # end
 
     # from ghq_key_bindings.fish
     bind \cg ghq_repository_search
