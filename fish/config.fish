@@ -93,7 +93,7 @@ if test -f ~/.cask/bin/cask
     set -x PATH ~/.cask/bin $PATH
 end
 
-# rust
+# rust tools
 if test -d ~/.cargo/bin
     set -x PATH ~/.cargo/bin $PATH
     set -x CARGO_NET_GIT_FETCH_WITH_CLI true
