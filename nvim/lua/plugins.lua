@@ -1401,6 +1401,7 @@ local plugins = {
   },
   {
     'rcarriga/nvim-notify',
+    cond = not_in_vscode,
     config = function()
       require('notify').setup({
         background_colour = '#000000',
