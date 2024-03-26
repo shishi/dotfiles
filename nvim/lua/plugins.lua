@@ -932,7 +932,7 @@ local plugins = {
   {
     'rcarriga/nvim-dap-ui',
     cond = not_in_vscode,
-    dependencies = { 'mfussenegger/nvim-dap' },
+    dependencies = { 'mfussenegger/nvim-dap', 'nvim-neotest/nvim-nio' },
     lazy = true,
     config = function()
       require('dapui').setup({})
@@ -1394,6 +1394,10 @@ local plugins = {
       -- vim.api.nvim_set_hl(0, 'NavicText', { default = true, bg = '#000000', fg = '#ffffff' })
       -- vim.api.nvim_set_hl(0, 'NavicSeparator', { default = true, bg = '#000000', fg = '#ffffff' })
     end,
+  },
+  {
+    'nvim-neotest/nvim-nio',
+    cond = not_in_vscode,
   },
   {
     'rcarriga/nvim-notify',
