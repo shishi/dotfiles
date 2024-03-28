@@ -100,18 +100,6 @@ local plugins = {
     end,
   },
   {
-    'numToStr/Comment.nvim',
-    enabled = false,
-    dependencies = { { 'JoosepAlviste/nvim-ts-context-commentstring' } },
-    config = function()
-      require('Comment').setup({
-        pre_hook = require('ts_context_commentstring.integrations.comment_nvim').create_pre_hook(),
-      })
-      local ft = require('Comment.ft')
-      ft.set('sh', '#%s')
-    end,
-  },
-  {
     'zbirenbaum/copilot-cmp',
     dependencies = { 'zbirenbaum/copilot.lua' },
     cond = not_in_vscode,
@@ -184,7 +172,22 @@ local plugins = {
     dependencies = { 'neovim/nvim-lspconfig' },
   },
   {
+    'folke/flash.nvim',
+    event = 'VeryLazy',
+    --- @type Flash.Config
+    opts = {},
+    -- stylua: ignore
+    keys = {
+      { "s",     mode = { "n", "x", "o" }, function() require("flash").jump() end,              desc = "Flash" },
+      { "S",     mode = { "n", "x", "o" }, function() require("flash").treesitter() end,        desc = "Flash Treesitter" },
+      { "r",     mode = "o",               function() require("flash").remote() end,            desc = "Remote Flash" },
+      { "R",     mode = { "o", "x" },      function() require("flash").treesitter_search() end, desc = "Treesitter Search" },
+      { "<c-s>", mode = { "c" },           function() require("flash").toggle() end,            desc = "Toggle Flash Search" },
+    },
+  },
+  {
     'ggandor/flit.nvim',
+    enabled = false,
     cond = not_in_vscode,
     config = function()
       require('flit').setup({})
@@ -346,6 +349,7 @@ local plugins = {
   },
   {
     'ggandor/leap.nvim',
+    enabled = false,
     config = function()
       require('leap').add_default_mappings()
     end,
@@ -1438,14 +1442,6 @@ local plugins = {
     },
   },
   {
-    'kylechui/nvim-surround',
-    version = '*', -- Use for stability; omit to use `main` branch for the latest features
-    enabled = false,
-    config = function()
-      require('nvim-surround').setup({})
-    end,
-  },
-  {
     'nvim-treesitter/nvim-treesitter',
     -- enabled = false,
     build = function()
@@ -1484,14 +1480,6 @@ local plugins = {
   {
     'MunifTanjim/nui.nvim',
     lazy = true,
-  },
-  {
-    'gen740/SmoothCursor.nvim',
-    enabled = false,
-    cond = not_in_vscode,
-    config = function()
-      require('smoothcursor').setup({})
-    end,
   },
   {
     'kevinhwang91/nvim-bqf',
@@ -1760,15 +1748,6 @@ local plugins = {
     end,
   },
   {
-    'nvim-telescope/telescope-ui-select.nvim',
-    enabled = false,
-    cond = not_in_vscode,
-    dependencies = { { 'nvim-telescope/telescope.nvim' } },
-    config = function()
-      require('telescope').load_extension('ui-select')
-    end,
-  },
-  {
     'nvim-telescope/telescope.nvim',
     -- version = '0.1.0',
     branch = '0.1.x',
@@ -2024,14 +2003,6 @@ local plugins = {
   {
     'mbbill/undotree',
     cond = not_in_vscode,
-  },
-  {
-    'RRethy/vim-illuminate',
-    cond = not_in_vscode,
-    enabled = false,
-    config = function()
-      require('illuminate').configure({})
-    end,
   },
   {
     'andymass/vim-matchup',
