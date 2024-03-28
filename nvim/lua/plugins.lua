@@ -46,8 +46,8 @@ local plugins = {
       require('bufferline').setup({
         options = {
           mode = 'buffers',
-          close_command = 'bp|bd #',        -- can be a string | function, see "Mouse actions"
-          right_mouse_command = 'bp|bd #',  -- can be a string | function, see "Mouse actions"
+          close_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
+          right_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           left_mouse_command = 'buffer %d', -- can be a string | function, see "Mouse actions"
           middle_mouse_command = 'bp|bd #', -- can be a string | function, see "Mouse actions"
           show_tab_indicators = true,
@@ -429,6 +429,15 @@ local plugins = {
     end,
   },
   {
+    'ray-x/lsp_signature.nvim',
+    enabled = false,
+    event = 'VeryLazy',
+    opts = {},
+    config = function(_, opts)
+      require('lsp_signature').setup(opts)
+    end,
+  },
+  {
     'nvim-lualine/lualine.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-tree/nvim-web-devicons', 'SmiteshP/nvim-navic' } },
@@ -615,15 +624,15 @@ local plugins = {
 
       require('mini.surround').setup({
         mappings = {
-          add = '<Leader>sa',            -- Add surrounding in Normal and Visual modes
-          delete = '<Leader>sd',         -- Delete surrounding
-          find = '<Leader>sf',           -- Find surrounding (to the right)
-          find_left = '<Leader>sF',      -- Find surrounding (to the left)
-          highlight = '<Leader>sh',      -- Highlight surrounding
-          replace = '<Leader>sr',        -- Replace surrounding
+          add = '<Leader>sa', -- Add surrounding in Normal and Visual modes
+          delete = '<Leader>sd', -- Delete surrounding
+          find = '<Leader>sf', -- Find surrounding (to the right)
+          find_left = '<Leader>sF', -- Find surrounding (to the left)
+          highlight = '<Leader>sh', -- Highlight surrounding
+          replace = '<Leader>sr', -- Replace surrounding
           update_n_lines = '<Leader>sn', -- Update `n_lines`
-          suffix_last = 'l',             -- Suffix to search with "prev" method
-          suffix_next = 'n',             -- Suffix to search with "next" method
+          suffix_last = 'l', -- Suffix to search with "prev" method
+          suffix_next = 'n', -- Suffix to search with "next" method
         },
       })
     end,
@@ -739,7 +748,7 @@ local plugins = {
         bottom_search = false,
         command_palette = true,
         long_message_to_split = true,
-        inc_rename = false,     -- enables an input dialog for inc-rename.nvim
+        inc_rename = false, -- enables an input dialog for inc-rename.nvim
         lsp_doc_border = false, -- add a border to hover docs and signature help
       },
     },
@@ -1052,7 +1061,7 @@ local plugins = {
       require('linkedit').setup({
         sources = {
           { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight',  on = { 'operator' } },
+          { name = 'lsp_document_highlight', on = { 'operator' } },
         },
       })
     end,
@@ -1739,6 +1748,26 @@ local plugins = {
     end,
   },
   {
+    'danielfalk/smart-open.nvim',
+    branch = '0.2.x',
+    config = function()
+      require('telescope').load_extension('smart_open')
+      vim.keymap.set('n', '<C-p>', function()
+        require('telescope').extensions.smart_open.smart_open()
+      end, {
+        desc = 'telescope file browser',
+      })
+    end,
+    dependencies = {
+      { 'nvim-telescope/telescope.nvim' },
+      { 'kkharji/sqlite.lua' },
+      -- Only required if using match_algorithm fzf
+      -- { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
+      -- Optional.  If installed, native fzy will be used when match_algorithm is fzy
+      { 'nvim-telescope/telescope-fzy-native.nvim' },
+    },
+  },
+  {
     'nvim-telescope/telescope-file-browser.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-telescope/telescope.nvim' } },
@@ -1830,10 +1859,10 @@ local plugins = {
         },
         extensions = {
           fzf = {
-            fuzzy = true,                   -- false will only do exact matching
+            fuzzy = true, -- false will only do exact matching
             override_generic_sorter = true, -- override the generic sorter
-            override_file_sorter = true,    -- override the file sorter
-            case_mode = 'smart_case',       -- or "ignore_case" or "respect_case"
+            override_file_sorter = true, -- override the file sorter
+            case_mode = 'smart_case', -- or "ignore_case" or "respect_case"
             -- the default case_mode is "smart_case"
           },
           live_grep_args = {
@@ -1859,7 +1888,7 @@ local plugins = {
       end, {
         desc = 'telescope help_tags',
       })
-      vim.keymap.set('n', '<C-p>', function()
+      vim.keymap.set('n', '<C-k>f', function()
         require('telescope.builtin').find_files()
       end, {
         desc = 'telescope find files',
