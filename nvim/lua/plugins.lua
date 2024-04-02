@@ -127,7 +127,9 @@ local plugins = {
             dismiss = '<C-M-]>',
           },
         },
-        panel = { enabled = false },
+        panel = {
+          enabled = false,
+        },
       })
     end,
   },
@@ -192,8 +194,7 @@ local plugins = {
           require('flash').treesitter()
         end,
         desc = 'Flash Treesitter',
-      },
-      -- {
+      }, -- {
       --   'r',
       --   mode = 'o',
       --   function()
@@ -339,7 +340,9 @@ local plugins = {
           autocmd ColorScheme gruvbox-material highlight DiagnosticSign ctermbg=235 guibg=#282828
         augroup END
       ]],
-        { output = false }
+        {
+          output = false,
+        }
       )
       vim.g.gruvbox_material_diagnostic_text_highlight = 1
       vim.g.gruvbox_material_diagnostic_line_highlight = 1
@@ -572,8 +575,7 @@ local plugins = {
     dependencies = { { 'williamboman/mason.nvim' } },
     config = function()
       require('mason-lspconfig').setup({
-        ensure_installed = {
-          -- lsp
+        ensure_installed = { -- lsp
           'bashls',
           'lua_ls',
           'rust_analyzer',
@@ -613,10 +615,22 @@ local plugins = {
       hipatterns.setup({
         highlighters = {
           -- Highlight standalone 'FIXME', 'HACK', 'TODO', 'NOTE'
-          fixme = { pattern = '%f[%w]()FIXME()%f[%W]', group = 'MiniHipatternsFixme' },
-          hack = { pattern = '%f[%w]()HACK()%f[%W]', group = 'MiniHipatternsHack' },
-          todo = { pattern = '%f[%w]()TODO()%f[%W]', group = 'MiniHipatternsTodo' },
-          note = { pattern = '%f[%w]()NOTE()%f[%W]', group = 'MiniHipatternsNote' },
+          fixme = {
+            pattern = '%f[%w]()FIXME()%f[%W]',
+            group = 'MiniHipatternsFixme',
+          },
+          hack = {
+            pattern = '%f[%w]()HACK()%f[%W]',
+            group = 'MiniHipatternsHack',
+          },
+          todo = {
+            pattern = '%f[%w]()TODO()%f[%W]',
+            group = 'MiniHipatternsTodo',
+          },
+          note = {
+            pattern = '%f[%w]()NOTE()%f[%W]',
+            group = 'MiniHipatternsNote',
+          },
           -- Highlight hex color strings (`#rrggbb`) using that color
           hex_color = hipatterns.gen_highlighter.hex_color(),
         },
@@ -640,11 +654,7 @@ local plugins = {
   {
     'nvim-neo-tree/neo-tree.nvim',
     branch = 'v3.x',
-    dependencies = {
-      'nvim-lua/plenary.nvim',
-      'nvim-tree/nvim-web-devicons',
-      'MunifTanjim/nui.nvim',
-    },
+    dependencies = { 'nvim-lua/plenary.nvim', 'nvim-tree/nvim-web-devicons', 'MunifTanjim/nui.nvim' },
     cond = not_in_vscode,
     cmd = 'Neotree',
     deactivate = function()
@@ -724,13 +734,15 @@ local plugins = {
     dependencies = {
       { 'nvim-lua/plenary.nvim' },
       { 'nvim-telescope/telescope.nvim' },
-      { 'sindrets/diffview.nvim' },
-      -- {'ibhagwan/fzf-lua'},
+      { 'sindrets/diffview.nvim' }, -- {'ibhagwan/fzf-lua'},
     },
     config = true,
-    keys = {
-      { '<A-g>', '<cmd>Neogit<cr>', desc = 'neogit', mode = 'n' },
-    },
+    keys = { {
+      '<A-g>',
+      '<cmd>Neogit<cr>',
+      desc = 'neogit',
+      mode = 'n',
+    } },
   },
   {
     'folke/noice.nvim',
@@ -1060,13 +1072,17 @@ local plugins = {
     config = function()
       require('linkedit').setup({
         sources = {
-          { name = 'lsp_linked_editing_range' },
-          { name = 'lsp_document_highlight', on = { 'operator' } },
+          {
+            name = 'lsp_linked_editing_range',
+          },
+          {
+            name = 'lsp_document_highlight',
+            on = { 'operator' },
+          },
         },
       })
     end,
   },
-
   {
     'neovim/nvim-lspconfig',
     cond = not_in_vscode,
@@ -1185,8 +1201,7 @@ local plugins = {
           -- format
           vim.keymap.set(
             'n',
-            '<F8>',
-            -- 0.7
+            '<F8>', -- 0.7
             -- vim.lsp.buf.formatting,
             -- 0.8
             vim.lsp.buf.format,
@@ -1465,7 +1480,10 @@ local plugins = {
       {
         '<leader>un',
         function()
-          require('notify').dismiss({ silent = true, pending = true })
+          require('notify').dismiss({
+            silent = true,
+            pending = true,
+          })
         end,
         desc = 'Delete all Notifications',
       },
@@ -1623,7 +1641,10 @@ local plugins = {
         -- you can reuse a shared lspconfig on_attach callback here
         on_attach = function(client, bufnr)
           if client.supports_method('textDocument/formatting') then
-            vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+            vim.api.nvim_clear_autocmds({
+              group = augroup,
+              buffer = bufnr,
+            })
             vim.api.nvim_create_autocmd('BufWritePre', {
               group = augroup,
               buffer = bufnr,
@@ -1639,7 +1660,9 @@ local plugins = {
   {
     'folke/persistence.nvim',
     event = 'BufReadPre',
-    opts = { options = { 'buffers', 'curdir', 'tabpages', 'winsize', 'help' } },
+    opts = {
+      options = { 'buffers', 'curdir', 'tabpages', 'winsize', 'help' },
+    },
     keys = {
       {
         '<Leader>ps',
@@ -1651,7 +1674,9 @@ local plugins = {
       {
         '<Leader>pl',
         function()
-          require('persistence').load({ last = true })
+          require('persistence').load({
+            last = true,
+          })
         end,
         desc = 'Restore Last Session',
       },
@@ -1671,15 +1696,7 @@ local plugins = {
     config = function()
       require('project_nvim').setup({
         detection_methods = { 'pattern', 'lsp' },
-        patterns = {
-          '.git',
-          '_darcs',
-          '.hg',
-          '.bzr',
-          '.svn',
-          'Makefile',
-          'package.json',
-        },
+        patterns = { '.git', '_darcs', '.hg', '.bzr', '.svn', 'Makefile', 'package.json' },
         exclude_dirs = { '~/', '/mnt/c/Users/shishi/scoop/*' },
         show_hidden = true,
         silent_chdir = false,
@@ -1818,9 +1835,7 @@ local plugins = {
     dependencies = {
       { 'nvim-tree/nvim-web-devicons' },
       { 'nvim-lua/plenary.nvim' },
-      {
-        'nvim-treesitter/nvim-treesitter',
-      },
+      { 'nvim-treesitter/nvim-treesitter' },
     },
     config = function()
       local trouble = require('trouble.providers.telescope')
@@ -1998,9 +2013,9 @@ local plugins = {
         direction = 'horizontal',
         size = function(term)
           if term.direction == 'horizontal' then
-            return 20
+            return 10
           elseif term.direction == 'vertical' then
-            return vim.o.columns * 0.4
+            return vim.o.columns * 0.5
           end
         end,
       })
@@ -2072,19 +2087,22 @@ local plugins = {
     -- enabled = false,
     cond = not_in_vscode,
     config = function()
-      vim.g.matchup_matchparen_offscreen = { method = 'popup' }
+      vim.g.matchup_matchparen_offscreen = {
+        method = 'popup',
+      }
     end,
   },
-  {
-    'chaoren/vim-wordmotion',
-  },
+  { 'chaoren/vim-wordmotion' },
   {
     'ojroques/nvim-osc52',
-    enabled = false,
     cond = not_in_vscode,
     config = function()
-      vim.keymap.set('n', '<leader>c', require('osc52').copy_operator, { expr = true })
-      vim.keymap.set('n', '<leader>cc', '<leader>c_', { remap = true })
+      vim.keymap.set('n', '<leader>c', require('osc52').copy_operator, {
+        expr = true,
+      })
+      vim.keymap.set('n', '<leader>cc', '<leader>c_', {
+        remap = true,
+      })
       vim.keymap.set('v', '<leader>c', require('osc52').copy_visual)
     end,
   },
@@ -2149,9 +2167,7 @@ local plugins = {
   {
     'piersolenski/wtf.nvim',
     enabled = false,
-    dependencies = {
-      'MunifTanjim/nui.nvim',
-    },
+    dependencies = { 'MunifTanjim/nui.nvim' },
     event = 'VeryLazy',
     opts = {},
     keys = {

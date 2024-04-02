@@ -4,7 +4,10 @@
 -- vim.wo: behaves like :let &l:{option-name} for window-local options
 -- leader key
 vim.g.mapleader = ' '
-vim.keymap.set('', '<BS>', '<Leader>', { remap = true, desc = 'second <Leader>' })
+vim.keymap.set('', '<BS>', '<Leader>', {
+  remap = true,
+  desc = 'second <Leader>',
+})
 
 -- encodings
 -- vim.opt.fileencoding = "utf-8"
@@ -101,16 +104,16 @@ if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe
     },
     cache_enable = 0,
   }
-elseif (vim.fn.getenv("SSH_TTY") ~= nil) then
+elseif vim.fn.getenv('SSH_TTY') ~= nil then
   vim.g.clipboard = {
     name = 'OSC 52',
     copy = {
-      ['+'] = require('vim.clipboard.osc52').copy,
-      ['*'] = require('vim.clipboard.osc52').copy,
+      ['+'] = require('vim.ui.clipboard.osc52').copy,
+      ['*'] = require('vim.ui.clipboard.osc52').copy,
     },
     paste = {
-      ['+'] = require('vim.clipboard.osc52').paste,
-      ['*'] = require('vim.clipboard.osc52').paste,
+      ['+'] = require('vim.ui.clipboard.osc52').paste,
+      ['*'] = require('vim.ui.clipboard.osc52').paste,
     },
   }
 end
