@@ -2013,7 +2013,7 @@ local plugins = {
         direction = 'horizontal',
         size = function(term)
           if term.direction == 'horizontal' then
-            return 10
+            return 20
           elseif term.direction == 'vertical' then
             return vim.o.columns * 0.5
           end
