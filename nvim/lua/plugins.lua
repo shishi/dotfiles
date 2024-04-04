@@ -1765,26 +1765,6 @@ local plugins = {
     end,
   },
   {
-    'danielfalk/smart-open.nvim',
-    branch = '0.2.x',
-    config = function()
-      require('telescope').load_extension('smart_open')
-      vim.keymap.set('n', '<C-p>', function()
-        require('telescope').extensions.smart_open.smart_open()
-      end, {
-        desc = 'telescope file browser',
-      })
-    end,
-    dependencies = {
-      { 'nvim-telescope/telescope.nvim' },
-      { 'kkharji/sqlite.lua' },
-      -- Only required if using match_algorithm fzf
-      -- { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
-      -- Optional.  If installed, native fzy will be used when match_algorithm is fzy
-      { 'nvim-telescope/telescope-fzy-native.nvim' },
-    },
-  },
-  {
     'nvim-telescope/telescope-file-browser.nvim',
     cond = not_in_vscode,
     dependencies = { { 'nvim-telescope/telescope.nvim' } },
@@ -1903,7 +1883,7 @@ local plugins = {
       end, {
         desc = 'telescope help_tags',
       })
-      vim.keymap.set('n', '<C-k>f', function()
+      vim.keymap.set('n', '<C-p>', function()
         require('telescope.builtin').find_files()
       end, {
         desc = 'telescope find files',
