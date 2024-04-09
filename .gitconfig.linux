@@ -60,3 +60,5 @@
     hideCampaign = true
 [ghq]
 	root = ~/dev/src
+[pull]
+	autostash = true
