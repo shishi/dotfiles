@@ -750,7 +750,6 @@ local plugins = {
   },
   {
     'folke/noice.nvim',
-    cond = not_in_vscode,
     dependencies = { { 'MunifTanjim/nui.nvim' }, { 'rcarriga/nvim-notify' } },
     event = 'VeryLazy',
     opts = {
@@ -2077,7 +2076,10 @@ local plugins = {
       }
     end,
   },
-  { 'chaoren/vim-wordmotion' },
+  {
+    'chaoren/vim-wordmotion',
+    enabled = false,
+  },
   {
     'ojroques/nvim-osc52',
     cond = not_in_vscode,
