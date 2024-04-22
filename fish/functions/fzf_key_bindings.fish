@@ -95,7 +95,7 @@ function fzf_key_bindings
 
     bind \ct fzf-file-widget
     # use / (slash) in vi-mode
-    # bind \cr fzf-history-widget
+    bind \cr fzf-history-widget
     bind \ec fzf-cd-widget
 
     if bind -M insert >/dev/null 2>&1
