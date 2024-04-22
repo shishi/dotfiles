@@ -583,10 +583,10 @@ local plugins = {
           'lua_ls',
           'ruby_ls',
           'rust_analyzer',
+          'taplo'
           'vtsls',
           -- tools
           -- rubocop
-          -- taplo
         },
         automatic_installation = true,
       })
@@ -597,7 +597,7 @@ local plugins = {
     cond = not_in_vscode,
     config = function()
       require('mason').setup()
-      -- nvim --headless -c "MasonInstall actionlint buf eslint-lsp sqlfluff stylelint yamllint shfmt goimports taplo" -c qall
+      -- nvim --headless -c "MasonInstall actionlint buf eslint-lsp sqlfluff stylelint yamllint shfmt goimports" -c qall
     end,
   },
   {
