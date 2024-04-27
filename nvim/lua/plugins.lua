@@ -581,9 +581,9 @@ local plugins = {
           'eslint',
           'gopls',
           'lua_ls',
-          'ruby_ls',
+          'ruby_lsp',
           'rust_analyzer',
-          'taplo'
+          'taplo',
           'vtsls',
           -- tools
           -- rubocop
@@ -1419,7 +1419,7 @@ local plugins = {
         capabilitiies = capabilities,
         on_attach = on_attach,
       })
-      lspconfig.ruby_ls.setup({
+      lspconfig.ruby_lsp.setup({
         capabilitiies = capabilities,
         on_attach = on_attach,
       })
@@ -1817,7 +1817,7 @@ local plugins = {
   {
     'nvim-telescope/telescope.nvim',
     -- version = '0.1.0',
-    branch = '0.1.x',
+    branch = 'master',
     cond = not_in_vscode,
     dependencies = {
       { 'nvim-tree/nvim-web-devicons' },
@@ -1829,6 +1829,9 @@ local plugins = {
       local lga_actions = require('telescope-live-grep-args.actions')
       require('telescope').setup({
         defaults = {
+          path_display = {
+            'filename_first',
+          },
           vimgrep_arguments = { 'rg', '--vimgrep', '--smart-case', '--hidden', '--glob', '!.git' },
           -- layout_strategy = 'vertical',
           -- layout_config = {
