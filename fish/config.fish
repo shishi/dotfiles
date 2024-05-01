@@ -130,23 +130,12 @@ if test -d ~/.console-ninja &>/dev/null
     set -x PATH ~/.console-ninja/.bin $PATH
 end
 
-# Windows
-
-# windows explorer
-if test -e /mnt/c/Windows/explorer.exe &>/dev/null
-    alias explorer /mnt/c/Windows/explorer.exe
-    alias open /mnt/c/Windows/explorer.exe
+if type batcat &>/dev/null
+    ln -fs (which batcat) ~/.local/bin/bat
 end
 
-# wezterm in windows
-if test -e /mnt/c/Users/shishi/scoop/shims/wezterm.exe &>/dev/null
-    alias wezterm /mnt/c/Users/shishi/scoop/shims/wezterm.exe
-    alias wez /mnt/c/Users/shishi/scoop/shims/wezterm.exe
-end
-
-# neovide in windows
-if test -e /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/null
-    alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
+if type fdfind &>/dev/null
+    ln -fs (which fdfind) ~/.local/bin/fd
 end
 
 # settings
@@ -169,28 +158,6 @@ end
 
 # alias
 #########################################
-
-alias n nvim
-alias grep 'grep --color'
-alias lv 'lv -c'
-
-# git
-alias g git
-alias gs 'git status -sb'
-alias gl 'git log --graph --decorate --name-status'
-alias gg 'git grep'
-alias gd 'git diff'
-alias ga 'git add'
-alias gb 'git branch'
-
-# rails
-alias be 'bundle exec'
-alias rs 'bundle exec rails server'
-alias rc 'bundle exec rails console'
-alias rdm 'bundle exec rake db:migrate'
-alias rdms 'bundle exec rake db:migrate; and bundle exec rake db:seed'
-alias rdmr 'bundle exec rake db:migrate:reset'
-alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
 
 # docker
 if type docker-compose &>/dev/null
@@ -244,20 +211,58 @@ if type eza &>/dev/null
     alias lt 'eza -T --icons --git-ignore'
 end
 
-if type batcat &>/dev/null
-    ln -fs (which batcat) ~/.local/bin/bat
-end
-
-if type fdfind &>/dev/null
-    ln -fs (which fdfind) ~/.local/bin/fd
-end
-
-# if type bat &> /dev/null
-#   alias bat 'bat --color always'
-#   if type fzf &> /dev/null
-#     alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
-#   end
+# if type bat &>/dev/null
+#     alias bat 'bat --color always'
 # end
+#
+# if type fzf &>/dev/null
+#     alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+# end
+
+# Windows
+
+# windows explorer
+if test -e /mnt/c/Windows/explorer.exe &>/dev/null
+    alias explorer /mnt/c/Windows/explorer.exe
+    alias open /mnt/c/Windows/explorer.exe
+end
+
+# wezterm in windows
+if test -e /mnt/c/Users/shishi/scoop/shims/wezterm.exe &>/dev/null
+    alias wezterm /mnt/c/Users/shishi/scoop/shims/wezterm.exe
+    alias wez /mnt/c/Users/shishi/scoop/shims/wezterm.exe
+end
+
+# neovide in windows
+if test -e /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/null
+    alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
+end
+
+# abbr
+#########################################
+
+alias n nvim
+alias grep 'grep --color'
+alias lv 'lv -c'
+
+# git
+alias g git
+alias gs 'git status -sb'
+alias gl 'git log --graph --decorate --name-status'
+alias gg 'git grep'
+alias gd 'git diff'
+alias ga 'git add'
+alias gb 'git branch'
+
+# rails
+alias be 'bundle exec'
+alias rs 'bundle exec rails server'
+alias rc 'bundle exec rails console'
+alias rdm 'bundle exec rake db:migrate'
+alias rdms 'bundle exec rake db:migrate; and bundle exec rake db:seed'
+alias rdmr 'bundle exec rake db:migrate:reset'
+alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
+
 
 # function
 #########################################
