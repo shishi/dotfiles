@@ -233,11 +233,19 @@ abbr --add n nvim
 # git
 abbr --add g git
 abbr --add gs 'git status -sb'
+abbr --add gco 'git checkout'
 abbr --add gl 'git log --graph --decorate --name-status'
 abbr --add gg 'git grep'
 abbr --add gd 'git diff'
 abbr --add ga 'git add'
 abbr --add gb 'git branch'
+abbr --add gp 'git push'
+abbr --add gpf 'git push --force-with-lease'
+abbr --add gpF 'git push --force'
+abbr --add gpl 'git pull'
+abbr --add gr 'git rebase'
+abbr --add grc 'git rebase --continue'
+abbr --add gra 'git rebase --abort'
 
 # rails
 abbr --add be 'bundle exec'
