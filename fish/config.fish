@@ -159,19 +159,6 @@ end
 # alias
 #########################################
 
-# docker
-if type docker-compose &>/dev/null
-    alias dc docker-compose
-    alias dcr 'docker-compose run --rm'
-    alias dce 'docker-compose exec'
-else
-    alias dc 'docker compose'
-    alias dcr 'docker compose run --rm'
-    alias dce 'docker compose exec'
-    alias docker-compose "docker compose"
-end
-
-
 switch (uname -a)
     case "*MINGW64*"
         alias ghq 'ghq.exe'
@@ -241,28 +228,37 @@ end
 # abbr
 #########################################
 
-alias n nvim
-alias grep 'grep --color'
-alias lv 'lv -c'
+abbr --add n nvim
 
 # git
-alias g git
-alias gs 'git status -sb'
-alias gl 'git log --graph --decorate --name-status'
-alias gg 'git grep'
-alias gd 'git diff'
-alias ga 'git add'
-alias gb 'git branch'
+abbr --add g git
+abbr --add gs 'git status -sb'
+abbr --add gl 'git log --graph --decorate --name-status'
+abbr --add gg 'git grep'
+abbr --add gd 'git diff'
+abbr --add ga 'git add'
+abbr --add gb 'git branch'
 
 # rails
-alias be 'bundle exec'
-alias rs 'bundle exec rails server'
-alias rc 'bundle exec rails console'
-alias rdm 'bundle exec rake db:migrate'
-alias rdms 'bundle exec rake db:migrate; and bundle exec rake db:seed'
-alias rdmr 'bundle exec rake db:migrate:reset'
-alias rdmrs 'bundle exec rake db:migrate:reset; and bundle exec rake db:seed'
+abbr --add be 'bundle exec'
+abbr --add rs 'bundle exec rails server'
+abbr --add rc 'bundle exec rails console'
+abbr --add rdm 'bundle exec rails db:migrate'
+abbr --add rdms 'bundle exec rails db:migrate; and bundle exec rails db:seed'
+abbr --add rdmr 'bundle exec rails db:migrate:reset'
+abbr --add rdmrs 'bundle exec rails db:migrate:reset; and bundle exec rails db:seed'
 
+# docker
+if type docker-compose &>/dev/null
+    abbr --add dc docker-compose
+    abbr --add dcr 'docker-compose run --rm'
+    abbr --add dce 'docker-compose exec'
+else
+    abbr --add dc 'docker compose'
+    abbr --add dcr 'docker compose run --rm'
+    abbr --add dce 'docker compose exec'
+    abbr --add docker-compose "docker compose"
+end
 
 # function
 #########################################
