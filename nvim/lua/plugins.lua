@@ -28,8 +28,8 @@ local plugins = {
     name = 'barbecue',
     version = '*',
     dependencies = {
-      'SmiteshP/nvim-navic',
-      'nvim-tree/nvim-web-devicons', -- optional dependency
+      { 'SmiteshP/nvim-navic' },
+      { 'nvim-tree/nvim-web-devicons' }, -- optional dependency
     },
     opts = {
       -- configurations go here
@@ -221,14 +221,6 @@ local plugins = {
     },
   },
   {
-    'ggandor/flit.nvim',
-    enabled = false,
-    cond = not_in_vscode,
-    config = function()
-      require('flit').setup({})
-    end,
-  },
-  {
     'rafamadriz/friendly-snippets',
     cond = not_in_vscode,
   },
@@ -382,13 +374,6 @@ local plugins = {
       -- require('ibl').setup({ scope = { highlight = highlight } })
       --
       -- hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
-    end,
-  },
-  {
-    'ggandor/leap.nvim',
-    enabled = false,
-    config = function()
-      require('leap').add_default_mappings()
     end,
   },
   {
@@ -1665,6 +1650,12 @@ local plugins = {
     end,
   },
   {
+    'stevearc/oil.nvim',
+    opts = {},
+    -- Optional dependencies
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+  },
+  {
     'folke/persistence.nvim',
     event = 'BufReadPre',
     opts = {
@@ -1881,9 +1872,6 @@ local plugins = {
               },
             },
           },
-          --   file_browser = {
-          --     hijack_netrw = true
-          --   }
         },
       })
 
@@ -1898,6 +1886,11 @@ local plugins = {
       end, {
         desc = 'telescope find files',
       })
+      vim.keymap.set('n', '<C-k>g', function()
+        require('telescope.builtin').git_files()
+      end, {
+        desc = 'telescope git files',
+      })
       vim.keymap.set('n', '<C-g>', function()
         -- require('telescope.builtin').live_grep()
         require('telescope').extensions.live_grep_args.live_grep_args()
@@ -1910,9 +1903,6 @@ local plugins = {
       end, {
         desc = 'telescope current_buffer_fuzzy_find',
       })
-      -- vim.keymap.set('n', '<Leader>tb', function()
-      --   require('telescope.builtin').buffers()
-      -- end)
       vim.keymap.set('n', 'Q', function()
         require('telescope.builtin').buffers()
       end, {
@@ -1933,9 +1923,6 @@ local plugins = {
       end, {
         desc = 'telescope search history',
       })
-      -- vim.keymap.set('n', '<Leader>tc', function()
-      --   require('telescope.builtin').commands()
-      -- end)
       vim.keymap.set('n', '<C-k>c', function()
         require('telescope.builtin').commands()
       end, {
