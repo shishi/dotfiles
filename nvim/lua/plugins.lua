@@ -1886,7 +1886,7 @@ local plugins = {
       end, {
         desc = 'telescope find files',
       })
-      vim.keymap.set('n', '<C-k>g', function()
+      vim.keymap.set('n', '<C-M-p>', function()
         require('telescope.builtin').git_files()
       end, {
         desc = 'telescope git files',
