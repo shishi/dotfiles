@@ -234,6 +234,7 @@ abbr --add n nvim
 abbr --add g git
 abbr --add gs 'git status -sb'
 abbr --add gco 'git checkout'
+abbr --add gci 'git commit -m'
 abbr --add gl 'git log --graph --decorate --name-status'
 abbr --add gg 'git grep'
 abbr --add gd 'git diff'
