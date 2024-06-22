@@ -274,20 +274,20 @@ local config = {
 }
 
 -- ssh domains
-local ssh_config = {
-  ssh_domains = {
-    {
-      name = 'stafes',
-      remote_address = '192.168.10.110',
-      username = 'shishi',
-      -- connect_automatically = true,
-      ssh_option = {
-        identityfile = '~/.ssh/id_rsa',
-      },
-    },
-  },
-}
-append_table(config, ssh_config)
+-- local ssh_config = {
+--   ssh_domains = {
+--     {
+--       name = 'stafes',
+--       remote_address = '192.168.10.110',
+--       username = 'shishi',
+--       -- connect_automatically = true,
+--       ssh_option = {
+--         identityfile = '~/.ssh/id_rsa',
+--       },
+--     },
+--   },
+-- }
+-- append_table(config, ssh_config)
 
 -- per os config
 if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
@@ -314,12 +314,18 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
       },
     },
   }
+
   append_table(config, windows_config)
 elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
   local linux_config = {
     front_end = 'OpenGL',
   }
   append_table(config, linux_config)
+elseif wezterm.target_triple == 'aarch64-apple-darwin' then
+  local macos_config = {
+    front_end = 'WebGpu',
+  }
+  append_table(config, macos_config)
 end
 
 return config
