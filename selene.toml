@@ -1,1 +1,2 @@
 std = "lua51+vim"
+mixed_table = "allow"
