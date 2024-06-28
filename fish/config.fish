@@ -93,6 +93,10 @@ if test -f ~/.cask/bin/cask
     set -x PATH ~/.cask/bin $PATH
 end
 
+# aqua
+if test -f /opt/homebrew/bin/aqua
+    set -x PATH (aqua root-dir)/bin $PATH
+end
 # rust tools
 if test -d ~/.cargo/bin
     set -x PATH ~/.cargo/bin $PATH
