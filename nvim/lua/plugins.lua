@@ -730,7 +730,7 @@ local plugins = {
     },
     config = true,
     keys = { {
-      '<A-g>',
+      '<M-g>',
       '<cmd>Neogit<cr>',
       desc = 'neogit',
       mode = 'n',

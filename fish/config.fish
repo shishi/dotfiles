@@ -73,9 +73,24 @@ if type lv &>/dev/null
     #   set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
 end
 
+# homebrew
+if test -f /opt/homebrew/bin/brew
+    eval (/opt/homebrew/bin/brew shellenv)
+end
+
+# mise
+if type mise &>/dev/null
+    if status is-interactive
+        mise activate fish | source
+    else
+        mise activate fish --shims | source
+    end
+end
+
 # rbenv
-if test -d ~/.rbenv/bin
+if test -f ~/.rbenv/bin/rbenv
     set -x PATH ~/.rbenv/bin $PATH
+    status --is-interactive; and source (rbenv init -|psub)
 end
 
 # # ruby
@@ -84,7 +99,7 @@ end
 # end
 
 # tfenv
-if test -d ~/.tfenv/bin
+if test -f ~/.tfenv/bin/tfenv
     set -x PATH ~/.tfenv/bin $PATH
 end
 
@@ -94,11 +109,11 @@ if test -f ~/.cask/bin/cask
 end
 
 # aqua
-if test -f /opt/homebrew/bin/aqua
+if type aqua &>/dev/null
     set -x PATH (aqua root-dir)/bin $PATH
 end
 # rust tools
-if test -d ~/.cargo/bin
+if type cargo &>/dev/null
     set -x PATH ~/.cargo/bin $PATH
     set -x CARGO_NET_GIT_FETCH_WITH_CLI true
 end
@@ -149,11 +164,6 @@ set fish_greeting
 
 # cmorrell theme
 set default_user shishi
-
-# rbenv
-if test -d ~/.rbenv
-    status --is-interactive; and source (rbenv init -|psub)
-end
 
 # direnv
 if type direnv &>/dev/null
