@@ -2,6 +2,7 @@
 
 DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
+mkdir -p ~/.config
 
 if [ -L ~/.config/fish ]; then
     rm ~/.config/fish
