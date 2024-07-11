@@ -324,6 +324,7 @@ elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
 elseif wezterm.target_triple == 'aarch64-apple-darwin' then
   local macos_config = {
     front_end = 'WebGpu',
+    macos_forward_to_ime_modifier_mask = 'CTRL|SHIFT',
   }
   append_table(config, macos_config)
 end
