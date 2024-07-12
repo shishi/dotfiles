@@ -581,6 +581,7 @@ local plugins = {
           'rust_analyzer',
           'taplo',
           'vtsls',
+          'volar',
           -- tools
           -- rubocop
         },
