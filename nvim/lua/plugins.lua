@@ -172,12 +172,22 @@ local plugins = {
     'creativenull/efmls-configs-nvim',
     -- version = 'v1.x.x', -- version is optional, but recommended
     dependencies = { 'neovim/nvim-lspconfig' },
+    enabled = false,
   },
   {
     'folke/flash.nvim',
     event = 'VeryLazy',
     --- @type Flash.Config
-    opts = {},
+    opts = {
+      jump = {
+        autojump = true,
+      },
+      modes = {
+        search = {
+          enabled = true,
+        },
+      },
+    },
     keys = {
       {
         's',
@@ -194,22 +204,23 @@ local plugins = {
           require('flash').treesitter()
         end,
         desc = 'Flash Treesitter',
-      }, -- {
-      --   'r',
-      --   mode = 'o',
-      --   function()
-      --     require('flash').remote()
-      --   end,
-      --   desc = 'Remote Flash',
-      -- },
-      -- {
-      --   'R',
-      --   mode = { 'o', 'x' },
-      --   function()
-      --     require('flash').treesitter_search()
-      --   end,
-      --   desc = 'Treesitter Search',
-      -- },
+      },
+      {
+        'r',
+        mode = 'o',
+        function()
+          require('flash').remote()
+        end,
+        desc = 'Remote Flash',
+      },
+      {
+        'R',
+        mode = { 'o', 'x' },
+        function()
+          require('flash').treesitter_search()
+        end,
+        desc = 'Treesitter Search',
+      },
       {
         '<M-s>',
         mode = { 'c' },
