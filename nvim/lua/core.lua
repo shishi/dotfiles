@@ -78,7 +78,7 @@ vim.opt.title = true
 -- integratiion
 vim.opt.mouse = 'a'
 vim.opt.mousemodel = 'popup'
-vim.opt.clipboard = 'unnamed,unnamedplus'
+vim.opt.clipboard = 'unnamedplus'
 
 local m = {}
 function m.file_exists(name)
@@ -104,16 +104,16 @@ if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe
     },
     cache_enable = 0,
   }
-elseif vim.fn.getenv('SSH_TTY') ~= nil then
+elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL then
   vim.g.clipboard = {
     name = 'OSC 52',
     copy = {
-      ['+'] = require('vim.ui.clipboard.osc52').copy,
-      ['*'] = require('vim.ui.clipboard.osc52').copy,
+      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
     },
     paste = {
-      ['+'] = require('vim.ui.clipboard.osc52').paste,
-      ['*'] = require('vim.ui.clipboard.osc52').paste,
+      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
     },
   }
 end
