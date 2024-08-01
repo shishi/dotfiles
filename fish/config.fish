@@ -249,6 +249,7 @@ abbr --add g git
 abbr --add gs 'git status -sb'
 abbr --add gco 'git checkout'
 abbr --add gci 'git commit -m'
+abbr --add gcia 'git commit --amend'
 abbr --add gl 'git log --graph --decorate --name-status'
 abbr --add gg 'git grep'
 abbr --add gd 'git diff'
@@ -261,6 +262,7 @@ abbr --add gp 'git pull'
 abbr --add gr 'git rebase'
 abbr --add grc 'git rebase --continue'
 abbr --add gra 'git rebase --abort'
+abbr --add gcl 'git clean --force'
 
 # rails
 abbr --add be 'bundle exec'
