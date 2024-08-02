@@ -1037,8 +1037,8 @@ local plugins = {
             type = 'pwa-node',
             request = 'launch',
             name = 'Launch',
-            -- program = '${file}',
-            program = 'npm run dev',
+            program = '${file}',
+            -- program = 'npm run dev',
             cwd = '${workspaceFolder}',
           },
           {
@@ -1053,6 +1053,21 @@ local plugins = {
             type = 'pwa-chrome',
             request = 'launch',
             url = 'http://localhost:3000',
+          },
+          {
+            type = 'pwa-node',
+            request = 'launch',
+            name = 'Debug Jest Tests',
+            -- trace = true, -- include debugger info
+            runtimeExecutable = 'node',
+            runtimeArgs = {
+              './node_modules/jest/bin/jest.js',
+              '--runInBand',
+            },
+            rootPath = '${workspaceFolder}',
+            cwd = '${workspaceFolder}',
+            console = 'integratedTerminal',
+            internalConsoleOptions = 'neverOpen',
           },
         }
       end
@@ -2182,7 +2197,7 @@ local plugins = {
   {
     'microsoft/vscode-js-debug',
     cond = not_in_vscode,
-    build = 'npm install --legacy-peer-deps && npm run compile',
+    build = 'npm install --legacy-peer-deps && npx gulp vsDebugServerBundle && mv dist out',
   },
   {
     'folke/which-key.nvim',
