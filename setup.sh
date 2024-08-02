@@ -4,6 +4,30 @@ DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 mkdir -p ~/.config
 
+if [ $REMOTE_CONTAINERS -ne true ] ; then
+    if [ -L ~/.config/wezterm ]; then
+        rm ~/.config/wezterm
+        ln -sf $DOTDIR/wezterm ~/.config/wezterm
+    elif [ -d ~/.config/wezterm ]; then
+        rm -fr ~/.config/wezterm
+        ln -sf $DOTDIR/wezterm ~/.config/wezterm
+    else
+        ln -sf $DOTDIR/wezterm ~/.config/wezterm
+    fi
+
+    if [ -L ~/.emacs.d ]; then
+        rm ~/.emacs.d
+        ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
+    elif [ -d ~/.emacs.d ]; then
+        git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
+        rm -fr ~/.emacs.d
+        ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
+    else
+        git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
+        ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
+    fi
+fi
+
 if [ -L ~/.config/fish ]; then
     rm ~/.config/fish
     ln -sf $DOTDIR/fish ~/.config/fish
@@ -22,28 +46,6 @@ elif [ -d ~/.config/nvim ]; then
     ln -sf $DOTDIR/nvim ~/.config/nvim
 else
     ln -sf $DOTDIR/nvim ~/.config/nvim
-fi
-
-if [ -L ~/.config/wezterm ]; then
-    rm ~/.config/wezterm
-    ln -sf $DOTDIR/wezterm ~/.config/wezterm
-elif [ -d ~/.config/wezterm ]; then
-    rm -fr ~/.config/wezterm
-    ln -sf $DOTDIR/wezterm ~/.config/wezterm
-else
-    ln -sf $DOTDIR/wezterm ~/.config/wezterm
-fi
-
-if [ -L ~/.emacs.d ]; then
-    rm ~/.emacs.d
-    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
-elif [ -d ~/.emacs.d ]; then
-    git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
-    rm -fr ~/.emacs.d
-    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
-else
-    git -C $(dirname $DOTDIR) clone git@github.com:shishi/emacs.git
-    ln -sf $(dirname $DOTDIR)/emacs ~/.emacs.d
 fi
 
 if [ `uname` = Darwin ]; then
@@ -79,8 +81,5 @@ ln -sf $DOTDIR/.bashrc ~/.bashrc
 # ln -s $DOTDIR/.zsh ~/.zsh
 # ln -s $DOTDIR/.zshenv ~/.zshenv
 # ln -s $DOTDIR/.zshrc ~/.zshrc
-
-ln -sf $DOTDIR/ssm ~/.local/bin/ssm
-
 
 echo "please reload shell"
