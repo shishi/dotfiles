@@ -750,6 +750,7 @@ local plugins = {
   },
   {
     'folke/noice.nvim',
+    cond = not_in_vscode,
     dependencies = { { 'MunifTanjim/nui.nvim' }, { 'rcarriga/nvim-notify' } },
     event = 'VeryLazy',
     opts = {
