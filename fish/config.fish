@@ -10,7 +10,7 @@ set fish_color_command white
 #else
 #    set dev ~/dev
 #end
-set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin /home/linuxbrew/.linuxbrew/bin $PATH
 set -x GPG_TTY (tty)
 
 if [ "$TERM_PROGRAM" = vscode ]

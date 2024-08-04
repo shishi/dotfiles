@@ -1,0 +1,7 @@
+[[language]]
+name = "lua"
+auto-format = true
+formatter = { command = "stylua", args = ["-"] }
+
+[language-server.lua-language-server]
+config = { Lua = { diagnostics = { globals = ["vim"] } } }

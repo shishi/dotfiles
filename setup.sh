@@ -4,7 +4,7 @@ DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 mkdir -p ~/.config
 
-if [ $REMOTE_CONTAINERS -ne true ] ; then
+if [ "$REMOTE_CONTAINERS" != true ]; then
     if [ -L ~/.config/wezterm ]; then
         rm ~/.config/wezterm
         ln -sf $DOTDIR/wezterm ~/.config/wezterm
@@ -46,6 +46,16 @@ elif [ -d ~/.config/nvim ]; then
     ln -sf $DOTDIR/nvim ~/.config/nvim
 else
     ln -sf $DOTDIR/nvim ~/.config/nvim
+fi
+
+if [ -L ~/.config/helix ]; then
+    rm ~/.config/helix
+    ln -sf $DOTDIR/helix ~/.config/helix
+elif [ -d ~/.config/helix ]; then
+    rm -fr ~/.config/helix
+    ln -sf $DOTDIR/helix ~/.config/helix
+else
+    ln -sf $DOTDIR/helix ~/.config/helix
 fi
 
 if [ `uname` = Darwin ]; then

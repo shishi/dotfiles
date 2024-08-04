@@ -1,0 +1,5 @@
+theme = "onedark"
+
+[editor.statusline]
+left = ["mode", "spinner", "version-control", "file-name", "read-only-indicator", "file-modification-indicator"]
+right = ["diagnostics", "selections", "register", "file-type", "position", "total-line-numbers", "file-encoding", "file-line-ending"]
