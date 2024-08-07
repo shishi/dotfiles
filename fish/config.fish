@@ -154,7 +154,11 @@ if type batcat &>/dev/null
 end
 
 if type fdfind &>/dev/null
-    ln -fs (which fdfind) ~/.local/bin/fd
+    if test -d ~/.local/bin
+        ln -fs (which fdfind) ~/.local/bin/fd
+    else
+        sudo ls -fs (which fdfind) /usr/local/bin/fd
+    end
 end
 
 # settings
