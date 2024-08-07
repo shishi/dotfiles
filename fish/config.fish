@@ -157,7 +157,7 @@ if type fdfind &>/dev/null
     if test -d ~/.local/bin
         ln -fs (which fdfind) ~/.local/bin/fd
     else
-        sudo ls -fs (which fdfind) /usr/local/bin/fd
+        sudo ln -fs (which fdfind) /usr/local/bin/fd
     end
 end
 
