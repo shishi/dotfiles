@@ -76,6 +76,7 @@ fi
 
 ln -sf $DOTDIR/.gitignore.global ~/.gitignore
 
+ln -sf $DOTDIR/.ideavimrc ~/.ideavimrc
 ln -sf $DOTDIR/.vimrc ~/.vimrc
 ln -sf $DOTDIR/.gvimrc ~/.gvimrc
 #ln -sf $DOTDIR/.vim ~/.vim

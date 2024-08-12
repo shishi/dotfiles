@@ -1419,8 +1419,8 @@ local plugins = {
                       location = require('mason-registry').get_package('vue-language-server'):get_install_path()
                         .. '/node_modules/@vue/language-server',
                       languages = { 'vue' },
-                      configNamespace = 'typescript',
-                      enableForWorkspaceTypeScriptVersions = true,
+                      -- configNamespace = 'typescript',
+                      -- enableForWorkspaceTypeScriptVersions = true,
                     },
                   },
                 },
