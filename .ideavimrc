@@ -1,4 +1,4 @@
-" core
+" core;
 
 let mapleader = ' '
 inoremap ; :
@@ -11,9 +11,9 @@ set laststatus = 2
 set cmdheight = 2
 
 set wildmenu
-set wildmode = list:full
+set wildmode = longest:full,full
 
-set incsearch
+set incearch
 set hlsearch
 set wrapscan
 set ignorecase
@@ -22,44 +22,37 @@ set smartcase
 set clipboard += unnamedplus
 
 " keybind
-nnoremap <Leader>ev :<C-u>vsplit ~/.ideavimrc<CR>
-nnoremap <Leader>rv :<C-u>source ~/.ideavimrc<CR>
+nnoremap <Leader>ce :<C-u>vsplit ~/.ideavimrc<CR>
+nnoremap <Leader>cr :<C-u>source ~/.ideavimrc<CR>
 
 nnoremap x "_x
+inoremap jk <ESC>
 
 " ----
-"nnoremap / :<C-u>action Find<CR>
-"
-"nnoremap [m :action MethodUp<CR>
-"nnoremap ]m :action MethodDown<CR>
-"
-"nnoremap [v :action VcsShowPrevChangeMarker<CR>
-"nnoremap ]v :action VcsShowNextChangeMarker<CR>
-"
-"nnoremap [e :action GotoPreviousError<CR>
-"nnoremap ]e :action GotoNextError<CR>
-"
-"nnoremap [c :action JumpToLastChange<CR>
-"nnoremap ]c :action JumpToNextChange<CR>
-"
-"nnoremap [n :action NextOccurence<CR>
-"nnoremap ]n :action PreviousOccurence<CR>
-"
-"nnoremap <C-o> :action Back<CR>
-"nnoremap <C-i> :action Forward<CR>
-"
+nnoremap <Leader>s :action SearchEverywhere<CR>
+nnoremap <C-S-p> :action GotoAction<CR>
+nnoremap <C-p> :action GotoFile<CR>
+
+nnoremap [c :action VcsShowPrevChangeMarker<CR>
+nnoremap ]c :action VcsShowNextChangeMarker<CR>
+
+nnoremap [d :action GotoPreviousError<CR>
+nnoremap ]d :action GotoNextError<CR>
+
 "nnoremap K :action QuickJavaDoc<CR>
 "nnoremap <C-k> :action ShowUsages<CR>
-"nnoremap <Space>k :action GotoDeclaration<CR>
-"nnoremap <Space>K :action GotoTypeDeclaration<CR>
-"nnoremap <Space>i :action GotoImplementation<CR>
-"nnoremap <Space>s :action GotoSuperMethod<CR>
-"nnoremap <Space>t :action GotoTest<CR>
-"
+nnoremap gr :action FindUsages<CR>
+nnoremap gy :action GotoTypeDeclaration<CR>
+nnoremap gi :action GotoImplementation<CR>
+nnoremap gs :action GotoSuperMethod<CR>
+nnoremap <Leader>r :action RenameElement<CR>
+nnoremap <Leader>t :action GotoTest<CR>
+
 "command! Exit :action Exit<CR>
 "-------
 
 " plugins
+Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-surround'
 Plug 'justinmk/vim-sneak'
 Plug 'machakann/vim-highlightedyank'
