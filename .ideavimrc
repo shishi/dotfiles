@@ -19,7 +19,10 @@ set wrapscan
 set ignorecase
 set smartcase
 
-set clipboard += unnamed,unnamedplus
+set clipboard-=ideaput
+set clipboard+=unnamed,unnamedplus
+
+set ideajoin
 
 " keybind
 nnoremap <Leader>ce :vsplit ~/.ideavimrc<CR>
@@ -70,8 +73,6 @@ nnoremap <C-Down> :action EditorCodeBlockEnd<CR>
 
 nnoremap <Leader>t :action ActivateTerminalToolWindow<CR>
 
-"-------
-
 " plugins
 Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-surround'
@@ -88,3 +89,13 @@ set keep-english-in-normal-and-restore-in-insert
 " plugins/which-key
 set notimeout
 let g:WhichKey_ShowVimActions = "true"
+
+
+
+
+
+
+
+
+
+k
