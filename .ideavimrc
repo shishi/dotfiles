@@ -19,7 +19,7 @@ set wrapscan
 set ignorecase
 set smartcase
 
-set clipboard += unnamedplus
+set clipboard += unnamed,unnamedplus
 
 " keybind
 nnoremap <Leader>ce :vsplit ~/.ideavimrc<CR>
@@ -55,6 +55,18 @@ nnoremap ]c :action VcsShowNextChangeMarker<CR>
 
 nnoremap [d :action GotoPreviousError<CR>
 nnoremap ]d :action GotoNextError<CR>
+
+nnoremap <C-Up> :action EditorCodeBlockStart<CR>
+nnoremap <C-Down> :action EditorCodeBlockEnd<CR>
+
+
+
+
+
+
+
+
+
 
 nnoremap <Leader>t :action ActivateTerminalToolWindow<CR>
 
