@@ -25,6 +25,13 @@
     autocrlf = false
     safecrlf = true
     filemode = true
+# [pager]
+#     diff = delta
+#     log = delta
+#     reflog = delta
+#     show = delta
+[commit]
+    gpgsign = true
 [push]
     default = current
 [help]
