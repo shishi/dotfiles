@@ -90,7 +90,7 @@ end
 # rbenv
 if test -f ~/.rbenv/bin/rbenv
     set -x PATH ~/.rbenv/bin $PATH
-    status --is-interactive; and source (rbenv init -|psub)
+    status --is-interactive; and rbenv init - --no-rehash fish | source
 end
 
 # # ruby
