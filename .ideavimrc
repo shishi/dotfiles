@@ -29,8 +29,6 @@ nnoremap <Leader>ce :vsplit ~/.ideavimrc<CR>
 nnoremap <Leader>cr :source ~/.ideavimrc<CR>
 
 inoremap jk <ESC>
-inoremap jj <ESC>
-inoremap kk <ESC>
 
 nnoremap <Leader>q :action CloseContent<CR>
 nnoremap <Leader>vs :action SplitVertically<CR>
