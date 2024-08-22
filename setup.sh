@@ -1,6 +1,8 @@
 #!/bin/bash
 
-if [ -z $XDG_CONFIG_HOME ]; then
+if [ -d /.jbdevcontainer ]; then
+    XDG_CONFIG_HOME=/.jbdevcontainer/config
+elif [ -z $XDG_CONFIG_HOME ]; then
     XDG_CONFIG_HOME=$HOME/.config
     mkdir -p ~/.config
 fi
