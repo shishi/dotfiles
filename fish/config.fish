@@ -85,10 +85,8 @@ if type mise &>/dev/null
     else
         mise activate fish --shims | source
     end
-end
-
-# rbenv
-if test -f ~/.rbenv/bin/rbenv
+    # rbenv
+else if type ~/.rbenv/bin/rbenv &>/dev/null
     set -x PATH ~/.rbenv/bin $PATH
     status --is-interactive; and source (rbenv init -|psub)
 end
