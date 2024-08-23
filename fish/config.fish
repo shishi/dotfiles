@@ -88,7 +88,7 @@ if type mise &>/dev/null
     # rbenv
 else if type ~/.rbenv/bin/rbenv &>/dev/null
     set -x PATH ~/.rbenv/bin $PATH
-    status --is-interactive; and source (rbenv init -|psub)
+    status --is-interactive; and rbenv init - --no-rehash fish | source
 end
 
 # # ruby

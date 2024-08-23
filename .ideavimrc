@@ -1,17 +1,17 @@
-" core;
+" core
 
 let mapleader = ' '
-inoremap ; :
+nmap <BS> <Leader>
 nnoremap ; :
 
+set number
 set showmode
 set showcmd
 set showmatch
-set laststatus = 2
-set cmdheight = 2
 
-set wildmenu
-set wildmode = longest:full,full
+" コマンドモードに補完はないので意味ない
+"set wildmenu
+"set wildmode = longest:full,full
 
 set incearch
 set hlsearch
@@ -19,19 +19,37 @@ set wrapscan
 set ignorecase
 set smartcase
 
-set clipboard += unnamedplus
+set clipboard-=ideaput
+set clipboard+=unnamed,unnamedplus
+
+set ideajoin
 
 " keybind
-nnoremap <Leader>ce :<C-u>vsplit ~/.ideavimrc<CR>
-nnoremap <Leader>cr :<C-u>source ~/.ideavimrc<CR>
+nnoremap <Leader>ce :vsplit ~/.ideavimrc<CR>
+nnoremap <Leader>cr :source ~/.ideavimrc<CR>
 
-nnoremap x "_x
 inoremap jk <ESC>
 
-" ----
-nnoremap <Leader>s :action SearchEverywhere<CR>
+nnoremap <Leader>q :action CloseContent<CR>
+nnoremap <Leader>vs :action SplitVertically<CR>
+nnorempa <Leader>sp :action SplitHorizontally<CR>
+
+nnoremap / :action Find<CR>
+
+nnoremap <C-;> :action SearchEverywhere<CR>
 nnoremap <C-S-p> :action GotoAction<CR>
 nnoremap <C-p> :action GotoFile<CR>
+
+nnoremap gd :action GotoDeclaration<CR>
+nnoremap gD :action GotoDeclarationOnly<CR>
+nnoremap gr :action FindUsages<CR>
+nnoremap gy :action GotoTypeDeclaration<CR>
+nnoremap gi :action GotoImplementation<CR>
+nnoremap gs :action GotoSuperMethod<CR>
+nnoremap <Leader>rn :action RenameElement<CR>
+nnoremap K :action QuickJavaDoc<CR>
+nnoremap gk :action ShowUsages<CR>
+nnoremap <Leader>gt :action GotoTest<CR>
 
 nnoremap [c :action VcsShowPrevChangeMarker<CR>
 nnoremap ]c :action VcsShowNextChangeMarker<CR>
@@ -39,24 +57,32 @@ nnoremap ]c :action VcsShowNextChangeMarker<CR>
 nnoremap [d :action GotoPreviousError<CR>
 nnoremap ]d :action GotoNextError<CR>
 
-"nnoremap K :action QuickJavaDoc<CR>
-"nnoremap <C-k> :action ShowUsages<CR>
-nnoremap gr :action FindUsages<CR>
-nnoremap gy :action GotoTypeDeclaration<CR>
-nnoremap gi :action GotoImplementation<CR>
-nnoremap gs :action GotoSuperMethod<CR>
-nnoremap <Leader>r :action RenameElement<CR>
-nnoremap <Leader>t :action GotoTest<CR>
+nnoremap <C-Up> :action EditorCodeBlockStart<CR>
+nnoremap <C-Down> :action EditorCodeBlockEnd<CR>
 
-"command! Exit :action Exit<CR>
-"-------
+
+
+
+
+
+
+
+
+
+nnoremap <Leader>t :action ActivateTerminalToolWindow<CR>
 
 " plugins
 Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-surround'
-Plug 'justinmk/vim-sneak'
+Plug 'easymotion/vim-easymotion'
 Plug 'machakann/vim-highlightedyank'
 set which-key
+
+" plugins/vim-easymotion
+nmap s <Plug>(easymotion-s)
+
+" plugins/IdeaVimExtension
+set keep-english-in-normal-and-restore-in-insert
 
 " plugins/which-key
 set notimeout
@@ -64,3 +90,10 @@ let g:WhichKey_ShowVimActions = "true"
 
 
 
+
+
+
+
+
+
+k
