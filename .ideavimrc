@@ -36,7 +36,7 @@ nnorempa <Leader>sp :action SplitHorizontally<CR>
 
 nnoremap / :action Find<CR>
 
-nnoremap <C-;> :action SearchEverywhere<CR>
+" nnoremap <C-;> :action SearchEverywhere<CR>
 nnoremap <C-S-p> :action GotoAction<CR>
 nnoremap <C-p> :action GotoFile<CR>
 
