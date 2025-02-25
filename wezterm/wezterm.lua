@@ -303,7 +303,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
     front_end = 'WebGpu',
     -- this setting make cmd and powershell can't start
     -- default_domain = 'WSL:Ubuntu',
-    default_prog = { 'C:/Program Files/PowerShell/7/pwsh.exe' },
+    default_prog = { 'C:/Users/shishi/AppData/Local/Microsoft/WinGet/Packages/Microsoft.PowerShell_Microsoft.Winget.Source_8wekyb3d8bbwe/pwsh.exe' },
     launch_menu = {
       {
         label = 'Command Prompt',
@@ -311,7 +311,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
       },
       {
         label = 'Powershell',
-        args = { 'C:/Program Files/PowerShell/7/pwsh.exe' },
+        args = { 'C:/Users/shishi/AppData/Local/Microsoft/WinGet/Packages/Microsoft.PowerShell_Microsoft.Winget.Source_8wekyb3d8bbwe/pwsh.exe' },
       },
       {
         label = 'Ubuntu',
