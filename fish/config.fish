@@ -59,6 +59,16 @@ if [ (uname) = Darwin ]
     if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
         set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
     end
+
+    # jetbrains toolbox
+    if type -d "~/Library/Application Support/JetBrains/Toolbox/scripts" &>/dev/null
+        set -x PATH "~/Library/Application Support/JetBrains/Toolbox/scripts" $PATH
+    end
+
+    # orbstack
+    if type orb &> /dev/null
+        set -x PATH ~/.orbstack/bin $PATH
+    end
 end
 
 if type less &>/dev/null
@@ -110,8 +120,10 @@ end
 
 # aqua
 if type aqua &>/dev/null
-    set -x PATH (aqua root-dir)/bin $PATH
+    set -x AQUA_GLOBAL_CONFIG (string join ':' $AQUA_GLOBAL_CONFIG $XDG_CONFIG_HOME/$HOME/.config/aquaproj-aqua/aqua.yaml)
+    set -x PATH (string join ':' $AQUA_ROOT_DIR/$XDG_DATA_HOME/$HOME/.local/share/aquaproj-aqua/bin $PATH)
 end
+
 # rust tools
 if type cargo &>/dev/null
     set -x PATH ~/.cargo/bin $PATH
@@ -122,6 +134,19 @@ if type bat &>/dev/null
     set -x BAT_THEME zenburn
     set -x BAT_STYLE auto
 end
+
+if type batcat &>/dev/null
+    ln -fs (which batcat) ~/.local/bin/bat
+end
+
+if type fdfind &>/dev/null
+    if test -d ~/.local/bin
+        ln -fs (which fdfind) ~/.local/bin/fd
+    else
+        sudo ln -fs (which fdfind) /usr/local/bin/fd
+    end
+end
+
 # # vagrant in wsl
 # if type vagrant &> /dev/null
 #   if string match -q -- '*microsoft*' (uname -a)
@@ -149,17 +174,6 @@ if test -d ~/.console-ninja &>/dev/null
     set -x PATH ~/.console-ninja/.bin $PATH
 end
 
-if type batcat &>/dev/null
-    ln -fs (which batcat) ~/.local/bin/bat
-end
-
-if type fdfind &>/dev/null
-    if test -d ~/.local/bin
-        ln -fs (which fdfind) ~/.local/bin/fd
-    else
-        sudo ln -fs (which fdfind) /usr/local/bin/fd
-    end
-end
 
 # settings
 #########################################

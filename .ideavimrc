@@ -39,6 +39,7 @@ nnoremap / :action Find<CR>
 " nnoremap <C-;> :action SearchEverywhere<CR>
 nnoremap <C-S-p> :action GotoAction<CR>
 nnoremap <C-p> :action GotoFile<CR>
+nnoremap <Leader>t :action ActivateTerminalToolWindow<CR>
 
 nnoremap gd :action GotoDeclaration<CR>
 nnoremap gD :action GotoDeclarationOnly<CR>
