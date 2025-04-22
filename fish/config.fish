@@ -66,7 +66,7 @@ if [ (uname) = Darwin ]
     end
 
     # orbstack
-    if type orb &> /dev/null
+    if type orb &>/dev/null
         set -x PATH ~/.orbstack/bin $PATH
     end
 end
@@ -120,8 +120,9 @@ end
 
 # aqua
 if type aqua &>/dev/null
-    set -x AQUA_GLOBAL_CONFIG (string join ':' $AQUA_GLOBAL_CONFIG $XDG_CONFIG_HOME/$HOME/.config/aquaproj-aqua/aqua.yaml)
-    set -x PATH (string join ':' $AQUA_ROOT_DIR/$XDG_DATA_HOME/$HOME/.local/share/aquaproj-aqua/bin $PATH)
+    echo hoge
+    set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
+    set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
 end
 
 # rust tools
@@ -173,7 +174,6 @@ end
 if test -d ~/.console-ninja &>/dev/null
     set -x PATH ~/.console-ninja/.bin $PATH
 end
-
 
 # settings
 #########################################
@@ -387,7 +387,6 @@ end
 #
 #  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
 #end
-
 
 # source other file
 #########################################
