@@ -316,7 +316,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
       {
         label = 'Ubuntu',
         args = { 'wsl.exe', '~', '-d', 'Ubuntu', '--user', 'shishi' },
-      }
+      },
     },
   }
 
