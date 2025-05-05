@@ -14,10 +14,21 @@
 -- core
 vim.keymap.set({ 'n', 'v' }, ';', ':')
 vim.keymap.set({ 'n', 'v' }, ':', ';')
-vim.keymap.set('n', 'x', '"_x')
-vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>')
-vim.keymap.set('n', '<Leader>q', 'q')
-vim.keymap.set('n', 'q', '<Nop>')
+vim.keymap.set('n', '<Leader><Leader>q', 'q', { desc = 'start recording' })
+-- vim.keymap.set('n', 'q', '<Nop>')
+
+vim.keymap.set('n', 'p', 'p`]', { desc = 'Paste and move the end' })
+vim.keymap.set('n', 'P', 'P`]', { desc = 'Paste and move the end' })
+
+-- vim.keymap.set({ 'n', 'x' }, 'x', '"_d', { desc = 'Delete into blackhole' })
+vim.keymap.set({ 'n', 'x' }, 'x', '"_x', { desc = 'Delete into blackhole' })
+vim.keymap.set('n', 'X', '"_D', { desc = 'Delete into blackhole' })
+vim.keymap.set('o', 'x', 'd', { desc = 'Delete using x' })
+
+vim.keymap.set('n', '<Enter>', 'o<ESC>')
+vim.keymap.set('n', '<A-Enter>', 'O<ESC>')
+
+vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>', { desc = 'nohlsearch' })
 
 vim.cmd([[
   cabbrev Q qa
@@ -27,25 +38,32 @@ vim.cmd([[
 
 if vim.g.vscode then
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
-  vim.keymap.set('n', '<Leader>;', '<Cmd>Tabclose<CR>')
-  vim.keymap.set('n', '<Leader>n', '<Cmd>Tabprevious<CR>')
-  vim.keymap.set('n', '<Leader>p', '<Cmd>Tabnext<CR>')
+  vim.keymap.set('n', '<Leader>;', '<Cmd>Tabclose<CR>', { desc = 'close tab' })
+  vim.keymap.set('n', '[t', '<Cmd>Tabprevious<CR>', { desc = 'previous tab' })
+  vim.keymap.set('n', ']t', '<Cmd>Tabnext<CR>', { desc = 'next tab' })
   vim.keymap.set('n', '<Leader><Leader>r', '<Cmd>call VSCodeNotify("workbench.action.openRecent")<CR>')
 else
   vim.keymap.set('i', 'jj', '<ESC>')
   vim.keymap.set('i', 'kk', '<ESC>')
   vim.keymap.set('i', 'jk', '<ESC>')
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
+
   -- buffer
-  vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd #<CR>')
-  vim.keymap.set('n', '<Leader>n', '<Cmd>bnext<CR>')
-  vim.keymap.set('n', '<Leader>p', '<Cmd>bprevious<CR>')
+  vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd #<CR>', { desc = 'close buffer without close window' })
+  vim.keymap.set('n', '[b', '<Cmd>bprevious<CR>', { desc = 'previous buffer' })
+  vim.keymap.set('n', ']b', '<Cmd>bnext<CR>', { desc = 'next buffer' })
+  vim.keymap.set('n', '[t', '<Cmd>tabprevious<CR>', { desc = 'previous tab' })
+  vim.keymap.set('n', ']t', '<Cmd>tabnext<CR>', { desc = 'next tab' })
 
   -- quickfix, grep
   -- batch replace on quickfix list (:cl or :copen)
   -- :cdo s/hoge/huag/gc
-  vim.keymap.set('n', '<F3>', '<Cmd>cnext<CR>')
-  vim.keymap.set('n', '<F4>', '<Cmd>cprevious<CR>')
+  vim.keymap.set('n', '[q', '<Cmd>cprevious<CR>', { desc = 'previous quickfix' })
+  vim.keymap.set('n', ']q', '<Cmd>cnext<CR>', { desc = 'next quickfix' })
+  vim.keymap.set('n', '<F4>', '<Cmd>cprevious<CR>', { desc = 'previous quickfix' })
+  vim.keymap.set('n', '<F3>', '<Cmd>cnext<CR>', { desc = 'next quickfix' })
+  vim.keymap.set('n', '<Leader>/', ':Grep ', { desc = 'Grep' })
+  vim.keymap.set('n', '<Leader>*', ':Grep <c-r><c-w><CR>', { desc = 'Grep current word' })
 
   -- set working directory is current editing file
   vim.keymap.set('n', "<Leader>'", '<Cmd>lcd %:p:h<CR>')
@@ -67,7 +85,7 @@ vim.keymap.set({ 'n', 't' }, '<A-L>', '<C-w>>')
 
 -- split window
 -- vim.keymap.set('n', '<Leader>h', '<Cmd>split<CR>')
-vim.keymap.set('n', '<Leader><Leader>v', '<Cmd>vsplit<CR>')
+vim.keymap.set('n', '<Leader><Leader>v', '<Cmd>vsplit<CR>', { desc = 'vsplit' })
 
 -- keep selection after indent
 vim.keymap.set('v', '<', '<gv')
@@ -76,9 +94,9 @@ vim.keymap.set('v', '=', '=gb')
 
 -- open configs
 -- vim.keymap.set('n', '<Leader>`', '<Cmd>luafile $MYVIMRC<CR>')
-vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/<CR>')
+vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/init.lua<CR>', { desc = 'open init.lua' })
 
 -- terminal
 -- vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
-vim.keymap.set('t', 'fj', [[<C-\><C-n>]])
+vim.keymap.set('t', 'fj', [[<C-\><C-n>]], { desc = 'esc in terminal' })

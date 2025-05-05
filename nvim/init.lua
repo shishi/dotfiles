@@ -1,9 +1,8 @@
--- https://github.com/kyazdani42/nvim-tree.lua
-vim.g.loaded = 1
-vim.g.loaded_netrwPlugin = 1
+vim.loader.enable()
 
 require('core')
 require('keybind')
 require('autocmd')
 require('plugins')
 require('filetype')
+require('lsp')
