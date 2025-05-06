@@ -177,5 +177,5 @@ later(function()
 
   vim.lsp.enable(lsp_names)
   -- for lsp without settings
-  vim.lsp.enable(require('mason-lspconfig').get_installed_servers())
+  -- vim.lsp.enable(require('mason-lspconfig').get_installed_servers())
 end)
