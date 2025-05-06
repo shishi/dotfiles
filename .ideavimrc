@@ -13,7 +13,7 @@ set showmatch
 "set wildmenu
 "set wildmode = longest:full,full
 
-set incearch
+set incsearch
 set hlsearch
 set wrapscan
 set ignorecase

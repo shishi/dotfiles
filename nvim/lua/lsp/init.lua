@@ -1,16 +1,18 @@
 local add, now, later = MiniDeps.add, MiniDeps.now, MiniDeps.later
 
 later(function()
-  add({ source = 'williamboman/mason.nvim' })
   add({
     source = 'williamboman/mason-lspconfig.nvim',
     depends = { 'williamboman/mason.nvim' },
+  })
+  add({
+    source = 'hrsh7th/cmp-nvim-lsp',
   })
 
   -- lsp common setting
   vim.lsp.config('*', {
     -- root_markers = { '.git' },
-    capabilities = require('mini.completion').get_lsp_capabilities(),
+    capabilities = require('cmp_nvim_lsp').default_capabilities(),
   })
 
   -- lsp diagnostics setting
@@ -46,11 +48,10 @@ later(function()
       end
 
       -- code definitions, references
-      vim.keymap.set('n', 'gd', vim.lsp.buf.definition,
-        {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.definition',
-        })
+      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, {
+        buffer = bufnr,
+        desc = 'vim.lsp.buf.definition',
+      })
       vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, {
         buffer = bufnr,
         desc = 'vim.lsp declaration',
@@ -59,11 +60,10 @@ later(function()
         buffer = bufnr,
         desc = 'vim.lsp hover',
       })
-      vim.keymap.set('n', 'gri', vim.lsp.buf.implementation,
-        {
-          buffer = bufnr,
-          desc = 'vim.lsp.buf.implementation',
-        })
+      vim.keymap.set('n', 'gri', vim.lsp.buf.implementation, {
+        buffer = bufnr,
+        desc = 'vim.lsp.buf.implementation',
+      })
       vim.keymap.set('n', 'gk', vim.lsp.buf.signature_help, {
         buffer = bufnr,
         desc = 'vim.lsp signature_help',
@@ -112,24 +112,14 @@ later(function()
       })
 
       -- format
-      vim.keymap.set(
-        'n',
-        'gq',
-        vim.lsp.buf.format,
-        {
-          buffer = bufnr,
-          desc = 'vim.lsp format',
-        }
-      )
-      vim.keymap.set(
-        'n',
-        '<F8>',
-        vim.lsp.buf.format,
-        {
-          buffer = bufnr,
-          desc = 'vim.lsp format',
-        }
-      )
+      vim.keymap.set('n', 'gq', vim.lsp.buf.format, {
+        buffer = bufnr,
+        desc = 'vim.lsp format',
+      })
+      vim.keymap.set('n', '<F8>', vim.lsp.buf.format, {
+        buffer = bufnr,
+        desc = 'vim.lsp format',
+      })
 
       -- symbols through by treesitter
       vim.keymap.set('n', 'gW', vim.lsp.buf.workspace_symbol, {
@@ -146,11 +136,15 @@ later(function()
         buffer = bufnr,
         desc = 'open diagnostic',
       })
-      vim.keymap.set('n', '[d', function() vim.diagnostic.jump({ count = -1 }) end, {
+      vim.keymap.set('n', '[d', function()
+        vim.diagnostic.jump({ count = -1 })
+      end, {
         buffer = bufnr,
         desc = 'goto prev diagnostic',
       })
-      vim.keymap.set('n', ']d', function() vim.diagnostic.jump({ count = 1 }) end, {
+      vim.keymap.set('n', ']d', function()
+        vim.diagnostic.jump({ count = 1 })
+      end, {
         buffer = bufnr,
         desc = 'goto next diagnostic ',
       })

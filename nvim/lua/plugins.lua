@@ -116,7 +116,7 @@ end)
 later(function()
   require('mini.pairs').setup({
     modes = { insert = true, command = true, terminal = true },
-    vim.keymap.set('i', '<CR>', 'v:lua.cr_action()', { expr = true }),
+    -- vim.keymap.set('i', '<CR>', 'v:lua.cr_action()', { expr = true }),
   })
 end)
 
@@ -295,17 +295,12 @@ end)
 
 later(function()
   add({
-    source = 'nvim-lua/plenary.nvim',
-  })
-  add({
-    source = 'sindrets/diffview.nvim',
-  })
-  add({
-    source = 'nvim-telescope/telescope.nvim',
-  })
-  add({
     source = 'NeogitOrg/neogit',
-    dependencies = { 'nvim-lua/plenary.nvim', 'sindrets/diffview.nvim', 'nvim-telescope/telescope.nvim' },
+    depends = {
+      'nvim-lua/plenary.nvim',
+      'sindrets/diffview.nvim',
+      'nvim-telescope/telescope.nvim',
+    },
   })
 
   vim.api.nvim_create_user_command('Neogit', function()
@@ -534,15 +529,15 @@ end)
 -- fuzzy finder ----------------------------------------------------------------
 later(function()
   add({
-    source = 'nvim-lua/plenary.nvim',
-  })
-  add({
     source = 'nvim-telescope/telescope.nvim',
-    dependencies = { 'nvim-lua/plenary.nvim', 'folke/trouble.nvim' },
+    depends = {
+      'nvim-lua/plenary.nvim',
+      'folke/trouble.nvim',
+    },
   })
   add({
     source = 'nvim-telescope/telescope-live-grep-args.nvim',
-    dependencies = { 'nvim-telescope/telescope.nvim' },
+    depends = { 'nvim-telescope/telescope.nvim' },
   })
 
   local open_with_trouble = require('trouble.sources.telescope').open
@@ -734,72 +729,272 @@ end)
 
 -- completion ----------------------------------------------------------------
 later(function()
+  local build = function(args)
+    local obj = vim.system({ 'make', '-C', args.path, 'install_jsregexp' }, { text = true }):wait()
+    vim.print(vim.inspect(obj))
+  end
+
   add({
-    source = 'rafamadriz/friendly-snippets',
-  })
-  require('mini.fuzzy').setup()
-  require('mini.completion').setup({
-    lsp_completion = {
-      process_items = MiniFuzzy.process_lsp_items,
+    source = 'L3MON4D3/LuaSnip',
+    hooks = {
+      post_install = function(args)
+        later(function()
+          build(args)
+        end)
+      end,
     },
   })
 
-  -- improve fallback completion
-  vim.opt.complete = { '.', 'w', 'k', 'b', 'u' }
-  vim.opt.completeopt:append('fuzzy')
-  -- vim.opt.dictionary:append('/usr/share/dict/words')
+  local luasnip = require('luasnip')
+  require('luasnip.loaders.from_vscode').lazy_load()
+  -- load snippets from path/of/your/nvim/config/my-cool-snippets
+  -- require('luasnip.loaders.from_vscode').lazy_load({ paths = { './my-cool-snippets' } })
 
-  -- define keycodes
-  local keys = {
-    cn = vim.keycode('<c-n>'),
-    cp = vim.keycode('<c-p>'),
-    ct = vim.keycode('<c-t>'),
-    cd = vim.keycode('<c-d>'),
-    cr = vim.keycode('<cr>'),
-    cy = vim.keycode('<c-y>'),
-  }
+  -- vim.keymap.set({ 'i' }, '<C-y>', function()
+  --   ---@diagnostic disable-next-line: missing-parameter
+  --   luasnip.expand()
+  -- end, { silent = true })
+  -- vim.keymap.set({ 'i', 's' }, '<C-l>', function()
+  --   luasnip.jump(1)
+  -- end, { silent = true })
+  -- vim.keymap.set({ 'i', 's' }, '<C-k>', function()
+  --   luasnip.jump(-1)
+  -- end, { silent = true })
+  -- vim.keymap.set({ 'i', 's' }, '<C-,>', function()
+  --   if luasnip.choice_active() then
+  --     luasnip.change_choice(1)
+  --   end
+  -- end, { silent = true })
 
-  -- select by <tab>/<s-tab>
-  vim.keymap.set('i', '<tab>', function()
-    -- popup is visible -> next item
-    -- popup is NOT visible -> add indent
-    return vim.fn.pumvisible() == 1 and keys.cn or keys.ct
-  end, { expr = true, desc = 'Select next item if popup is visible' })
-  vim.keymap.set('i', '<s-tab>', function()
-    -- popup is visible -> previous item
-    -- popup is NOT visible -> remove indent
-    return vim.fn.pumvisible() == 1 and keys.cp or keys.cd
-  end, { expr = true, desc = 'Select previous item if popup is visible' })
-
-  -- complete by <cr>
-  vim.keymap.set('i', '<cr>', function()
-    if vim.fn.pumvisible() == 0 then
-      -- popup is NOT visible -> insert newline
-      return require('mini.pairs').cr()
-      -- alternative if you want to avoid require
-      -- return keys.cr
-    end
-    local item_selected = vim.fn.complete_info()['selected'] ~= -1
-    if item_selected then
-      -- popup is visible and item is selected -> complete item
-      return keys.cy
-    end
-    -- popup is visible but item is NOT selected -> hide popup and insert newline
-    return keys.cy .. keys.cr
-  end, { expr = true, desc = 'Complete current item if item is selected' })
-
-  local gen_loader = require('mini.snippets').gen_loader
-  require('mini.snippets').setup({
-    snippets = {
-      -- Load custom file with global snippets first (adjust for Windows)
-      gen_loader.from_file('~/.config/nvim/snippets/global.json'),
-
-      -- Load snippets based on current language by reading files from
-      -- "snippets/" subdirectories from 'runtimepath' directories.
-      gen_loader.from_lang(),
+  add({
+    source = 'hrsh7th/nvim-cmp',
+    depends = {
+      'neovim/nvim-lspconfig',
+      'hrsh7th/cmp-nvim-lsp',
+      'hrsh7th/cmp-buffer',
+      'hrsh7th/cmp-path',
+      'hrsh7th/cmp-cmdline',
+      'L3MON4D3/LuaSnip',
+      'saadparwaiz1/cmp_luasnip',
+      'rafamadriz/friendly-snippets',
     },
   })
+
+  local cmp = require('cmp')
+  cmp.setup({
+    snippet = {
+      -- REQUIRED - you must specify a snippet engine
+      expand = function(args)
+        -- vim.fn['vsnip#anonymous'](args.body) -- For `vsnip` users.
+        require('luasnip').lsp_expand(args.body) -- For `luasnip` users.
+        -- require('snippy').expand_snippet(args.body) -- For `snippy` users.
+        -- vim.fn["UltiSnips#Anon"](args.body) -- For `ultisnips` users.
+        -- vim.snippet.expand(args.body) -- For native neovim snippets (Neovim v0.10+)
+
+        -- For `mini.snippets` users:
+        -- local insert = MiniSnippets.config.expand.insert or MiniSnippets.default_insert
+        -- insert({ body = args.body }) -- Insert at cursor
+        -- cmp.resubscribe({ "TextChangedI", "TextChangedP" })
+        -- require("cmp.config").set_onetime({ sources = {} })
+      end,
+    },
+    window = {
+      -- completion = cmp.config.window.bordered(),
+      -- documentation = cmp.config.window.bordered(),
+    },
+    mapping = cmp.mapping.preset.insert({
+      ['<C-u>'] = cmp.mapping.scroll_docs(-4),
+      ['<C-d>'] = cmp.mapping.scroll_docs(4),
+      ['<C-Space>'] = cmp.mapping.complete(),
+      ['<C-e>'] = cmp.mapping.abort(),
+      -- ['<CR>'] = cmp.mapping.confirm({ select = true }), -- Accept currently selected item. Set `select` to `false` to only confirm explicitly selected items.
+      -- super tab
+      -- https://github.com/hrsh7th/nvim-cmp/wiki/Example-mappings#luasnip
+      ['<CR>'] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          if luasnip.expandable() then
+            --- @diagnostic disable-next-line: missing-parameter
+            luasnip.expand()
+          else
+            cmp.confirm({
+              select = true,
+            })
+          end
+        else
+          fallback()
+        end
+      end),
+
+      ['<Tab>'] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          cmp.select_next_item()
+        elseif luasnip.locally_jumpable(1) then
+          luasnip.jump(1)
+        else
+          fallback()
+        end
+      end, { 'i', 's' }),
+
+      ['<S-Tab>'] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          cmp.select_prev_item()
+        elseif luasnip.locally_jumpable(-1) then
+          luasnip.jump(-1)
+        else
+          fallback()
+        end
+      end, { 'i', 's' }),
+    }),
+    -- {
+    --   -- default keymaps start
+    --   ['<Down>'] = {
+    --     i = cmp.mapping.select_next_item({ behavior = cmp.types.cmp.SelectBehavior.Select }),
+    --   },
+    --   ['<Up>'] = {
+    --     i = cmp.mapping.select_prev_item({ behavior = cmp.types.cmp.SelectBehavior.Select }),
+    --   },
+    --   ['<C-n>'] = {
+    --     i = function()
+    --       if cmp.visible() then
+    --         cmp.select_next_item({ behavior = cmp.types.cmp.SelectBehavior.Insert })
+    --       else
+    --         cmp.complete()
+    --       end
+    --     end,
+    --   },
+    --   ['<C-p>'] = {
+    --     i = function()
+    --       if cmp.visible() then
+    --         cmp.select_prev_item({ behavior = cmp.types.cmp.SelectBehavior.Insert })
+    --       else
+    --         cmp.complete()
+    --       end
+    --     end,
+    --   },
+    --   ['<C-y>'] = {
+    --     i = cmp.mapping.confirm({ select = false }),
+    --   },
+    --   ['<C-e>'] = {
+    --     i = cmp.mapping.abort(),
+    --   },
+    --   -- default keymapse end
+    sources = cmp.config.sources({
+      { name = 'nvim_lsp' },
+      -- { name = 'vsnip' }, -- For vsnip users.
+      { name = 'luasnip' }, -- For luasnip users.
+      -- { name = 'ultisnips' }, -- For ultisnips users.
+      -- { name = 'snippy' }, -- For snippy users.
+    }, {
+      { name = 'buffer' },
+      { name = 'path' },
+    }),
+  })
+  -- To use git you need to install the plugin petertriho/cmp-git and uncomment lines below
+  -- Set configuration for specific filetype.
+  -- cmp.setup.filetype('gitcommit', {
+  --   sources = cmp.config.sources({
+  --     { name = 'git' },
+  --   }, {
+  --     { name = 'buffer' },
+  --   }),
+  -- })
+  -- require('cmp_git').setup()
+
+  -- Use buffer source for `/` and `?` (if you enabled `native_menu`, this won't work anymore).
+  cmp.setup.cmdline({ '/', '?' }, {
+    mapping = cmp.mapping.preset.cmdline(),
+    sources = {
+      { name = 'buffer' },
+    },
+  })
+
+  -- Use cmdline & path source for ':' (if you enabled `native_menu`, this won't work anymore).
+  cmp.setup.cmdline(':', {
+    mapping = cmp.mapping.preset.cmdline(),
+    sources = cmp.config.sources({
+      { name = 'path' },
+    }, {
+      { name = 'cmdline' },
+    }),
+    matching = { disallow_symbol_nonprefix_matching = false },
+  })
+
+  -- moved to lsp/init.lua
+  -- -- Set up lspconfig.
+  -- local capabilities = require('cmp_nvim_lsp').default_capabilities()
+  -- -- Replace <YOUR_LSP_SERVER> with each lsp server you've enabled.
+  -- require('lspconfig')['<YOUR_LSP_SERVER>'].setup({
+  --   capabilities = capabilities,
+  -- })
 end)
+
+-- later(function()
+--   add({
+--     source = 'rafamadriz/friendly-snippets',
+--   })
+--   require('mini.fuzzy').setup()
+--   require('mini.completion').setup({
+--     lsp_completion = {
+--       process_items = MiniFuzzy.process_lsp_items,
+--     },
+--   })
+--
+--   -- improve fallback completion
+--   vim.opt.complete = { '.', 'w', 'k', 'b', 'u' }
+--   vim.opt.completeopt:append('fuzzy')
+--   -- vim.opt.dictionary:append('/usr/share/dict/words')
+--
+--   -- define keycodes
+--   local keys = {
+--     cn = vim.keycode('<c-n>'),
+--     cp = vim.keycode('<c-p>'),
+--     ct = vim.keycode('<c-t>'),
+--     cd = vim.keycode('<c-d>'),
+--     cr = vim.keycode('<cr>'),
+--     cy = vim.keycode('<c-y>'),
+--   }
+--
+--   -- select by <tab>/<s-tab>
+--   vim.keymap.set('i', '<tab>', function()
+--     -- popup is visible -> next item
+--     -- popup is NOT visible -> add indent
+--     return vim.fn.pumvisible() == 1 and keys.cn or keys.ct
+--   end, { expr = true, desc = 'Select next item if popup is visible' })
+--   vim.keymap.set('i', '<s-tab>', function()
+--     -- popup is visible -> previous item
+--     -- popup is NOT visible -> remove indent
+--     return vim.fn.pumvisible() == 1 and keys.cp or keys.cd
+--   end, { expr = true, desc = 'Select previous item if popup is visible' })
+--
+--   -- complete by <cr>
+--   vim.keymap.set('i', '<cr>', function()
+--     if vim.fn.pumvisible() == 0 then
+--       -- popup is NOT visible -> insert newline
+--       return require('mini.pairs').cr()
+--       -- alternative if you want to avoid require
+--       -- return keys.cr
+--     end
+--     local item_selected = vim.fn.complete_info()['selected'] ~= -1
+--     if item_selected then
+--       -- popup is visible and item is selected -> complete item
+--       return keys.cy
+--     end
+--     -- popup is visible but item is NOT selected -> hide popup and insert newline
+--     return keys.cy .. keys.cr
+--   end, { expr = true, desc = 'Complete current item if item is selected' })
+--
+--   local gen_loader = require('mini.snippets').gen_loader
+--   require('mini.snippets').setup({
+--     snippets = {
+--       -- Load custom file with global snippets first (adjust for Windows)
+--       gen_loader.from_file('~/.config/nvim/snippets/global.json'),
+--
+--       -- Load snippets based on current language by reading files from
+--       -- "snippets/" subdirectories from 'runtimepath' directories.
+--       gen_loader.from_lang(),
+--     },
+--   })
+-- end)
 
 -- lsp ----------------------------------------------------------------
 later(function()
