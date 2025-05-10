@@ -3,7 +3,7 @@ return {
     -- enabledFeatures = {
     --   diagnostics = false,
     -- },
-    formatter = 'auto',
+    formatter = 'none',
     linters = {},
   },
 }

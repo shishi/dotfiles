@@ -293,3 +293,13 @@ $RECYCLE.BIN/
 
 
 # End of https://www.gitignore.io/api/go,vim,ruby,linux,macos,emacs,windows,intellij+all,visualstudiocode
+
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
