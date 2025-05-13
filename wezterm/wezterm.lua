@@ -14,6 +14,7 @@ end)
 
 -- common config
 local config = {
+  leader = { key = 'w', mods = 'ALT' },
   -- seems this setting effect only QuitApplication
   window_close_confirmation = 'NeverPrompt',
   send_composed_key_when_right_alt_is_pressed = false,
@@ -37,22 +38,22 @@ local config = {
     -- applicaton
     {
       key = 'q',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.QuitApplication,
     },
     {
       key = 'l',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ShowLauncher,
     },
     {
       key = 'Backspace',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateCopyMode,
     },
     {
       key = 'f',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.Search({ CaseInSensitiveString = '' }),
     },
     {
@@ -68,130 +69,130 @@ local config = {
     -- tab & pane
     {
       key = 't',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.SpawnCommandInNewTab,
     },
     {
       key = 'w',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.CloseCurrentPane({
         confirm = false,
       }),
     },
     {
       key = "'",
-      mods = 'CTRL|ALT',
-      action = wezterm.action.SplitVertical({
+      mods = 'LEADER',
+      action = act.SplitVertical({
         domain = 'CurrentPaneDomain',
       }),
     },
     {
       key = ';',
-      mods = 'CTRL|ALT',
-      action = wezterm.action.SplitHorizontal({
+      mods = 'LEADER',
+      action = act.SplitHorizontal({
         domain = 'CurrentPaneDomain',
       }),
     },
     {
       key = 'UpArrow',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivatePaneDirection('Up'),
     },
     {
       key = 'DownArrow',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivatePaneDirection('Down'),
     },
     {
       key = 'RightArrow',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivatePaneDirection('Right'),
     },
     {
       key = 'LeftArrow',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivatePaneDirection('Left'),
     },
     {
       key = 'Tab',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTabRelative(1),
     },
     {
       key = 'Tab',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTabRelative(-1),
     },
     {
       key = '1',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(0),
     },
     {
       key = '2',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(1),
     },
     {
       key = '3',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(2),
     },
     {
       key = '4',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(3),
     },
     {
       key = '5',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(4),
     },
     {
       key = '6',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(5),
     },
     {
       key = '7',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(6),
     },
     {
       key = '8',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(7),
     },
     {
       key = '9',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ActivateTab(-1),
     },
     -- copy & paste
     {
       key = 'c',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.CopyTo('Clipboard'),
     },
     {
       key = 'v',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.PasteFrom('Clipboard'),
     },
     -- font size
     {
       key = '0',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.ResetFontSize,
     },
     {
       key = '-',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.DecreaseFontSize,
     },
     {
       key = '=',
-      mods = 'CTRL|ALT',
+      mods = 'LEADER',
       action = act.IncreaseFontSize,
     },
   },
