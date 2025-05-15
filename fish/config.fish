@@ -45,9 +45,6 @@ set -x GOPATH ~/dev/
 #   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh"
 # end
 
-# ruby for nix
-set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
-
 if [ (uname) = Darwin ]
     if type gls &>/dev/null
         set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
@@ -368,6 +365,12 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
     end
 end
 
+# gem path for current ruby
+function gem_path
+  set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
+end
+gem_path
+
 # switch ruby
 function ruby-switch
   if test (count $argv) -eq 0
@@ -376,10 +379,11 @@ function ruby-switch
   end
 
   if [ -d $HOME/.nix-profile-ruby-$argv[1]/bin ]
-    echo "switched to ruby $argv[1]"
     set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin
+    gem_path
+    echo "switched to ruby $argv[1]"
   else
-    echo "Unknown version $argv[1]"
+    echo "you do not have version $argv[1]"
   end
 end
 
