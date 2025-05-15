@@ -45,6 +45,9 @@ set -x GOPATH ~/dev/
 #   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh"
 # end
 
+# ruby for nix
+set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
+
 if [ (uname) = Darwin ]
     if type gls &>/dev/null
         set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
@@ -95,7 +98,7 @@ if type mise &>/dev/null
     else
         mise activate fish --shims | source
     end
-    # rbenv
+# rbenv
 else if type ~/.rbenv/bin/rbenv &>/dev/null
     set -x PATH ~/.rbenv/bin $PATH
     status --is-interactive; and rbenv init - --no-rehash fish | source
