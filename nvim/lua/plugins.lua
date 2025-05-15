@@ -351,6 +351,24 @@ later(function()
       animation = require('mini.indentscope').gen_animation.none(),
     },
   })
+  vim.api.nvim_create_autocmd({ 'BufEnter' }, {
+    callback = function()
+      local ignore_filetypes = {
+        'help',
+        'Trouble',
+        'trouble',
+        'lazy',
+        'mason',
+        'notify',
+        'better_term',
+        'toggleterm',
+        'lazyterm',
+      }
+      if vim.tbl_contains(ignore_filetypes, vim.bo.filetype) then
+        vim.b.miniindentscope_disable = true
+      end
+    end,
+  })
 end)
 
 later(function()

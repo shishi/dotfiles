@@ -365,27 +365,29 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
     end
 end
 
-# gem path for current ruby
-function gem_path
-  set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
-end
-gem_path
-
-# switch ruby
-function ruby-switch
-  if test (count $argv) -eq 0
-    echo "Usage: ruby-switch <version>"
-    return 1
+# ruby (mainly for nix now)
+if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
+  function add_current_gem_path
+    set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
   end
+  add_current_gem_path
 
-  if [ -d $HOME/.nix-profile-ruby-$argv[1]/bin ]
-    set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin
-    gem_path
-    echo "switched to ruby $argv[1]"
-  else
-    echo "you do not have version $argv[1]"
+  function ruby_switch
+    if test (count $argv) -eq 0
+      echo "Usage: ruby-switch <version>"
+      return 1
+    end
+
+    if test -d $HOME/.nix-profile-ruby-$argv[1]/bin
+      set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin $PATH
+      add_current_gem_path
+      echo "switched to ruby $argv[1]"
+    else
+      echo "you do not have version $argv[1]"
+    end
   end
 end
+
 
 #function fci -d "Fuzzy-find and checkout a commit"
 #  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
