@@ -368,6 +368,21 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
     end
 end
 
+# switch ruby
+function ruby-switch
+  if test (count $argv) -eq 0
+    echo "Usage: ruby-switch <version>"
+    return 1
+  end
+
+  if [ -d $HOME/.nix-profile-ruby-$argv[1]/bin ]
+    echo "switched to ruby $argv[1]"
+    set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin
+  else
+    echo "Unknown version $argv[1]"
+  end
+end
+
 #function fci -d "Fuzzy-find and checkout a commit"
 #  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
 #end
