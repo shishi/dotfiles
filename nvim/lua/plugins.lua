@@ -50,6 +50,20 @@ now(function()
 end)
 
 now(function()
+  add({
+    source = 'stevearc/oil.nvim',
+  })
+  require('oil').setup()
+
+  vim.api.nvim_create_user_command('OilFloat', function()
+    vim.api.nvim_cmd({
+      cmd = 'Oil',
+      args = { '--float', vim.fn.expand('%:p:h') },
+    }, {})
+  end, { desc = 'Open Oil Float' })
+end)
+
+now(function()
   require('mini.notify').setup()
 
   vim.notify = require('mini.notify').make_notify({
@@ -494,13 +508,13 @@ later(function()
     },
   })
 
-  vim.keymap.set('n', '<leader>q', function()
+  vim.keymap.set('n', '<leader><leader>q', function()
     require('quicker').toggle()
     require('quicker').refresh()
   end, {
     desc = 'Toggle quickfix',
   })
-  vim.keymap.set('n', '<leader>l', function()
+  vim.keymap.set('n', '<leader><leader>l', function()
     require('quicker').toggle({ loclist = true })
     require('quicker').refresh()
   end, {
@@ -1135,6 +1149,45 @@ later(function()
   vim.opt.splitright = true
   vim.keymap.set('ca', 'chat', 'CopilotChat', { desc = 'Ask CopilotChat' })
   vim.keymap.set({ 'n', 'x' }, '<Leader>p', '<cmd>CopilotChatPrompt<cr>', { desc = 'CopilotChat predefined prompts' })
+end)
+
+later(function()
+  add({
+    source = 'coder/claudecode.nvim',
+  })
+  require('claudecode').setup()
+
+  vim.keymap.set('n', '<Leader>lc', function()
+    vim.cmd('ClaudeCode')
+  end, { desc = 'Toggle Claudecode' })
+
+  vim.keymap.set('n', '<Leader>lf', function()
+    vim.cmd('ClaudeCodeFocus')
+  end, { desc = 'Focus Claudecode' })
+
+  vim.keymap.set('n', '<Leader>lr', function()
+    vim.cmd('ClaudeCode --resume')
+  end, { desc = 'Resume Claudecode' })
+
+  vim.keymap.set('n', '<Leader>lo', function()
+    vim.cmd('ClaudeCode --continue')
+  end, { desc = 'Continue Claudecode' })
+
+  vim.keymap.set('x', '<Leader>ls', function()
+    vim.cmd('ClaudeCodeSend')
+  end, { desc = 'Send Claudecode' })
+
+  vim.keymap.set('n', '<Leader>lt', function()
+    vim.cmd('ClaudeCodeTreeAdd')
+  end, { desc = 'Add files' })
+
+  vim.keymap.set('n', '<Leader>la', function()
+    vim.cmd('ClaudeCodeDiffAccept')
+  end, { desc = 'Accespt Diff' })
+
+  vim.keymap.set('n', '<Leader>ld', function()
+    vim.cmd('ClaudeCodeDiffDeny')
+  end, { desc = 'Deny Diff' })
 end)
 
 -- formatting ---------------------------------------------------------------
