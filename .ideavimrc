@@ -47,10 +47,10 @@ nnoremap gr :action FindUsages<CR>
 nnoremap gy :action GotoTypeDeclaration<CR>
 nnoremap gi :action GotoImplementation<CR>
 nnoremap gs :action GotoSuperMethod<CR>
-nnoremap <Leader>rn :action RenameElement<CR>
+nnoremap grn :action RenameElement<CR>
 nnoremap K :action QuickJavaDoc<CR>
 nnoremap gk :action ShowUsages<CR>
-nnoremap <Leader>gt :action GotoTest<CR>
+nnoremap grt :action GotoTest<CR>
 
 nnoremap [c :action VcsShowPrevChangeMarker<CR>
 nnoremap ]c :action VcsShowNextChangeMarker<CR>

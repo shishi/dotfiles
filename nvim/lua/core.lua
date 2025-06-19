@@ -116,7 +116,7 @@ if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe
     },
     cache_enable = 0,
   }
-elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL then
+elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('USER') == 'app' then
   vim.g.clipboard = {
     name = 'OSC 52',
     copy = {
