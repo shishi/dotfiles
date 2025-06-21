@@ -10,7 +10,8 @@ set fish_color_command white
 #else
 #    set dev ~/dev
 #end
-set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin /home/linuxbrew/.linuxbrew/bin $PATH
+set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+# set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin /home/linuxbrew/.linuxbrew/bin $PATH
 set -x GPG_TTY (tty)
 
 if [ "$TERM_PROGRAM" = vscode ]
@@ -83,23 +84,18 @@ if type lv &>/dev/null
     #   set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
 end
 
-# homebrew
-if test -f /opt/homebrew/bin/brew
-    eval (/opt/homebrew/bin/brew shellenv)
-end
-
-# mise
-if type mise &>/dev/null
-    if status is-interactive
-        mise activate fish | source
-    else
-        mise activate fish --shims | source
-    end
-# rbenv
-else if type ~/.rbenv/bin/rbenv &>/dev/null
-    set -x PATH ~/.rbenv/bin $PATH
-    status --is-interactive; and rbenv init - --no-rehash fish | source
-end
+# # mise
+# if type mise &>/dev/null
+#     if status is-interactive
+#         mise activate fish | source
+#     else
+#         mise activate fish --shims | source
+#     end
+# # rbenv
+# else if type ~/.rbenv/bin/rbenv &>/dev/null
+#     set -x PATH ~/.rbenv/bin $PATH
+#     status --is-interactive; and rbenv init - --no-rehash fish | source
+# end
 
 # # ruby
 # if test -d ~/.gem/
@@ -210,6 +206,12 @@ switch (uname -a)
             alias vi 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOS/Vim "$@"'
             alias vim 'env LANG=ja_JP.UTF-8 ~/Applications/MacVim.app/Contents/MacOpS/Vim "$@"'
         end
+
+        # homebrew
+        if test -f /opt/homebrew/bin/brew
+            eval (/opt/homebrew/bin/brew shellenv)
+        end
+
     case "*Linux*"
         alias ll 'ls -la --color'
         # alias open 'xdg-open'
