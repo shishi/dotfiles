@@ -61,6 +61,11 @@ if [ (uname) = Darwin ]
         set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
     end
 
+    # nix-darwin
+    if type -d '/run/current-system/sw/bin/' &>/dev/null
+        set -x PATH '/run/current-system/sw/bin/' $PATH
+    end
+
     # jetbrains toolbox
     if type -d "~/Library/Application Support/JetBrains/Toolbox/scripts" &>/dev/null
         set -x PATH "~/Library/Application Support/JetBrains/Toolbox/scripts" $PATH
@@ -369,27 +374,26 @@ end
 
 # ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
-  function add_current_gem_path
-    set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
-  end
-  add_current_gem_path
-
-  function ruby_switch
-    if test (count $argv) -eq 0
-      echo "Usage: ruby-switch <version>"
-      return 1
+    function add_current_gem_path
+        set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
     end
+    add_current_gem_path
 
-    if test -d $HOME/.nix-profile-ruby-$argv[1]/bin
-      set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin $PATH
-      add_current_gem_path
-      echo "switched to ruby $argv[1]"
-    else
-      echo "you do not have version $argv[1]"
+    function ruby_switch
+        if test (count $argv) -eq 0
+            echo "Usage: ruby-switch <version>"
+            return 1
+        end
+
+        if test -d $HOME/.nix-profile-ruby-$argv[1]/bin
+            set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin $PATH
+            add_current_gem_path
+            echo "switched to ruby $argv[1]"
+        else
+            echo "you do not have version $argv[1]"
+        end
     end
-  end
 end
-
 
 #function fci -d "Fuzzy-find and checkout a commit"
 #  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
