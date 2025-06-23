@@ -1,6 +1,6 @@
 {
+  "model": "opus",
   "theme": "dark",
-  "cleanupPeriodDays": 60,
   "permissions": {
     "allow": [
       "Bash(npm:*)",
@@ -318,7 +318,5 @@
     ]
   },
   "env": {
-    "ANTHROPIC_MODEL": "claude-opus-4-20250514",
   },
-  "preferredNotifChannel": "terminal_bell"
 }
