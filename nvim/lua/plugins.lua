@@ -1069,6 +1069,8 @@ later(function()
   -- nvim --headless -c "MasonInstall actionlint buf eslint-lsp selene sqlfluff stylelint stylua yamllint shfmt goimports" -c qall
 
   require('mason-lspconfig').setup({
+    automatic_enable = false,
+    automatic_installation = true,
     ensure_installed = {
       -- lsp
       'bashls',
@@ -1079,11 +1081,10 @@ later(function()
       'rust_analyzer',
       'taplo',
       'vtsls',
-      'volar',
+      'vue_ls',
       -- tools
       'rubocop',
     },
-    automatic_installation = true,
   })
 end)
 
