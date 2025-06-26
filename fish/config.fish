@@ -118,10 +118,10 @@ if test -f ~/.cask/bin/cask
 end
 
 # aqua
-if type aqua &>/dev/null
-    set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
-    set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
-end
+# if type aqua &>/dev/nul1l
+#     set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
+#     set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
+# end
 
 # rust tools
 if type cargo &>/dev/null

@@ -64,17 +64,17 @@ else
   ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
 fi
 
-ln -sf ${DOTDIR}/claude/settings.json ~/.claude/settings.json
-ln -sf ${DOTDIR}/claude/CLAUDE.md ~/.claude/CLAUDE.md
-# if [ -L ${XDG_CONFIG_HOME}/claude ]; then
-#   rm ${XDG_CONFIG_HOME}/claude
-#   ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
-# elif [ -d ${XDG_CONFIG_HOME}/claude ]; then
-#   rm -fr ${XDG_CONFIG_HOME}/claude
-#   ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
-# else
-#   ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
-# fi
+# ln -sf ${DOTDIR}/claude/settings.json ~/.claude/settings.json
+# ln -sf ${DOTDIR}/claude/CLAUDE.md ~/.claude/CLAUDE.md
+if [ -L ${XDG_CONFIG_HOME}/claude ]; then
+  rm ${XDG_CONFIG_HOME}/claude
+  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
+elif [ -d ${XDG_CONFIG_HOME}/claude ]; then
+  rm -fr ${XDG_CONFIG_HOME}/claude
+  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
+else
+  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
+fi
 
 if [ $(uname) = Darwin ]; then
   ln -sf ${DOTDIR}/.gitconfig.mac ~/.gitconfig
@@ -105,7 +105,7 @@ ln -sf ${DOTDIR}/.pryrc ~/.pryrc
 
 ln -sf ${DOTDIR}/.npmrc ~/.npmrc
 
-ln -sf ${DOTDIR}/.bashrc ~/.bashrc
+# ln -sf ${DOTDIR}/.bashrc ~/.bashrc
 
 # ln -s ${DOTDIR}/.zsh ~/.zsh
 # ln -s ${DOTDIR}/.zshenv ~/.zshenv
