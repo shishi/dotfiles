@@ -76,6 +76,19 @@ else
   ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
 fi
 
+if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
+  rm ${XDG_CONFIG_HOME}/nushell
+  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
+  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
+elif [ -d ${XDG_CONFIG_HOME}/nushell ]; then
+  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
+  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
+else
+  mkdir -p ${XDG_CONFIG_HOME}/nushell
+  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
+  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
+fi
+
 if [ $(uname) = Darwin ]; then
   ln -sf ${DOTDIR}/.gitconfig.mac ~/.gitconfig
   ln -sf ${DOTDIR}/Brewfile ~/Brewfile
