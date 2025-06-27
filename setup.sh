@@ -64,8 +64,8 @@ else
   ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
 fi
 
-# ln -sf ${DOTDIR}/claude/settings.json ~/.claude/settings.json
-# ln -sf ${DOTDIR}/claude/CLAUDE.md ~/.claude/CLAUDE.md
+ln -sf ${DOTDIR}/claude/settings.json ~/.claude/settings.json
+ln -sf ${DOTDIR}/claude/CLAUDE.md ~/.claude/CLAUDE.md
 if [ -L ${XDG_CONFIG_HOME}/claude ]; then
   rm ${XDG_CONFIG_HOME}/claude
   ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
