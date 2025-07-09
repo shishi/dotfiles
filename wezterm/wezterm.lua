@@ -275,6 +275,11 @@ local config = {
   },
 }
 
+-- claude code notification
+wezterm.on('bell', function(window, _pane)
+  window:toast_notification('Claude Code', 'Task completed', nil, 4000)
+end)
+
 -- ssh domains
 -- local ssh_config = {
 --   ssh_domains = {

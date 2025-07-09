@@ -316,6 +316,9 @@
       "Write(/etc/sudoers)"
     ]
   },
+  env: {
+    "BASH_MAX_TIMEOUT_MS": 600000,
+  },
   "theme": "dark",
   "preferredNotifChannel": "terminal_bell",
   "model": "opus"
