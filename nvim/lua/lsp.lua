@@ -160,13 +160,13 @@ later(function()
 
   local utils = require('utils')
   local lsp_modules = utils.get_lsp_modules()
-
-  -- print all lsp_modules
-  for _, module in ipairs(lsp_modules) do
-    print('lsp module: ' .. module)
-  end
-
   vim.lsp.enable(lsp_modules)
-  -- for lsp without settings
+
+  -- -- print all lsp_modules
+  -- for _, module in ipairs(lsp_modules) do
+  --   print('lsp module: ' .. module)
+  -- end
+
+  -- for lsp without settings with mason-lspconfig
   -- vim.lsp.enable(require('mason-lspconfig').get_installed_servers())
 end)

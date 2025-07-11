@@ -1071,20 +1071,21 @@ later(function()
   require('mason-lspconfig').setup({
     automatic_enable = false,
     automatic_installation = true,
-    ensure_installed = {
-      -- lsp
-      'bashls',
-      'eslint',
-      'gopls',
-      'lua_ls',
-      'ruby_lsp',
-      'rust_analyzer',
-      'taplo',
-      'vtsls',
-      'vue_ls',
-      -- tools
-      'rubocop',
-    },
+    ensure_installed = {},
+    -- ensure_installed = {
+    --   -- lsp
+    --   'bashls',
+    --   'eslint',
+    --   'gopls',
+    --   'lua_ls',
+    --   'ruby_lsp',
+    --   'rust_analyzer',
+    --   'taplo',
+    --   'vtsls',
+    --   'vue_ls',
+    --   -- tools
+    --   'rubocop',
+    -- },
   })
 end)
 
