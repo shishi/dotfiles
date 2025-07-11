@@ -173,6 +173,11 @@ if test -d ~/.console-ninja &>/dev/null
     set -x PATH ~/.console-ninja/.bin $PATH
 end
 
+# claude code
+if test -f ~/.claude/local/claude &>/dev/null
+    set -x PATH ~/.claude/local $PATH
+end
+
 # settings
 #########################################
 
@@ -419,3 +424,4 @@ end
 #########################################
 
 # source ~/.config/fish/functions/github_copilot_cli.fish
+

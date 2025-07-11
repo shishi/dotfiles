@@ -158,24 +158,15 @@ later(function()
     end,
   })
 
-  -- load lsp setting automatically
-  local dirname = vim.fn.stdpath('config') .. '/lua/lsp'
-  local lsp_names = {}
+  local utils = require('utils')
+  local lsp_modules = utils.get_lsp_modules()
 
-  for file, ftype in vim.fs.dir(dirname) do
-    if ftype == 'file' and vim.endswith(file, '.lua') and file ~= 'init.lua' then
-      local lsp_name = file:sub(1, -5) -- fname without '.lua'
-      local ok, result = pcall(require, 'lsp.' .. lsp_name)
-      if ok then
-        vim.lsp.config(lsp_name, result)
-        table.insert(lsp_names, lsp_name)
-      else
-        vim.notify('Error loading LSP: ' .. lsp_name .. '\n' .. result, vim.log.levels.WARN)
-      end
-    end
+  -- print all lsp_modules
+  for _, module in ipairs(lsp_modules) do
+    print('lsp module: ' .. module)
   end
 
-  vim.lsp.enable(lsp_names)
+  vim.lsp.enable(lsp_modules)
   -- for lsp without settings
   -- vim.lsp.enable(require('mason-lspconfig').get_installed_servers())
 end)

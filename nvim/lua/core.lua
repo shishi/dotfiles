@@ -92,18 +92,9 @@ vim.opt.mouse = 'a'
 vim.opt.mousemodel = 'popup'
 vim.opt.clipboard = 'unnamedplus'
 
-local m = {}
-function m.file_exists(name)
-  local f = io.open(name, 'r')
-  if f ~= nil then
-    io.close(f)
-    return true
-  else
-    return false
-  end
-end
+local utils = require('utils')
 
-if m.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
+if utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
   vim.g.clipboard = {
     name = 'win32yank_wsl',
     copy = {
