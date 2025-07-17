@@ -1,5 +1,12 @@
 {
-  "env": {},
+  "model": "opus",
+  "env": {
+      "BASH_MAX_TIMEOUT_MS": 600000
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "terraform"
+  ],
   "permissions": {
     "allow": [
       "Bash(7z:*)",
@@ -241,7 +248,7 @@
       "Write(~/dev/**)",
       "Write(~/projects/**)",
       "Write(~/src/**)",
-      "Write(~/work/**)",
+      "Write(~/work/**)"
     ],
     "deny": [
       "Bash(> /dev/*)",
@@ -314,17 +321,7 @@
       "Write(~/.ssh/*_ecdsa)",
       "Write(~/.ssh/*_ed25519)",
       "Write(~/.ssh/*_rsa)",
-      "Write(~/.ssh/id_*)",
+      "Write(~/.ssh/id_*)"
     ]
-  },
-  env: {
-    "BASH_MAX_TIMEOUT_MS": 600000,
-  },
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "terraform"
-  ],
-  "theme": "dark",
-  "preferredNotifChannel": "terminal_bell",
-  "model": "opus"
+  }
 }
