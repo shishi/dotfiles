@@ -1163,7 +1163,7 @@ later(function()
     },
     window = {
       position = 'right', -- right, left, bottom, top
-      size = 0.3, -- 40% of screen
+      size = 0.3, -- 30% of screen
     },
   })
 
