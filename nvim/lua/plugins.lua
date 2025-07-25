@@ -1145,74 +1145,74 @@ later(function()
   vim.keymap.set({ 'n', 'x' }, '<Leader>p', '<cmd>CopilotChatPrompt<cr>', { desc = 'CopilotChat predefined prompts' })
 end)
 
-later(function()
-  add({
-    source = 'edo1z/claude-cli.nvim',
-  })
-  require('claude-cli').setup({
-    keymaps = {
-      toggle = '<leader>cc', -- New session or toggle window
-      toggle_dangerous = '<leader>cd', -- New session or toggle (dangerous mode)
-      continue_session = '<leader>cC', -- Continue last session
-      continue_session_dangerous = '<leader>cD', -- Continue last session dangerous
-      toggle_window = '<leader>ct', -- Toggle window visibility
-      send_path = '<leader>cp', -- Send file path to prompt
-      send_error = '<leader>ce', -- Send error info to prompt
-      send_selection = '<leader>cs', -- Send selection to prompt
-      open_prompt = '<leader>ca', -- Open prompt builder
-    },
-    window = {
-      position = 'right', -- right, left, bottom, top
-      size = 0.3, -- 30% of screen
-    },
-  })
-
-  require('claude-prompt').setup({
-    -- Prompt builder settings
-    snippets_dir = vim.fn.stdpath('data') .. '/claude-prompt/snippets',
-    history_dir = vim.fn.stdpath('data') .. '/claude-prompt/history',
-    max_history = 100,
-  })
-end)
-
 -- later(function()
 --   add({
---     source = 'coder/claudecode.nvim',
+--     source = 'edo1z/claude-cli.nvim',
 --   })
---   require('claudecode').setup()
+--   require('claude-cli').setup({
+--     keymaps = {
+--       toggle = '<leader>cc', -- New session or toggle window
+--       toggle_dangerous = '<leader>cd', -- New session or toggle (dangerous mode)
+--       continue_session = '<leader>cC', -- Continue last session
+--       continue_session_dangerous = '<leader>cD', -- Continue last session dangerous
+--       toggle_window = '<leader>ct', -- Toggle window visibility
+--       send_path = '<leader>cp', -- Send file path to prompt
+--       send_error = '<leader>ce', -- Send error info to prompt
+--       send_selection = '<leader>cs', -- Send selection to prompt
+--       open_prompt = '<leader>ca', -- Open prompt builder
+--     },
+--     window = {
+--       position = 'right', -- right, left, bottom, top
+--       size = 0.3, -- 30% of screen
+--     },
+--   })
 --
---   vim.keymap.set('n', '<Leader>lc', function()
---     vim.cmd('ClaudeCode')
---   end, { desc = 'Toggle Claudecode' })
---
---   vim.keymap.set('n', '<Leader>lf', function()
---     vim.cmd('ClaudeCodeFocus')
---   end, { desc = 'Focus Claudecode' })
---
---   vim.keymap.set('n', '<Leader>lr', function()
---     vim.cmd('ClaudeCode --resume')
---   end, { desc = 'Resume Claudecode' })
---
---   vim.keymap.set('n', '<Leader>lo', function()
---     vim.cmd('ClaudeCode --continue')
---   end, { desc = 'Continue Claudecode' })
---
---   vim.keymap.set('x', '<Leader>ls', function()
---     vim.cmd('ClaudeCodeSend')
---   end, { desc = 'Send Claudecode' })
---
---   vim.keymap.set('n', '<Leader>lt', function()
---     vim.cmd('ClaudeCodeTreeAdd')
---   end, { desc = 'Add files' })
---
---   vim.keymap.set('n', '<Leader>la', function()
---     vim.cmd('ClaudeCodeDiffAccept')
---   end, { desc = 'Accespt Diff' })
---
---   vim.keymap.set('n', '<Leader>ld', function()
---     vim.cmd('ClaudeCodeDiffDeny')
---   end, { desc = 'Deny Diff' })
+--   require('claude-prompt').setup({
+--     -- Prompt builder settings
+--     snippets_dir = vim.fn.stdpath('data') .. '/claude-prompt/snippets',
+--     history_dir = vim.fn.stdpath('data') .. '/claude-prompt/history',
+--     max_history = 100,
+--   })
 -- end)
+
+later(function()
+  add({
+    source = 'coder/claudecode.nvim',
+  })
+  require('claudecode').setup()
+
+  vim.keymap.set('n', '<Leader>cc', function()
+    vim.cmd('ClaudeCode')
+  end, { desc = 'Toggle Claudecode' })
+
+  vim.keymap.set('n', '<Leader>cf', function()
+    vim.cmd('ClaudeCodeFocus')
+  end, { desc = 'Focus Claudecode' })
+
+  vim.keymap.set('n', '<Leader>cr', function()
+    vim.cmd('ClaudeCode --resume')
+  end, { desc = 'Resume Claudecode' })
+
+  vim.keymap.set('n', '<Leader>cC', function()
+    vim.cmd('ClaudeCode --continue')
+  end, { desc = 'Continue Claudecode' })
+
+  vim.keymap.set('x', '<Leader>cs', function()
+    vim.cmd('ClaudeCodeSend')
+  end, { desc = 'Send Claudecode' })
+
+  vim.keymap.set('n', '<Leader>ct', function()
+    vim.cmd('ClaudeCodeTreeAdd')
+  end, { desc = 'Add files' })
+
+  vim.keymap.set('n', '<Leader>cda', function()
+    vim.cmd('ClaudeCodeDiffAccept')
+  end, { desc = 'Accespt Diff' })
+
+  vim.keymap.set('n', '<Leader>cdd', function()
+    vim.cmd('ClaudeCodeDiffDeny')
+  end, { desc = 'Deny Diff' })
+end)
 
 -- formatting ---------------------------------------------------------------
 add({
