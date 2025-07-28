@@ -1227,7 +1227,8 @@ later(function()
     },
     formatters_by_ft = {
       go = { 'gofmt', 'goimports' },
-      json = { 'jq' },
+      json = { 'deno_fmt' },
+      jsonc = { 'deno_fmt' },
       lua = { 'stylua' },
       ruby = { 'rubocop' },
       sh = { 'shfmt' },

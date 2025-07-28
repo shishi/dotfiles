@@ -108,6 +108,13 @@ if utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank
     cache_enable = 0,
   }
 elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('USER') == 'app' then
+  local function paste()
+    return {
+      vim.fn.split(vim.fn.getreg(''), '\n'),
+      vim.fn.getregtype(''),
+    }
+  end
+
   vim.g.clipboard = {
     name = 'OSC 52',
     copy = {
@@ -115,8 +122,8 @@ elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('USER') == 'app' the
       ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
     },
     paste = {
-      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+      ['+'] = paste,
+      ['*'] = paste,
     },
   }
 end
