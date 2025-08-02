@@ -74,6 +74,9 @@ if [ (uname) = Darwin ]
     # orbstack
     if type orb &>/dev/null
         set -x PATH ~/.orbstack/bin $PATH
+        # Added by OrbStack: command-line tools and integration
+        # This won't be added again if you remove it.
+        source ~/.orbstack/shell/init2.fish 2>/dev/null || :
     end
 end
 
@@ -424,4 +427,5 @@ end
 #########################################
 
 # source ~/.config/fish/functions/github_copilot_cli.fish
+
 
