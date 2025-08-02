@@ -165,17 +165,17 @@ later(function()
   })
 end)
 
-later(function()
-  require('mini.jump').setup({
-    mappings = {
-      -- forward = 'f',
-      -- backward = 'F',
-      -- forward_till = 't',
-      -- backward_till = 'T',
-      repeat_jump = ':',
-    },
-  })
-end)
+-- later(function()
+--   require('mini.jump').setup({
+--     mappings = {
+--       -- forward = 'f',
+--       -- backward = 'F',
+--       -- forward_till = 't',
+--       -- backward_till = 'T',
+--       repeat_jump = ':',
+--     },
+--   })
+-- end)
 
 -- later(function()
 --   require('mini.jump2d').setup({
@@ -185,12 +185,81 @@ end)
 --   })
 -- end)
 
+-- later(function()
+--   add({
+--     source = 'ggandor/leap.nvim',
+--   })
+--   vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
+--   vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
+-- end)
+
 later(function()
   add({
-    source = 'ggandor/leap.nvim',
+    source = 'folke/flash.nvim',
   })
-  vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
-  vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
+
+  require('flash').setup({
+    remote_op = {
+      restore = true,
+      motion = true,
+    },
+    vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
+      require('flash').jump()
+    end, { desc = 'Flash Jump' }),
+
+    vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
+      require('flash').treesitter()
+    end, { desc = 'Flash Treesitter' }),
+
+    vim.keymap.set('o', 'r', function()
+      require('flash').remote()
+    end, { desc = 'Flash Remote' }),
+
+    vim.keymap.set({ 'o', 'x' }, 'R', function()
+      require('flash').treesitter_search()
+    end, { desc = 'Flash Treesitter Search' }),
+
+    vim.keymap.set({ 'c' }, '<c-s>', function()
+      require('flash').toggle()
+    end, { desc = 'Toggle Flash Search' }),
+  })
+end)
+
+later(function()
+  add({
+    source = 'sei40kr/migemo-search.nvim',
+  })
+  local nvim_root = vim.fn.stdpath('config')
+  local migemo_dir = nvim_root .. '/migemo'
+  local migemo_bin = ''
+  local migemo_dict = migemo_dir .. '/utf-8.d/migemo-dict'
+  -- vim.env.MIGEMO_DICT = migemo_dir .. '/utf-8.d/migemo-dict'
+
+  if vim.fn.has('unix') then
+    migemo_bin = migemo_dir .. '/x86_64_linux/cmigemo'
+    local migemo_linux_dir = migemo_dir .. '/x86_64_linux/'
+    vim.env.PATH = migemo_linux_dir .. ':' .. vim.env.PATH
+    vim.env.LD_LIBRARY_PATH = migemo_linux_dir .. ':' .. (vim.env.LD_LIBRARY_PATH or '')
+  elseif vim.fn.has('mac') then
+    migemo_bin = migemo_dir .. '/arm64_darwin/cmigemo'
+    local migemo_mac_dir = migemo_dir .. '/arm64_darwin/'
+    vim.env.PATH = migemo_mac_dir .. ':' .. vim.env.PATH
+    vim.env.DYLD_LIBRARY_PATH = migemo_mac_dir .. ':' .. (vim.env.DYLD_LIBRARY_PATH or '')
+  elseif vim.fn.has('win32') then
+    migemo_bin = migemo_dir .. '/x86_64_windows/cmigemo.exe'
+    local migemo_windows_dir = migemo_dir .. '/x86_64_windows/'
+    vim.env.PATH = migemo_windows_dir .. ':' .. vim.env.PATH
+  end
+
+  local ms = require('migemo-search')
+  ms.setup({
+    cmigemo_exec_path = migemo_bin,
+    migemo_dict_path = migemo_dict,
+  })
+  vim.keymap.set('c', '<CR>', ms.cr)
+  -- ああああああ
+  -- みげも
+  -- 検索
 end)
 
 later(function()
