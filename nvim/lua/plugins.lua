@@ -165,17 +165,17 @@ later(function()
   })
 end)
 
--- later(function()
---   require('mini.jump').setup({
---     mappings = {
---       -- forward = 'f',
---       -- backward = 'F',
---       -- forward_till = 't',
---       -- backward_till = 'T',
---       repeat_jump = ':',
---     },
---   })
--- end)
+later(function()
+  require('mini.jump').setup({
+    mappings = {
+      -- forward = 'f',
+      -- backward = 'F',
+      -- forward_till = 't',
+      -- backward_till = 'T',
+      repeat_jump = ':',
+    },
+  })
+end)
 
 -- later(function()
 --   require('mini.jump2d').setup({
@@ -185,45 +185,81 @@ end)
 --   })
 -- end)
 
--- later(function()
---   add({
---     source = 'ggandor/leap.nvim',
---   })
---   vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
---   vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
--- end)
-
 later(function()
   add({
-    source = 'folke/flash.nvim',
+    source = 'ggandor/leap.nvim',
   })
-
-  require('flash').setup({
-    remote_op = {
-      restore = true,
-      motion = true,
-    },
-    vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
-      require('flash').jump()
-    end, { desc = 'Flash Jump' }),
-
-    vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
-      require('flash').treesitter()
-    end, { desc = 'Flash Treesitter' }),
-
-    vim.keymap.set('o', 'r', function()
-      require('flash').remote()
-    end, { desc = 'Flash Remote' }),
-
-    vim.keymap.set({ 'o', 'x' }, 'R', function()
-      require('flash').treesitter_search()
-    end, { desc = 'Flash Treesitter Search' }),
-
-    vim.keymap.set({ 'c' }, '<c-s>', function()
-      require('flash').toggle()
-    end, { desc = 'Toggle Flash Search' }),
-  })
+  vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
+  vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
 end)
+
+-- later(function()
+--   add({
+--     source = 'folke/flash.nvim',
+--   })
+--
+--   require('flash').setup({
+--     modes = {
+--       char = {
+--         enabled = false, -- デフォルトでは無効
+--       },
+--     },
+--     remote_op = {
+--       restore = true,
+--       motion = true,
+--     },
+--     vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
+--       require('flash').jump()
+--     end, { desc = 'Flash Jump' }),
+--
+--     vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
+--       require('flash').treesitter()
+--     end, { desc = 'Flash Treesitter' }),
+--
+--     vim.keymap.set('o', 'r', function()
+--       require('flash').remote()
+--     end, { desc = 'Flash Remote' }),
+--
+--     vim.keymap.set({ 'o', 'x' }, 'R', function()
+--       require('flash').treesitter_search()
+--     end, { desc = 'Flash Treesitter Search' }),
+--
+--     vim.keymap.set({ 'c' }, '<c-s>', function()
+--       require('flash').toggle()
+--     end, { desc = 'Toggle Flash Search' }),
+--
+--     -- f/F/T/t での検索を flash に置き換えるが operator-pending モードでは通常の動作を維持
+--     vim.keymap.set({ 'n', 'x' }, 't', function()
+--       require('flash').jump({
+--         search = { mode = 'fuzzy', max_length = 1 },
+--         label = { after = { 0, 0 } },
+--       })
+--     end),
+--
+--     vim.keymap.set({ 'n', 'x' }, 'T', function()
+--       require('flash').jump({
+--         search = { mode = 'fuzzy', max_length = 1, forward = false },
+--         label = { after = { 0, 0 } },
+--       })
+--     end),
+--
+--     vim.keymap.set({ 'n', 'x' }, 'f', function()
+--       require('flash').jump({
+--         search = { mode = 'search', max_length = 1 },
+--         label = { after = { 0, 0 } },
+--         pattern = '^',
+--       })
+--     end),
+--
+--     vim.keymap.set({ 'n', 'x' }, 'F', function()
+--       require('flash').jump({
+--         search = { mode = 'search', max_length = 1 },
+--         label = { after = { 0, 0 } },
+--         pattern = '^',
+--       })
+--     end),
+--   })
+-- end)
 
 later(function()
   add({
@@ -264,8 +300,14 @@ end)
 
 later(function()
   require('mini.operators').setup({
-    replace = { prefix = 'gR' },
-    exchange = { prefix = 'g/' },
+    replace = {
+      prefix = 'gR',
+      reindent_linewise = true,
+    },
+    exchange = {
+      prefix = 'g/',
+      reindent_linewise = true,
+    },
   })
 
   vim.keymap.set('n', 'RR', 'R', { desc = 'Replace mode' })
