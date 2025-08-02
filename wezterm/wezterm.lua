@@ -322,7 +322,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
       },
       {
         label = 'NuShell',
-        args = { 'C:/Users/shishi/scoop/shims/nu.exe' }
+        args = { 'C:/Users/shishi/scoop/shims/nu.exe' },
       },
       {
         label = 'Ubuntu',

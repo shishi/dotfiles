@@ -21,6 +21,7 @@ vim.opt.undofile = true
 
 -- ui
 vim.opt.number = true
+vim.opt.wrap = true
 vim.opt.signcolumn = 'yes'
 vim.opt.laststatus = 3
 vim.opt.cursorline = true
