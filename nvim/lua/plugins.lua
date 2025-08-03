@@ -178,6 +178,34 @@ later(function()
 end)
 
 -- later(function()
+--   add({
+--     source = 's-show/ft-mapper.nvim',
+--   })
+--
+--   require('ft-mapper').setup({
+--     mappings = {
+--       -- This configuration is designed with Japanese in mind.
+--       { ',', '、', '，' },
+--       { '.', '。', '．' },
+--       { ':', '：' },
+--       { ';', '；' },
+--       { '!', '！' },
+--       { '?', '？' },
+--       { '(', '（' },
+--       { ')', '）' },
+--       { '[', '「', '『', '【', '［' },
+--       { ']', '」', '』', '】', '］' },
+--       { "'", "'", "'" },
+--       { '"', '"', '"', '«', '»' },
+--       { '-', 'ー', '―', '—', '–' },
+--       { ' ', '　' }, -- half-width and full-width spaces
+--     },
+--     -- Enable debug output (optional)
+--     debug = false,
+--   })
+-- end)
+
+-- later(function()
 --   require('mini.jump2d').setup({
 --     mappings = {
 --       start_jumping = 's',
