@@ -368,39 +368,75 @@ end)
 later(function()
   add({
     source = 'nvim-treesitter/nvim-treesitter',
-    -- Use 'master' while monitoring updates in 'main'
-    checkout = 'master',
-    monitor = 'main',
-    -- Perform action after every checkout
+    checkout = 'main',
+    -- monitor = 'main',
     hooks = {
+      -- post_install = function()
+      --   vim.cmd('TSInstall all')
+      -- end,
+      -- Perform action after every checkout
       post_checkout = function()
         vim.cmd('TSUpdate')
       end,
     },
   })
 
-  vim.treesitter.start = (function(wrapped)
-    return function(bufnr, lang)
-      lang = lang or vim.fn.getbufvar(bufnr or '', '&filetype')
-      pcall(wrapped, bufnr, lang)
-    end
-  end)(vim.treesitter.start)
+  require('nvim-treesitter').setup()
 
-  require('nvim-treesitter.configs').setup({
-    modules = {},
-    -- A list of parser names, or "all" (the listed parsers MUST always be installed)
-    ensure_installed = {},
-    -- Install parsers synchronously (only applied to `ensure_installed`)
-    sync_install = false,
-    -- List of parsers to ignore installing (or "all")
-    ignore_install = {},
-
-    auto_install = true,
-    highlight = {
-      enable = true,
-      additional_vim_regex_highlighting = true,
-    },
+  -- autoinstall代替
+  vim.api.nvim_create_autocmd({ 'Filetype' }, {
+    callback = function(event)
+      local ok, nvim_treesitter = pcall(require, 'nvim-treesitter')
+      if not ok then
+        return
+      end
+      local ft = vim.bo[event.buf].ft
+      local lang = vim.treesitter.language.get_lang(ft)
+      nvim_treesitter.install({ lang }):await(function(err)
+        if err then
+          vim.notify('Treesitter install error for ft: ' .. ft .. ' err: ' .. err)
+          return
+        end
+        pcall(vim.treesitter.start, event.buf)
+        vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+      end)
+    end,
   })
+
+  -- これはたしかkawarimiさんが紹介していたエラーを抑止するための方法
+  -- vim.treesitter.start = (function(wrapped)
+  --   return function(bufnr, lang)
+  --     lang = lang or vim.fn.getbufvar(bufnr or '', '&filetype')
+  --     pcall(wrapped, bufnr, lang)
+  --   end
+  -- end)(vim.treesitter.start)
+
+  vim.api.nvim_create_autocmd('FileType', {
+    group = vim.api.nvim_create_augroup('vim-treesitter-start', {}),
+    callback = function(_ctx)
+      -- 必要に応じて`ctx.match`に入っているファイルタイプの値に応じて挙動を制御
+      -- `pcall`でエラーを無視することでパーサーやクエリがあるか気にしなくてすむ
+      pcall(vim.treesitter.start)
+    end,
+  })
+
+  -- nvim-treesitter main以降後はconfigがない
+  -- require('nvim-treesitter.configs').setup({
+  --   modules = {},
+  --   -- A list of parser names, or "all" (the listed parsers MUST always be installed)
+  --   ensure_installed = {},
+  --   -- Install parsers synchronously (only applied to `ensure_installed`)
+  --   sync_install = false,
+  --   -- List of parsers to ignore installing (or "all")
+  --   ignore_install = {},
+  --
+  --   auto_install = true,
+  --   highlight = {
+  --     enable = true,
+  --     additional_vim_regex_highlighting = true,
+  --   },
+  -- })
 end)
 
 later(function()
