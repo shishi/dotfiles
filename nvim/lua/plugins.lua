@@ -1354,7 +1354,10 @@ later(function()
   add({
     source = 'coder/claudecode.nvim',
   })
-  require('claudecode').setup()
+
+  require('claudecode').setup({
+    -- terminal_cmd = '~/.claude/local/claude',
+  })
 
   vim.keymap.set('n', '<Leader>cc', function()
     vim.cmd('ClaudeCode')
@@ -1372,7 +1375,7 @@ later(function()
     vim.cmd('ClaudeCode --continue')
   end, { desc = 'Continue Claudecode' })
 
-  vim.keymap.set('x', '<Leader>cs', function()
+  vim.keymap.set('v', '<Leader>cs', function()
     vim.cmd('ClaudeCodeSend')
   end, { desc = 'Send Claudecode' })
 
