@@ -683,13 +683,13 @@ later(function()
     },
   })
 
-  vim.keymap.set('n', '<leader><leader>q', function()
+  vim.keymap.set('n', '<leader>q', function()
     require('quicker').toggle()
     require('quicker').refresh()
   end, {
     desc = 'Toggle quickfix',
   })
-  vim.keymap.set('n', '<leader><leader>l', function()
+  vim.keymap.set('n', '<leader>l', function()
     require('quicker').toggle({ loclist = true })
     require('quicker').refresh()
   end, {
