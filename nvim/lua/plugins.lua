@@ -503,6 +503,11 @@ later(function()
   end, { desc = 'Open Neogit' })
 end)
 
+later(function()
+  add({
+    source = 'vim-denops/denops.vim',
+  })
+end)
 -- ui ----------------------------------------------------------------
 later(function()
   require('mini.statusline').setup()
@@ -935,6 +940,23 @@ end)
 --     MiniPick.builtin.files({ tool = 'git' })
 --   end, { desc = 'mini.pick.files' })
 -- end)
+
+-- inputs ----------------------------------------------------------------
+later(function()
+  add({
+    source = 'vim-skk/skkeleton',
+    depends = {
+      'vim-denops/denops.vim',
+    },
+  })
+  vim.fn['skkeleton#config']({
+    globalDictionaries = { vim.fn.stdpath('config') .. '/migemo/SKK-JISYO.L' },
+    sources = { 'skk_dictionary', 'google_japanese_input' },
+    eggLikeNewline = true,
+    showCandidatesCount = 2,
+  })
+  vim.keymap.set({ 'i', 'c' }, [[<C-j>]], [[<Plug>(skkeleton-enable)]], { noremap = false })
+end)
 
 -- completion ----------------------------------------------------------------
 later(function()

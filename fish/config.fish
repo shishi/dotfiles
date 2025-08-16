@@ -292,6 +292,9 @@ abbr --add gp 'git pull'
 abbr --add gr 'git rebase'
 abbr --add grc 'git rebase --continue'
 abbr --add gra 'git rebase --abort'
+abbr --add gm 'git merge'
+abbr --add gmc 'git merge --continue'
+abbr --add gma 'git merge --abort'
 abbr --add gcl 'git clean --force'
 
 # rails
