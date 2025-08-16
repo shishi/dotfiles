@@ -14,6 +14,7 @@ end)
 
 -- common config
 local config = {
+  -- debug_key_events = true,
   leader = { key = 'w', mods = 'ALT' },
   -- seems this setting effect only QuitApplication
   window_close_confirmation = 'NeverPrompt',
@@ -257,7 +258,7 @@ local config = {
 
     -- The size of the font in the tab bar.
     -- Default to 10. on Windows but 12.0 on other systems
-    font_size = 16.0,
+    font_size = 18.0,
 
     -- The overall background color of the tab bar when
     -- the window is focused
@@ -305,8 +306,10 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
   end
 
   local windows_config = {
+    use_ime = true,
+    ime_preedit_rendering = "System",
     wsl_domains = wsl_domains,
-    front_end = 'WebGpu',
+    front_end = 'OpenGL',
     -- this setting make cmd and powershell can't start
     -- default_domain = 'WSL:Ubuntu',
     default_prog = { 'C:/Users/shishi/scoop/shims/nu.exe' },
@@ -334,12 +337,14 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
   append_table(config, windows_config)
 elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
   local linux_config = {
+    use_ime = true,
     front_end = 'OpenGL',
   }
   append_table(config, linux_config)
 elseif wezterm.target_triple == 'aarch64-apple-darwin' then
   local macos_config = {
-    front_end = 'WebGpu',
+    use_ime = true,
+    front_end = 'OpenGL',
     macos_forward_to_ime_modifier_mask = 'CTRL|SHIFT',
   }
   append_table(config, macos_config)

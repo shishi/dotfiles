@@ -19,6 +19,8 @@
 
 ################################
 
+$env.config.show_banner = false
+
 def ll [...args] {
     if ($args | is-empty) {
         ls -la
