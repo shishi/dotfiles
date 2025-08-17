@@ -4,7 +4,8 @@
       "Bash(cp:*)",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(gsettings get:*)"
     ],
     "deny": []
   }
