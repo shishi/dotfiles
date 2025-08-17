@@ -4,14 +4,14 @@ set fish_color_command white
 #########################################
 
 #set -x LANG ja_JP.UTF-8
-#set uname (uname -a)
-#if [ (echo $uname | grep -c "microsoft") -gt 0 ] && ! test -f /.dockerenv
-#    set dev /mnt/c/Users/shishi/dev
-#else
-#    set dev ~/dev
-#end
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
-# set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin /home/linuxbrew/.linuxbrew/bin $PATH
+
+set -x LIBRARY_PATH ~/.nix-profile/lib:$LIBRARY_PATH
+set -x LD_LIBRARY_PATH ~/.nix-profile/lib:$LD_LIBRARY_PATH
+set -x C_INCLUDE_PATH ~/.nix-profile/include:$C_INCLUDE_PATH
+set -x CPLUS_INCLUDE_PATH  ~/.nix-profile/include:$CPLUS_INCLUDE_PATH
+set -x PKG_CONFIG_PATH ~/.nix-profile/lib/pkgconfig:$PKG_CONFIG_PATH
+
 set -x GPG_TTY (tty)
 
 if [ "$TERM_PROGRAM" = vscode ]
