@@ -321,6 +321,14 @@ end
 # function
 #########################################
 
+# skkeleton
+if [ "$GUAKE_TAB_UUID" ]; then
+    nvim -c "startinsert" /tmp/tmp_input
+    cat /tmp/tmp_input | xsel --clipboard --input
+    rm /tmp/tmp_input
+    exit 0
+end
+
 switch (uname -a)
     case "*MINGW64*"
     case "*Linux*" "Darwin*"
