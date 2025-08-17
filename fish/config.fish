@@ -6,11 +6,11 @@ set fish_color_command white
 #set -x LANG ja_JP.UTF-8
 set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 
-set -x LIBRARY_PATH ~/.nix-profile/lib:$LIBRARY_PATH
-set -x LD_LIBRARY_PATH ~/.nix-profile/lib:$LD_LIBRARY_PATH
-set -x C_INCLUDE_PATH ~/.nix-profile/include:$C_INCLUDE_PATH
-set -x CPLUS_INCLUDE_PATH  ~/.nix-profile/include:$CPLUS_INCLUDE_PATH
-set -x PKG_CONFIG_PATH ~/.nix-profile/lib/pkgconfig:$PKG_CONFIG_PATH
+# set -x LIBRARY_PATH ~/.nix-profile/lib:$LIBRARY_PATH
+# set -x LD_LIBRARY_PATH ~/.nix-profile/lib:$LD_LIBRARY_PATH
+# set -x C_INCLUDE_PATH ~/.nix-profile/include:$C_INCLUDE_PATH
+# set -x CPLUS_INCLUDE_PATH  ~/.nix-profile/include:$CPLUS_INCLUDE_PATH
+# set -x PKG_CONFIG_PATH ~/.nix-profile/lib/pkgconfig:$PKG_CONFIG_PATH
 
 set -x GPG_TTY (tty)
 
