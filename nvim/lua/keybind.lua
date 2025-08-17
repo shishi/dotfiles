@@ -50,6 +50,7 @@ else
 
   -- buffer
   vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd! #<CR>', { desc = 'close buffer without close window' })
+  vim.keymap.set('n', '<Leader><Leader>;', '<Cmd>bd!<CR>', { desc = 'close buffer force' })
   vim.keymap.set('n', '[b', '<Cmd>bprevious<CR>', { desc = 'previous buffer' })
   vim.keymap.set('n', ']b', '<Cmd>bnext<CR>', { desc = 'next buffer' })
   vim.keymap.set('n', '[t', '<Cmd>tabprevious<CR>', { desc = 'previous tab' })
