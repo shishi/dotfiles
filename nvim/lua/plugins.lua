@@ -1441,7 +1441,7 @@ later(function()
         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
       },
     },
-    command = { '~/.local/bin/claude', 'claude' }, -- Command to run Claude Code, can be a string or table of strings
+    command = '~/.local/bin/claude',
     keymaps = {
       toggle = {
         normal = '<C-,>', -- Normal mode keymap for toggling Claude Code, false to disable
