@@ -1441,6 +1441,7 @@ later(function()
         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
       },
     },
+    command = { '~/.local/bin/claude', 'claude' }, -- Command to run Claude Code, can be a string or table of strings
     keymaps = {
       toggle = {
         normal = '<C-,>', -- Normal mode keymap for toggling Claude Code, false to disable
@@ -1451,7 +1452,7 @@ later(function()
         },
       },
       window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
-      scrolling = true, -- Enable scrolling keymaps (<C-f/b>) for page up/down
+      scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
     },
   })
   vim.keymap.set('n', '<leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
