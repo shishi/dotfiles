@@ -168,10 +168,10 @@ end)
 later(function()
   require('mini.jump').setup({
     mappings = {
-      -- forward = 'f',
-      -- backward = 'F',
-      -- forward_till = 't',
-      -- backward_till = 'T',
+      forward = 'f',
+      backward = 'F',
+      forward_till = 't',
+      backward_till = 'T',
       repeat_jump = ':',
     },
   })
@@ -200,6 +200,10 @@ end)
 --       { '-', 'ー', '―', '—', '–' },
 --       { ' ', '　' }, -- half-width and full-width spaces
 --     },
+--     -- Use `:` instead of `>` for repeat search (optional)
+--     replace_semicolon = ':',
+--     -- Use `<` instead of `,` for reverse repeat search (optional)
+--     replace_comma = ',',
 --     -- Enable debug output (optional)
 --     debug = false,
 --   })
