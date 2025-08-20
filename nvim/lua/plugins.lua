@@ -67,18 +67,11 @@ now(function()
   add({
     source = 'rcarriga/nvim-notify',
   })
-  add({
-    source = 'mrded/nvim-lsp-notify',
-    depends = { 'rcarriga/nvim-notify' },
-  })
-
   vim.notify = require('notify')
 
   vim.api.nvim_create_user_command('NotifyHistory', function()
     vim.cmd('Telescope notify')
   end, { desc = 'Show notify history' })
-
-  require('lsp-notify').setup()
 end)
 
 -- now(function()
@@ -189,15 +182,15 @@ later(function()
   })
 end)
 
-later(function()
-  add({
-    source = 'rhysd/clever-f.vim',
-  })
-
-  vim.g.clever_f_smart_case = 1
-  vim.g.clever_f_mark_direct = 1
-  vim.g.clever_f_use_migemo = 1
-end)
+-- later(function()
+--   add({
+--     source = 'rhysd/clever-f.vim',
+--   })
+--
+--   vim.g.clever_f_smart_case = 1
+--   vim.g.clever_f_mark_direct = 1
+--   vim.g.clever_f_use_migemo = 1
+-- end)
 
 -- later(function()
 --   require('mini.jump').setup({
@@ -206,7 +199,7 @@ end)
 --       backward = 'F',
 --       forward_till = 't',
 --       backward_till = 'T',
---       repeat_jump = ':',
+--       repeat_jump = ';',
 --     },
 --   })
 -- end)
@@ -235,7 +228,7 @@ end)
 --       { ' ', '　' }, -- half-width and full-width spaces
 --     },
 --     -- Use `:` instead of `>` for repeat search (optional)
---     replace_semicolon = ':',
+--     replace_semicolon = ';',
 --     -- Use `<` instead of `,` for reverse repeat search (optional)
 --     replace_comma = ',',
 --     -- Enable debug output (optional)
@@ -251,81 +244,125 @@ end)
 --   })
 -- end)
 
-later(function()
-  add({
-    source = 'ggandor/leap.nvim',
-  })
-  vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
-  vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
-end)
-
 -- later(function()
 --   add({
---     source = 'folke/flash.nvim',
+--     source = 'ggandor/leap.nvim',
+--     depends = {
+--       'tpope/vim-repeat',
+--     },
 --   })
 --
---   require('flash').setup({
---     modes = {
---       char = {
---         enabled = false, -- デフォルトでは無効
---       },
---     },
---     remote_op = {
---       restore = true,
---       motion = true,
---     },
---     vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
---       require('flash').jump()
---     end, { desc = 'Flash Jump' }),
+--   -- Exclude whitespace and the middle of alphabetic words from preview:
+--   --   foobar[baaz] = quux
+--   --   ^----^^^--^^-^-^--^
+--   require('leap').opts.preview_filter = function(ch0, ch1, ch2)
+--     return not (ch1:match('%s') or ch0:match('%a') and ch1:match('%a') and ch2:match('%a'))
+--   end
 --
---     vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
---       require('flash').treesitter()
---     end, { desc = 'Flash Treesitter' }),
+--   vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
+--   vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
 --
---     vim.keymap.set('o', 'r', function()
---       require('flash').remote()
---     end, { desc = 'Flash Remote' }),
+--   do
+--     local function ft_args(key_specific_args)
+--       local common_args = {
+--         inputlen = 1,
+--         inclusive_op = true,
+--         opts = {
+--           case_sensitive = true,
+--           labels = {},
+--           -- Match the modes here for which you don't want to use labels.
+--           safe_labels = vim.fn.mode(1):match('o') and {} or nil,
+--         },
+--       }
+--       return vim.tbl_deep_extend('keep', common_args, key_specific_args)
+--     end
 --
---     vim.keymap.set({ 'o', 'x' }, 'R', function()
---       require('flash').treesitter_search()
---     end, { desc = 'Flash Treesitter Search' }),
+--     local leap = require('leap').leap
+--     -- This helper function makes it easier to set "clever-f"-like
+--     -- functionality (https://github.com/rhysd/clever-f.vim), returning
+--     -- an `opts` table, where:
+--     -- * the given keys are set as `next_target` and `prev_target`
+--     -- * `prev_target` is removed from `safe_labels` (if appears there)
+--     -- * `next_target` is used as the first label
+--     local with_traversal_keys = require('leap.user').with_traversal_keys
+--     local f_opts = with_traversal_keys('f', 'F')
+--     local t_opts = with_traversal_keys('t', 'T')
+--     -- You can of course set ;/, for both instead:
+--     -- local ft_opts = with_traversal_keys(';', ',')
 --
---     vim.keymap.set({ 'c' }, '<c-s>', function()
---       require('flash').toggle()
---     end, { desc = 'Toggle Flash Search' }),
---
---     -- f/F/T/t での検索を flash に置き換えるが operator-pending モードでは通常の動作を維持
---     vim.keymap.set({ 'n', 'x' }, 't', function()
---       require('flash').jump({
---         search = { mode = 'fuzzy', max_length = 1 },
---         label = { after = { 0, 0 } },
---       })
---     end),
---
---     vim.keymap.set({ 'n', 'x' }, 'T', function()
---       require('flash').jump({
---         search = { mode = 'fuzzy', max_length = 1, forward = false },
---         label = { after = { 0, 0 } },
---       })
---     end),
---
---     vim.keymap.set({ 'n', 'x' }, 'f', function()
---       require('flash').jump({
---         search = { mode = 'search', max_length = 1 },
---         label = { after = { 0, 0 } },
---         pattern = '^',
---       })
---     end),
---
---     vim.keymap.set({ 'n', 'x' }, 'F', function()
---       require('flash').jump({
---         search = { mode = 'search', max_length = 1 },
---         label = { after = { 0, 0 } },
---         pattern = '^',
---       })
---     end),
---   })
+--     vim.keymap.set({ 'n', 'x', 'o' }, 'f', function()
+--       leap(ft_args({ opts = f_opts }))
+--     end)
+--     vim.keymap.set({ 'n', 'x', 'o' }, 'F', function()
+--       leap(ft_args({ opts = f_opts, backward = true }))
+--     end)
+--     vim.keymap.set({ 'n', 'x', 'o' }, 't', function()
+--       leap(ft_args({ opts = t_opts, offset = -1 }))
+--     end)
+--     vim.keymap.set({ 'n', 'x', 'o' }, 'T', function()
+--       leap(ft_args({ opts = t_opts, backward = true, offset = 1 }))
+--     end)
+--   end
 -- end)
+
+later(function()
+  add({
+    source = 'folke/flash.nvim',
+  })
+
+  require('flash').setup()
+
+  vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
+    require('flash').jump()
+  end, { desc = 'Flash Jump' })
+
+  vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
+    require('flash').treesitter()
+  end, { desc = 'Flash Treesitter' })
+
+  vim.keymap.set('o', 'r', function()
+    require('flash').remote()
+  end, { desc = 'Flash Remote' })
+
+  vim.keymap.set({ 'o', 'x' }, 'R', function()
+    require('flash').treesitter_search()
+  end, { desc = 'Flash Treesitter Search' })
+
+  vim.keymap.set({ 'c' }, '<c-s>', function()
+    require('flash').toggle()
+  end, { desc = 'Toggle Flash Search' })
+
+  -- -- f/F/T/t での検索を flash に置き換えるが operator-pending モードでは通常の動作を維持
+  -- vim.keymap.set({ 'n', 'x' }, 't', function()
+  --   require('flash').jump({
+  --     search = { mode = 'fuzzy', max_length = 1 },
+  --     label = { after = { 0, 0 } },
+  --   })
+  -- end),
+  --
+  -- vim.keymap.set({ 'n', 'x' }, 'T', function()
+  --   require('flash').jump({
+  --     search = { mode = 'fuzzy', max_length = 1, forward = false },
+  --     label = { after = { 0, 0 } },
+  --   })
+  -- end),
+  --
+  -- vim.keymap.set({ 'n', 'x' }, 'f', function()
+  --   require('flash').jump({
+  --     search = { mode = 'search', max_length = 1 },
+  --     label = { after = { 0, 0 } },
+  --     pattern = '^',
+  --   })
+  -- end),
+  --
+  -- vim.keymap.set({ 'n', 'x' }, 'F', function()
+  --   require('flash').jump({
+  --     search = { mode = 'search', max_length = 1 },
+  --     label = { after = { 0, 0 } },
+  --     pattern = '^',
+  --   })
+  -- end),
+end)
 
 later(function()
   add({
@@ -574,19 +611,19 @@ later(function()
   end, { desc = 'Open Neogit' })
 end)
 
-later(function()
-  add({
-    source = 'subnut/nvim-ghost.nvim',
-  })
-
-  vim.g.nvim_ghost_server_port = 4001
-
-  -- augroup nvim_ghost_user_autocommands
-  --   au User www.reddit.com,www.stackoverflow.com setfiletype markdown
-  --   au User www.reddit.com,www.github.com setfiletype markdown
-  --   au User *github.com setfiletype markdown
-  -- augroup END
-end)
+-- later(function()
+--   add({
+--     source = 'subnut/nvim-ghost.nvim',
+--   })
+--
+--   vim.g.nvim_ghost_server_port = 4001
+--
+--   -- augroup nvim_ghost_user_autocommands
+--   --   au User www.reddit.com,www.stackoverflow.com setfiletype markdown
+--   --   au User www.reddit.com,www.github.com setfiletype markdown
+--   --   au User *github.com setfiletype markdown
+--   -- augroup END
+-- end)
 
 -- ui ----------------------------------------------------------------
 later(function()
@@ -819,6 +856,36 @@ later(function()
   --   { desc = '' }
   -- )
 end)
+
+-- later(function()
+--   add({
+--     source = 'folke/noice.nvim',
+--     depends = {
+--       'MunifTanjim/nui.nvim',
+--       'rcarriga/nvim-notify',
+--       'hr7sh7th/nvim-cmp',
+--     },
+--   })
+--
+--   require('noice').setup({
+--     lsp = {
+--       -- override markdown rendering so that **cmp** and other plugins use **Treesitter**
+--       override = {
+--         ['vim.lsp.util.convert_input_to_markdown_lines'] = true,
+--         ['vim.lsp.util.stylize_markdown'] = true,
+--         ['cmp.entry.get_documentation'] = true, -- requires hrsh7th/nvim-cmp
+--       },
+--     },
+--     -- you can enable a preset for easier configuration
+--     presets = {
+--       bottom_search = true, -- use a classic bottom cmdline for search
+--       command_palette = true, -- position the cmdline and popupmenu together
+--       long_message_to_split = true, -- long messages will be sent to a split
+--       inc_rename = false, -- enables an input dialog for inc-rename.nvim
+--       lsp_doc_border = false, -- add a border to hover docs and signature help
+--     },
+--   })
+-- end)
 
 -- fuzzy finder ----------------------------------------------------------------
 later(function()
@@ -1369,6 +1436,13 @@ later(function()
   })
 end)
 
+later(function()
+  add({
+    source = 'j-hui/fidget.nvim',
+  })
+  require('fidget').setup({})
+end)
+
 -- llm ----------------------------------------------------------------
 later(function()
   add({ source = 'zbirenbaum/copilot.lua' })
@@ -1554,11 +1628,26 @@ later(function()
   require('conform').setup({
     default_format_opts = {
       lsp_format = 'fallback',
-    },
-    format_on_save = {
-      -- These options will be passed to conform.format()
       timeout_ms = 500,
     },
+    format_on_save = function(buf)
+      -- `:w!`で保存したときはフォーマットをスキップ
+      if vim.v.cmdbang == 1 then
+        return nil
+      end
+
+      local name = vim.api.nvim_buf_get_name(buf)
+      local basename = vim.fs.basename(name)
+
+      -- lockファイルはフォーマットをスキップ
+      if basename:match('%.lock$') or basename:match('%plock%p') then
+        -- do not format lock files
+        return nil
+      end
+
+      -- その他のファイルはsetup時の設定でフォーマット
+      return {}
+    end,
     formatters_by_ft = {
       go = { 'gofmt', 'goimports' },
       json = { 'deno_fmt' },

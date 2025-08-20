@@ -12,8 +12,8 @@
 -- | 'c'                  | mapmode-c   | Command-line                             | :cmap                |
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
-vim.keymap.set({ 'n', 'v' }, ';', ':')
-vim.keymap.set({ 'n', 'v' }, ':', ';')
+-- vim.keymap.set({ 'n', 'v' }, ';', ':')
+-- vim.keymap.set({ 'n', 'v' }, ':', ';')
 vim.keymap.set('n', '<Leader><Leader>q', 'q', { desc = 'start recording' })
 
 -- vim.keymap.set('n', 'q', '<Nop>')
