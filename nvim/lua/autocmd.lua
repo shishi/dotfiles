@@ -1,23 +1,3 @@
--- open init.lua
-vim.api.nvim_create_user_command('InitLua', function()
-  vim.cmd.edit(vim.fn.stdpath('config') .. '/init.lua')
-end, { desc = 'Open init.lua' })
-
--- reload init.lua and requires
--- create user command for reload config
-vim.api.nvim_create_user_command('ReloadInits', function()
-  package.loaded['core'] = nil
-  package.loaded['keybind'] = nil
-  package.loaded['autocmd'] = nil
-  -- for name, _ in pairs(package.loaded) do
-  --   if name:match('^cnull') then
-  --     package.loaded[name] = nil
-  --   end
-  -- end
-
-  dofile(vim.env.MYVIMRC)
-end, {})
-
 -- auto reload when edit plugins.lua
 -- local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
 --   clear = true,
@@ -99,5 +79,17 @@ vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
   pattern = { '[vV\x16]*:*' },
   callback = function()
     vim.opt.relativenumber = false
+  end,
+})
+
+local augroup_nvim_ghost_user_autocommands = vim.api.nvim_create_augroup('augroup_nvim_ghost_user_autocommands', {
+  clear = true,
+})
+vim.api.nvim_create_autocmd({ 'User' }, {
+  group = augroup_nvim_ghost_user_autocommands,
+  pattern = { 'github.com' },
+  callback = function()
+    print('hoge')
+    vim.opt.filetype = 'markdown'
   end,
 })

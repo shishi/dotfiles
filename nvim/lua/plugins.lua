@@ -146,6 +146,12 @@ end)
 
 -- later ----------------------------------------------------------------
 later(function()
+  add({
+    source = 'vim-denops/denops.vim',
+  })
+end)
+
+later(function()
   require('mini.pairs').setup({
     modes = { insert = true, command = true, terminal = true },
     -- vim.keymap.set('i', '<CR>', 'v:lua.cr_action()', { expr = true }),
@@ -570,9 +576,18 @@ end)
 
 later(function()
   add({
-    source = 'vim-denops/denops.vim',
+    source = 'subnut/nvim-ghost.nvim',
   })
+
+  vim.g.nvim_ghost_server_port = 4001
+
+  -- augroup nvim_ghost_user_autocommands
+  --   au User www.reddit.com,www.stackoverflow.com setfiletype markdown
+  --   au User www.reddit.com,www.github.com setfiletype markdown
+  --   au User *github.com setfiletype markdown
+  -- augroup END
 end)
+
 -- ui ----------------------------------------------------------------
 later(function()
   require('mini.statusline').setup()
