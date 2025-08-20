@@ -326,40 +326,73 @@ end)
 
 later(function()
   add({
-    source = 'sei40kr/migemo-search.nvim',
+    source = 'lambdalisue/kensaku.vim',
+    depends = {
+      'vim-denops/denops.vim',
+    },
   })
-  local nvim_root = vim.fn.stdpath('config')
-  local migemo_dir = nvim_root .. '/migemo'
-  local migemo_bin = ''
-  local migemo_dict = migemo_dir .. '/utf-8.d/migemo-dict'
-  -- vim.env.MIGEMO_DICT = migemo_dir .. '/utf-8.d/migemo-dict'
-
-  if vim.fn.has('unix') then
-    migemo_bin = migemo_dir .. '/x86_64_linux/cmigemo'
-    local migemo_linux_dir = migemo_dir .. '/x86_64_linux/'
-    vim.env.PATH = migemo_linux_dir .. ':' .. vim.env.PATH
-    vim.env.LD_LIBRARY_PATH = migemo_linux_dir .. ':' .. (vim.env.LD_LIBRARY_PATH or '')
-  elseif vim.fn.has('mac') then
-    migemo_bin = migemo_dir .. '/arm64_darwin/cmigemo'
-    local migemo_mac_dir = migemo_dir .. '/arm64_darwin/'
-    vim.env.PATH = migemo_mac_dir .. ':' .. vim.env.PATH
-    vim.env.DYLD_LIBRARY_PATH = migemo_mac_dir .. ':' .. (vim.env.DYLD_LIBRARY_PATH or '')
-  elseif vim.fn.has('win32') then
-    migemo_bin = migemo_dir .. '/x86_64_windows/cmigemo.exe'
-    local migemo_windows_dir = migemo_dir .. '/x86_64_windows/'
-    vim.env.PATH = migemo_windows_dir .. ':' .. vim.env.PATH
-  end
-
-  local ms = require('migemo-search')
-  ms.setup({
-    cmigemo_exec_path = migemo_bin,
-    migemo_dict_path = migemo_dict,
-  })
-  vim.keymap.set('c', '<CR>', ms.cr)
-  -- ああああああ
-  -- みげも
-  -- 検索
 end)
+
+later(function()
+  add({
+    source = 'lambdalisue/vim-kensaku-search',
+    depends = {
+      'lambdalisue/kensaku.vim',
+    },
+  })
+
+  vim.keymap.set('c', '<CR>', [[<Plug>(kensaku-search-replace)<CR>]])
+end)
+
+later(function()
+  add({
+    source = 'lambdalisue/vim-kensaku-command',
+    depends = {
+      'lambdalisue/kensaku.vim',
+    },
+  })
+
+  vim.api.nvim_create_user_command('K', function(opts)
+    vim.cmd('Kensaku ' .. opts.args)
+  end, { nargs = '*' })
+end)
+
+-- later(function()
+--   add({
+--     source = 'sei40kr/migemo-search.nvim',
+--   })
+--   local nvim_root = vim.fn.stdpath('config')
+--   local migemo_dir = nvim_root .. '/migemo'
+--   local migemo_bin = ''
+--   local migemo_dict = migemo_dir .. '/utf-8.d/migemo-dict'
+--   -- vim.env.MIGEMO_DICT = migemo_dir .. '/utf-8.d/migemo-dict'
+--
+--   if vim.fn.has('unix') then
+--     migemo_bin = migemo_dir .. '/x86_64_linux/cmigemo'
+--     local migemo_linux_dir = migemo_dir .. '/x86_64_linux/'
+--     vim.env.PATH = migemo_linux_dir .. ':' .. vim.env.PATH
+--     vim.env.LD_LIBRARY_PATH = migemo_linux_dir .. ':' .. (vim.env.LD_LIBRARY_PATH or '')
+--   elseif vim.fn.has('mac') then
+--     migemo_bin = migemo_dir .. '/arm64_darwin/cmigemo'
+--     local migemo_mac_dir = migemo_dir .. '/arm64_darwin/'
+--     vim.env.PATH = migemo_mac_dir .. ':' .. vim.env.PATH
+--     vim.env.DYLD_LIBRARY_PATH = migemo_mac_dir .. ':' .. (vim.env.DYLD_LIBRARY_PATH or '')
+--   elseif vim.fn.has('win32') then
+--     migemo_bin = migemo_dir .. '/x86_64_windows/cmigemo.exe'
+--     local migemo_windows_dir = migemo_dir .. '/x86_64_windows/'
+--     vim.env.PATH = migemo_windows_dir .. ':' .. vim.env.PATH
+--   end
+--
+--   local ms = require('migemo-search')
+--   ms.setup({
+--     cmigemo_exec_path = migemo_bin,
+--     migemo_dict_path = migemo_dict,
+--   })
+--   vim.keymap.set('c', '<CR>', ms.cr)
+--   -- ああああああ
+--   -- みげも
+--   -- 検索
+-- end)
 
 later(function()
   require('mini.operators').setup({
@@ -984,13 +1017,19 @@ later(function()
       'vim-denops/denops.vim',
     },
   })
+
   vim.fn['skkeleton#config']({
-    globalDictionaries = { vim.fn.stdpath('config') .. '/migemo/SKK-JISYO.L' },
+    globalDictionaries = {
+      vim.fn.stdpath('config') .. '/skk/SKK-JISYO.L',
+      vim.fn.stdpath('config') .. '/skk/SKK-JISYO.emoji.utf8',
+      vim.fn.stdpath('config') .. '/skk/skk-x-emoji.txt',
+    },
     sources = { 'skk_dictionary', 'google_japanese_input' },
     -- sources = { 'skk_server' },
     eggLikeNewline = true,
-    showCandidatesCount = 2,
+    showCandidatesCount = 1,
   })
+
   vim.keymap.set({ 'i', 'c', 't' }, [[<C-j>]], [[<Plug>(skkeleton-enable)]], { noremap = false })
 end)
 
