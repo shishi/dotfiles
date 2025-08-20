@@ -15,6 +15,7 @@
 vim.keymap.set({ 'n', 'v' }, ';', ':')
 vim.keymap.set({ 'n', 'v' }, ':', ';')
 vim.keymap.set('n', '<Leader><Leader>q', 'q', { desc = 'start recording' })
+
 -- vim.keymap.set('n', 'q', '<Nop>')
 
 vim.keymap.set('n', 'p', 'p`]', { desc = 'Paste and move the end' })

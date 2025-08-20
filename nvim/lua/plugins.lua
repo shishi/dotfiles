@@ -64,16 +64,37 @@ now(function()
 end)
 
 now(function()
-  require('mini.notify').setup()
-
-  vim.notify = require('mini.notify').make_notify({
-    ERROR = { duration = 10000 },
+  add({
+    source = 'rcarriga/nvim-notify',
   })
 
+  vim.notify = require('notify')
+
   vim.api.nvim_create_user_command('NotifyHistory', function()
-    MiniNotify.show_history()
+    vim.cmd('Telescope notify')
   end, { desc = 'Show notify history' })
 end)
+
+now(function()
+  add({
+    source = 'mrded/nvim-lsp-notify',
+    depends = { 'rcarriga/nvim-notify' },
+  })
+
+  require('lsp-notify').setup()
+end)
+
+-- now(function()
+--   require('mini.notify').setup()
+--
+--   vim.notify = require('mini.notify').make_notify({
+--     ERROR = { duration = 10000 },
+--   })
+--
+--   vim.api.nvim_create_user_command('NotifyHistory', function()
+--     MiniNotify.show_history()
+--   end, { desc = 'Show notify history' })
+-- end)
 
 now(function()
   require('mini.sessions').setup()
@@ -166,16 +187,26 @@ later(function()
 end)
 
 later(function()
-  require('mini.jump').setup({
-    mappings = {
-      forward = 'f',
-      backward = 'F',
-      forward_till = 't',
-      backward_till = 'T',
-      repeat_jump = ':',
-    },
+  add({
+    source = 'rhysd/clever-f.vim',
   })
+
+  vim.g.clever_f_smart_case = 1
+  vim.g.clever_f_mark_direct = 1
+  vim.g.clever_f_use_migemo = 1
 end)
+
+-- later(function()
+--   require('mini.jump').setup({
+--     mappings = {
+--       forward = 'f',
+--       backward = 'F',
+--       forward_till = 't',
+--       backward_till = 'T',
+--       repeat_jump = ':',
+--     },
+--   })
+-- end)
 
 -- later(function()
 --   add({
@@ -1482,7 +1513,7 @@ later(function()
       lua = { 'stylua' },
       ruby = { 'rubocop' },
       sh = { 'shfmt' },
-      yaml = { 'yamlfmt' },
+      yaml = { 'deno_fmt' },
     },
   })
   vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
