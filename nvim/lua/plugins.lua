@@ -67,19 +67,16 @@ now(function()
   add({
     source = 'rcarriga/nvim-notify',
   })
+  add({
+    source = 'mrded/nvim-lsp-notify',
+    depends = { 'rcarriga/nvim-notify' },
+  })
 
   vim.notify = require('notify')
 
   vim.api.nvim_create_user_command('NotifyHistory', function()
     vim.cmd('Telescope notify')
   end, { desc = 'Show notify history' })
-end)
-
-now(function()
-  add({
-    source = 'mrded/nvim-lsp-notify',
-    depends = { 'rcarriga/nvim-notify' },
-  })
 
   require('lsp-notify').setup()
 end)
@@ -815,6 +812,7 @@ later(function()
     depends = {
       'nvim-lua/plenary.nvim',
       'folke/trouble.nvim',
+      'rcarriga/nvim-notify',
     },
   })
   add({
@@ -888,6 +886,7 @@ later(function()
     },
   })
 
+  require('telescope').load_extension('notify')
   require('telescope').load_extension('live_grep_args')
 
   -- builtin
