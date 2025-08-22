@@ -104,4 +104,4 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/init.lua<CR
 vim.keymap.set('t', 'fj', [[<C-\><C-n>]], { desc = 'esc in terminal' })
 
 -- input process for cant input area correctly with skkleton like claude code
-vim.keymap.set({ 'n', 't', 'i' }, '<Leader>i', "<Cmd>call feedkeys(input(''), 'n')<CR>")
+vim.keymap.set({ 'n', 't', 'i' }, '<Alt-I>', "<Cmd>call feedkeys(input(''), 'n')<CR>")
