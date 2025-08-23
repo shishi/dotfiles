@@ -31,11 +31,11 @@ vim.keymap.set('n', '<A-Enter>', 'O<ESC>')
 
 vim.keymap.set('n', '<Leader><Leader>h', '<Cmd>nohlsearch<CR>', { desc = 'nohlsearch' })
 
-vim.cmd([[
-  cabbrev Q qa
-  cabbrev Q! qa!
-  cabbrev W wa
-]])
+-- vim.cmd([[
+--   cabbrev Q qa
+--   cabbrev Q! qa!
+--   cabbrev W wa
+-- ]])
 
 if vim.g.vscode then
   -- vim.keymap.set('n', '<Leader>s', '<Cmd>Write<CR>')
@@ -45,9 +45,8 @@ if vim.g.vscode then
   vim.keymap.set('n', '<Leader><Leader>r', '<Cmd>call VSCodeNotify("workbench.action.openRecent")<CR>')
 else
   vim.keymap.set('i', 'jj', '<ESC>')
-  vim.keymap.set('i', 'kk', '<ESC>')
-  vim.keymap.set('i', 'jk', '<ESC>')
-  -- vim.keymap.set('n', '<Leader>s', '<Cmd>write<CR>')
+  -- vim.keymap.set('i', 'kk', '<ESC>')
+  -- vim.keymap.set('i', 'jk', '<ESC>')
 
   -- buffer
   vim.keymap.set('n', '<Leader>;', '<Cmd>bp|bd! #<CR>', { desc = 'close buffer without close window' })
@@ -101,7 +100,8 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/init.lua<CR
 -- terminal
 -- vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
-vim.keymap.set('t', 'fj', [[<C-\><C-n>]], { desc = 'esc in terminal' })
+vim.keymap.set('t', '<ESC>', [[<c-\><c-n><Plug>(esc)]], { remap = true, desc = 'esc in terminal' })
+vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { desc = 'back to terminal' })
 
 -- input process for cant input area correctly with skkleton like claude code
-vim.keymap.set({ 'n', 't', 'i' }, '<Alt-I>', "<Cmd>call feedkeys(input(''), 'n')<CR>")
+vim.keymap.set({ 'n', 't', 'i' }, '<Leader>i', "<Cmd>call feedkeys(input(''), 'n')<CR>")
