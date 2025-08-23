@@ -34,3 +34,10 @@ vim.api.nvim_create_user_command('Grep', function(arg)
     vim.cmd.cclose()
   end
 end, { nargs = '+', bang = true, desc = 'Enhanced grep' })
+
+-- vertical terminal
+vim.api.nvim_create_user_command('Vt', function()
+  vim.cmd.vsplit()
+  vim.cmd.terminal()
+  vim.cmd.startinsert()
+end, { desc = 'Open vertical terminal' })
