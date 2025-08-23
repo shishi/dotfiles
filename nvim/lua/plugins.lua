@@ -63,28 +63,28 @@ now(function()
   end, { desc = 'Open Oil Float' })
 end)
 
-now(function()
-  add({
-    source = 'rcarriga/nvim-notify',
-  })
-  vim.notify = require('notify')
-
-  vim.api.nvim_create_user_command('NotifyHistory', function()
-    vim.cmd('Telescope notify')
-  end, { desc = 'Show notify history' })
-end)
-
 -- now(function()
---   require('mini.notify').setup()
---
---   vim.notify = require('mini.notify').make_notify({
---     ERROR = { duration = 10000 },
+--   add({
+--     source = 'rcarriga/nvim-notify',
 --   })
+--   vim.notify = require('notify')
 --
 --   vim.api.nvim_create_user_command('NotifyHistory', function()
---     MiniNotify.show_history()
+--     vim.cmd('Telescope notify')
 --   end, { desc = 'Show notify history' })
 -- end)
+
+now(function()
+  require('mini.notify').setup()
+
+  vim.notify = require('mini.notify').make_notify({
+    ERROR = { duration = 10000 },
+  })
+
+  vim.api.nvim_create_user_command('NotifyHistory', function()
+    MiniNotify.show_history()
+  end, { desc = 'Show notify history' })
+end)
 
 now(function()
   require('mini.sessions').setup()
@@ -885,7 +885,7 @@ later(function()
     },
   })
 
-  require('telescope').load_extension('notify')
+  -- require('telescope').load_extension('notify')
   require('telescope').load_extension('live_grep_args')
 
   -- builtin
@@ -1353,12 +1353,12 @@ later(function()
   })
 end)
 
-later(function()
-  add({
-    source = 'j-hui/fidget.nvim',
-  })
-  require('fidget').setup({})
-end)
+-- later(function()
+--   add({
+--     source = 'j-hui/fidget.nvim',
+--   })
+--   require('fidget').setup({})
+-- end)
 
 -- llm ----------------------------------------------------------------
 later(function()
