@@ -248,37 +248,6 @@ later(function()
   vim.keymap.set({ 'c' }, '<c-s>', function()
     require('flash').toggle()
   end, { desc = 'Toggle Flash Search' })
-
-  -- -- f/F/T/t での検索を flash に置き換えるが operator-pending モードでは通常の動作を維持
-  -- vim.keymap.set({ 'n', 'x' }, 't', function()
-  --   require('flash').jump({
-  --     search = { mode = 'fuzzy', max_length = 1 },
-  --     label = { after = { 0, 0 } },
-  --   })
-  -- end),
-  --
-  -- vim.keymap.set({ 'n', 'x' }, 'T', function()
-  --   require('flash').jump({
-  --     search = { mode = 'fuzzy', max_length = 1, forward = false },
-  --     label = { after = { 0, 0 } },
-  --   })
-  -- end),
-  --
-  -- vim.keymap.set({ 'n', 'x' }, 'f', function()
-  --   require('flash').jump({
-  --     search = { mode = 'search', max_length = 1 },
-  --     label = { after = { 0, 0 } },
-  --     pattern = '^',
-  --   })
-  -- end),
-  --
-  -- vim.keymap.set({ 'n', 'x' }, 'F', function()
-  --   require('flash').jump({
-  --     search = { mode = 'search', max_length = 1 },
-  --     label = { after = { 0, 0 } },
-  --     pattern = '^',
-  --   })
-  -- end),
 end)
 
 later(function()
@@ -307,49 +276,14 @@ later(function()
     depends = {
       'lambdalisue/kensaku.vim',
     },
+    -- みげも
+    -- 検索
   })
 
   vim.api.nvim_create_user_command('K', function(opts)
     vim.cmd('Kensaku ' .. opts.args)
   end, { nargs = '*' })
 end)
-
--- later(function()
---   add({
---     source = 'sei40kr/migemo-search.nvim',
---   })
---   local nvim_root = vim.fn.stdpath('config')
---   local migemo_dir = nvim_root .. '/migemo'
---   local migemo_bin = ''
---   local migemo_dict = migemo_dir .. '/utf-8.d/migemo-dict'
---   -- vim.env.MIGEMO_DICT = migemo_dir .. '/utf-8.d/migemo-dict'
---
---   if vim.fn.has('unix') then
---     migemo_bin = migemo_dir .. '/x86_64_linux/cmigemo'
---     local migemo_linux_dir = migemo_dir .. '/x86_64_linux/'
---     vim.env.PATH = migemo_linux_dir .. ':' .. vim.env.PATH
---     vim.env.LD_LIBRARY_PATH = migemo_linux_dir .. ':' .. (vim.env.LD_LIBRARY_PATH or '')
---   elseif vim.fn.has('mac') then
---     migemo_bin = migemo_dir .. '/arm64_darwin/cmigemo'
---     local migemo_mac_dir = migemo_dir .. '/arm64_darwin/'
---     vim.env.PATH = migemo_mac_dir .. ':' .. vim.env.PATH
---     vim.env.DYLD_LIBRARY_PATH = migemo_mac_dir .. ':' .. (vim.env.DYLD_LIBRARY_PATH or '')
---   elseif vim.fn.has('win32') then
---     migemo_bin = migemo_dir .. '/x86_64_windows/cmigemo.exe'
---     local migemo_windows_dir = migemo_dir .. '/x86_64_windows/'
---     vim.env.PATH = migemo_windows_dir .. ':' .. vim.env.PATH
---   end
---
---   local ms = require('migemo-search')
---   ms.setup({
---     cmigemo_exec_path = migemo_bin,
---     migemo_dict_path = migemo_dict,
---   })
---   vim.keymap.set('c', '<CR>', ms.cr)
---   -- ああああああ
---   -- みげも
---   -- 検索
--- end)
 
 later(function()
   require('mini.operators').setup({
@@ -477,6 +411,7 @@ later(function()
   })
 
   local get_option = vim.filetype.get_option
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.filetype.get_option = function(filetype, option)
     return option == 'commentstring' and require('ts_context_commentstring.internal').calculate_commentstring()
       or get_option(filetype, option)
@@ -484,29 +419,9 @@ later(function()
 end)
 
 later(function()
-  require('mini.diff').setup()
-end)
-
-later(function()
   require('mini.git').setup()
 
   vim.keymap.set({ 'n', 'x' }, '<Leader>gs', MiniGit.show_at_cursor, { desc = 'Show at cursor' })
-end)
-
-later(function()
-  add({
-    source = 'sindrets/diffview.nvim',
-    depends = { 'nvim-lua/plenary.nvim' },
-  })
-
-  require('diffview').setup({
-    view = {
-      merge_tool = {
-        layout = 'diff3_mixed',
-        disable_diagnostics = true,
-      },
-    },
-  })
 end)
 
 later(function()
@@ -526,6 +441,37 @@ later(function()
   vim.keymap.set('n', '<A-g>', function()
     require('neogit').open()
   end, { desc = 'Open Neogit' })
+end)
+
+later(function()
+  add({
+    source = 'lambdalisue/vim-gin',
+    depends = { 'vim-denops/denops.vim' },
+  })
+
+  -- vim.api.nvim_create_user_command('Gs', function()
+  --   vim.cmd('GinStatus')
+  -- end, { desc = 'GinStatus' })
+end)
+
+later(function()
+  require('mini.diff').setup()
+end)
+
+later(function()
+  add({
+    source = 'sindrets/diffview.nvim',
+    depends = { 'nvim-lua/plenary.nvim' },
+  })
+
+  require('diffview').setup({
+    view = {
+      merge_tool = {
+        layout = 'diff3_mixed',
+        disable_diagnostics = true,
+      },
+    },
+  })
 end)
 
 -- later(function()
@@ -584,15 +530,18 @@ later(function()
   vim.api.nvim_create_autocmd({ 'BufEnter' }, {
     callback = function()
       local ignore_filetypes = {
-        'help',
+        '',
+        'NvimTree',
         'Trouble',
-        'trouble',
+        'aerial',
+        'better_term',
+        'help',
         'lazy',
+        'lazyterm',
         'mason',
         'notify',
-        'better_term',
         'toggleterm',
-        'lazyterm',
+        'trouble',
       }
       if vim.tbl_contains(ignore_filetypes, vim.bo.filetype) then
         vim.b.miniindentscope_disable = true
