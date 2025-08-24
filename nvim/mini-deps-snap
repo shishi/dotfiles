@@ -35,6 +35,7 @@ return {
   ["telescope.nvim"] = "b4da76be54691e854d3e0e02c36b0245f945c2c7",
   ["toggleterm.nvim"] = "9a88eae817ef395952e08650b3283726786fb5fb",
   ["trouble.nvim"] = "85bedb7eb7fa331a2ccbecb9202d8abba64d37b3",
+  ["vim-gin"] = "7c4b98011a2d5bdf7342031f9c8ae7a1c11b584b",
   ["vim-kensaku-command"] = "d14e13d67e53b597806951f7ccabc40fe6a574fb",
   ["vim-kensaku-search"] = "9568c2b174a9cf31bd9922c0a991117f4dd4f0c3"
 }
