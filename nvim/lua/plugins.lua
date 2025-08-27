@@ -1514,6 +1514,11 @@ later(function()
       -- その他のファイルはsetup時の設定でフォーマット
       return {}
     end,
+    formatters = {
+      yaml = {
+        append_args = { '--single-quote' },
+      },
+    },
     formatters_by_ft = {
       go = { 'gofmt', 'goimports' },
       json = { 'deno_fmt' },
