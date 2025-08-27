@@ -1,7 +1,15 @@
 {
   "model": "opus",
   "env": {
-      "BASH_MAX_TIMEOUT_MS": 600000
+    "BASH_MAX_TIMEOUT_MS": 600000,
+    "CLAUDE_CODE_ENABLE_TELEMETRY": false,
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": true,
+    "DISABLE_ERROR_REPORTING": true,
+    "DISABLE_TELEMETRY": true,
+    "DISABLE_AUTOUPDATER": true,
+    "DISABLE_MICROCOMPACT": true,
+    "DISABLE_INTERLEAVED_THINKING": true,
+    "MAX_THINKING_TOKENS": 31999
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [

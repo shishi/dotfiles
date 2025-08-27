@@ -102,7 +102,7 @@ vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/init.lua<CR
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
 vim.keymap.set('t', '<ESC>', [[<c-\><c-n><Plug>(esc)]], { remap = true, desc = 'esc in terminal' })
 vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { remap = true, desc = 'back to terminal' })
-vim.keymap.set('n', 'vt', '<cmd>Vt<CR>', { desc = 'vertical terminal' })
+vim.keymap.set('n', 'Vt', '<cmd>Vt<CR>', { desc = 'vertical terminal' })
 
 -- input process for cant input area correctly with skkleton like claude code
 vim.keymap.set({ 'n', 't', 'i' }, '<Alt>i', "<Cmd>call feedkeys(input(''), 'n')<CR>")
