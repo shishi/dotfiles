@@ -53,7 +53,17 @@ now(function()
   add({
     source = 'stevearc/oil.nvim',
   })
-  require('oil').setup()
+  require('oil').setup({
+    keymaps = {
+      ['yp'] = {
+        desc = 'Copy filepath to system clipboard',
+        callback = function()
+          require('oil.actions').copy_entry_path.callback()
+          vim.fn.setreg('+', vim.fn.getreg(vim.v.register))
+        end,
+      },
+    },
+  })
 
   vim.api.nvim_create_user_command('OilFloat', function()
     vim.api.nvim_cmd({
