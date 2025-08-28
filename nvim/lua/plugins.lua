@@ -62,6 +62,22 @@ now(function()
           vim.fn.setreg('+', vim.fn.getreg(vim.v.register))
         end,
       },
+      ['yP'] = {
+        desc = 'Copy relative filepath to system clipboard',
+        callback = function()
+          local entry = require('oil').get_cursor_entry()
+
+          local dir = require('oil').get_current_dir()
+
+          if not entry or not dir then
+            return
+          end
+
+          local relpath = vim.fn.fnamemodify(dir, ':.')
+
+          vim.fn.setreg('+', relpath .. entry.name)
+        end,
+      },
     },
   })
 
