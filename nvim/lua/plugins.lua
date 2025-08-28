@@ -33,20 +33,20 @@ end)
 
 now(function()
   require('mini.icons').setup()
-  require('mini.files').setup({
-    windows = {
-      -- Whether to show preview of file/directory under cursor
-      preview = true,
-    },
-  })
+  -- require('mini.files').setup({
+  --   windows = {
+  --     -- Whether to show preview of file/directory under cursor
+  --     preview = true,
+  --   },
+  -- })
 
-  vim.api.nvim_create_user_command('Files', function()
-    MiniFiles.open()
-  end, { desc = 'Open MiniFiles' })
-
-  vim.keymap.set('n', '<Leader>e', function()
-    MiniFiles.open()
-  end, { desc = 'Open MiniFiles' })
+  -- vim.api.nvim_create_user_command('Files', function()
+  --   MiniFiles.open()
+  -- end, { desc = 'Open MiniFiles' })
+  --
+  -- vim.keymap.set('n', '<Leader>e', function()
+  --   MiniFiles.open()
+  -- end, { desc = 'Open MiniFiles' })
 end)
 
 now(function()
@@ -61,6 +61,10 @@ now(function()
       args = { '--float', vim.fn.expand('%:p:h') },
     }, {})
   end, { desc = 'Open Oil Float' })
+
+  vim.keymap.set('n', '<Leader>e', function()
+    vim.cmd('OilFloat')
+  end, { desc = 'Open OilFloat' })
 end)
 
 -- now(function()
