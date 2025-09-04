@@ -234,49 +234,49 @@ end)
 --   })
 -- end)
 
-later(function()
-  add({
-    source = 's-show/ft-mapper.nvim',
-  })
-
-  require('ft-mapper').setup({
-    mappings = {
-      -- This configuration is designed for Japanese editing
-      { ',', '、', '，' },
-      { '.', '。', '．' },
-      { ':', '：' },
-      { ';', '；' },
-      { '!', '！' },
-      { '?', '？' },
-      { '(', '（' },
-      { ')', '）' },
-      { '[', '「', '『', '【', '［' },
-      { ']', '」', '』', '】', '］' },
-      { "'", "'", "'" },
-      { '"', '"', '"', '゛' },
-      { '<', '＜', '«' },
-      { '>', '＞', '»' },
-      { '-', 'ー', '―', '—', '–' },
-      { ' ', '　' }, -- half-width and full-width spaces
-    },
-    -- Search within 10 lines above and below cursor line (optional)
-    line_limit = 30,
-    -- Don't assign to default key mappings (optional)
-    no_default_mappings = true,
-    -- Enable debug output (optional)
-    debug = false,
-  })
-
-  -- Assign extended functionality to <leader>f/t/F/T
-  vim.keymap.set({ 'n', 'v', 'o' }, 'f', '<Plug>(f_motion)')
-  vim.keymap.set({ 'n', 'v', 'o' }, 't', '<Plug>(t_motion)')
-  vim.keymap.set({ 'n', 'v', 'o' }, 'F', '<Plug>(F_motion)')
-  vim.keymap.set({ 'n', 'v', 'o' }, 'T', '<Plug>(T_motion)')
-  -- Assign forward repeat search (;) to ">"
-  vim.keymap.set({ 'n', 'v', 'o' }, ':', '<Plug>(forward_repeat)')
-  -- Assign backward repeat search (,) to "<"
-  vim.keymap.set({ 'n', 'v', 'o' }, ',', '<Plug>(backward_repeat)')
-end)
+-- later(function()
+--   add({
+--     source = 's-show/ft-mapper.nvim',
+--   })
+--
+--   require('ft-mapper').setup({
+--     mappings = {
+--       -- This configuration is designed for Japanese editing
+--       { ',', '、', '，' },
+--       { '.', '。', '．' },
+--       { ':', '：' },
+--       { ';', '；' },
+--       { '!', '！' },
+--       { '?', '？' },
+--       { '(', '（' },
+--       { ')', '）' },
+--       { '[', '「', '『', '【', '［' },
+--       { ']', '」', '』', '】', '］' },
+--       { "'", "'", "'" },
+--       { '"', '"', '"', '゛' },
+--       { '<', '＜', '«' },
+--       { '>', '＞', '»' },
+--       { '-', 'ー', '―', '—', '–' },
+--       { ' ', '　' }, -- half-width and full-width spaces
+--     },
+--     -- Search within 10 lines above and below cursor line (optional)
+--     line_limit = 30,
+--     -- Don't assign to default key mappings (optional)
+--     no_default_mappings = true,
+--     -- Enable debug output (optional)
+--     debug = false,
+--   })
+--
+--   -- Assign extended functionality to <leader>f/t/F/T
+--   vim.keymap.set({ 'n', 'v', 'o' }, 'f', '<Plug>(f_motion)')
+--   vim.keymap.set({ 'n', 'v', 'o' }, 't', '<Plug>(t_motion)')
+--   vim.keymap.set({ 'n', 'v', 'o' }, 'F', '<Plug>(F_motion)')
+--   vim.keymap.set({ 'n', 'v', 'o' }, 'T', '<Plug>(T_motion)')
+--   -- Assign forward repeat search (;) to ">"
+--   vim.keymap.set({ 'n', 'v', 'o' }, '.', '<Plug>(forward_repeat)')
+--   -- Assign backward repeat search (,) to "<"
+--   vim.keymap.set({ 'n', 'v', 'o' }, ',', '<Plug>(backward_repeat)')
+-- end)
 
 later(function()
   add({
@@ -285,11 +285,11 @@ later(function()
 
   ---@diagnostic disable-next-line missing-fields
   require('flash').setup({
-    modes = {
-      char = {
-        enabled = false,
-      },
-    },
+    -- modes = {
+    --   char = {
+    --     enabled = false,
+    --   },
+    -- },
   })
 
   vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
