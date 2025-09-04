@@ -7,7 +7,7 @@ if not vim.uv.fs_stat(mini_path) then
     'git',
     'clone',
     '--filter=blob:none',
-    'https://github.com/echasnovski/mini.nvim',
+    'https://github.com/nvim-mini/mini.nvim',
     mini_path,
   }
   vim.fn.system(clone_cmd)
@@ -15,7 +15,7 @@ if not vim.uv.fs_stat(mini_path) then
   vim.cmd('echo "Installed `mini.nvim`" | redraw')
 end
 
--- Set up 'mini.deps' (customize to your liking)
+-- Set up .deps' (customize to your liking)
 require('mini.deps').setup({ path = { package = path_package } })
 
 -- local not_in_vscode = vim.g.vscode == nil
@@ -215,34 +215,14 @@ later(function()
 end)
 
 -- later(function()
---   add({
---     source = 's-show/ft-mapper.nvim',
---   })
---
---   require('ft-mapper').setup({
+--   require('mini.jump').setup({
 --     mappings = {
---       -- This configuration is designed with Japanese in mind.
---       { ',', '、', '，' },
---       { '.', '。', '．' },
---       { ':', '：' },
---       { ';', '；' },
---       { '!', '！' },
---       { '?', '？' },
---       { '(', '（' },
---       { ')', '）' },
---       { '[', '「', '『', '【', '［' },
---       { ']', '」', '』', '】', '］' },
---       { "'", "'", "'" },
---       { '"', '"', '"', '«', '»' },
---       { '-', 'ー', '―', '—', '–' },
---       { ' ', '　' }, -- half-width and full-width spaces
+--       forward = 'f',
+--       backward = 'F',
+--       forward_till = 't',
+--       backward_till = 'T',
+--       repeat_jump = ':',
 --     },
---     -- Use `:` instead of `>` for repeat search (optional)
---     replace_semicolon = ';',
---     -- Use `<` instead of `,` for reverse repeat search (optional)
---     replace_comma = ',',
---     -- Enable debug output (optional)
---     debug = false,
 --   })
 -- end)
 
@@ -256,10 +236,61 @@ end)
 
 later(function()
   add({
+    source = 's-show/ft-mapper.nvim',
+  })
+
+  require('ft-mapper').setup({
+    mappings = {
+      -- This configuration is designed for Japanese editing
+      { ',', '、', '，' },
+      { '.', '。', '．' },
+      { ':', '：' },
+      { ';', '；' },
+      { '!', '！' },
+      { '?', '？' },
+      { '(', '（' },
+      { ')', '）' },
+      { '[', '「', '『', '【', '［' },
+      { ']', '」', '』', '】', '］' },
+      { "'", "'", "'" },
+      { '"', '"', '"', '゛' },
+      { '<', '＜', '«' },
+      { '>', '＞', '»' },
+      { '-', 'ー', '―', '—', '–' },
+      { ' ', '　' }, -- half-width and full-width spaces
+    },
+    -- Search within 10 lines above and below cursor line (optional)
+    line_limit = 30,
+    -- Don't assign to default key mappings (optional)
+    no_default_mappings = true,
+    -- Enable debug output (optional)
+    debug = false,
+  })
+
+  -- Assign extended functionality to <leader>f/t/F/T
+  vim.keymap.set({ 'n', 'v', 'o' }, 'f', '<Plug>(f_motion)')
+  vim.keymap.set({ 'n', 'v', 'o' }, 't', '<Plug>(t_motion)')
+  vim.keymap.set({ 'n', 'v', 'o' }, 'F', '<Plug>(F_motion)')
+  vim.keymap.set({ 'n', 'v', 'o' }, 'T', '<Plug>(T_motion)')
+  -- Assign forward repeat search (;) to ">"
+  vim.keymap.set({ 'n', 'v', 'o' }, ':', '<Plug>(forward_repeat)')
+  -- Assign backward repeat search (,) to "<"
+  vim.keymap.set({ 'n', 'v', 'o' }, ',', '<Plug>(backward_repeat)')
+end)
+
+later(function()
+  add({
     source = 'folke/flash.nvim',
   })
 
-  require('flash').setup()
+  ---@diagnostic disable-next-line missing-fields
+  require('flash').setup({
+    modes = {
+      char = {
+        enabled = false,
+      },
+    },
+  })
 
   vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
     require('flash').jump()
