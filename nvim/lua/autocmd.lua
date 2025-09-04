@@ -14,6 +14,11 @@
 vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
   pattern = '*',
   callback = function(event)
+    -- Skip for oil filetype
+    if vim.bo[event.buf].filetype == 'oil' then
+      return
+    end
+
     local dir = vim.fs.dirname(event.file)
     local force = vim.v.cmdbang == 1
     if

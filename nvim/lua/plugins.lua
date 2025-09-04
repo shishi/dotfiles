@@ -54,6 +54,9 @@ now(function()
     source = 'stevearc/oil.nvim',
   })
   require('oil').setup({
+    view_options = {
+      show_hidden = true,
+    },
     keymaps = {
       ['yp'] = {
         desc = 'Copy filepath to system clipboard',
