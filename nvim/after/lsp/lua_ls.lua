@@ -25,6 +25,7 @@ return {
         --   { path = 'wezterm-types', mods = { 'wezterm' } },
         -- },
         library = vim.list_extend(vim.api.nvim_get_runtime_file('lua', true), {
+          -- '~/.local/share/nvim/runtime',
           '${3rd}/luv/library',
           '${3rd}/busted/library',
         }),
