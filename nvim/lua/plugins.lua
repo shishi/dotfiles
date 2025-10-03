@@ -1605,7 +1605,7 @@ later(function()
     '<cmd>Aibo -opener="<C-r>=&columns * 2 / 3<CR>vsplit" claude --continue <CR>',
     { desc = 'Aibo Claude Code' }
   )
-  vim.keymap.set('n, v', '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
+  vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
 end)
 
 -- formatting ---------------------------------------------------------------
