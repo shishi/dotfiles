@@ -1436,175 +1436,105 @@ later(function()
   vim.keymap.set({ 'n', 'x' }, '<Leader>p', '<cmd>CopilotChatPrompt<cr>', { desc = 'CopilotChat predefined prompts' })
 end)
 
--- later(function()
---   add({
---     source = 'edo1z/claude-cli.nvim',
---   })
---   require('claude-cli').setup({
---     keymaps = {
---       toggle = '<leader>cc', -- New session or toggle window
---       toggle_dangerous = '<leader>cd', -- New session or toggle (dangerous mode)
---       continue_session = '<leader>cC', -- Continue last session
---       continue_session_dangerous = '<leader>cD', -- Continue last session dangerous
---       toggle_window = '<leader>ct', -- Toggle window visibility
---       send_path = '<leader>cp', -- Send file path to prompt
---       send_error = '<leader>ce', -- Send error info to prompt
---       send_selection = '<leader>cs', -- Send selection to prompt
---       open_prompt = '<leader>ca', -- Open prompt builder
---     },
---     window = {
---       position = 'right', -- right, left, bottom, top
---       size = 0.3, -- 30% of screen
---     },
---   })
---
---   require('claude-prompt').setup({
---     -- Prompt builder settings
---     snippets_dir = vim.fn.stdpath('data') .. '/claude-prompt/snippets',
---     history_dir = vim.fn.stdpath('data') .. '/claude-prompt/history',
---     max_history = 100,
---   })
--- end)
-
--- later(function()
---   add({
---     source = 'coder/claudecode.nvim',
---   })
---
---   require('claudecode').setup()
---
---   vim.keymap.set('n', '<Leader>cc', function()
---     vim.cmd('ClaudeCode')
---   end, { desc = 'Toggle Claudecode' })
---
---   vim.keymap.set('n', '<Leader>cf', function()
---     vim.cmd('ClaudeCodeFocus')
---   end, { desc = 'Focus Claudecode' })
---
---   vim.keymap.set('n', '<Leader>cr', function()
---     vim.cmd('ClaudeCode --resume')
---   end, { desc = 'Resume Claudecode' })
---
---   vim.keymap.set('n', '<Leader>cC', function()
---     vim.cmd('ClaudeCode --continue')
---   end, { desc = 'Continue Claudecode' })
---
---   vim.keymap.set('v', '<Leader>cs', function()
---     vim.cmd('ClaudeCodeSend')
---   end, { desc = 'Send Claudecode' })
---
---   vim.keymap.set('n', '<Leader>ct', function()
---     vim.cmd('ClaudeCodeTreeAdd')
---   end, { desc = 'Add files' })
---
---   vim.keymap.set('n', '<Leader>cda', function()
---     vim.cmd('ClaudeCodeDiffAccept')
---   end, { desc = 'Accespt Diff' })
---
---   vim.keymap.set('n', '<Leader>cdd', function()
---     vim.cmd('ClaudeCodeDiffDeny')
---   end, { desc = 'Deny Diff' })
--- end)
-
--- later(function()
---   add({
---     source = 'greggh/claude-code.nvim',
---     depends = {
---       'nvim-lua/plenary.nvim',
---     },
---   })
---
---   require('claude-code').setup({
---     window = {
---       split_ratio = 0.3, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
---       position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
---       enter_insert = true, -- Whether to enter insert mode when opening Claude Code
---       hide_numbers = true, -- Hide line numbers in the terminal window
---       hide_signcolumn = true, -- Hide the sign column in the terminal window
---
---       -- Floating window configuration (only applies when position = "float")
---       float = {
---         width = '80%', -- Width: number of columns or percentage string
---         height = '80%', -- Height: number of rows or percentage string
---         row = 'center', -- Row position: number, "center", or percentage string
---         col = 'center', -- Column position: number, "center", or percentage string
---         relative = 'editor', -- Relative to: "editor" or "cursor"
---         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
---       },
---     },
---     command = '~/.local/bin/claude',
---     keymaps = {
---       toggle = {
---         normal = '<C-,>', -- Normal mode keymap for toggling Claude Code, false to disable
---         terminal = '<C-,>', -- Terminal mode keymap for toggling Claude Code, false to disable
---         variants = {
---           continue = '<leader>cC', -- Normal mode keymap for Claude Code with continue flag
---           verbose = '<leader>cV', -- Normal mode keymap for Claude Code with verbose flag
---         },
---       },
---       window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
---       scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
---     },
---   })
---   vim.keymap.set('n', '<leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
--- end)
-
 later(function()
   add({
-    source = 'lambdalisue/nvim-aibo',
-  })
-  require('aibo').setup({
-    -- Prompt buffer configuration
-    prompt = {
-      no_default_mappings = false, -- Set to true to disable default keymaps
-      on_attach = function(bufnr, info)
-        -- Custom setup for prompt buffers
-        -- Runs AFTER ftplugin files
-        -- info.type = "prompt"
-        -- info.tool = tool name (e.g., "claude")
-        -- info.aibo = aibo instance
-      end,
-    },
-
-    -- Console buffer configuration
-    console = {
-      no_default_mappings = false,
-      on_attach = function(bufnr, info)
-        -- Custom setup for console buffers
-        -- info.type = "console"
-        -- info.cmd = command being executed
-        -- info.args = command arguments
-        -- info.job_id = terminal job ID
-      end,
-    },
-
-    -- Tool-specific overrides
-    tools = {
-      claude = {
-        no_default_mappings = false,
-        on_attach = function(bufnr, info)
-          -- Custom setup for Claude buffers
-          -- Called after prompt/console on_attach
-        end,
-      },
-      codex = {
-        -- Codex-specific configuration
-      },
+    source = 'greggh/claude-code.nvim',
+    depends = {
+      'nvim-lua/plenary.nvim',
     },
   })
 
-  vim.keymap.set('n', '<Leader>cc', function()
-    local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="%dvsplit" claude', width))
-  end, { desc = 'Open Claude AI assistant' })
+  require('claude-code').setup({
+    window = {
+      split_ratio = 0.4, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
+      position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
+      enter_insert = true, -- Whether to enter insert mode when opening Claude Code
+      hide_numbers = true, -- Hide line numbers in the terminal window
+      hide_signcolumn = true, -- Hide the sign column in the terminal window
 
-  vim.keymap.set('n', '<Leader>cC', function()
-    local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="%dvsplit" claude --continue', width))
-  end, { desc = 'Open Claude AI assistant' })
-
-  vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
+      -- Floating window configuration (only applies when position = "float")
+      float = {
+        width = '80%', -- Width: number of columns or percentage string
+        height = '80%', -- Height: number of rows or percentage string
+        row = 'center', -- Row position: number, "center", or percentage string
+        col = 'center', -- Column position: number, "center", or percentage string
+        relative = 'editor', -- Relative to: "editor" or "cursor"
+        border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
+      },
+    },
+    command = '~/.local/bin/claude',
+    keymaps = {
+      toggle = {
+        normal = '<Leader>cc', -- Normal mode keymap for toggling Claude Code, false to disable
+        terminal = '<Leader>cc', -- Terminal mode keymap for toggling Claude Code, false to disable
+        variants = {
+          continue = '<Leader>cC', -- Normal mode keymap for Claude Code with continue flag
+          verbose = '<Leader>cV', -- Normal mode keymap for Claude Code with verbose flag
+        },
+      },
+      window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
+      scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
+    },
+  })
+  vim.keymap.set('n', '<Leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
 end)
+
+-- later(function()
+--   add({
+--     source = 'lambdalisue/nvim-aibo',
+--   })
+--   require('aibo').setup({
+--     -- Prompt buffer configuration
+--     prompt = {
+--       no_default_mappings = false, -- Set to true to disable default keymaps
+--       on_attach = function(bufnr, info)
+--         -- Custom setup for prompt buffers
+--         -- Runs AFTER ftplugin files
+--         -- info.type = "prompt"
+--         -- info.tool = tool name (e.g., "claude")
+--         -- info.aibo = aibo instance
+--       end,
+--     },
+--
+--     -- Console buffer configuration
+--     console = {
+--       no_default_mappings = false,
+--       on_attach = function(bufnr, info)
+--         -- Custom setup for console buffers
+--         -- info.type = "console"
+--         -- info.cmd = command being executed
+--         -- info.args = command arguments
+--         -- info.job_id = terminal job ID
+--       end,
+--     },
+--
+--     -- Tool-specific overrides
+--     tools = {
+--       claude = {
+--         no_default_mappings = false,
+--         on_attach = function(bufnr, info)
+--           -- Custom setup for Claude buffers
+--           -- Called after prompt/console on_attach
+--         end,
+--       },
+--       codex = {
+--         -- Codex-specific configuration
+--       },
+--     },
+--   })
+--
+--   vim.keymap.set('n', '<Leader>cc', function()
+--     local width = math.floor(vim.o.columns * 1 / 3)
+--     vim.cmd(string.format('Aibo -opener="%dvsplit" claude', width))
+--   end, { desc = 'Open Claude AI assistant' })
+--
+--   vim.keymap.set('n', '<Leader>cC', function()
+--     local width = math.floor(vim.o.columns * 1 / 3)
+--     vim.cmd(string.format('Aibo -opener="%dvsplit" claude --continue', width))
+--   end, { desc = 'Open Claude AI assistant' })
+--
+--   vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
+-- end)
 
 -- formatting ---------------------------------------------------------------
 later(function()
