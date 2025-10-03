@@ -1462,7 +1462,7 @@ later(function()
         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
       },
     },
-    command = '~/.local/bin/claude',
+    -- command = '~/.local/bin/claude',
     keymaps = {
       toggle = {
         normal = '<Leader>cc', -- Normal mode keymap for toggling Claude Code, false to disable
