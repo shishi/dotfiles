@@ -1506,54 +1506,113 @@ end)
 --   end, { desc = 'Deny Diff' })
 -- end)
 
+-- later(function()
+--   add({
+--     source = 'greggh/claude-code.nvim',
+--     depends = {
+--       'nvim-lua/plenary.nvim',
+--     },
+--   })
+--
+--   require('claude-code').setup({
+--     window = {
+--       split_ratio = 0.3, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
+--       position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
+--       enter_insert = true, -- Whether to enter insert mode when opening Claude Code
+--       hide_numbers = true, -- Hide line numbers in the terminal window
+--       hide_signcolumn = true, -- Hide the sign column in the terminal window
+--
+--       -- Floating window configuration (only applies when position = "float")
+--       float = {
+--         width = '80%', -- Width: number of columns or percentage string
+--         height = '80%', -- Height: number of rows or percentage string
+--         row = 'center', -- Row position: number, "center", or percentage string
+--         col = 'center', -- Column position: number, "center", or percentage string
+--         relative = 'editor', -- Relative to: "editor" or "cursor"
+--         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
+--       },
+--     },
+--     command = '~/.local/bin/claude',
+--     keymaps = {
+--       toggle = {
+--         normal = '<C-,>', -- Normal mode keymap for toggling Claude Code, false to disable
+--         terminal = '<C-,>', -- Terminal mode keymap for toggling Claude Code, false to disable
+--         variants = {
+--           continue = '<leader>cC', -- Normal mode keymap for Claude Code with continue flag
+--           verbose = '<leader>cV', -- Normal mode keymap for Claude Code with verbose flag
+--         },
+--       },
+--       window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
+--       scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
+--     },
+--   })
+--   vim.keymap.set('n', '<leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
+-- end)
+
 later(function()
   add({
-    source = 'greggh/claude-code.nvim',
-    depends = {
-      'nvim-lua/plenary.nvim',
+    source = 'lambdalisue/nvim-aibo',
+  })
+  require('aibo').setup({
+    -- Prompt buffer configuration
+    prompt = {
+      no_default_mappings = false, -- Set to true to disable default keymaps
+      on_attach = function(bufnr, info)
+        -- Custom setup for prompt buffers
+        -- Runs AFTER ftplugin files
+        -- info.type = "prompt"
+        -- info.tool = tool name (e.g., "claude")
+        -- info.aibo = aibo instance
+      end,
+    },
+
+    -- Console buffer configuration
+    console = {
+      no_default_mappings = false,
+      on_attach = function(bufnr, info)
+        -- Custom setup for console buffers
+        -- info.type = "console"
+        -- info.cmd = command being executed
+        -- info.args = command arguments
+        -- info.job_id = terminal job ID
+      end,
+    },
+
+    -- Tool-specific overrides
+    tools = {
+      claude = {
+        no_default_mappings = false,
+        on_attach = function(bufnr, info)
+          -- Custom setup for Claude buffers
+          -- Called after prompt/console on_attach
+        end,
+      },
+      codex = {
+        -- Codex-specific configuration
+      },
     },
   })
 
-  require('claude-code').setup({
-    window = {
-      split_ratio = 0.3, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
-      position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
-      enter_insert = true, -- Whether to enter insert mode when opening Claude Code
-      hide_numbers = true, -- Hide line numbers in the terminal window
-      hide_signcolumn = true, -- Hide the sign column in the terminal window
-
-      -- Floating window configuration (only applies when position = "float")
-      float = {
-        width = '80%', -- Width: number of columns or percentage string
-        height = '80%', -- Height: number of rows or percentage string
-        row = 'center', -- Row position: number, "center", or percentage string
-        col = 'center', -- Column position: number, "center", or percentage string
-        relative = 'editor', -- Relative to: "editor" or "cursor"
-        border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
-      },
-    },
-    command = '~/.local/bin/claude',
-    keymaps = {
-      toggle = {
-        normal = '<C-,>', -- Normal mode keymap for toggling Claude Code, false to disable
-        terminal = '<C-,>', -- Terminal mode keymap for toggling Claude Code, false to disable
-        variants = {
-          continue = '<leader>cC', -- Normal mode keymap for Claude Code with continue flag
-          verbose = '<leader>cV', -- Normal mode keymap for Claude Code with verbose flag
-        },
-      },
-      window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
-      scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
-    },
-  })
-  vim.keymap.set('n', '<leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
+  vim.keymap.set(
+    'n',
+    '<Leader>cc',
+    '<cmd>Aibo -opener="<C-r>=&columns * 2 / 3<CR>vsplit" claude<CR>',
+    { desc = 'Aibo Claude Code' }
+  )
+  vim.keymap.set(
+    'n',
+    '<Leader>cC',
+    '<cmd>Aibo -opener="<C-r>=&columns * 2 / 3<CR>vsplit" claude --continue <CR>',
+    { desc = 'Aibo Claude Code' }
+  )
+  vim.keymap.set('n, v', '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
 end)
 
 -- formatting ---------------------------------------------------------------
-add({
-  source = 'stevearc/conform.nvim',
-})
 later(function()
+  add({
+    source = 'stevearc/conform.nvim',
+  })
   require('conform').setup({
     default_format_opts = {
       lsp_format = 'fallback',
@@ -1604,10 +1663,11 @@ later(function()
 end)
 
 -- linting ----------------------------------------------------------------
-add({
-  source = 'mfussenegger/nvim-lint',
-})
 later(function()
+  add({
+    source = 'mfussenegger/nvim-lint',
+  })
+
   require('lint').linters_by_ft = {
     fish = { 'fish' },
     -- lua = { 'selene' },
