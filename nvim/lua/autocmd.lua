@@ -15,7 +15,7 @@ vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
   pattern = '*',
   callback = function(event)
     -- Skip for oil filetype
-    if vim.bo[event.buf].filetype == 'oil' then
+    if vim.bo[event.buf].filetype == 'oil' or vim.bo[event.buf].filetype == 'mininotify' then
       return
     end
 
