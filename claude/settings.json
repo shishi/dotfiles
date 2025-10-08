@@ -331,5 +331,6 @@
       "Write(~/.ssh/*_rsa)",
       "Write(~/.ssh/id_*)"
     ]
-  }
+  },
+  "alwaysThinkingEnabled": true
 }
