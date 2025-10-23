@@ -105,4 +105,4 @@ vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { remap = t
 vim.keymap.set('n', 'Vt', '<cmd>Vt<CR>', { desc = 'vertical terminal' })
 
 -- input process for cant input area correctly with skkleton like claude code
-vim.keymap.set({ 'n', 't', 'i' }, '<Alt>i', "<Cmd>call feedkeys(input(''), 'n')<CR>")
+vim.keymap.set({ 'n', 't', 'i' }, '<A-i>', "<Cmd>call feedkeys(input(''), 'n')<CR>")
