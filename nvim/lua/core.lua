@@ -21,6 +21,7 @@ vim.opt.undofile = true
 
 -- ui
 vim.opt.number = true
+vim.opt.cmdheight = 0
 vim.opt.wrap = true
 vim.opt.signcolumn = 'yes'
 vim.opt.laststatus = 3
@@ -54,7 +55,7 @@ vim.opt.wildignorecase = true
 vim.opt.completeopt = 'menu,menuone,preview,noinsert'
 
 if vim.fn.executable('rg') == 1 then
-  vim.opt.grepprg = 'rg --vimgrep  --smart-case --hidden --glob "!.git/" --no-ignore'
+  vim.opt.grepprg = 'rg --vimgrep  --smart-case --hidden --glob "!.git/"' -- --no-ignore
 end
 
 -- indent

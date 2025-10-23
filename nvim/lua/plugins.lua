@@ -848,7 +848,8 @@ later(function()
         '--smart-case',
         '--hidden',
         '--glob',
-        '!.git',
+        '!.git/',
+        -- --no-ignore
         -- '--glob',
         -- '!*.lock',
         -- '--glob',

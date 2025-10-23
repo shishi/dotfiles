@@ -146,10 +146,11 @@ function M.setup()
           buffer = true,
           desc = '<leader>gi で入力用バッファを開く',
         })
-        vim.keymap.set('t', '<C-g>i', create_bottom_window, {
+        vim.keymap.set('t', '<C-A-g>', create_bottom_window, {
           buffer = true,
-          desc = 'Ctrl-g + i で入力用バッファを開く',
+          desc = 'Ctrl-Alt-g で入力用バッファを開く',
         })
+        -- Alt-i でエコーエリアをつかうのもある
       end
     end,
   })
