@@ -613,6 +613,12 @@ later(function()
   })
 end)
 
+-- later(function()
+--   add({
+--     source = 'emmanueltouzery/key-menu.nvim',
+--   })
+-- end)
+
 later(function()
   local clue = require('mini.clue')
   local function mode_nx(keys)
