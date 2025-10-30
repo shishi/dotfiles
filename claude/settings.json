@@ -264,8 +264,8 @@
       "Bash(cargo publish:*)",
       "Bash(chmod 777 /*)",
       "Bash(chown root:*)",
-      "Bash(curl * | bash)",
-      "Bash(curl * | sh)",
+      "Bash(curl | bash:*)",
+      "Bash(curl | sh:*)",
       "Bash(dd:*)",
       "Bash(deno publish:*)",
       "Bash(docker system prune -af)",
@@ -288,10 +288,10 @@
       "Bash(sudo rm:*)",
       "Bash(sudo su:*)",
       "Bash(sudo umount:*)",
-      "Bash(sudo:*passwd*)",
-      "Bash(sudo:*shadow*)",
-      "Bash(wget * | bash)",
-      "Bash(wget * | sh)",
+      "Bash(sudo:passwd:*)",
+      "Bash(sudo:shadow:*)",
+      "Bash(wget | bash:*)",
+      "Bash(wget | sh:*)",
       "Edit(/bin/**)",
       "Edit(/boot/**)",
       "Edit(/dev/**)",
@@ -334,3 +334,4 @@
   },
   "alwaysThinkingEnabled": true
 }
+
