@@ -1490,39 +1490,41 @@ later(function()
   add({
     source = 'lambdalisue/nvim-aibo',
   })
+
+  --- @diagnostic disable-next-line: redundant-parameter
   require('aibo').setup({
     -- Prompt buffer configuration
     prompt = {
       no_default_mappings = false, -- Set to true to disable default keymaps
-      on_attach = function(bufnr, info)
-        -- Custom setup for prompt buffers
-        -- Runs AFTER ftplugin files
-        -- info.type = "prompt"
-        -- info.tool = tool name (e.g., "claude")
-        -- info.aibo = aibo instance
-      end,
+      -- on_attach = function(bufnr, info)
+      --   -- Custom setup for prompt buffers
+      --   -- Runs AFTER ftplugin files
+      --   -- info.type = "prompt"
+      --   -- info.tool = tool name (e.g., "claude")
+      --   -- info.aibo = aibo instance
+      -- end,
     },
 
     -- Console buffer configuration
     console = {
       no_default_mappings = false,
-      on_attach = function(bufnr, info)
-        -- Custom setup for console buffers
-        -- info.type = "console"
-        -- info.cmd = command being executed
-        -- info.args = command arguments
-        -- info.job_id = terminal job ID
-      end,
+      -- on_attach = function(bufnr, info)
+      --   -- Custom setup for console buffers
+      --   -- info.type = "console"
+      --   -- info.cmd = command being executed
+      --   -- info.args = command arguments
+      --   -- info.job_id = terminal job ID
+      -- end,
     },
 
     -- Tool-specific overrides
     tools = {
       claude = {
         no_default_mappings = false,
-        on_attach = function(bufnr, info)
-          -- Custom setup for Claude buffers
-          -- Called after prompt/console on_attach
-        end,
+        -- on_attach = function(bufnr, info)
+        --   -- Custom setup for Claude buffers
+        --   -- Called after prompt/console on_attach
+        -- end,
       },
       codex = {
         -- Codex-specific configuration
