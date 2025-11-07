@@ -621,7 +621,7 @@ end)
 
 later(function()
   local clue = require('mini.clue')
-  local function mode_nx(keys)
+  local function mode_nv(keys)
     return { mode = 'n', keys = keys }, { mode = 'v', keys = keys }
   end
 
@@ -632,20 +632,20 @@ later(function()
     },
     triggers = {
       -- Leader triggers
-      mode_nx('<leader>'),
+      mode_nv('<leader>'),
 
       -- Built-in completion
       { mode = 'i', keys = '<c-x>' },
 
       -- `g` key
-      mode_nx('g'),
+      mode_nv('g'),
 
       -- Marks
-      mode_nx("'"),
-      mode_nx('`'),
+      mode_nv("'"),
+      mode_nv('`'),
 
       -- Registers
-      mode_nx('"'),
+      mode_nv('"'),
       { mode = 'i', keys = '<c-r>' },
       { mode = 'c', keys = '<c-r>' },
 
@@ -657,7 +657,7 @@ later(function()
       { mode = 'n', keys = ']' },
 
       -- `z` key
-      mode_nx('z'),
+      mode_nv('z'),
 
       -- surround
       -- mode_nv('s'),
