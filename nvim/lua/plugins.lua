@@ -1625,6 +1625,24 @@ later(function()
   })
 end)
 
+-- filetype specific  ----------------------------------------------------------------
+-- markdown
+later(function()
+  add({
+    source = 'ixru/nvim-markdown',
+  })
+end)
+
+later(function()
+  add({
+    source = 'MeanderingProgrammer/render-markdown.nvim',
+    depends = {
+      'nvim-treesitter/nvim-treesitter',
+      'nvim-mini/mini.nvim',
+    },
+  })
+end)
+
 -- terminal ----------------------------------------------------------------
 later(function()
   add({
