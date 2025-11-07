@@ -622,7 +622,7 @@ end)
 later(function()
   local clue = require('mini.clue')
   local function mode_nx(keys)
-    return { mode = 'n', keys = keys }, { mode = 'x', keys = keys }
+    return { mode = 'n', keys = keys }, { mode = 'v', keys = keys }
   end
 
   clue.setup({
@@ -660,11 +660,11 @@ later(function()
       mode_nx('z'),
 
       -- surround
-      -- mode_nx('s'),
+      -- mode_nv('s'),
 
       -- text object
-      { mode = 'x', keys = 'i' },
-      { mode = 'x', keys = 'a' },
+      { mode = 'v', keys = 'i' },
+      { mode = 'v', keys = 'a' },
       { mode = 'o', keys = 'i' },
       { mode = 'o', keys = 'a' },
 
@@ -1663,6 +1663,65 @@ later(function()
   --   desc = 'lazygit',
   -- })
 end)
+
+-- other functions ----------------------------------------------------------------
+later(function()
+  add({
+    source = 'potamides/pantran.nvim',
+  })
+  require('pantran').setup({
+    -- Default engine to use for translation. To list valid engine names run
+    -- `:lua =vim.tbl_keys(require("pantran.engines"))`.
+    default_engine = 'google',
+    -- Configuration for individual engines goes here.
+    engines = {
+      google = {
+        -- Default languages can be defined on a per engine basis. In this case
+        -- `:lua require("pantran.async").run(function() vim.pretty_print(require("pantran.engines").yandex:languages()) end)`
+        -- can be used to list available language identifiers.
+        default_source = 'auto',
+        default_target = 'ja',
+        fallback = {
+          default_source = 'en',
+          default_target = 'ja',
+        },
+      },
+    },
+    -- controls = {
+    --   mappings = {
+    --     edit = {
+    --       n = {
+    --         -- Use this table to add additional mappings for the normal mode in
+    --         -- the translation window. Either strings or function references are
+    --         -- supported.
+    --         ['j'] = 'gj',
+    --         ['k'] = 'gk',
+    --       },
+    --       i = {
+    --         -- Similar table but for insert mode. Using 'false' disables
+    --         -- existing keybindings.
+    --         ['<C-y>'] = false,
+    --         ['<C-a>'] = require('pantran.ui.actions').yank_close_translation,
+    --       },
+    --     },
+    --     -- Keybindings here are used in the selection window.
+    --     -- select = {
+    --     --   n = {
+    --     --     -- ...
+    --     --   },
+    --     -- },
+    --   },
+    -- },
+  })
+  local pantran = require('pantran')
+  local opts = { noremap = true, silent = true, expr = true, desc = 'pantran translate' }
+  vim.keymap.set('n', '<leader>tr', pantran.motion_translate, opts)
+  vim.keymap.set('n', '<leader>trr', function()
+    return pantran.motion_translate() .. '_'
+  end, opts)
+  vim.keymap.set('v', '<leader>tr', pantran.motion_translate, opts)
+end)
+
 -- colosrsheme ----------------------------------------------------------------
 later(function()
   add({

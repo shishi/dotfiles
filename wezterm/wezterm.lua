@@ -196,6 +196,41 @@ local config = {
       mods = 'LEADER',
       action = act.IncreaseFontSize,
     },
+    {
+      key = 'e',
+      mods = 'LEADER',
+      action = wezterm.action_callback(function(window, pane)
+        local target_pane_id = tostring(pane:pane_id())
+
+        -- Try to resume existing editor pane
+        local success, _stdout, _stderr = wezterm.run_child_process({
+          'bash',
+          '-lc',
+          string.format('npx editprompt --resume --mux wezterm --target-pane %s', target_pane_id),
+        })
+
+        -- If resume failed, create new editor pane
+        if not success then
+          window:perform_action(
+            act.SplitPane({
+              direction = 'Down',
+              size = { Cells = 10 },
+              command = {
+                args = {
+                  'bash',
+                  '-lc',
+                  string.format(
+                    'npx editprompt --editor nvim --always-copy --mux wezterm --target-pane %s',
+                    target_pane_id
+                  ),
+                },
+              },
+            }),
+            pane
+          )
+        end
+      end),
+    },
   },
   -- mouse
   mouse_bindings = {
@@ -307,7 +342,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
 
   local windows_config = {
     use_ime = true,
-    ime_preedit_rendering = "System",
+    ime_preedit_rendering = 'System',
     wsl_domains = wsl_domains,
     front_end = 'OpenGL',
     -- this setting make cmd and powershell can't start
