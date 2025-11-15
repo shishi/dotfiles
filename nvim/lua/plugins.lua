@@ -1100,6 +1100,7 @@ later(function()
       'L3MON4D3/LuaSnip',
       'saadparwaiz1/cmp_luasnip',
       'rafamadriz/friendly-snippets',
+      'uga-rosa/cmp-skkeleton',
     },
   })
   add({
@@ -1211,6 +1212,7 @@ later(function()
       { name = 'luasnip' }, -- For luasnip users.
       -- { name = 'ultisnips' }, -- For ultisnips users.
       -- { name = 'snippy' }, -- For snippy users.
+      { name = 'skkeleton' },
     }, {
       { name = 'buffer' },
       { name = 'path' },
