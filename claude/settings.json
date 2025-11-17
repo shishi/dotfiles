@@ -15,6 +15,14 @@
   "enabledMcpjsonServers": [
     "terraform"
   ],
+  "hooks": {
+    "PreToolUse": {
+      "curlPipeBash": "if echo \"$CLAUDE_COMMAND\" | grep -qE 'curl .*\\| *bash'; then echo '禁止されています'; exit 1; fi",
+      "curlPipeSh": "if echo \"$CLAUDE_COMMAND\" | grep -qE 'curl .*\\| *sh'; then echo '禁止されています'; exit 1; fi",
+      "wgetPipeBash": "if echo \"$CLAUDE_COMMAND\" | grep -qE 'wget .*\\| *bash'; then echo '禁止されています'; exit 1; fi",
+      "wgetPipeSh": "if echo \"$CLAUDE_COMMAND\" | grep -qE 'wget .*\\| *sh'; then echo '禁止されています'; exit 1; fi"
+    }
+  },
   "permissions": {
     "allow": [
       "Bash(7z:*)",
@@ -264,8 +272,6 @@
       "Bash(cargo publish:*)",
       "Bash(chmod 777 /*)",
       "Bash(chown root:*)",
-      "Bash(curl | bash:*)",
-      "Bash(curl | sh:*)",
       "Bash(dd:*)",
       "Bash(deno publish:*)",
       "Bash(docker system prune -af)",
@@ -288,10 +294,8 @@
       "Bash(sudo rm:*)",
       "Bash(sudo su:*)",
       "Bash(sudo umount:*)",
-      "Bash(sudo:passwd:*)",
-      "Bash(sudo:shadow:*)",
-      "Bash(wget | bash:*)",
-      "Bash(wget | sh:*)",
+      "Bash(sudo passwd:*)",
+      "Bash(sudo shadow:*)",
       "Edit(/bin/**)",
       "Edit(/boot/**)",
       "Edit(/dev/**)",
