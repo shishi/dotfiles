@@ -98,10 +98,11 @@ vim.keymap.set('v', '=', '=gb')
 vim.keymap.set('n', '<Leader><Leader>`', '<Cmd>tabnew ~/.config/nvim/init.lua<CR>', { desc = 'open init.lua' })
 
 -- terminal
+vim.keymap.set('t', 'fj', [[<C-\><C-n>]])
 -- vim.keymap.set('t', '<Esc><Esc>', [[<C-\><C-n>]])
 -- vim.keymap.set('t', 'jj', [[<C-\><C-n>]])
-vim.keymap.set('t', '<ESC>', [[<c-\><c-n><Plug>(esc)]], { remap = true, desc = 'esc in terminal' })
-vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { remap = true, desc = 'back to terminal' })
+-- vim.keymap.set('t', '<ESC>', [[<c-\><c-n><Plug>(esc)]], { remap = true, desc = 'esc in terminal' })
+-- vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { remap = true, desc = 'back to terminal' })
 -- vim.keymap.set('n', 'Vt', '<cmd>Vt<CR>', { desc = 'vertical terminal' })
 
 -- input process for cant input area correctly with skkleton like claude code
