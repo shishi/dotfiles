@@ -88,14 +88,36 @@ vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
   end,
 })
 
-local augroup_nvim_ghost_user_autocommands = vim.api.nvim_create_augroup('augroup_nvim_ghost_user_autocommands', {
-  clear = true,
-})
-vim.api.nvim_create_autocmd({ 'User' }, {
-  group = augroup_nvim_ghost_user_autocommands,
-  pattern = { 'github.com' },
+-- set cellwidth automatically
+local augroup_set_cellwidth = vim.api.nvim_create_augroup('augroup_set_cellwidth', { clear = true })
+local font = require('core/font')
+local force_single_width_fts = {
+  'yazi',
+  'toggleterm',
+}
+vim.api.nvim_create_autocmd('FileType', {
+  group = augroup_set_cellwidth,
+  pattern = force_single_width_fts,
   callback = function()
-    print('hoge')
-    vim.opt.filetype = 'markdown'
+    vim.fn.setcellwidths({})
+  end,
+})
+
+vim.api.nvim_create_autocmd('WinClosed', {
+  group = augroup_set_cellwidth,
+  callback = function(event)
+    local win_id = tonumber(event.match)
+    if not win_id then
+      return
+    end
+    local buf = vim.api.nvim_win_get_buf(win_id)
+    if (not buf) or (not vim.api.nvim_buf_is_valid(buf)) then
+      return
+    end
+
+    local filetype = vim.api.nvim_get_option_value('filetype', { buf = buf })
+    if vim.tbl_contains(force_single_width_fts, filetype) then
+      font.apply_cellwidths()
+    end
   end,
 })
