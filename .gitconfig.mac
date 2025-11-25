@@ -12,12 +12,13 @@
     br = branch
     logs = log --graph --decorate --stat
     logn = log --graph --decorate --name-status
-	graph = log --graph --oneline --decorate
-	ignore = update-index --assume-unchanged
-	not-ignore = update-index --no-assume-unchanged
-	ignored = !git ls-files -v | grep "^[[:lower:]]"
+    graph = log --graph --oneline --decorate
+    ignore = update-index --assume-unchanged
+    not-ignore = update-index --no-assume-unchanged
+    ignored = !git ls-files -v | grep "^[[:lower:]]"
     current-branch = "!sh -c \"git branch | grep '*' | awk '{ print \\$2 }' \""
     push-for-review = "!sh -c 'git push origin HEAD:refs/for/master/`git current-branch`'"
+    aicommit = "!f() { COMMITMSG=$(claude -p 'Generate ONLY a one-line Git commit message in English, using imperative mood, summarizing what was changed and why, based strictly on the contents of `git diff --cached`. Do not add explanation or a body. Output only the commit summary line.'); git commit -m \"$COMMITMSG\" -e; }; f"
 [core]
     excludesfile = ~/.gitignore
     # pager = lv -c
