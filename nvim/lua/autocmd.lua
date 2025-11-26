@@ -89,8 +89,19 @@ vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
 })
 
 -- set cellwidth automatically
+-- https://github.com/wancup/dotfiles/blob/ed785d6e283dc04aed456bb7d1b04a5cf38e6a6d/.config/nvim/lua/configs/autocmd.lua?plain=1#L33-L63
 local augroup_set_cellwidth = vim.api.nvim_create_augroup('augroup_set_cellwidth', { clear = true })
-local font = require('core/font')
+local apply_cellwidths = function()
+	vim.fn.setcellwidths({
+		{ 0x1F000, 0x1FFFF, 2 }, -- 🀀 ~ 🫸
+		{ 0x2190, 0x2193, 2 }, -- ← ~ ↓
+		{ 0x2025, 0x2026, 2 }, -- ‥ ~ …
+		{ 0x2460, 0x2473, 2 }, -- ① ~ ⑳
+		{ 0x2600, 0x27FF, 2 }, -- ☀ ~ ⛿
+		{ 0x2B05, 0x2B07, 2 }, -- ⬅ ~ ⬇
+		{ 0x25BC, 0x25BD, 2 }, -- ▼ ~ ▽
+	})
+end
 local force_single_width_fts = {
   'yazi',
   'toggleterm',
@@ -117,7 +128,7 @@ vim.api.nvim_create_autocmd('WinClosed', {
 
     local filetype = vim.api.nvim_get_option_value('filetype', { buf = buf })
     if vim.tbl_contains(force_single_width_fts, filetype) then
-      font.apply_cellwidths()
+      apply_cellwidths()
     end
   end,
 })
