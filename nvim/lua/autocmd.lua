@@ -59,7 +59,11 @@ vim.api.nvim_create_autocmd({ 'FocusLost' }, {
 })
 
 -- auto reload file when file changed outside of nvim
+local augroup_auto_reload = vim.api.nvim_create_augroup('augroup_auto_reload', {
+  clear = true,
+})
 vim.api.nvim_create_autocmd({ 'WinEnter', 'FocusGained', 'BufEnter' }, {
+  group = augroup_auto_reload,
   pattern = '*',
   command = 'checktime',
 })
