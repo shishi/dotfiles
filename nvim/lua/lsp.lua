@@ -60,7 +60,7 @@ later(function()
         buffer = bufnr,
         desc = 'vim.lsp hover',
       })
-      vim.keymap.set('n', 'gri', vim.lsp.buf.implementation, {
+      vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, {
         buffer = bufnr,
         desc = 'vim.lsp.buf.implementation',
       })
@@ -68,25 +68,25 @@ later(function()
         buffer = bufnr,
         desc = 'vim.lsp signature_help',
       })
-      vim.keymap.set('n', 'grr', vim.lsp.buf.references, {
+      vim.keymap.set('n', 'gr', vim.lsp.buf.references, {
         buffer = bufnr,
         desc = 'vim.lsp.buf.references',
       })
-      vim.keymap.set('n', 'grt', vim.lsp.buf.type_definition, {
+      vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, {
         buffer = bufnr,
         desc = 'vim.lsp.buf.type_definition',
       })
 
       -- workspace
-      vim.keymap.set('n', 'grwa', vim.lsp.buf.add_workspace_folder, {
+      vim.keymap.set('n', 'gwa', vim.lsp.buf.add_workspace_folder, {
         buffer = bufnr,
         desc = 'vim.lsp add_workspace_folder',
       })
-      vim.keymap.set('n', 'grwr', vim.lsp.buf.remove_workspace_folder, {
+      vim.keymap.set('n', 'gwr', vim.lsp.buf.remove_workspace_folder, {
         buffer = bufnr,
         desc = 'vim.lsp remove_workspace_folder',
       })
-      vim.keymap.set('n', 'grwl', function()
+      vim.keymap.set('n', 'gwl', function()
         print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
       end, {
         buffer = bufnr,
@@ -94,7 +94,7 @@ later(function()
       })
 
       -- code actions
-      vim.keymap.set({ 'n', 'v' }, 'grn', vim.lsp.buf.rename, {
+      vim.keymap.set({ 'n', 'v' }, 'gn', vim.lsp.buf.rename, {
         buffer = bufnr,
         desc = 'vim.lsp rename',
       })
@@ -102,7 +102,7 @@ later(function()
         buffer = bufnr,
         desc = 'vim.lsp rename',
       })
-      vim.keymap.set({ 'n', 'v' }, 'gra', vim.lsp.buf.code_action, {
+      vim.keymap.set({ 'n', 'v' }, 'ga', vim.lsp.buf.code_action, {
         buffer = bufnr,
         desc = 'vim.lsp code_action',
       })
@@ -154,7 +154,7 @@ later(function()
       --   buffer = bufnr,
       --   desc = 'telescope diagnostics',
       -- })
-      vim.keymap.set('n', 'grq', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist' })
+      vim.keymap.set('n', 'gq', vim.diagnostic.setloclist, { desc = 'diagnose set_loclist' })
     end,
   })
 

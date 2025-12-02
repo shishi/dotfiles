@@ -1631,19 +1631,19 @@ end)
 -- markdown
 later(function()
   add({
-    source = 'ixru/nvim-markdown',
+    source = 'yousefhadder/markdown-plus.nvim',
   })
 end)
 
-later(function()
-  add({
-    source = 'MeanderingProgrammer/render-markdown.nvim',
-    depends = {
-      'nvim-treesitter/nvim-treesitter',
-      'nvim-mini/mini.nvim',
-    },
-  })
-end)
+-- later(function()
+--   add({
+--     source = 'MeanderingProgrammer/render-markdown.nvim',
+--     depends = {
+--       'nvim-treesitter/nvim-treesitter',
+--       'nvim-mini/mini.nvim',
+--     },
+--   })
+-- end)
 
 -- terminal ----------------------------------------------------------------
 later(function()
