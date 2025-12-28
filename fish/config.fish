@@ -368,6 +368,46 @@ switch (uname -a)
             bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
         end
 
+        # git worktree functions
+        function gwt -d "Create a new git worktree"
+            if test (count $argv) -eq 0
+                echo "Usage: gwt <branch-name>"
+                return 1
+            end
+
+            set -l branch_name $argv[1]
+            set -l base_path (basename (pwd))
+            set -l worktree_path "../$base_path-$branch_name"
+
+            git worktree add -b "$branch_name" "$worktree_path"
+            cd "$worktree_path"
+        end
+
+        function gwtd -d "Remove git worktree"
+            set -l current_pwd (pwd)
+            set -l worktree_root (git worktree list | grep (pwd) | awk '{print $1}')
+            
+            if test -z "$worktree_root"
+                echo "Not in a git worktree"
+                return 1
+            end
+
+            # Extract worktree name and branch
+            set -l worktree_name (basename "$worktree_root")
+            set -l branch_name (string replace -r '.*--' '' "$worktree_name")
+
+            # Protect against removing main worktree
+            if string match -q "*--*" "$worktree_name"
+                echo "Removing worktree: $worktree_root"
+                cd ..
+                git worktree remove "$worktree_root"
+                git branch -D "$branch_name"
+            else
+                echo "Cannot remove main worktree"
+                return 1
+            end
+        end
+
         function docker_run_with_current_user_and_dir
             docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
         end
@@ -391,7 +431,13 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
     end
 end
 
-# ruby (mainly for nix now)
+# nix
+## nom
+function nom-home-manager-switch
+    nix run home-manager/master -- switch --flake .#shishi@ubuntu 2>&1 | nom
+end
+
+## ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
     function add_current_gem_path
         set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
