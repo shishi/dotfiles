@@ -673,9 +673,6 @@ later(function()
 
       -- telescope
       { mode = 'n', keys = '<C-k>' },
-
-      -- trouble
-      { mode = 'n', keys = '<Leader>x' },
     },
 
     clues = {
