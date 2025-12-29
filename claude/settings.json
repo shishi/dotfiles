@@ -55,6 +55,8 @@
       {
         "hooks": [
           {
+            "type": "command",
+            "command": "echo 'ギャルっぽく話して'"
           }
         ]
       }
