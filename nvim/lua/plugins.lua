@@ -613,79 +613,90 @@ later(function()
   })
 end)
 
+later(function()
+  add({
+    source = 'folke/which-key.nvim',
+  })
+  require('which-key').setup()
+
+  vim.keymap.set('n, v', '<Leader>?', function()
+    require('which-key').show({ global = false })
+  end, { desc = 'Buffer Local Keymaps (which-key)' })
+end)
+
 -- later(function()
 --   add({
 --     source = 'emmanueltouzery/key-menu.nvim',
 --   })
 -- end)
 
-later(function()
-  local clue = require('mini.clue')
-  local function mode_nv(keys)
-    return { mode = 'n', keys = keys }, { mode = 'v', keys = keys }
-  end
-
-  clue.setup({
-    window = {
-      -- Delay before showing clue window
-      delay = 100,
-    },
-    triggers = {
-      -- Leader triggers
-      mode_nv('<leader>'),
-
-      -- Built-in completion
-      { mode = 'i', keys = '<c-x>' },
-
-      -- `g` key
-      mode_nv('g'),
-
-      -- Marks
-      mode_nv("'"),
-      mode_nv('`'),
-
-      -- Registers
-      mode_nv('"'),
-      { mode = 'i', keys = '<c-r>' },
-      { mode = 'c', keys = '<c-r>' },
-
-      -- Window commands
-      { mode = 'n', keys = '<c-w>' },
-
-      -- bracketed commands
-      { mode = 'n', keys = '[' },
-      { mode = 'n', keys = ']' },
-
-      -- `z` key
-      mode_nv('z'),
-
-      -- surround
-      -- mode_nv('s'),
-
-      -- text object
-      { mode = 'v', keys = 'i' },
-      { mode = 'v', keys = 'a' },
-      { mode = 'o', keys = 'i' },
-      { mode = 'o', keys = 'a' },
-
-      -- option toggle (mini.basics)
-      -- { mode = 'n', keys = 'm' },
-
-      -- telescope
-      { mode = 'n', keys = '<C-k>' },
-    },
-
-    clues = {
-      -- Enhance this by adding descriptions for <Leader> mapping groups
-      clue.gen_clues.builtin_completion(),
-      clue.gen_clues.g(),
-      clue.gen_clues.marks(),
-      clue.gen_clues.registers({ show_contents = true }),
-      clue.gen_clues.windows({ submode_resize = true, submode_move = true }),
-      clue.gen_clues.z(),
-    },
-  })
-end)
+-- later(function()
+--   local clue = require('mini.clue')
+--   local function mode_nv(keys)
+--     return { mode = 'n', keys = keys }, { mode = 'v', keys = keys }
+--   end
+--
+--   clue.setup({
+--     window = {
+--       -- Delay before showing clue window
+--       delay = 100,
+--     },
+--     triggers = {
+--       -- Leader triggers
+--       mode_nv('<leader>'),
+--
+--       -- Built-in completion
+--       { mode = 'i', keys = '<c-x>' },
+--
+--       -- `g` key
+--       mode_nv('g'),
+--
+--       -- Marks
+--       mode_nv("'"),
+--       mode_nv('`'),
+--
+--       -- Registers
+--       mode_nv('"'),
+--       { mode = 'i', keys = '<c-r>' },
+--       { mode = 'c', keys = '<c-r>' },
+--
+--       -- Window commands
+--       { mode = 'n', keys = '<c-w>' },
+--
+--       -- bracketed commands
+--       { mode = 'n', keys = '[' },
+--       { mode = 'n', keys = ']' },
+--
+--       -- `z` key
+--       mode_nv('z'),
+--
+--       -- surround
+--       -- mode_nv('s'),
+--
+--       -- text object
+--       { mode = 'v', keys = 'i' },
+--       { mode = 'v', keys = 'a' },
+--       { mode = 'o', keys = 'i' },
+--       { mode = 'o', keys = 'a' },
+--
+--       -- option toggle (mini.basics)
+--       -- { mode = 'n', keys = 'm' },
+--
+--       -- telescope
+--       { mode = 'n', keys = '<C-k>' },
+--     },
+--
+--     clues = {
+--       -- Enhance this by adding descriptions for <Leader> mapping groups
+--       clue.gen_clues.builtin_completion(),
+--       clue.gen_clues.g(),
+--       clue.gen_clues.marks(),
+--       clue.gen_clues.registers({ show_contents = true }),
+--       clue.gen_clues.windows({ submode_resize = true, submode_move = true }),
+--       clue.gen_clues.z(),
+--     },
+--   })
+-- end)
 
 later(function()
   require('mini.cursorword').setup()
