@@ -1071,6 +1071,17 @@ later(function()
   vim.keymap.set({ 'i', 'c', 't' }, [[<C-j>]], [[<Plug>(skkeleton-enable)]], { noremap = false })
 end)
 
+later(function()
+  add({
+    source = 'delphinus/skkeleton_indicator.nvim',
+    depends = {
+      'vim-skk/skkeleton',
+    },
+  })
+
+  require('skkeleton_indicator').setup({})
+end)
+
 -- completion ----------------------------------------------------------------
 later(function()
   local build = function(args)
@@ -1118,10 +1129,11 @@ later(function()
       'hrsh7th/cmp-buffer',
       'hrsh7th/cmp-path',
       'hrsh7th/cmp-cmdline',
+      'f3fora/cmp-spell',
+      'uga-rosa/cmp-skkeleton',
       'L3MON4D3/LuaSnip',
       'saadparwaiz1/cmp_luasnip',
       'rafamadriz/friendly-snippets',
-      'uga-rosa/cmp-skkeleton',
     },
   })
   add({
@@ -1233,10 +1245,21 @@ later(function()
       { name = 'luasnip' }, -- For luasnip users.
       -- { name = 'ultisnips' }, -- For ultisnips users.
       -- { name = 'snippy' }, -- For snippy users.
-      { name = 'skkeleton' },
     }, {
       { name = 'buffer' },
       { name = 'path' },
+
+      { name = 'skkeleton' },
+      {
+        name = 'spell',
+        option = {
+          keep_all_entries = false,
+          enable_in_context = function()
+            return true
+          end,
+          preselect_correct_word = true,
+        },
+      },
     }),
     formatting = {
       format = lspkind.cmp_format({

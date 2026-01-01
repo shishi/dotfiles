@@ -29,6 +29,8 @@ vim.opt.cursorline = true
 -- vim.opt.winbar = '%F'
 -- vim.opt.winbar = ''
 vim.opt.termguicolors = true
+vim.opt.spell = true
+vim.opt.spelllang = { 'en_us' }
 
 -- vim.opt.relativenumber = true
 -- if vim.g.vscode then
@@ -95,7 +97,7 @@ if utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank
       ['+'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
       ['*'] = '/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe -o --lf',
     },
-    cache_enable = 0,
+    cache_enable = 1,
   }
 elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('USER') == 'app' then
   local function paste()
