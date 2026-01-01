@@ -619,7 +619,7 @@ later(function()
   })
   require('which-key').setup()
 
-  vim.keymap.set('n, v', '<Leader>?', function()
+  vim.keymap.set({ 'n', 'x' }, '<Leader>?', function()
     require('which-key').show({ global = false })
   end, { desc = 'Buffer Local Keymaps (which-key)' })
 end)
@@ -845,10 +845,20 @@ later(function()
     depends = { 'nvim-telescope/telescope.nvim' },
   })
 
+  add({
+    source = 'Allianaab2m/telescope-kensaku.nvim',
+    depends = {
+      'nvim-lua/plenary.nvim',
+      'lambdalisue/kensaku.vim',
+      'nvim-telescope/telescope.nvim',
+    },
+  })
+
   local open_with_trouble = require('trouble.sources.telescope').open
   --- @diagnostic disable-next-line: unused-local
   local add_to_trouble = require('trouble.sources.telescope').add
   local lga_actions = require('telescope-live-grep-args.actions')
+  local kensaku = require('telescope').load_extension('kensaku') -- :Telescope kensaku
 
   require('telescope').setup({
     defaults = {
@@ -926,12 +936,6 @@ later(function()
   end, {
     desc = 'telescope find files',
   })
-  vim.keymap.set('n', '<C-g>', function()
-    -- require('telescope.builtin').live_grep()
-    require('telescope').extensions.live_grep_args.live_grep_args()
-  end, {
-    desc = 'telescope live grep',
-  })
   vim.keymap.set('n', 'q', function()
     require('telescope.builtin').current_buffer_fuzzy_find()
   end, {
@@ -941,6 +945,15 @@ later(function()
     require('telescope.builtin').buffers()
   end, {
     desc = 'telescope buffers',
+  })
+  vim.keymap.set('n', '<C-g>', '<CMD>Telescope kensaku<CR>', {
+    desc = 'telescope kensaku',
+  })
+  vim.keymap.set('n', '<C-k>a', function()
+    -- require('telescope.builtin').live_grep()
+    require('telescope').extensions.live_grep_args.live_grep_args()
+  end, {
+    desc = 'telescope live grep args',
   })
   vim.keymap.set('n', '<C-k>g', function()
     require('telescope.builtin').git_files()
