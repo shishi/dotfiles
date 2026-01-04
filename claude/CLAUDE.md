@@ -70,6 +70,10 @@ When approaching a new feature:
 6. Add another test for the next small increment of functionality
 7. Repeat until the feature is complete, committing behavioral changes separately from structural ones
 
+# Review gate (codex-review)
+
+If you can use codex cli in this environment, at key milestones—after updating specs/plans, after major implementation steps (≥5 files / public API / infra-config), and before commit/PR/release—run the codex-review SKILL and iterate review→fix→re-review until clean.
+
 Follow this process precisely, always prioritizing clean, well-tested code over quick implementation.
 
 Always write one test at a time, make it run, then improve structure. Always run all the tests (except long-running tests) each time.
