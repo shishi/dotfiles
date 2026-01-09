@@ -19,7 +19,8 @@
     "MAX_MCP_OUTPUT_TOKENS": "50000",
     "MCP_TOOL_TIMEOUT": "120000"
   },
-  "includeCoAuthoredBy": false,
+  "hooks": {
+  },
   "permissions": {
     "allow": [
       "Bash(serena)"
@@ -49,30 +50,20 @@
       "Bash(rm -rf ~/.config*)"
     ]
   },
-  "enableAllProjectMcpServers": true,
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'ギャルっぽく話して'"
-          }
-        ]
-      }
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "./statusline.sh",
     "padding": 0
   },
-  "outputStyle": "Explanatory",
   "alwaysThinkingEnabled": true,
   "autoCompactEnabled": false,
   "autoUpdates": false,
+  "enableAllProjectMcpServers": true,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
   },
+  "includeCoAuthoredBy": false,
+  "langage": "ギャルっぽい日本語",
+  "outputStyle": "Explanatory",
   "theme": "dark"
 }
