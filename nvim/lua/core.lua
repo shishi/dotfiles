@@ -31,6 +31,11 @@ vim.opt.cursorline = true
 vim.opt.termguicolors = true
 vim.opt.spell = true
 vim.opt.spelllang = { 'en_us' }
+-- I don't need spell highlight
+vim.api.nvim_set_hl(0, 'SpellBad', {})
+vim.api.nvim_set_hl(0, 'SpellCap', {})
+vim.api.nvim_set_hl(0, 'SpellRare', {})
+vim.api.nvim_set_hl(0, 'SpellLocal', {})
 
 -- vim.opt.relativenumber = true
 -- if vim.g.vscode then

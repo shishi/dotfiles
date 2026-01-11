@@ -39,13 +39,13 @@ later(function()
       local bufnr = args.buf
       local client = assert(vim.lsp.get_client_by_id(args.data.client_id))
 
-      if client:supports_method('textDocument/definition') then
-        -- 定義ジャンプの設定（省略）
-      end
-
-      if client:supports_method('textDocument/formatting') then
-        -- フォーマットの設定（省略）
-      end
+      -- if client:supports_method('textDocument/definition') then
+      --   -- 定義ジャンプの設定
+      -- end
+      --
+      -- if client:supports_method('textDocument/formatting') then
+      --   -- フォーマットの設定
+      -- end
 
       -- code definitions, references
       vim.keymap.set('n', 'gd', vim.lsp.buf.definition, {

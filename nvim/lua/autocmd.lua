@@ -16,6 +16,7 @@
 local augroup_formatoptions = vim.api.nvim_create_augroup('augroup_formatoptions', {
   clear = true,
 })
+---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
 vim.api.nvim_create_autocmd({ 'Filetype' }, {
   group = augroup_formatoptions,
   pattern = { '*' },
@@ -25,6 +26,7 @@ vim.api.nvim_create_autocmd({ 'Filetype' }, {
 })
 
 -- auto mkdir when save file
+---@diagnostic disable-next-line: param-type-mismatch
 vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
   pattern = '*',
   callback = function(event)
@@ -50,6 +52,7 @@ vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
 local augroup_autosave = vim.api.nvim_create_augroup('augroup_autosave', {
   clear = true,
 })
+---@diagnostic disable-next-line: param-type-mismatch
 vim.api.nvim_create_autocmd({ 'FocusLost' }, {
   group = augroup_autosave,
   pattern = { '*' },
@@ -62,6 +65,7 @@ vim.api.nvim_create_autocmd({ 'FocusLost' }, {
 local augroup_auto_reload = vim.api.nvim_create_augroup('augroup_auto_reload', {
   clear = true,
 })
+---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
 vim.api.nvim_create_autocmd({ 'WinEnter', 'FocusGained', 'BufEnter' }, {
   group = augroup_auto_reload,
   pattern = '*',
@@ -84,6 +88,7 @@ vim.api.nvim_create_autocmd({ 'WinEnter', 'FocusGained', 'BufEnter' }, {
 local augroup_relativenumber_in_visual_mode = vim.api.nvim_create_augroup('augroup_relativenumber_in_visual_mode', {
   clear = true,
 })
+---@diagnostic disable-next-line: param-type-mismatch
 vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
   group = augroup_relativenumber_in_visual_mode,
   pattern = { '*:[vV\x16]*' },
@@ -91,6 +96,7 @@ vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
     vim.opt.relativenumber = true
   end,
 })
+---@diagnostic disable-next-line: param-type-mismatch
 vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
   group = augroup_relativenumber_in_visual_mode,
   pattern = { '[vV\x16]*:*' },
@@ -125,6 +131,7 @@ vim.api.nvim_create_autocmd('FileType', {
   end,
 })
 
+---@diagnostic disable-next-line: param-type-mismatch
 vim.api.nvim_create_autocmd('WinClosed', {
   group = augroup_set_cellwidth,
   callback = function(event)
@@ -169,4 +176,19 @@ vim.api.nvim_create_autocmd('QuitPre', {
     -- この後、ウィンドウ1つの状態でquitが実行されるので、Vimが終了する
   end,
   desc = 'Close all special buffers and quit Neovim',
+})
+
+-- disable spell check highlight
+local augroup_disable_spell_highlight = vim.api.nvim_create_augroup('augroup_disable_spell_highlight', {
+  clear = true,
+})
+vim.api.nvim_create_autocmd('ColorScheme', {
+  group = augroup_disable_spell_highlight,
+  pattern = '*',
+  callback = function()
+    vim.api.nvim_set_hl(0, 'SpellBad', {})
+    vim.api.nvim_set_hl(0, 'SpellCap', {})
+    vim.api.nvim_set_hl(0, 'SpellRare', {})
+    vim.api.nvim_set_hl(0, 'SpellLocal', {})
+  end,
 })

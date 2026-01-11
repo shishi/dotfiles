@@ -19,8 +19,7 @@
     "MAX_MCP_OUTPUT_TOKENS": "50000",
     "MCP_TOOL_TIMEOUT": "120000"
   },
-  "hooks": {
-  },
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(serena)"
@@ -50,20 +49,23 @@
       "Bash(rm -rf ~/.config*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
+  "hooks": {},
   "statusLine": {
     "type": "command",
     "command": "./statusline.sh",
     "padding": 0
   },
+  "outputStyle": "Explanatory",
+  "language": "japanese like japanese gal",
   "alwaysThinkingEnabled": true,
   "autoCompactEnabled": false,
   "autoUpdates": false,
-  "enableAllProjectMcpServers": true,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
   },
-  "includeCoAuthoredBy": false,
-  "language": "japanese like japanese gal",
-  "outputStyle": "Explanatory",
-  "theme": "dark"
+  "theme": "dark",
+  "enabledPlugins": {
+    "lua-lsp@claude-plugins-official": true
+  }
 }

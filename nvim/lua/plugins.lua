@@ -25,6 +25,13 @@ local add, now, later = MiniDeps.add, MiniDeps.now, MiniDeps.later
 -- install and configure plugins
 -- now ----------------------------------------------------------------
 now(function()
+  add({
+    source = 'willothy/flatten.nvim',
+  })
+  require('flatten').setup()
+end)
+
+now(function()
   require('mini.misc').setup()
 
   MiniMisc.setup_restore_cursor()
@@ -580,8 +587,18 @@ later(function()
 end)
 
 later(function()
-  require('mini.tabline').setup()
+  add({
+    source = 'serhez/bento.nvim',
+  })
+
+  require('bento').setup({
+    main_keymap = ':',
+  })
 end)
+
+-- later(function()
+--   require('mini.tabline').setup()
+-- end)
 
 later(function()
   require('mini.indentscope').setup({
@@ -1528,6 +1545,7 @@ later(function()
         terminal = '<Leader>cc', -- Terminal mode keymap for toggling Claude Code, false to disable
         variants = {
           continue = '<Leader>cC', -- Normal mode keymap for Claude Code with continue flag
+          resume = '<Leader>cR', -- Normal mode keymap for Claude Code with continue flag
           verbose = '<Leader>cV', -- Normal mode keymap for Claude Code with verbose flag
         },
       },
