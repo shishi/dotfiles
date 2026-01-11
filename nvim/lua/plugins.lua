@@ -838,8 +838,10 @@ later(function()
       'nvim-lua/plenary.nvim',
       'folke/trouble.nvim',
       'rcarriga/nvim-notify',
+      'nvim-telescope/telescope-fzy-native.nvim',
     },
   })
+
   add({
     source = 'nvim-telescope/telescope-live-grep-args.nvim',
     depends = { 'nvim-telescope/telescope.nvim' },
@@ -909,6 +911,10 @@ later(function()
       },
     },
     extensions = {
+      fzy_native = {
+        override_generic_sorter = false,
+        override_file_sorter = true,
+      },
       live_grep_args = {
         auto_quoting = true, -- enable/disable auto-quoting
         mappings = {
