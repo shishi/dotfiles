@@ -12,19 +12,15 @@
 -- | 'c'                  | mapmode-c   | Command-line                             | :cmap                |
 -- | 't'                  | mapmode-t   | Terminal                                 | :tmap                |
 -- core
-vim.keymap.set({ 'n', 'v' }, ';', ':')
-vim.keymap.set({ 'n', 'v' }, ':', ';')
+-- vim.keymap.set({ 'n', 'v' }, ';', ':')
+-- vim.keymap.set({ 'n', 'v' }, ':', ';')
 vim.keymap.set('n', '<Leader><Leader>q', 'q', { desc = 'start recording' })
-
--- vim.keymap.set('n', 'q', '<Nop>')
 
 vim.keymap.set('n', 'p', 'p`]', { desc = 'Paste and move the end' })
 vim.keymap.set('n', 'P', 'P`]', { desc = 'Paste and move the end' })
 
--- vim.keymap.set({ 'n', 'x' }, 'x', '"_d', { desc = 'Delete into blackhole' })
 vim.keymap.set({ 'n', 'x' }, 'x', '"_x', { desc = 'Delete into blackhole' })
-vim.keymap.set('n', 'X', '"_D', { desc = 'Delete into blackhole' })
-vim.keymap.set('o', 'x', 'd', { desc = 'Delete using x' })
+vim.keymap.set('n', 'X', '"_X', { desc = 'Delete into blackhole' })
 
 vim.keymap.set('n', '<Enter>', 'o<ESC>')
 vim.keymap.set('n', '<A-Enter>', 'O<ESC>')
