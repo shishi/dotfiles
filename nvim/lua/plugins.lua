@@ -544,6 +544,14 @@ later(function()
   })
 end)
 
+later(function()
+  add({
+    source = 'Bakudankun/BackAndForward.vim',
+  })
+
+  vim.keymap.set('n', '<Leader><C-o>', '<Plug>(backandforward-back)', { desc = 'Go Back' })
+  vim.keymap.set('n', '<Leader><C-i>', '<Plug>(backandforward-forward)', { desc = 'Go Forward' })
+end)
 -- later(function()
 --   add({
 --     source = 'subnut/nvim-ghost.nvim',
@@ -586,15 +594,16 @@ later(function()
   -- })
 end)
 
-later(function()
-  add({
-    source = 'serhez/bento.nvim',
-  })
-
-  require('bento').setup({
-    main_keymap = ':',
-  })
-end)
+-- later(function()
+--
+--   add({
+--     source = 'serhez/bento.nvim',
+--   })
+--
+--   require('bento').setup({
+--     main_keymap = ';',
+--   })
+-- end)
 
 -- later(function()
 --   require('mini.tabline').setup()
