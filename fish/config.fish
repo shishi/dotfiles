@@ -181,6 +181,11 @@ if test -f ~/.claude/local/claude &>/dev/null
     set -x PATH ~/.claude/local $PATH
 end
 
+# git-wt
+if test -f git-wt &>/dev/null
+    git wt --init fish | source
+end
+
 # settings
 #########################################
 
@@ -377,7 +382,7 @@ end
 
 # git wt
 function gw -d "git worktree list with fzf"
-    cd (git worktree list | fzf --header-lines=1 | awk '{print $1}')
+    cd (git-wt | fzf | awk '{print $1}')
 end
 
 # git worktree functions
