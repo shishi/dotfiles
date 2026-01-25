@@ -21,41 +21,48 @@
     aicommit = "!f() { COMMITMSG=$(claude -p 'Generate ONLY a one-line Git commit message in English, using imperative mood, summarizing what was changed and why, based strictly on the contents of `git diff --cached`. Do not add explanation or a body. Output only the commit summary line.'); git commit -m \"$COMMITMSG\" -e; }; f"
 [core]
     excludesfile = ~/.gitignore
-    # pager = lv -c
-    pager = less --no-init --RAW-CONTROL-CHARS --quit-if-one-screen
     autocrlf = false
     safecrlf = true
     filemode = true
+    # pager = lv -c
+    pager = less --no-init --RAW-CONTROL-CHARS --quit-if-one-screen
 # [pager]
 #     diff = delta
 #     log = delta
 #     reflog = delta
 #     show = delta
-[commit]
-    gpgsign = true
-[push]
-    default = current
-[help]
-    autocorrect = 1
 [branch]
     autosetuprebase = always
+[commit]
+    gpgsign = true
+[credential]
+    helper = osxkeychain
+[ghq]
+	root = ~/dev/src
+[magit]
+    hideCampaign = true
+[pull]
+	autostash = true
+[push]
+    default = current
+    autoSetupRemote = true
+[help]
+    autocorrect = 1
+[filter "lfs"]
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    process = git-lfs filter-process
+    required = true
+[url "ssh://git@github.com/"]
+    insteadOf = https://github.com/
+[url "ssh://git@heroku.com/"]
+	insteadOf = https://git.heroku.com/
 [github]
     user = shishi
     token = hogehoge
 [heroku]
     account = shishi
-[credential]
-    helper = osxkeychain
-[magit]
-	hideCampaign = true
-[ghq]
-    root = ~/dev/src
-[filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
-[url "ssh://git@github.com/"]
-    insteadOf = https://github.com/
-[url "ssh://git@heroku.com/"]
-	insteadOf = https://git.heroku.com/
+[wt]
+    basedir = /tmp/worktrees
+    copy = .devcontainer/
+# hook =

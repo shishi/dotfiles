@@ -24,36 +24,47 @@
     preloadindex = true
     fscache = true
     symlinks = true
-	editor = code --wait
-[push]
-    default = current
-[help]
-    autocorrect = 1
+    editor = code --wait
+# [pager]
+#     diff = delta
+#     log = delta
+#     reflog = delta
+#     show = delta
+[gpg]
+    program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe
 [branch]
     autosetuprebase = always
-[github]
-    user = shishi
-    token = hogehoge
-[heroku]
-    account = shishi
+[commit]
+    gpgsign = true
+[credential]
+	helper = cache --timeout=2419200
+	# helper = /usr/lib/git-core/git-credential-libsecret
+[ghq]
+	root = ~/dev/src
 [magit]
     hideCampaign = true
-[ghq]
-    root = C:/Users/shishi/dev/src
+[pull]
+	autostash = true
+[push]
+    default = current
+    autoSetupRemote = true
+[help]
+    autocorrect = 1
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
     process = git-lfs filter-process
     required = true
-[credential]
-	helper = manager-core
-	# helper = manager
-[commit]
-    gpgsign = true
-[gpg]
-    program = C:\\Users\\shishi\\scoop\\apps\\gpg\\current\\bin\\gpg.exe
 [url "ssh://git@github.com/"]
     insteadOf = https://github.com/
 [url "ssh://git@heroku.com/"]
 	insteadOf = https://git.heroku.com/
-
+[github]
+    user = shishi
+    token = hogehoge
+[heroku]
+    account = shishi
+[wt]
+    basedir = /tmp/worktrees
+    copy = .devcontainer/
+# hook =

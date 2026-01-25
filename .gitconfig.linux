@@ -21,7 +21,7 @@
     aicommit = "!f() { COMMITMSG=$(claude -p 'Generate ONLY a one-line Git commit message in English, using imperative mood, summarizing what was changed and why, based strictly on the contents of `git diff --cached`. Do not add explanation or a body. Output only the commit summary line.'); git commit -m \"$COMMITMSG\" -e; }; f"
 [core]
     excludesfile = ~/.gitignore
-	autocrlf = false
+    autocrlf = false
     safecrlf = true
     filemode = true
     # pager = lv -c
@@ -31,18 +31,24 @@
 #     log = delta
 #     reflog = delta
 #     show = delta
+[branch]
+    autosetuprebase = always
 [commit]
     gpgsign = true
+[credential]
+	helper = cache --timeout=2419200
+	# helper = /usr/lib/git-core/git-credential-libsecret
+[ghq]
+	root = ~/dev/src
+[magit]
+    hideCampaign = true
+[pull]
+	autostash = true
 [push]
     default = current
     autoSetupRemote = true
 [help]
     autocorrect = 1
-[branch]
-    autosetuprebase = always
-[credential]
-	helper = cache --timeout=2419200
-	# helper = /usr/lib/git-core/git-credential-libsecret
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
@@ -57,9 +63,7 @@
     token = hogehoge
 [heroku]
     account = shishi
-[magit]
-    hideCampaign = true
-[ghq]
-	root = ~/dev/src
-[pull]
-	autostash = true
+[wt]
+    basedir = /tmp/worktrees
+    copy = .devcontainer/
+# hook =
