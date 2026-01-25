@@ -62,8 +62,8 @@ if [ (uname) = Darwin ]
     end
 
     # nix-darwin
-    if type -d '/run/current-system/sw/bin/' &>/dev/null
-        set -x PATH '/run/current-system/sw/bin/' $PATH
+    if type -d /run/current-system/sw/bin/ &>/dev/null
+        set -x PATH /run/current-system/sw/bin/ $PATH
     end
 
     # jetbrains toolbox
@@ -321,96 +321,107 @@ end
 # function
 #########################################
 
-# skkeleton
-if [ "$GUAKE_TAB_UUID" ]; then
-    nvim -c "startinsert" /tmp/tmp_input
+function ln_setup
+    bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
+end
+
+# vime skkeleton
+if [ "$GUAKE_TAB_UUID" ]
+    then
+    nvim -c startinsert /tmp/tmp_input
     cat /tmp/tmp_input | xsel --clipboard --input
     rm /tmp/tmp_input
     exit 0
 end
 
-switch (uname -a)
-    case "*MINGW64*"
-    case "*Linux*" "Darwin*"
-        function su
-            /bin/su --shell=/usr/bin/fish $argv
-        end
+function su
+    /bin/su --shell=/usr/bin/fish $argv
+end
 
-        function ibus_restart
-            ibus-daemon -drx
-        end
+function ibus_restart
+    ibus-daemon -drx
+end
 
-        # ghq
-        if type ghq &>/dev/null
-            function __ghq_cd_repository -d "Change local repository directory"
-                ghq list --full-path | fzf | read -l repo_path
-                cd $repo_path
-            end
-            alias ghc __ghq_cd_github
+# ghq
+if type ghq &>/dev/null
+    function __ghq_cd_repository -d "Change local repository directory"
+        ghq list --full-path | fzf | read -l repo_path
+        cd $repo_path
+    end
+    alias ghc __ghq_cd_github
 
-            function __ghq_browse_github -d "Browse remote repository on github"
-                ghq list | fzf | read -l repo_path
-                set -l repo_name (string split -m1 "/" $repo_path)[2]
-                # hub browse $repo_name
-                open https://github.com/$repo_name
-            end
-            alias ghb __ghq_browse_github
-        end
+    function __ghq_browse_github -d "Browse remote repository on github"
+        ghq list | fzf | read -l repo_path
+        set -l repo_name (string split -m1 "/" $repo_path)[2]
+        # hub browse $repo_name
+        open https://github.com/$repo_name
+    end
+    alias ghb __ghq_browse_github
+end
 
-        # fzf
-        if type fzf &>/dev/null
-            function gb -d "Fuzzy-find and checkout a branch"
-                git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
-            end
-        end
+# fzf git branch
+if type fzf &>/dev/null
+    function gbf -d "Fuzzy-find and checkout a branch"
+        git branch --all | grep -v HEAD | string trim | fzf | xargs git checkout
+    end
+end
 
-        function ln_setup
-            bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
-        end
+# git batch delete branch
+function gbd -d "git batch delete branch"
+    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -d
+end
 
-        # git worktree functions
-        function gwt -d "Create a new git worktree"
-            if test (count $argv) -eq 0
-                echo "Usage: gwt <branch-name>"
-                return 1
-            end
+function gbD -d "git batch delete branch"
+    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -D
+end
 
-            set -l branch_name $argv[1]
-            set -l base_path (basename (pwd))
-            set -l worktree_path "../$base_path-$branch_name"
+# git wt
+function gw -d "git worktree list with fzf"
+    cd (git worktree list | fzf --header-lines=1 | awk '{print $1}')
+end
 
-            git worktree add -b "$branch_name" "$worktree_path"
-            cd "$worktree_path"
-        end
+# git worktree functions
+function gwt -d "Create a new git worktree"
+    if test (count $argv) -eq 0
+        echo "Usage: gwt <branch-name>"
+        return 1
+    end
 
-        function gwtd -d "Remove git worktree"
-            set -l current_pwd (pwd)
-            set -l worktree_root (git worktree list | grep (pwd) | awk '{print $1}')
-            
-            if test -z "$worktree_root"
-                echo "Not in a git worktree"
-                return 1
-            end
+    set -l branch_name $argv[1]
+    set -l base_path (basename (pwd))
+    set -l worktree_path "../$base_path-$branch_name"
 
-            # Extract worktree name and branch
-            set -l worktree_name (basename "$worktree_root")
-            set -l branch_name (string replace -r '.*--' '' "$worktree_name")
+    git worktree add -b "$branch_name" "$worktree_path"
+    cd "$worktree_path"
+end
 
-            # Protect against removing main worktree
-            if string match -q "*--*" "$worktree_name"
-                echo "Removing worktree: $worktree_root"
-                cd ..
-                git worktree remove "$worktree_root"
-                git branch -D "$branch_name"
-            else
-                echo "Cannot remove main worktree"
-                return 1
-            end
-        end
+function gwtd -d "Remove git worktree"
+    set -l current_pwd (pwd)
+    set -l worktree_root (git worktree list | grep (pwd) | awk '{print $1}')
 
-        function docker_run_with_current_user_and_dir
-            docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
-        end
+    if test -z "$worktree_root"
+        echo "Not in a git worktree"
+        return 1
+    end
+
+    # Extract worktree name and branch
+    set -l worktree_name (basename "$worktree_root")
+    set -l branch_name (string replace -r '.*--' '' "$worktree_name")
+
+    # Protect against removing main worktree
+    if string match -q "*--*" "$worktree_name"
+        echo "Removing worktree: $worktree_root"
+        cd ..
+        git worktree remove "$worktree_root"
+        git branch -D "$branch_name"
+    else
+        echo "Cannot remove main worktree"
+        return 1
+    end
+end
+
+function docker_run_with_current_user_and_dir
+    docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
 end
 
 # Arch
@@ -460,29 +471,7 @@ if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&
     end
 end
 
-#function fci -d "Fuzzy-find and checkout a commit"
-#  git log --pretty=oneline --abbrev-commit --reverse | fzf --tac +s -e | awk '{print $1;}' | xargs git checkout
-#end
-#
-#function fssh -d "Fuzzy-find ssh host and ssh into it"
-#  ag '^host [^*]' ~/.ssh/config | cut -d ' ' -f 2 | fzf | xargs -o ssh
-#end
-#
-#function fpass -d "Fuzzy-find a Lastpass entry and copy the password"
-#  if not lpass status -q
-#    lpass login $EMAIL
-#  end
-#
-#  if not lpass status -q
-#    exit
-#  end
-#
-#  lpass ls | fzf | string replace -r -a '.+\[id: (\d+)\]' '$1' | xargs lpass show -c --password
-#end
-
 # source other file
 #########################################
 
 # source ~/.config/fish/functions/github_copilot_cli.fish
-
-

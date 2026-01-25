@@ -504,6 +504,13 @@ later(function()
     },
   })
 
+  require('neogit').setup({
+    integrations = {
+      telescope = true,
+      diffview = true,
+    },
+  })
+
   vim.api.nvim_create_user_command('Neogit', function()
     require('neogit').open()
   end, { desc = 'Open Neogit' })
@@ -511,6 +518,10 @@ later(function()
   vim.keymap.set('n', '<A-g>', function()
     require('neogit').open()
   end, { desc = 'Open Neogit' })
+
+  vim.keymap.set('n', '<A-G>', function()
+    require('neogit').open({ 'commit' })
+  end, { desc = 'Open Neogit commit' })
 end)
 
 later(function()
@@ -1627,6 +1638,7 @@ later(function()
       ruby = { 'rubocop' },
       sh = { 'shfmt' },
       yaml = { 'deno_fmt' },
+      fish = { 'fish_indent' },
     },
   })
   vim.o.formatexpr = "v:lua.require('conform').formatexpr()"
