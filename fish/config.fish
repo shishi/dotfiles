@@ -182,7 +182,7 @@ if test -f ~/.claude/local/claude &>/dev/null
 end
 
 # git-wt
-if test -f git-wt &>/dev/null
+if type git-wt &>/dev/null
     git wt --init fish | source
 end
 
