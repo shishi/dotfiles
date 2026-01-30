@@ -57,8 +57,7 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "lua-lsp@claude-plugins-official": true,
-    "superpowers@superpowers-marketplace": true
+    "lua-lsp@claude-plugins-official": true
   },
   "outputStyle": "Explanatory",
   "language": "japanese like japanese gal",

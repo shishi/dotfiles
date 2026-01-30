@@ -197,6 +197,11 @@ local config = {
       action = act.IncreaseFontSize,
     },
     {
+      key = 's',
+      mods = 'LEADER',
+      action = act.PaneSelect,
+    },
+    {
       key = 'e',
       mods = 'LEADER',
       action = wezterm.action_callback(function(window, pane)
