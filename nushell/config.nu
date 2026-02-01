@@ -41,3 +41,5 @@ $env.config = {
         osc633: true
     }
 }
+
+alias sudo = gsudo

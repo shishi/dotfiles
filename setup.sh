@@ -64,17 +64,14 @@ else
   ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
 fi
 
-mkdir -p ~/.claude
-ln -sf ${DOTDIR}/claude/settings.json ~/.claude/settings.json
-ln -sf ${DOTDIR}/claude/CLAUDE.md ~/.claude/CLAUDE.md
-if [ -L ${XDG_CONFIG_HOME}/claude ]; then
-  rm ${XDG_CONFIG_HOME}/claude
-  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
-elif [ -d ${XDG_CONFIG_HOME}/claude ]; then
-  rm -fr ${XDG_CONFIG_HOME}/claude
-  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
+if [ -L ~/.claude ]; then
+  rm ~/.claude
+  ln -sf ${DOTDIR}/claude ~/.claude
+elif [ -d ~/.claude ]; then
+  rm -fr ~/.claude
+  ln -sf ${DOTDIR}/claude ~/.claude
 else
-  ln -sf ${DOTDIR}/claude ${XDG_CONFIG_HOME}/claude
+  ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then

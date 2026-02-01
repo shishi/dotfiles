@@ -56,6 +56,9 @@
     "command": "./statusline.sh",
     "padding": 0
   },
+  "enabledPlugins": {
+    "lua-lsp@claude-plugins-official": true
+  },
   "outputStyle": "Explanatory",
   "language": "japanese like japanese gal",
   "alwaysThinkingEnabled": true,
@@ -64,8 +67,5 @@
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
   },
-  "theme": "dark",
-  "enabledPlugins": {
-    "lua-lsp@claude-plugins-official": true
-  }
+  "theme": "dark"
 }
