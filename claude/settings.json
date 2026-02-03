@@ -53,11 +53,16 @@
   "hooks": {},
   "statusLine": {
     "type": "command",
-    "command": "./statusline.sh",
+    "command": "bash ./statusline.sh",
     "padding": 0
   },
   "enabledPlugins": {
-    "lua-lsp@claude-plugins-official": true
+    "lua-lsp@claude-plugins-official": true,
+    "double-shot-latte@superpowers-marketplace": true,
+    "elements-of-style@superpowers-marketplace": true,
+    "superpowers-chrome@superpowers-marketplace": true,
+    "superpowers-developing-for-claude-code@superpowers-marketplace": true,
+    "superpowers-lab@superpowers-marketplace": true
   },
   "outputStyle": "Explanatory",
   "language": "japanese like japanese gal",
