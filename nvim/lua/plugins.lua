@@ -975,7 +975,7 @@ later(function()
   end, {
     desc = 'telescope current_buffer_fuzzy_find',
   })
-  vim.keymap.set('n', '<C-P>', function()
+  vim.keymap.set('n', '<C-q>', function()
     require('telescope.builtin').buffers()
   end, {
     desc = 'telescope buffers',

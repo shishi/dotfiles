@@ -56,12 +56,22 @@
     "command": "bash ./statusline.sh",
     "padding": 0
   },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    }
+  },
   "enabledPlugins": {
-    "double-shot-latte@superpowers-marketplace": true,
-    "elements-of-style@superpowers-marketplace": true,
+    "superpowers@superpowers-marketplace": true,
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
-    "superpowers-lab@superpowers-marketplace": true
+    "superpowers-lab@superpowers-marketplace": true,
+    "double-shot-latte@superpowers-marketplace": true,
+    "elements-of-style@superpowers-marketplace": true,
+    "episodic-memory@superpowers-marketplace": false
   },
   "outputStyle": "Explanatory",
   "language": "japanese like japanese gal",
