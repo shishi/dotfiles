@@ -1477,15 +1477,15 @@ later(function()
     suggestion = {
       auto_trigger = true,
       hide_during_completion = false,
-    },
-    keymap = {
-      accept = '<A-l>',
-      accept_word = false,
-      accept_line = false,
-      next = '<A-]>',
-      prev = '<A-[>',
-      dismiss = '<C-]>',
-      toggle_auto_trigger = false,
+      keymap = {
+        accept = '<A-l>',
+        accept_word = false,
+        accept_line = false,
+        next = '<A-]>',
+        prev = '<A-[>',
+        dismiss = '<C-]>',
+        toggle_auto_trigger = false,
+      },
     },
     filetypes = {
       markdown = true,
