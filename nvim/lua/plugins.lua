@@ -472,20 +472,11 @@ end)
 
 later(function()
   add({
-    source = 'JoosepAlviste/nvim-ts-context-commentstring',
+    source = 'folke/ts-comments.nvim',
     depends = { 'nvim-treesitter/nvim-treesitter' },
   })
 
-  require('ts_context_commentstring').setup({
-    enable_autocmd = false,
-  })
-
-  local get_option = vim.filetype.get_option
-  ---@diagnostic disable-next-line: duplicate-set-field
-  vim.filetype.get_option = function(filetype, option)
-    return option == 'commentstring' and require('ts_context_commentstring.internal').calculate_commentstring()
-      or get_option(filetype, option)
-  end
+  require('ts-comments').setup()
 end)
 
 later(function()
