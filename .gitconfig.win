@@ -65,6 +65,6 @@
 [heroku]
     account = shishi
 [wt]
-    basedir = /tmp/worktrees
+    basedir = .worktrees
     copy = .devcontainer/
-# hook =
+    # hook =
