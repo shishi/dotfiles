@@ -53,7 +53,7 @@
   "hooks": {},
   "statusLine": {
     "type": "command",
-    "command": "bash ./statusline.sh",
+    "command": "bash ~/.claude/statusline.sh",
     "padding": 0
   },
   "extraKnownMarketplaces": {
