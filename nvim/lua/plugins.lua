@@ -28,7 +28,20 @@ now(function()
   add({
     source = 'willothy/flatten.nvim',
   })
-  require('flatten').setup()
+  -- require('flatten').setup()
+  local flatten = require('flatten')
+  ---@diagnostic disable-next-line: missing-fields
+  flatten.setup({
+    window = {
+      open = 'split',
+      diff = 'tab_vsplit',
+      focus = 'first',
+    },
+    integrations = {
+      kitty = false,
+      wezterm = true,
+    },
+  })
 end)
 
 now(function()
@@ -1684,6 +1697,7 @@ later(function()
   add({
     source = 'yousefhadder/markdown-plus.nvim',
   })
+  require('markdown-plus').setup()
 end)
 
 -- later(function()

@@ -17,6 +17,9 @@ set -x GPG_TTY (tty)
 if [ "$TERM_PROGRAM" = vscode ]
     set -x EDITOR code --wait
     set -x VISUAL code --wait
+else if [ -n "$NVIM" ]
+    set -x EDITOR "nvim --headless --cmd 'let g:flatten_wait=1'"
+    set -x VISUAL "nvim --headless --cmd 'let g:flatten_wait=1'"
 else if type nvim &>/dev/null
     set -x EDITOR nvim
     set -x VISUAL nvim
