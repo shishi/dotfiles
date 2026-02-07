@@ -6,7 +6,8 @@
       "Bash(echo:*)",
       "Bash(CLAUDECODE=1 bash -x ~/.config/fish/nvim-edit --version)",
       "Bash(fish -c 'source ~/.config/fish/config.fish 2>&1; echo $EDITOR')",
-      "Bash(CLAUDECODE=1 /home/shishi/.config/fish/nvim-edit -c 'echo \"\"mode:\"\" mode\\(\\) | cquit')"
+      "Bash(CLAUDECODE=1 /home/shishi/.config/fish/nvim-edit -c 'echo \"\"mode:\"\" mode\\(\\) | cquit')",
+      "Bash(test:*)"
     ]
   }
 }

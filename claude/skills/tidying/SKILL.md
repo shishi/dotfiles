@@ -24,8 +24,8 @@ Tidyings are:
 
 | Timing | Trigger | Flow |
 |--------|---------|------|
-| **Tidy First** | Code is hard to change | `/tidy:first` → `refactor:` commit → behavioral change → `feat:/fix:` commit |
-| **Tidy After** | Feature revealed better structure | behavioral change → `feat:/fix:` commit → `/tidy:after` → `refactor:` commit |
+| **Tidy First** | Code is hard to change | `/tidy-first` → `refactor:` commit → behavioral change → `feat:/fix:` commit |
+| **Tidy After** | Feature revealed better structure | behavioral change → `feat:/fix:` commit → `/tidy-after` → `refactor:` commit |
 | **Tidy Later** | Tidying too big or off-focus | Note opportunity → backlog/TODO → continue current work |
 
 ## Decision Framework

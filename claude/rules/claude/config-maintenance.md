@@ -14,17 +14,16 @@ Choose configuration type based on **when context should load** and **how contex
 |-------------|--------------|-------------------|-----------------|
 | `CLAUDE.md` | Startup      | Shared            | Full content |
 | `rules/`    | Startup/Path | Shared            | Full (lazy if paths specified) |
-| `commands/` | User         | Shared            | None |
 | `skills/`   | Auto         | Shared            | Description only |
 | `agents/`   | Auto/User    | Isolated          | Description only |
 
 ## Anti-Patterns to Avoid
 
-1. **Context bloat in CLAUDE.md**: Move task-specific procedures to slash commands
-2. **Duplicated content**: If skill and command overlap, have skill invoke the command
+1. **Context bloat in CLAUDE.md**: Move task-specific procedures to skills
+2. **Duplicated content**: If multiple skills overlap, consolidate into one
 3. **Shared rules in multiple agents**: Extract to CLAUDE.md (always-needed) or skill (conditional)
 4. **Heavyweight tasks in main context**: Use subagent when trial-and-error would pollute context
-5. **User-level path rules leaking**: Path-filtered rules at user level may apply unintentionally (e.g., `*.ts` frontend rules activating in CLI projects). Prefer skills/commands for user-level task-specific guidance
+5. **User-level path rules leaking**: Path-filtered rules at user level may apply unintentionally (e.g., `*.ts` frontend rules activating in CLI projects). Prefer skills for user-level task-specific guidance
 6. **Over-documenting mechanics**: Don't specify *how* to use tools Claude already knows (e.g., `git commit --amend` syntax). Use subtle hints for *when* to consider options (e.g., "Consider: Are there changes to amend?")
 
 ## Best Practices Examples
@@ -32,7 +31,7 @@ Choose configuration type based on **when context should load** and **how contex
 ### Optimizing Startup Context
 
 **CLAUDE.md/rules** should include only always-needed context (e.g., role, expertise, core principles).
-Move conditional content and detailed procedures, and deep knowledge to commands, skills, subagents, or path-specific rules.
+Move conditional content and detailed procedures, and deep knowledge to skills, subagents, or path-specific rules.
 
 Note that **Path-specific rules** defer loading until touching files that match the specified glob patterns in `paths:` frontmatter like below.
 
@@ -50,27 +49,30 @@ When extracting skills and subagents, mention their names for discoverability.
 Use `commit` skill to git commit the change
 ```
 
-Avoid mentioning user-invoked commands in CLAUDE.md and non-path-specific rules as they need no discovery.
-If discoverability is desired, have the skill invoke the command instead.
+Avoid mentioning user-invoked skills in CLAUDE.md and non-path-specific rules as they need no discovery.
 
-### Skills + Commands Integration Pattern
+### Skills: Auto-detection AND Manual Invocation
 
-For tasks needing both auto-detection AND manual invocation:
+Skills support both auto-detection and manual invocation via `/skill-name`:
 
 ```yaml
 ---
 # skills/git-commit/SKILL.md
 name: git-commit
-description: Stage meaningful diffs and create commits with WHY-focused messages. Use whenever making git commits.
+description: Stage meaningful diffs and create Conventional Commits with WHY-focused messages. Use whenever making git commits.
 ---
 
-Use `/git:commit` slash command to stage meaningful diffs and create commits with WHY-focused messages.
+## Context
+!`git status --short`
+
+## Task
+Stage meaningful diffs and create commits with WHY-focused messages.
 ```
 
 Benefits:
-- Auto-triggers when Claude detects commit intent
-- Allows explicit `/git:commit` for manual control
-- Eliminates duplication between skill and command
+- Auto-triggers when Claude detects commit intent (via description matching)
+- Allows explicit `/git-commit` for manual control
+- Single source of truth — no duplication between separate files
 
 ### Agents vs Skills: Choosing Context Isolation
 
@@ -101,9 +103,9 @@ Example: A "find files" task that may require trying multiple glob patterns shou
 When reviewing configurations:
 
 - [ ] Is CLAUDE.md content truly always-needed? Move conditional content and detailed procedures elsewhere
-- [ ] Are there duplications between skills and commands? Consolidate
+- [ ] Are there duplications between skills? Consolidate
 - [ ] Would a subagent's isolated context benefit this task?
 - [ ] Are agent definitions focused? Factor reusable workflows into skills
 - [ ] Is the skill description specific enough for auto-discovery?
-- [ ] Are commands self-contained without requiring other context?
+- [ ] Are skills focused on a single responsibility?
 - [ ] Are user-level path rules leaking into unintended project types?

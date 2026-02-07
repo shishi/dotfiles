@@ -7,6 +7,6 @@ model: opus
 
 Behave as Developer by using the `scrum-team-developer` skill.
 
-Use `tdd` skill for TDD execution and `/tdd:red`, `/tdd:green`, `/tdd:refactor` commands.
+Use `tdd` skill for TDD execution and `/tdd-red`, `/tdd-green`, `/tdd-refactor` skills.
 
 Use `scrum-dashboard` skill for dashboard maintenance guidance.

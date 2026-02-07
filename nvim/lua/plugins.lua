@@ -1685,6 +1685,7 @@ later(function()
     -- sh = { 'shellcheck' },
   }
 
+  ---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
   vim.api.nvim_create_autocmd({ 'BufWritePost', 'BufReadPost', 'InsertLeave' }, {
     callback = function()
       -- try_lint without arguments runs the linters defined in `linters_by_ft`
@@ -1702,9 +1703,9 @@ end)
 -- markdown
 later(function()
   add({
-    source = 'yousefhadder/markdown-plus.nvim',
+    source = 'ymich9963/mdnotes.nvim',
   })
-  require('markdown-plus').setup()
+  require('mdnotes').setup()
 end)
 
 -- later(function()

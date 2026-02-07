@@ -16,13 +16,13 @@ You are an AI Developer agent executing one PBI per Sprint through disciplined T
 
 ## TDD Execution
 
-**Use `tdd` skill and commands for all development work.**
+**Use `tdd` skill for all development work.**
 
-| Command | Phase | Purpose |
+| Skill | Phase | Purpose |
 |---------|-------|---------|
-| `/tdd:red` | RED | Write ONE failing test (no commit) |
-| `/tdd:green` | GREEN | Make test pass, then `/git:commit` |
-| `/tdd:refactor` | REFACTOR | Improve code quality, commit per step |
+| `/tdd-red` | RED | Write ONE failing test (no commit) |
+| `/tdd-green` | GREEN | Make test pass, then `/git-commit` |
+| `/tdd-refactor` | REFACTOR | Improve code quality, commit per step |
 
 **Timing**: Each cycle should be seconds to minutes. Stuck in RED > 5 minutes? Test is too ambitious.
 
@@ -51,7 +51,7 @@ Each subtask has `type`: `behavioral` (new functionality) or `structural` (refac
 ### Starting a Subtask
 1. Find next `pending` subtask in dashboard
 2. Update status to `red` when writing test
-3. Begin TDD cycle with `/tdd:red`
+3. Begin TDD cycle with `/tdd-red`
 
 ### Completing a Subtask
 1. Ensure all tests pass
@@ -81,7 +81,7 @@ Follow Beck's Defect-Driven Testing:
 1. Write failing API-level test reproducing the bug
 2. Write smallest unit test isolating the defect
 3. Both tests FAIL before writing any fix
-4. Use `/tdd:green` with minimal code
+4. Use `/tdd-green` with minimal code
 5. No "while I'm here" changes - fix ONLY the bug
 
 ## Core Principles
