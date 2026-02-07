@@ -1,0 +1,10 @@
+#!/bin/bash
+if [ "$TERM_PROGRAM" = "vscode" ]; then
+    exec code --wait "$@"
+elif [ -n "$NVIM" ]; then
+    exec nvim --headless --cmd 'let g:flatten_wait=1' "$@"
+elif command -v nvim > /dev/null 2>&1; then
+    NVIM_START_INSERT=1 exec nvim "$@"
+else
+    exec vim "$@"
+fi

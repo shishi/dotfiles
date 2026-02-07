@@ -37,6 +37,13 @@ now(function()
       diff = 'tab_vsplit',
       focus = 'first',
     },
+    hooks = {
+      post_open = function()
+        vim.schedule(function()
+          vim.api.nvim_feedkeys('i', 'n', false)
+        end)
+      end,
+    },
     integrations = {
       kitty = false,
       wezterm = true,

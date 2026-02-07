@@ -1,16 +1,3 @@
--- auto reload when edit plugins.lua
--- local augroup_reload_inits = vim.api.nvim_create_augroup('augroup_reload_inits', {
---   clear = true,
--- })
--- vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
---   group = augroup_reload_inits,
---   pattern = { 'plugins.lua' },
---   callback = function(arg)
---     -- require('packer').sync(arg.file)
---     -- vim.api.nvim_command('PackerSync')
---   end,
--- })
-
 -- formatoptions
 -- because using autocmmd many plugins overwrite
 local augroup_formatoptions = vim.api.nvim_create_augroup('augroup_formatoptions', {
@@ -84,27 +71,6 @@ vim.api.nvim_create_autocmd({ 'WinEnter', 'FocusGained', 'BufEnter' }, {
 --   end,
 -- })
 
--- relative number in visual mode
-local augroup_relativenumber_in_visual_mode = vim.api.nvim_create_augroup('augroup_relativenumber_in_visual_mode', {
-  clear = true,
-})
----@diagnostic disable-next-line: param-type-mismatch
-vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
-  group = augroup_relativenumber_in_visual_mode,
-  pattern = { '*:[vV\x16]*' },
-  callback = function()
-    vim.opt.relativenumber = true
-  end,
-})
----@diagnostic disable-next-line: param-type-mismatch
-vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
-  group = augroup_relativenumber_in_visual_mode,
-  pattern = { '[vV\x16]*:*' },
-  callback = function()
-    vim.opt.relativenumber = false
-  end,
-})
-
 -- set cellwidth automatically
 -- https://github.com/wancup/dotfiles/blob/ed785d6e283dc04aed456bb7d1b04a5cf38e6a6d/.config/nvim/lua/configs/autocmd.lua?plain=1#L33-L63
 local augroup_set_cellwidth = vim.api.nvim_create_augroup('augroup_set_cellwidth', { clear = true })
@@ -151,6 +117,57 @@ vim.api.nvim_create_autocmd('WinClosed', {
   end,
 })
 
+-- relative number in visual mode
+local augroup_relativenumber_in_visual_mode = vim.api.nvim_create_augroup('augroup_relativenumber_in_visual_mode', {
+  clear = true,
+})
+---@diagnostic disable-next-line: param-type-mismatch
+vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
+  group = augroup_relativenumber_in_visual_mode,
+  pattern = { '*:[vV\x16]*' },
+  callback = function()
+    vim.opt.relativenumber = true
+  end,
+})
+---@diagnostic disable-next-line: param-type-mismatch
+vim.api.nvim_create_autocmd({ 'ModeChanged' }, {
+  group = augroup_relativenumber_in_visual_mode,
+  pattern = { '[vV\x16]*:*' },
+  callback = function()
+    vim.opt.relativenumber = false
+  end,
+})
+
+-- enter insert mode when open or return to a terminal
+local augroup_terminal_insert_mode = vim.api.nvim_create_augroup('augroup_terminal_insert_mode', {
+  clear = true,
+})
+---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
+vim.api.nvim_create_autocmd({ 'TermOpen', 'BufEnter' }, {
+  group = augroup_terminal_insert_mode,
+  pattern = 'term://*',
+  callback = function()
+    vim.cmd('startinsert')
+  end,
+})
+
+-- enter insert mode when opened as $EDITOR (via nvim-edit wrapper)
+local augroup_start_insert = vim.api.nvim_create_augroup('augroup_start_insert', {
+  clear = true,
+})
+if vim.env.NVIM_START_INSERT then
+  ---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
+  vim.api.nvim_create_autocmd('VimEnter', {
+    group = augroup_start_insert,
+    once = true,
+    callback = function()
+      vim.schedule(function()
+        vim.api.nvim_feedkeys('i', 'n', false)
+      end)
+    end,
+  })
+end
+
 -- disable spell check highlight
 local augroup_disable_spell_highlight = vim.api.nvim_create_augroup('augroup_disable_spell_highlight', {
   clear = true,
@@ -163,18 +180,5 @@ vim.api.nvim_create_autocmd('ColorScheme', {
     vim.api.nvim_set_hl(0, 'SpellCap', {})
     vim.api.nvim_set_hl(0, 'SpellRare', {})
     vim.api.nvim_set_hl(0, 'SpellLocal', {})
-  end,
-})
-
--- enter insert mode when open a terminal
-local augroup_terminal_insert_mode = vim.api.nvim_create_augroup('augroup_terminal_insert_mode', {
-  clear = true,
-})
----@diagnostic disable-next-line: param-type-mismatch
-vim.api.nvim_create_autocmd('TermOpen', {
-  group = augroup_terminal_insert_mode,
-  pattern = '*',
-  callback = function()
-    vim.cmd('startinsert')
   end,
 })

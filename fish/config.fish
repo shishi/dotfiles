@@ -14,19 +14,8 @@ set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
 
 set -x GPG_TTY (tty)
 
-if [ "$TERM_PROGRAM" = vscode ]
-    set -x EDITOR code --wait
-    set -x VISUAL code --wait
-else if [ -n "$NVIM" ]
-    set -x EDITOR "nvim --headless --cmd 'let g:flatten_wait=1'"
-    set -x VISUAL "nvim --headless --cmd 'let g:flatten_wait=1'"
-else if type nvim &>/dev/null
-    set -x EDITOR nvim
-    set -x VISUAL nvim
-else
-    set -x EDITOR vim
-    set -x VISUAL vim
-end
+set -x EDITOR (status dirname)/nvim-edit
+set -x VISUAL (status dirname)/nvim-edit
 
 # if type emacsclient > /dev/null 2>&1
 #     set -x EDITOR 'emacsclient -n --alternate-editor vim'
