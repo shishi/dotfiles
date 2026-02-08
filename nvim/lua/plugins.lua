@@ -909,6 +909,19 @@ later(function()
   local add_to_trouble = require('trouble.sources.telescope').add
   local lga_actions = require('telescope-live-grep-args.actions')
   local kensaku = require('telescope').load_extension('kensaku') -- :Telescope kensaku
+  local function find_command()
+    if 1 == vim.fn.executable('rg') then
+      return { 'rg', '--files', '--color', 'never', '-uu', '-g', '!.git' }
+    elseif 1 == vim.fn.executable('fd') then
+      return { 'fd', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git' }
+    elseif 1 == vim.fn.executable('fdfind') then
+      return { 'fdfind', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git' }
+    elseif 1 == vim.fn.executable('find') and vim.fn.has('win32') == 0 then
+      return { 'find', '.', '-type', 'f' }
+    elseif 1 == vim.fn.executable('where') then
+      return { 'where', '/r', '.', '*' }
+    end
+  end
 
   require('telescope').setup({
     defaults = {
@@ -918,9 +931,13 @@ later(function()
       },
       vimgrep_arguments = {
         'rg',
-        '--vimgrep',
+        '--color=never',
+        '--no-heading',
+        '--with-filename',
+        '--line-number',
+        '--column',
         '--smart-case',
-        '--hidden',
+        '-uu',
         '--glob',
         '!.git/',
         -- --no-ignore
@@ -943,20 +960,7 @@ later(function()
       },
     },
     pickers = {
-      find_files = {
-        find_command = {
-          'fd',
-          '--color',
-          'never',
-          '--type',
-          'file',
-          '--hidden',
-          '--no-ignore',
-          '--exclude',
-          '.git',
-          '--strip-cwd-prefix',
-        },
-      },
+      find_files = find_command(),
     },
     extensions = {
       fzy_native = {

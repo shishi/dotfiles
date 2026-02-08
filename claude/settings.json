@@ -58,6 +58,12 @@
     "padding": 0
   },
   "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
     "superpowers-marketplace": {
       "source": {
         "source": "github",
@@ -66,13 +72,17 @@
     }
   },
   "enabledPlugins": {
-    "superpowers@superpowers-marketplace": true,
+    "double-shot-latte@superpowers-marketplace": true,
+    "elements-of-style@superpowers-marketplace": true,
+    "episodic-memory@superpowers-marketplace": false,
+    "lua-lsp@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": true,
-    "double-shot-latte@superpowers-marketplace": true,
-    "elements-of-style@superpowers-marketplace": true,
-    "episodic-memory@superpowers-marketplace": false
+    "superpowers@superpowers-marketplace": true,
+    "typescript-lsp@claude-plugins-official": true
   },
   "outputStyle": "Explanatory",
   "language": "japanese like japanese gal",
