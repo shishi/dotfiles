@@ -908,14 +908,16 @@ later(function()
   --- @diagnostic disable-next-line: unused-local
   local add_to_trouble = require('trouble.sources.telescope').add
   local lga_actions = require('telescope-live-grep-args.actions')
-  local kensaku = require('telescope').load_extension('kensaku') -- :Telescope kensaku
+
+  require('telescope').load_extension('kensaku') -- :Telescope kensaku
+
   local function find_command()
     if 1 == vim.fn.executable('rg') then
-      return { 'rg', '--files', '--color', 'never', '-uu', '-g', '!.git' }
+      return { 'rg', '--files', '--follow', '--color', 'never', '-uu', '-g', '!.git', '-g', '!.devenv' }
     elseif 1 == vim.fn.executable('fd') then
-      return { 'fd', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git' }
+      return { 'fd', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git', '-E', '.devenv' }
     elseif 1 == vim.fn.executable('fdfind') then
-      return { 'fdfind', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git' }
+      return { 'fdfind', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git', '-E', '.devenv' }
     elseif 1 == vim.fn.executable('find') and vim.fn.has('win32') == 0 then
       return { 'find', '.', '-type', 'f' }
     elseif 1 == vim.fn.executable('where') then
@@ -925,7 +927,7 @@ later(function()
 
   require('telescope').setup({
     defaults = {
-      generic_sorter = require('mini.fuzzy').get_telescope_sorter,
+      -- generic_sorter = require('mini.fuzzy').get_telescope_sorter,
       path_display = {
         'filename_first',
       },
@@ -940,6 +942,8 @@ later(function()
         '-uu',
         '--glob',
         '!.git/',
+        '--glob',
+        '!.devenv/',
         -- --no-ignore
         -- '--glob',
         -- '!*.lock',
@@ -960,7 +964,9 @@ later(function()
       },
     },
     pickers = {
-      find_files = find_command(),
+      find_files = {
+        find_command = find_command(),
+      },
     },
     extensions = {
       fzy_native = {
