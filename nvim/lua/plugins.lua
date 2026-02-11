@@ -915,9 +915,35 @@ later(function()
     if 1 == vim.fn.executable('rg') then
       return { 'rg', '--files', '--follow', '--color', 'never', '-uu', '-g', '!.git', '-g', '!.devenv' }
     elseif 1 == vim.fn.executable('fd') then
-      return { 'fd', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git', '-E', '.devenv' }
+      return {
+        'fd',
+        '--type',
+        'f',
+        '--follow',
+        '--color',
+        'never',
+        '-u',
+        '--strip-cwd-prefix',
+        '-E',
+        '.git',
+        '-E',
+        '.devenv',
+      }
     elseif 1 == vim.fn.executable('fdfind') then
-      return { 'fdfind', '--type', 'f', '--color', 'never', '-u', '--strip-cwd-prefix', '-E', '.git', '-E', '.devenv' }
+      return {
+        'fdfind',
+        '--type',
+        'f',
+        '--follow',
+        '--color',
+        'never',
+        '-u',
+        '--strip-cwd-prefix',
+        '-E',
+        '.git',
+        '-E',
+        '.devenv',
+      }
     elseif 1 == vim.fn.executable('find') and vim.fn.has('win32') == 0 then
       return { 'find', '.', '-type', 'f' }
     elseif 1 == vim.fn.executable('where') then
