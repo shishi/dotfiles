@@ -1741,7 +1741,9 @@ later(function()
   add({
     source = 'ymich9963/mdnotes.nvim',
   })
-  require('mdnotes').setup()
+  require('mdnotes').setup({
+    auto_table_best_fit = false,
+  })
 end)
 
 -- later(function()
