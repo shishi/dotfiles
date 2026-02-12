@@ -4,7 +4,7 @@ set fish_color_command white
 #########################################
 
 #set -x LANG ja_JP.UTF-8
-set -x PATH ~/.local/bin ~/dev/bin /usr/local/sbin /usr/local/bin $PATH
+set -x PATH ~/.local/bin ~/dev/bin ~/.bun/bin /usr/local/sbin /usr/local/bin $PATH
 
 # set -x LIBRARY_PATH ~/.nix-profile/lib:$LIBRARY_PATH
 # set -x LD_LIBRARY_PATH ~/.nix-profile/lib:$LD_LIBRARY_PATH
