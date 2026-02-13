@@ -1031,7 +1031,7 @@ later(function()
   end, {
     desc = 'telescope current_buffer_fuzzy_find',
   })
-  vim.keymap.set('n', '<C-q>', function()
+  vim.keymap.set('n', '<S-q>', function()
     require('telescope.builtin').buffers()
   end, {
     desc = 'telescope buffers',
@@ -1525,7 +1525,7 @@ later(function()
       auto_trigger = true,
       hide_during_completion = false,
       keymap = {
-        accept = '<A-l>',
+        accept = '<A-y>',
         accept_word = false,
         accept_line = false,
         next = '<A-]>',
@@ -1739,22 +1739,23 @@ end)
 -- markdown
 later(function()
   add({
-    source = 'ymich9963/mdnotes.nvim',
+    source = 'YousefHadder/markdown-plus.nvim',
   })
-  require('mdnotes').setup({
-    auto_table_best_fit = false,
-  })
+  require('markdown-plus').setup()
 end)
 
--- later(function()
---   add({
---     source = 'MeanderingProgrammer/render-markdown.nvim',
---     depends = {
---       'nvim-treesitter/nvim-treesitter',
---       'nvim-mini/mini.nvim',
---     },
---   })
--- end)
+later(function()
+  add({
+    source = 'MeanderingProgrammer/render-markdown.nvim',
+    depends = {
+      'nvim-treesitter/nvim-treesitter',
+      'nvim-mini/mini.nvim',
+    },
+  })
+  require('render-markdown').setup({
+    completions = { lsp = { enabled = true } },
+  })
+end)
 
 -- terminal ----------------------------------------------------------------
 later(function()
@@ -1772,8 +1773,8 @@ later(function()
       end
     end,
   })
-  vim.keymap.set({ 'n' }, '<Leader>t', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {})
-  vim.keymap.set({ 'n' }, '<Leader>ta', '<Cmd>ToggleTermToggleAll<CR>', {})
+  vim.keymap.set({ 'n' }, '<Leader>tt', '<Cmd>exe v:count1 . "ToggleTerm"<CR>', {})
+  vim.keymap.set({ 'n' }, '<Leader>tta', '<Cmd>ToggleTermToggleAll<CR>', {})
   vim.keymap.set({ 'n' }, '<Leader>y', '<Cmd>10ToggleTerm direction=float<CR>', {})
   vim.keymap.set({ 'n', 't' }, '<F6>', '<Cmd>10ToggleTerm direction=float<CR>', {})
 
