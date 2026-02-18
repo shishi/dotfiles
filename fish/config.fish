@@ -374,7 +374,10 @@ end
 
 # git wt
 function gw -d "git worktree list with fzf"
-    cd (git-wt | fzf | awk '{print $1}')
+    # oneline
+    # set dir (git-wt | fzf --header-lines=1 | awk '{if ($1 == "*") print $2; else print $1}'); and test -n "$dir"; and cd $dir
+    set -l dir (git-wt | fzf --header-lines=1 | awk '{if ($1 == "*") print $2; else print $1}')
+    test -n "$dir"; and cd $dir
 end
 
 # git worktree functions
