@@ -1553,84 +1553,84 @@ later(function()
   vim.api.nvim_set_hl(0, 'CopilotSuggestion', vim.tbl_extend('force', hl, { underline = true }))
 end)
 
-later(function()
-  add({
-    source = 'nvim-lua/plenary.nvim',
-  })
-  add({
-    source = 'CopilotC-Nvim/CopilotChat.nvim',
-    depends = {
-      'nvim-lua/plenary.nvim',
-      'zbirenbaum/copilot.lua',
-    },
-  })
+-- later(function()
+--   add({
+--     source = 'nvim-lua/plenary.nvim',
+--   })
+--   add({
+--     source = 'CopilotC-Nvim/CopilotChat.nvim',
+--     depends = {
+--       'nvim-lua/plenary.nvim',
+--       'zbirenbaum/copilot.lua',
+--     },
+--   })
+--
+--   local default_prompts = require('CopilotChat.config.prompts')
+--   local in_japanese = 'なお、説明は日本語でお願いします。'
+--   require('CopilotChat').setup({
+--     prompts = vim.tbl_deep_extend('force', default_prompts, {
+--       -- ビルトインのプロンプトを日本語化
+--       Explain = { prompt = default_prompts.Explain.prompt .. in_japanese },
+--       Review = { prompt = default_prompts.Review.prompt .. in_japanese },
+--       Fix = { prompt = default_prompts.Fix.prompt .. in_japanese },
+--       Optimize = { prompt = default_prompts.Optimize.prompt .. in_japanese },
+--       -- 日英翻訳のプロンプトを独自に追加
+--       TranslateJE = {
+--         prompt = 'Translate the selected text from English to Japanese if it is in English, or from Japanese to English if it is in Japanese. Please do not include unnecessary line breaks, line numbers, comments, etc. in the result.',
+--         system_prompt = 'You are an excellent Japanese-English translator. You can translate the original text correctly without losing its meaning. You also have deep knowledge of system engineering and are good at translating technical documents.',
+--         description = 'Translate text from Japanese to English or vice versa',
+--       },
+--     }),
+--   })
+--
+--   vim.opt.splitright = true
+--   vim.keymap.set('ca', 'chat', 'CopilotChat', { desc = 'Ask CopilotChat' })
+--   vim.keymap.set({ 'n', 'x' }, '<Leader>p', '<cmd>CopilotChatPrompt<cr>', { desc = 'CopilotChat predefined prompts' })
+-- end)
 
-  local default_prompts = require('CopilotChat.config.prompts')
-  local in_japanese = 'なお、説明は日本語でお願いします。'
-  require('CopilotChat').setup({
-    prompts = vim.tbl_deep_extend('force', default_prompts, {
-      -- ビルトインのプロンプトを日本語化
-      Explain = { prompt = default_prompts.Explain.prompt .. in_japanese },
-      Review = { prompt = default_prompts.Review.prompt .. in_japanese },
-      Fix = { prompt = default_prompts.Fix.prompt .. in_japanese },
-      Optimize = { prompt = default_prompts.Optimize.prompt .. in_japanese },
-      -- 日英翻訳のプロンプトを独自に追加
-      TranslateJE = {
-        prompt = 'Translate the selected text from English to Japanese if it is in English, or from Japanese to English if it is in Japanese. Please do not include unnecessary line breaks, line numbers, comments, etc. in the result.',
-        system_prompt = 'You are an excellent Japanese-English translator. You can translate the original text correctly without losing its meaning. You also have deep knowledge of system engineering and are good at translating technical documents.',
-        description = 'Translate text from Japanese to English or vice versa',
-      },
-    }),
-  })
-
-  vim.opt.splitright = true
-  vim.keymap.set('ca', 'chat', 'CopilotChat', { desc = 'Ask CopilotChat' })
-  vim.keymap.set({ 'n', 'x' }, '<Leader>p', '<cmd>CopilotChatPrompt<cr>', { desc = 'CopilotChat predefined prompts' })
-end)
-
-later(function()
-  add({
-    source = 'greggh/claude-code.nvim',
-    depends = {
-      'nvim-lua/plenary.nvim',
-    },
-  })
-
-  require('claude-code').setup({
-    window = {
-      split_ratio = 0.4, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
-      position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
-      enter_insert = true, -- Whether to enter insert mode when opening Claude Code
-      hide_numbers = true, -- Hide line numbers in the terminal window
-      hide_signcolumn = true, -- Hide the sign column in the terminal window
-
-      -- Floating window configuration (only applies when position = "float")
-      float = {
-        width = '80%', -- Width: number of columns or percentage string
-        height = '80%', -- Height: number of rows or percentage string
-        row = 'center', -- Row position: number, "center", or percentage string
-        col = 'center', -- Column position: number, "center", or percentage string
-        relative = 'editor', -- Relative to: "editor" or "cursor"
-        border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
-      },
-    },
-    -- command = '~/.local/bin/claude',
-    keymaps = {
-      toggle = {
-        normal = '<Leader>cc', -- Normal mode keymap for toggling Claude Code, false to disable
-        terminal = '<Leader>cc', -- Terminal mode keymap for toggling Claude Code, false to disable
-        variants = {
-          continue = '<Leader>cC', -- Normal mode keymap for Claude Code with continue flag
-          resume = '<Leader>cR', -- Normal mode keymap for Claude Code with continue flag
-          verbose = '<Leader>cV', -- Normal mode keymap for Claude Code with verbose flag
-        },
-      },
-      window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
-      scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
-    },
-  })
-  vim.keymap.set('n', '<Leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
-end)
+-- later(function()
+--   add({
+--     source = 'greggh/claude-code.nvim',
+--     depends = {
+--       'nvim-lua/plenary.nvim',
+--     },
+--   })
+--
+--   require('claude-code').setup({
+--     window = {
+--       split_ratio = 0.4, -- Percentage of screen for the terminal window (height for horizontal, width for vertical splits)
+--       position = 'vertical', -- Position of the window: "botright", "topleft", "vertical", "float", etc.
+--       enter_insert = true, -- Whether to enter insert mode when opening Claude Code
+--       hide_numbers = true, -- Hide line numbers in the terminal window
+--       hide_signcolumn = true, -- Hide the sign column in the terminal window
+--
+--       -- Floating window configuration (only applies when position = "float")
+--       float = {
+--         width = '80%', -- Width: number of columns or percentage string
+--         height = '80%', -- Height: number of rows or percentage string
+--         row = 'center', -- Row position: number, "center", or percentage string
+--         col = 'center', -- Column position: number, "center", or percentage string
+--         relative = 'editor', -- Relative to: "editor" or "cursor"
+--         border = 'rounded', -- Border style: "none", "single", "double", "rounded", "solid", "shadow"
+--       },
+--     },
+--     -- command = '~/.local/bin/claude',
+--     keymaps = {
+--       toggle = {
+--         normal = '<Leader>cc', -- Normal mode keymap for toggling Claude Code, false to disable
+--         terminal = '<Leader>cc', -- Terminal mode keymap for toggling Claude Code, false to disable
+--         variants = {
+--           continue = '<Leader>cC', -- Normal mode keymap for Claude Code with continue flag
+--           resume = '<Leader>cR', -- Normal mode keymap for Claude Code with continue flag
+--           verbose = '<Leader>cV', -- Normal mode keymap for Claude Code with verbose flag
+--         },
+--       },
+--       window_navigation = false, -- Enable window navigation keymaps (<C-h/j/k/l>)
+--       scrolling = false, -- Enable scrolling keymaps (<C-f/b>) for page up/down
+--     },
+--   })
+--   vim.keymap.set('n', '<Leader>cc', '<cmd>ClaudeCode<CR>', { desc = 'Toggle Claude Code' })
+-- end)
 
 later(function()
   add({
@@ -1640,17 +1640,17 @@ later(function()
   --- @diagnostic disable-next-line: redundant-parameter
   require('aibo').setup()
 
-  -- vim.keymap.set('n', '<Leader>cc', function()
-  --   local width = math.floor(vim.o.columns * 1 / 3)
-  --   vim.cmd(string.format('Aibo -opener="%dvsplit" claude', width))
-  -- end, { desc = 'Open Claude AI assistant' })
-  --
-  -- vim.keymap.set('n', '<Leader>cC', function()
-  --   local width = math.floor(vim.o.columns * 1 / 3)
-  --   vim.cmd(string.format('Aibo -opener="%dvsplit" claude --continue', width))
-  -- end, { desc = 'Open Claude AI assistant' })
-  --
-  -- vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
+  vim.keymap.set('n', '<Leader>cc', function()
+    local width = math.floor(vim.o.columns * 1 / 3)
+    vim.cmd(string.format('Aibo -opener="%dvsplit" claude', width))
+  end, { desc = 'Open Claude AI assistant' })
+
+  vim.keymap.set('n', '<Leader>cC', function()
+    local width = math.floor(vim.o.columns * 1 / 3)
+    vim.cmd(string.format('Aibo -opener="%dvsplit" claude --continue', width))
+  end, { desc = 'Open Claude AI assistant' })
+
+  vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
 end)
 
 -- formatting ---------------------------------------------------------------
@@ -1744,18 +1744,18 @@ later(function()
   require('markdown-plus').setup()
 end)
 
-later(function()
-  add({
-    source = 'MeanderingProgrammer/render-markdown.nvim',
-    depends = {
-      'nvim-treesitter/nvim-treesitter',
-      'nvim-mini/mini.nvim',
-    },
-  })
-  require('render-markdown').setup({
-    completions = { lsp = { enabled = true } },
-  })
-end)
+-- later(function()
+--   add({
+--     source = 'MeanderingProgrammer/render-markdown.nvim',
+--     depends = {
+--       'nvim-treesitter/nvim-treesitter',
+--       'nvim-mini/mini.nvim',
+--     },
+--   })
+--   require('render-markdown').setup({
+--     completions = { lsp = { enabled = true } },
+--   })
+-- end)
 
 -- terminal ----------------------------------------------------------------
 later(function()
