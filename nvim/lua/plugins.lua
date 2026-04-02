@@ -913,7 +913,20 @@ later(function()
 
   local function find_command()
     if 1 == vim.fn.executable('rg') then
-      return { 'rg', '--files', '--follow', '--color', 'never', '-uu', '-g', '!.git', '-g', '!.devenv' }
+      return {
+        'rg',
+        '--files',
+        '--follow',
+        '--color',
+        'never',
+        '-uu',
+        '-g',
+        '!.git',
+        '-g',
+        '!node_modules',
+        '-g',
+        '!.devenv',
+      }
     elseif 1 == vim.fn.executable('fd') then
       return {
         'fd',
@@ -926,6 +939,8 @@ later(function()
         '--strip-cwd-prefix',
         '-E',
         '.git',
+        '-E',
+        '!node_modules',
         '-E',
         '.devenv',
       }
@@ -941,6 +956,8 @@ later(function()
         '--strip-cwd-prefix',
         '-E',
         '.git',
+        '-E',
+        '!node_modules',
         '-E',
         '.devenv',
       }
@@ -968,6 +985,8 @@ later(function()
         '-uu',
         '--glob',
         '!.git/',
+        '--glob',
+        '!node_modules/',
         '--glob',
         '!.devenv/',
         -- --no-ignore
@@ -1642,12 +1661,17 @@ later(function()
 
   vim.keymap.set('n', '<Leader>cc', function()
     local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="%dvsplit" claude', width))
+    vim.cmd(string.format('Aibo -opener="vsplit right" claude', width))
+  end, { desc = 'Open Claude AI assistant' })
+
+  vim.keymap.set('n', '<Leader><Leader>cc', function()
+    local width = math.floor(vim.o.columns * 1 / 3)
+    vim.cmd(string.format('Aibo claude', width))
   end, { desc = 'Open Claude AI assistant' })
 
   vim.keymap.set('n', '<Leader>cC', function()
     local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="%dvsplit" claude --continue', width))
+    vim.cmd(string.format('Aibo -opener="vsplit right" claude --continue', width))
   end, { desc = 'Open Claude AI assistant' })
 
   vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
