@@ -1672,17 +1672,16 @@ later(function()
 
   vim.keymap.set('n', '<Leader>cc', function()
     local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="vsplit right" claude', width))
+    vim.cmd(string.format('Aibo -opener="rightbelow %dvsplit" claude', width))
   end, { desc = 'Open Claude AI assistant' })
 
   vim.keymap.set('n', '<Leader><Leader>cc', function()
-    local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo claude', width))
+    vim.cmd(string.format('Aibo claude'))
   end, { desc = 'Open Claude AI assistant' })
 
   vim.keymap.set('n', '<Leader>cC', function()
     local width = math.floor(vim.o.columns * 1 / 3)
-    vim.cmd(string.format('Aibo -opener="vsplit right" claude --continue', width))
+    vim.cmd(string.format('Aibo -opener="rightbelow %dvsplit" claude --continue', width))
   end, { desc = 'Open Claude AI assistant' })
 
   vim.keymap.set({ 'n', 'x' }, '<Leader>cs', '<cmd>AiboSend<CR>', { desc = 'AiboSend' })
