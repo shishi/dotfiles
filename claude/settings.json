@@ -58,6 +58,7 @@
     "padding": 0
   },
   "enabledPlugins": {
+    "codex@openai-codex": true,
     "double-shot-latte@superpowers-marketplace": true,
     "elements-of-style@superpowers-marketplace": true,
     "episodic-memory@superpowers-marketplace": false,
@@ -81,6 +82,12 @@
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
       }
     }
   },
