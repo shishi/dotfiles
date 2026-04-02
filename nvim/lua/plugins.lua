@@ -911,9 +911,12 @@ later(function()
 
   require('telescope').load_extension('kensaku') -- :Telescope kensaku
 
-  local function find_command()
+  local function find_command(opts)
+    opts = opts or {}
+    local include_ignored = opts.include_ignored or false
+
     if 1 == vim.fn.executable('rg') then
-      return {
+      local cmd = {
         'rg',
         '--files',
         '--follow',
@@ -923,12 +926,14 @@ later(function()
         '-g',
         '!.git',
         '-g',
-        '!node_modules',
-        '-g',
         '!.devenv',
       }
+      if not include_ignored then
+        vim.list_extend(cmd, { '-g', '!node_modules' })
+      end
+      return cmd
     elseif 1 == vim.fn.executable('fd') then
-      return {
+      local cmd = {
         'fd',
         '--type',
         'f',
@@ -940,12 +945,14 @@ later(function()
         '-E',
         '.git',
         '-E',
-        '!node_modules',
-        '-E',
         '.devenv',
       }
+      if not include_ignored then
+        vim.list_extend(cmd, { '-E', 'node_modules' })
+      end
+      return cmd
     elseif 1 == vim.fn.executable('fdfind') then
-      return {
+      local cmd = {
         'fdfind',
         '--type',
         'f',
@@ -957,10 +964,12 @@ later(function()
         '-E',
         '.git',
         '-E',
-        '!node_modules',
-        '-E',
         '.devenv',
       }
+      if not include_ignored then
+        vim.list_extend(cmd, { '-E', 'node_modules' })
+      end
+      return cmd
     elseif 1 == vim.fn.executable('find') and vim.fn.has('win32') == 0 then
       return { 'find', '.', '-type', 'f' }
     elseif 1 == vim.fn.executable('where') then
@@ -986,8 +995,6 @@ later(function()
         '--glob',
         '!.git/',
         '--glob',
-        '!node_modules/',
-        '--glob',
         '!.devenv/',
         -- --no-ignore
         -- '--glob',
@@ -1006,11 +1013,6 @@ later(function()
         n = {
           ['<C-t>'] = open_with_trouble,
         },
-      },
-    },
-    pickers = {
-      find_files = {
-        find_command = find_command(),
       },
     },
     extensions = {
@@ -1041,7 +1043,16 @@ later(function()
     desc = 'telescope help_tags',
   })
   vim.keymap.set('n', '<C-p>', function()
-    require('telescope.builtin').find_files()
+    require('telescope.builtin').find_files({
+      find_command = find_command(),
+    })
+  end, {
+    desc = 'telescope find files',
+  })
+  vim.keymap.set('n', '<Leader><C-p>', function()
+    require('telescope.builtin').find_files({
+      find_command = find_command({ include_ignored = true }),
+    })
   end, {
     desc = 'telescope find files',
   })
