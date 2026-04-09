@@ -32,6 +32,8 @@ Set-PSReadlineOption -Color @{
     "Comment" = [ConsoleColor]::DarkCyan
 }
 
+$env:CLAUDE_CODE_GIT_BASH_PATH = "C:\Users\shishi\scoop\shims\git-bash.exe"
+
 Set-Alias which Get-Command
 Set-Alias sudo gsudo
 Set-Alias g git

@@ -42,4 +42,6 @@ $env.config = {
     }
 }
 
+$env.CLAUDE_CODE_GIT_BASH_PATH = 'C:\Users\shishi\scoop\shims\git-bash.exe'
+
 alias sudo = gsudo

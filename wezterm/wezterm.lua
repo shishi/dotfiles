@@ -122,8 +122,18 @@ local config = {
     },
     {
       key = 'Tab',
-      mods = 'LEADER',
-      action = act.ActivateTabRelative(-1),
+      mods = 'LEADER|SHIFT',
+      action = act.ActivateTabRelative(-1)
+    },
+    {
+      key = 'RightArrow',
+      mods = 'LEADER|SHIFT',
+      action = act.MoveTabRelative(1)
+    },
+    {
+      key = 'LeftArrow',
+      mods = 'LEADER|SHIFT',
+      action = act.MoveTabRelative(-1),
     },
     {
       key = '1',
