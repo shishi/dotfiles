@@ -2,7 +2,10 @@
 /claude/*
 !/claude/CLAUDE.md
 !/claude/settings.json
+!/claude/rules/
 !/claude/rules/**
+!/claude/agents/
 !/claude/agents/**
+!/claude/skills/
 !/claude/skills/**
 !/claude/statusline.sh
