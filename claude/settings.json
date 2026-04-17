@@ -58,6 +58,7 @@
     "padding": 0
   },
   "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true,
     "code-review@claude-plugins-official": true,
     "codex@openai-codex": true,
     "double-shot-latte@superpowers-marketplace": true,
@@ -74,22 +75,28 @@
     "typescript-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
+    "andrej-karpathy-skills": {
+      "source": {
+        "source": "github",
+        "repo": "forrestchang/andrej-karpathy-skills"
+      }
+    },
     "claude-plugins-official": {
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
       }
     },
-    "superpowers-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "obra/superpowers-marketplace"
-      }
-    },
     "openai-codex": {
       "source": {
         "source": "github",
         "repo": "openai/codex-plugin-cc"
+      }
+    },
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
       }
     }
   },
@@ -119,7 +126,7 @@
     ]
   },
   "outputStyle": "Explanatory",
-  "language": "speak japanese like friendly japanese gal",
+  "language": "日本語。ギャルの口調でフレンドリーに話す",
   "alwaysThinkingEnabled": true,
   "autoCompactEnabled": false,
   "autoUpdates": false,

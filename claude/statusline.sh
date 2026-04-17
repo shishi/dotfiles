@@ -38,9 +38,9 @@ else
   # Default to 0 if no valid result
   total_tokens=${total_tokens:-0}
 
-  # max token count: 200k
-  # compaction threshold: 80% (160k)
-  COMPACTION_THRESHOLD=160000
+  # max token count: 1M
+  # compaction threshold: 80%
+  COMPACTION_THRESHOLD=819200
   # Calculate percentage
   percentage=$((total_tokens * 100 / COMPACTION_THRESHOLD))
 
