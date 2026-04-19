@@ -305,40 +305,40 @@ end)
 --   vim.keymap.set({ 'n', 'v', 'o' }, ',', '<Plug>(backward_repeat)')
 -- end)
 
-later(function()
-  add({
-    source = 'folke/flash.nvim',
-  })
-
-  ---@diagnostic disable-next-line missing-fields
-  require('flash').setup({
-    -- modes = {
-    --   char = {
-    --     enabled = false,
-    --   },
-    -- },
-  })
-
-  vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
-    require('flash').jump()
-  end, { desc = 'Flash Jump' })
-
-  vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
-    require('flash').treesitter()
-  end, { desc = 'Flash Treesitter' })
-
-  vim.keymap.set('o', 'r', function()
-    require('flash').remote()
-  end, { desc = 'Flash Remote' })
-
-  vim.keymap.set({ 'o', 'x' }, 'R', function()
-    require('flash').treesitter_search()
-  end, { desc = 'Flash Treesitter Search' })
-
-  vim.keymap.set({ 'c' }, '<c-s>', function()
-    require('flash').toggle()
-  end, { desc = 'Toggle Flash Search' })
-end)
+-- later(function()
+--   add({
+--     source = 'folke/flash.nvim',
+--   })
+--
+--   ---@diagnostic disable-next-line missing-fields
+--   require('flash').setup({
+--     -- modes = {
+--     --   char = {
+--     --     enabled = false,
+--     --   },
+--     -- },
+--   })
+--
+--   vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
+--     require('flash').jump()
+--   end, { desc = 'Flash Jump' })
+--
+--   vim.keymap.set({ 'n', 'x', 'o' }, 'S', function()
+--     require('flash').treesitter()
+--   end, { desc = 'Flash Treesitter' })
+--
+--   vim.keymap.set('o', 'r', function()
+--     require('flash').remote()
+--   end, { desc = 'Flash Remote' })
+--
+--   vim.keymap.set({ 'o', 'x' }, 'R', function()
+--     require('flash').treesitter_search()
+--   end, { desc = 'Flash Treesitter Search' })
+--
+--   vim.keymap.set({ 'c' }, '<c-s>', function()
+--     require('flash').toggle()
+--   end, { desc = 'Toggle Flash Search' })
+-- end)
 
 later(function()
   add({
@@ -373,6 +373,55 @@ later(function()
   vim.api.nvim_create_user_command('K', function(opts)
     vim.cmd('Kensaku ' .. opts.args)
   end, { nargs = '*' })
+end)
+
+later(function()
+  add({
+    source = 'atusy/jab.nvim',
+    depends = {
+      'lambdalisue/kensaku.vim',
+    },
+  })
+
+  -- stylua: ignore
+  -- @format:off
+  require("jab").labels_f = {
+    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
+    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
+    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',
+    'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',
+  }
+  -- @format:on
+
+  -- incremental search
+  -- if vim-kensaku is available and initial query is uppercase,
+  -- then the search is case-sensitive.
+  -- Otherwise, the search is case-insensitive.
+  -- hints appear on the left of the matches if possible.
+  vim.keymap.set({ 'n', 'x', 'o' }, ';', function()
+    ---@diagnostic disable-next-line
+    return require('jab').jab_win()
+  end, { expr = true })
+
+  -- f-motions
+  -- search is always case-sensitive
+  -- hints appear exactly on the matches.
+  vim.keymap.set({ 'n', 'x', 'o' }, 'f', function()
+    ---@diagnostic disable-next-line
+    return require('jab').f()
+  end, { expr = true })
+  vim.keymap.set({ 'n', 'x', 'o' }, 'F', function()
+    ---@diagnostic disable-next-line
+    return require('jab').F()
+  end, { expr = true })
+  vim.keymap.set({ 'n', 'x', 'o' }, 't', function()
+    ---@diagnostic disable-next-line
+    return require('jab').t()
+  end, { expr = true })
+  vim.keymap.set({ 'n', 'x', 'o' }, 'T', function()
+    ---@diagnostic disable-next-line
+    return require('jab').T()
+  end, { expr = true })
 end)
 
 later(function()
