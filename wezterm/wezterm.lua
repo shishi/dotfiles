@@ -68,6 +68,15 @@ local config = {
       mods = 'CTRL',
       action = act.ScrollByPage(1),
     },
+    -- Ctrl+Enter を CSI u シーケンスで送り、端末が LF に潰して Ctrl+J と同一視するのを避ける。
+    -- 端末全体で `enable_kitty_keyboard = true` を入れても区別は出来るが、
+    -- その場合 <C-i>/<Tab>, <C-m>/<CR>, <C-[>/<Esc> まで別キー扱いになり副作用が大きいので、
+    -- Ctrl+Enter だけを局所的にエスケープする。
+    {
+      key = 'Enter',
+      mods = 'CTRL',
+      action = act.SendString('\x1b[13;5u'),
+    },
     -- tab & pane
     {
       key = 't',
