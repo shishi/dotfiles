@@ -405,7 +405,7 @@ later(function()
   -- then the search is case-sensitive.
   -- Otherwise, the search is case-insensitive.
   -- hints appear on the left of the matches if possible.
-  vim.keymap.set({ 'n', 'x', 'o' }, ';', function()
+  vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
     ---@diagnostic disable-next-line
     return require('jab').jab_win()
   end, { expr = true })
