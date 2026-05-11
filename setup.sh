@@ -67,6 +67,10 @@ fi
 if [ -L ~/.claude ]; then
   rm ~/.claude
   ln -sf ${DOTDIR}/claude ~/.claude
+elif mountpoint -q ~/.claude 2>/dev/null; then
+  # ~/.claude が bind mount (devcontainer等) の場合は破壊しない。
+  # bind mount 越しに ${DOTDIR}/claude/ の中身が消える事故を防ぐためスキップ。
+  echo "setup.sh: ~/.claude is a mount point; skip claude symlink"
 elif [ -d ~/.claude ]; then
   rm -fr ~/.claude
   ln -sf ${DOTDIR}/claude ~/.claude
