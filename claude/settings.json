@@ -68,6 +68,7 @@
     "lua-lsp@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true,
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": true,
