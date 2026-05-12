@@ -130,10 +130,10 @@
   },
   "alwaysThinkingEnabled": true,
   "theme": "dark",
+  "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": false,
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
-  },
-  "preferredNotifChannel": "terminal_bell"
+  }
 }

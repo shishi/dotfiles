@@ -67,13 +67,19 @@ fi
 if [ -L ~/.claude ]; then
   rm ~/.claude
   ln -sf ${DOTDIR}/claude ~/.claude
-elif mountpoint -q ~/.claude 2>/dev/null; then
+elif mountpoint -q ~/.claude 2>/dev/null \
+  || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; then
   # ~/.claude が bind mount (devcontainer等) の場合は破壊しない。
-  # bind mount 越しに ${DOTDIR}/claude/ の中身が消える事故を防ぐためスキップ。
-  echo "setup.sh: ~/.claude is a mount point; skip claude symlink"
+  # mountpoint コマンドで検出できない bind mount (Docker Desktop の virtiofs/9p 等) も
+  # /proc/mounts のフォールバックで拾う。
+  # bind mount 越しに ${DOTDIR}/claude/ の中身は既に同じ実体を指しているので、symlink化不要。
+  echo "setup.sh: ~/.claude is a mount point; skip claude symlink (functional equivalent already in place)"
 elif [ -d ~/.claude ]; then
-  rm -fr ~/.claude
-  ln -sf ${DOTDIR}/claude ~/.claude
+  # 実体ディレクトリのつもりだが、検出をすり抜けた bind mount の可能性もある。
+  # 破壊的な rm -fr は permission denied / データ消失を引き起こす恐れがあるため行わない。
+  # 本当に symlink 化したい場合は手動で:
+  #   rm -fr ~/.claude && ln -sf ${DOTDIR}/claude ~/.claude
+  echo "setup.sh: ~/.claude exists as a directory; skip (manual setup required if intended as symlink)"
 else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
