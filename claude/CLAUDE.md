@@ -72,7 +72,7 @@ When approaching a new feature:
 
 # Review gate (codex-review)
 
-If you can use codex cli in this environment, at key milestones—after updating specs/plans, after major implementation steps (≥5 files / public API / infra-config), and before commit/PR/release—run the codex-review SKILL and iterate review→fix→re-review until clean.
+If you can use codex cli in this environment, at key milestones—after updating specs/plans, or/and after major implementation steps (≥5 files / public API / infra-config), and before commit/PR/release—run you have to use /codex:review iterate review→fix→re-review until clean. Codex plugin is here https://github.com/openai/codex-plugin-cc
 
 Follow this process precisely, always prioritizing clean, well-tested code over quick implementation.
 

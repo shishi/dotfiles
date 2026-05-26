@@ -70,6 +70,9 @@
       "Bash(git fetch:*)",
       "Bash(git ls-remote:*)",
       "Bash(git check-ignore:*)",
+      "Bash(git add:*)",
+      "Bash(git restore --staged:*)",
+      "Bash(git commit:*)",
       "Bash(gh search:*)",
       "Bash(gh pr:*)",
       "Bash(gh auth:*)",
@@ -87,6 +90,13 @@
       "Bash(docker logs:*)",
       "Bash(docker inspect:*)",
       "Bash(docker images:*)",
+      "Bash(bundle exec rails db:migrate)",
+      "Bash(bundle exec rails db:migrate:status)",
+      "Bash(bundle exec rails db:migrate:down VERSION=*)",
+      "Bash(bundle exec rails db:migrate:down:primary VERSION=*)",
+      "Bash(bundle exec rails db:rollback)",
+      "Bash(bundle exec rails db:rollback STEP=*)",
+      "Bash(bundle exec rails db:version)",
       "mcp__serena__list_dir",
       "mcp__serena__find_file",
       "mcp__serena__search_for_pattern",
@@ -115,7 +125,14 @@
       "WebFetch(domain:mcp.notion.com)",
       "WebFetch(domain:docs.datadoghq.com)",
       "WebFetch(domain:zenn.dev)",
-      "Skill(incident-investigation)"
+      "Skill(incident-investigation)",
+      "Bash(git switch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(git cherry-pick:*)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
@@ -139,7 +156,9 @@
       "Bash(rm -rf ~:*)",
       "Bash(rm -rf $HOME:*)",
       "Bash(rm -rf ~/.ssh*)",
-      "Bash(rm -rf ~/.config*)"
+      "Bash(rm -rf ~/.config*)",
+      "Bash(git push)",
+      "Bash(git push:*)"
     ],
     "defaultMode": "auto"
   },
@@ -192,6 +211,12 @@
         "source": "github",
         "repo": "obra/superpowers-marketplace"
       }
+    },
+    "karpathy-skills": {
+      "source": {
+        "source": "github",
+        "repo": "forrestchang/andrej-karpathy-skills"
+      }
     }
   },
   "outputStyle": "Explanatory",
@@ -225,9 +250,9 @@
   "theme": "dark",
   "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": false,
+  "skipAutoPermissionPrompt": true,
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
-  },
-  "skipAutoPermissionPrompt": true
+  }
 }
