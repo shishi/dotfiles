@@ -76,4 +76,18 @@ If you can use codex cli in this environment, at key milestones—after updating
 
 Follow this process precisely, always prioritizing clean, well-tested code over quick implementation.
 
+## Workaround when Codex's bubblewrap sandbox is unavailable
+
+If the host kernel does not allow unprivileged user namespaces (e.g. OrbStack devcontainer), `/codex:review`, the `codex-review` skill, and even `codex exec review --sandbox <any>` all fail with `bwrap: No permissions to create a new namespace` — Codex's internal bubblewrap sandbox cannot start, and Codex reports it could not inspect the repository.
+
+In that situation invoke `codex exec review` directly with `--dangerously-bypass-approvals-and-sandbox` (safe inside a Docker/devcontainer because the container itself provides the isolation):
+
+```bash
+codex exec review --dangerously-bypass-approvals-and-sandbox --uncommitted --title "<short title>"
+```
+
+- `--uncommitted` reviews working-tree changes (staged + unstaged + untracked); it cannot be combined with the optional `[PROMPT]` argument — pass review intent via `--title` instead.
+- The bypass flag is gated by a built-in "Create Unsafe Agents" safety rule; allow it via a Bash permission rule in `~/.claude/settings.json` (e.g. `Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)`).
+- If Codex returns `401 Unauthorized` or hangs reconnecting to `wss://api.openai.com/v1/responses`, the OpenAI auth token has expired. Ask the user to run `! codex login` (interactive command, Claude Code cannot execute it).
+
 Always write one test at a time, make it run, then improve structure. Always run all the tests (except long-running tests) each time.

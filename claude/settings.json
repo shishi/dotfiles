@@ -132,7 +132,8 @@
       "Bash(git merge-base:*)",
       "Bash(git pull:*)",
       "Bash(git rebase:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
