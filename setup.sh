@@ -132,4 +132,11 @@ ln -sf ${DOTDIR}/.npmrc ~/.npmrc
 # ln -s ${DOTDIR}/.zshenv ~/.zshenv
 # ln -s ${DOTDIR}/.zshrc ~/.zshrc
 
+# settings.json の enabledPlugins に従って Claude Code plugin を install する。
+# claude 未導入の環境では install-plugins.sh 側で黙ってスキップする。
+if command -v claude >/dev/null 2>&1; then
+  bash "${DOTDIR}/claude/install-plugins.sh" \
+    || echo "setup.sh: plugin install step reported issues (continuing)"
+fi
+
 echo "please reload shell"
