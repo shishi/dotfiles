@@ -15,7 +15,7 @@ end)
 -- common config
 local config = {
   -- debug_key_events = true,
-  leader = { key = 'w', mods = 'ALT' },
+  leader = { key = ';', mods = 'CTRL' },
   -- seems this setting effect only QuitApplication
   window_close_confirmation = 'NeverPrompt',
   send_composed_key_when_right_alt_is_pressed = false,
@@ -191,12 +191,12 @@ local config = {
     },
     -- copy & paste
     {
-      key = 'c',
+      key = 'y',
       mods = 'LEADER',
       action = act.CopyTo('Clipboard'),
     },
     {
-      key = 'v',
+      key = 'p',
       mods = 'LEADER',
       action = act.PasteFrom('Clipboard'),
     },
