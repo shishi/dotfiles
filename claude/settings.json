@@ -255,5 +255,6 @@
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
-  }
+  },
+  "skipWorkflowUsageWarning": true
 }
