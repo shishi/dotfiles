@@ -133,7 +133,10 @@
       "Bash(git pull:*)",
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
-      "Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)"
+      "Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)",
+      "Bash(git push origin develop/*)",
+      "Bash(git push -u origin develop/*)",
+      "Bash(git push --set-upstream origin develop/*)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
@@ -158,13 +161,36 @@
       "Bash(rm -rf $HOME:*)",
       "Bash(rm -rf ~/.ssh*)",
       "Bash(rm -rf ~/.config*)",
-      "Bash(git push)",
-      "Bash(git push:*)"
+      "Bash(git push origin master)",
+      "Bash(git push origin master:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --delete:*)",
+      "Bash(git push origin --delete:*)"
     ],
     "defaultMode": "auto"
   },
+  "sandbox": {
+    "excludedCommands": [
+      "git"
+    ]
+  },
   "enableAllProjectMcpServers": true,
-  "hooks": {},
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/git-push-guard.sh",
+            "timeout": 10,
+            "statusMessage": "git push ガード確認中..."
+          }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/statusline.sh",
@@ -248,6 +274,7 @@
     ]
   },
   "alwaysThinkingEnabled": true,
+  "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": false,
@@ -256,5 +283,5 @@
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
   },
-  "skipWorkflowUsageWarning": true
+  "model": "fable"
 }
