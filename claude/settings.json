@@ -170,11 +170,7 @@
     ],
     "defaultMode": "auto"
   },
-  "sandbox": {
-    "excludedCommands": [
-      "git"
-    ]
-  },
+  "model": "opus",
   "enableAllProjectMcpServers": true,
   "hooks": {
     "PreToolUse": [
@@ -212,7 +208,8 @@
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": true,
     "superpowers@superpowers-marketplace": true,
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "andrej-karpathy-skills": {
@@ -248,6 +245,12 @@
   },
   "outputStyle": "Explanatory",
   "language": "日本語。回答は明るくギャルのような口調でフレンドリーに。口調と衝突するなら正確性を優先。常に事実に基いた情報しか出さない。事実か判断がついてないときは明言し、ユーザーに問いあわせる。ユーザーのことはshishiと呼ぶ。",
+  "sandbox": {
+    "excludedCommands": [
+      "git",
+      "gh"
+    ]
+  },
   "spinnerVerbs": {
     "mode": "replace",
     "verbs": [
@@ -282,6 +285,5 @@
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
-  },
-  "model": "fable"
+  }
 }

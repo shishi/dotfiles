@@ -84,6 +84,24 @@ else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
+if [ -L ~/.codex ]; then
+  rm ~/.codex
+  ln -sf ${DOTDIR}/codex ~/.codex
+elif mountpoint -q ~/.codex 2>/dev/null \
+  || grep -qE "[[:space:]]$HOME/\.codex[[:space:]]" /proc/mounts 2>/dev/null; then
+  # ~/.codex が bind mount (devcontainer等) の場合は破壊しない。
+  # bind mount 越しに ${DOTDIR}/codex/ の中身は既に同じ実体を指している想定。
+  echo "setup.sh: ~/.codex is a mount point; skip codex symlink (functional equivalent already in place)"
+elif [ -d ~/.codex ]; then
+  # auth.json / sessions / logs などを含む実体ディレクトリの可能性が高いので、
+  # Claude と同じく破壊的な rm -fr は行わない。
+  # 本当に symlink 化したい場合は手動で:
+  #   rm -fr ~/.codex && ln -sf ${DOTDIR}/codex ~/.codex
+  echo "setup.sh: ~/.codex exists as a directory; skip (manual setup required if intended as symlink)"
+else
+  ln -sf ${DOTDIR}/codex ~/.codex
+fi
+
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
   rm ${XDG_CONFIG_HOME}/nushell
   ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell

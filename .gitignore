@@ -10,3 +10,7 @@
 !/claude/skills/**
 !/claude/statusline.sh
 !/claude/install-plugins.sh
+/codex/*
+!/codex/config.toml
+!/codex/skills/
+!/codex/skills/**
