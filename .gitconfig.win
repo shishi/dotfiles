@@ -68,3 +68,5 @@
     basedir = .worktrees
     copy = .devcontainer/
     # hook =
+[safe]
+	directory = \\\\wsl.localhost\\Ubuntu\\home\\shishi\\dev\\src\\github.com\\shishi\\voice-activate-claude/.git

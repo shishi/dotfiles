@@ -369,7 +369,8 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
     use_ime = true,
     ime_preedit_rendering = 'System',
     wsl_domains = wsl_domains,
-    front_end = 'OpenGL',
+    front_end = 'WebGpu',
+    webgpu_power_preference = 'HighPerformance',
     -- this setting make cmd and powershell can't start
     -- default_domain = 'WSL:Ubuntu',
     default_prog = { 'C:/Users/shishi/scoop/shims/nu.exe' },
