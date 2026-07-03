@@ -370,6 +370,7 @@ if wezterm.target_triple == 'x86_64-pc-windows-msvc' then
     ime_preedit_rendering = 'System',
     wsl_domains = wsl_domains,
     front_end = 'WebGpu',
+    max_fps = 120,
     webgpu_power_preference = 'HighPerformance',
     -- this setting make cmd and powershell can't start
     -- default_domain = 'WSL:Ubuntu',
@@ -400,12 +401,17 @@ elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
   local linux_config = {
     use_ime = true,
     front_end = 'OpenGL',
+    webgpu_power_preference = 'HighPerformance',
+    max_fps = 120
+
   }
   append_table(config, linux_config)
 elseif wezterm.target_triple == 'aarch64-apple-darwin' then
   local macos_config = {
     use_ime = true,
-    front_end = 'OpenGL',
+    front_end = 'WebGpu',
+    webgpu_power_preference = 'HighPerformance',
+    max_fps = 120,
     macos_forward_to_ime_modifier_mask = 'CTRL|SHIFT',
   }
   append_table(config, macos_config)
