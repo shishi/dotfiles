@@ -104,8 +104,9 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
 - 共通処理(`cleanup` / `recover` 両モード):
   - stdin JSON から `session_id` を取得(`jq -r` + `tr -d '\r'`。空なら即 exit 0)
   - 当該 sid の warn / warned marker を削除(通知 cooldown のリセット)
-  - TTL 掃除: `find ~/.claude/compact-state -type f -mtime +7 -delete 2>/dev/null || true`
-    (state file・orphan marker の無限蓄積を防ぐ)
+  - TTL 掃除: `find ~/.claude/compact-state -type f -mtime +30 -delete 2>/dev/null || true`
+    (state file・orphan marker の無限蓄積を防ぐ。テキストのみで容量は軽微なため
+    30 日と長めに取り、過去セッションの振り返り材料としても残す)
 - `recover` モードのみ、additionalContext で注入:
   - state file `~/.claude/compact-state/<sid>.md` が存在すれば: Read して作業状態を
     復元せよ(Session Decisions と Recovery Notes を重視)。**先頭の `Prepared:`
@@ -151,7 +152,7 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
 
 | パス | 書く人 | 消す人 | 意味 |
 |------|--------|--------|------|
-| `compact-state/<sid>.md` | compact-prep skill | TTL 掃除(7日超で削除。同一 sid の再 prep は上書き) | 圧縮前の判断構造 |
+| `compact-state/<sid>.md` | compact-prep skill | TTL 掃除(30日超で削除。同一 sid の再 prep は上書き) | 圧縮前の判断構造 |
 | `compact-state/warn/<sid>` | statusline | reminder hook(通知時)/ recovery hook(compact/clear/startup 時の掃除) | 通知したい |
 | `compact-state/warned/<sid>` | reminder hook | recovery hook(compact/clear/startup 時)/ TTL 掃除 | 通知済み(cooldown) |
 
