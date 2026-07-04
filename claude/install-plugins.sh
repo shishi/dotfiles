@@ -85,7 +85,10 @@ while IFS= read -r plugin; do
     echo "install-plugins: WARN failed to install $plugin"
     failed=$((failed + 1))
   fi
-done < <(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$SETTINGS")
+# Windows 版 jq は stdout をテキストモードで開き改行を CRLF にするため、
+# tr -d '\r' で末尾の CR を落とす (Unix では no-op)。これを怠ると marketplace 名に
+# \r が残り MARKETPLACE_REPO のキーと一致せず全 plugin が unresolved になる。
+done < <(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$SETTINGS" | tr -d '\r')
 
 echo "install-plugins: done (marketplaces added: $added, plugins installed: $installed, already present: $present, unresolved: $unresolved, failed: $failed)"
 
