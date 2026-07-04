@@ -52,8 +52,7 @@ if [ -z "$percentage" ]; then
   TOKEN_COUNT="_ tkns. (_%)"
 else
   if [ "$total_tokens" -ge 1000 ]; then
-    thousands=$(echo "scale=1; $total_tokens/1000" | bc)
-    token_display=$(printf "%.1fK" "$thousands")
+    token_display="$((total_tokens / 1000)).$(((total_tokens % 1000) / 100))K"
   elif [ "$total_tokens" -gt 0 ]; then
     token_display="$total_tokens"
   else
