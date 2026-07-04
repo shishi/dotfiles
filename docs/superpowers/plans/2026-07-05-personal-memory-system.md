@@ -284,16 +284,11 @@ fi
 Run: `bash ~/dev/dotfiles/claude/hooks/inject-memory.test.sh`
 Expected: `PASS=8 FAIL=0`
 
-- [ ] **Step 9: .gitignore にホワイトリスト追加**
+- [ ] **Step 9: .gitignore ホワイトリストの確認(追加済みのはず)**
 
-`.gitignore` の `!/claude/skills/**` の行の直後に追加:
+`.gitignore` には commit d1a29df で `!/claude/hooks/` と `!/claude/hooks/**` が既に追加されている。追加作業は不要。
 
-```gitignore
-!/claude/hooks/
-!/claude/hooks/**
-```
-
-確認: `git -C ~/dev/dotfiles status --short` に `claude/hooks/inject-memory.sh` と `.test.sh` が `??` で現れ、`claude/memory` が**現れない**こと。
+確認のみ: `git -C ~/dev/dotfiles status --short` に `claude/hooks/inject-memory.sh` と `.test.sh` が `??` で現れ、`claude/memory` が**現れない**こと。万一ホワイトリストが無ければ `!/claude/skills/**` の行の直後に上記 2 行を追加する。
 
 - [ ] **Step 10: Commit**
 
@@ -317,23 +312,21 @@ absent memory store never blocks session startup."
 - Consumes: `claude/hooks/inject-memory.sh`(Task 2)
 - Produces: 全セッションで hook が走る。`git -C ~/.claude/memory ...` が許可されて auto-commit/push が無プロンプトで通る(Task 4 のルールが依存)
 
-- [ ] **Step 1: hooks に SessionStart を追加**
+- [ ] **Step 1: 既存の SessionStart 配列へエントリ追記**
 
-`claude/settings.json` の `"hooks": {` ブロック内、`"PreToolUse"` の後に追加:
+`claude/settings.json` の `hooks.SessionStart` は既に存在する(compact-safety の matcher 付きエントリ 3 件: compact / clear / startup)。既存エントリは**変更せず**、配列の末尾に以下を追加する。matcher を持たないエントリは全 source(startup / resume / clear / compact)で発火する — 記憶注入は resume や compact 後の再注入も望ましいので matcher なしが正しい:
 
 ```json
-"SessionStart": [
-  {
-    "hooks": [
-      {
-        "type": "command",
-        "command": "bash ~/.claude/hooks/inject-memory.sh",
-        "timeout": 10,
-        "statusMessage": "個人記憶を注入中..."
-      }
-    ]
-  }
-]
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "bash ~/.claude/hooks/inject-memory.sh",
+      "timeout": 10,
+      "statusMessage": "個人記憶を注入中..."
+    }
+  ]
+}
 ```
 
 - [ ] **Step 2: permissions.allow に記憶リポジトリの git 操作を追加**
