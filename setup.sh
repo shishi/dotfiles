@@ -84,6 +84,20 @@ else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
+# claude-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
+# symlink は dotfiles の .gitignore (claude/* デフォルト無視) により追跡されない。
+CLAUDE_MEMORY_DIR="${CLAUDE_MEMORY_DIR:-$HOME/dev/claude-memory}"
+if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
+  if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
+    MSYS=winsymlinks:nativestrict ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory" 2>/dev/null \
+      || ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory"
+  else
+    echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
+  fi
+else
+  echo "setup.sh: ${CLAUDE_MEMORY_DIR} not found; clone first: gh repo clone shishi/claude-memory ${CLAUDE_MEMORY_DIR}"
+fi
+
 if [ -L ~/.codex ]; then
   rm ~/.codex
   ln -sf ${DOTDIR}/codex ~/.codex
