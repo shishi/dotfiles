@@ -111,6 +111,36 @@ check "exit 0" test "$RC" -eq 0
 check "無出力" test -z "$OUT"
 end
 
+echo "# statusline"
+
+begin "statusline/used_percentage 85 で warn"
+OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-6","context_window":{"used_percentage":85.2}}' | bash "$STATUSLINE")
+check "表示に 85% を含む" grep -q "85%" <<<"$OUT"
+check "warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-6"
+check "marker の中身が 85" grep -q "^85$" "$COMPACT_STATE_DIR/warn/sid-6"
+check "CR 混入ファイル名なし" no_cr_filenames
+end
+
+begin "statusline/warned cooldown 中は warn を書かない"
+mkdir -p "$COMPACT_STATE_DIR/warned"
+printf '1\n' > "$COMPACT_STATE_DIR/warned/sid-7"
+printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-7","context_window":{"used_percentage":90}}' | bash "$STATUSLINE" >/dev/null
+check "warn を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-7"
+end
+
+begin "statusline/50% は warn しない"
+printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-8","context_window":{"used_percentage":50}}' | bash "$STATUSLINE" >/dev/null
+check "warn を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-8"
+end
+
+begin "statusline/fallback は分母 200000"
+TRANSCRIPT="$TMP/transcript.jsonl"
+printf '%s\n' '{"type":"assistant","message":{"usage":{"input_tokens":100000,"output_tokens":0,"cache_creation_input_tokens":30000,"cache_read_input_tokens":30000}}}' > "$TRANSCRIPT"
+OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-9","transcript_path":"'"$TRANSCRIPT"'"}' | bash "$STATUSLINE")
+check "160K/200K = 80% を表示" grep -q "80%" <<<"$OUT"
+check "80% なので warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-9"
+end
+
 echo ""
 echo "結果: FAILURES=$FAILURES"
 exit "$FAILURES"
