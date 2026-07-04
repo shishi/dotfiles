@@ -6,6 +6,8 @@
 !/claude/rules/**
 !/claude/agents/
 !/claude/agents/**
+!/claude/hooks/
+!/claude/hooks/**
 !/claude/skills/
 !/claude/skills/**
 !/claude/statusline.sh
