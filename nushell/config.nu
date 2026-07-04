@@ -30,16 +30,13 @@ def ll [...args] {
 }
 
 # weztermとの相性で勝手にスクロールするのをとめる
-$env.config = {
-    # 他の設定がある場合はそのまま残す
-    
-    shell_integration: {
-        osc133: false  # これが重要
-        osc7: true
-        osc8: true
-        osc9_9: false
-        osc633: true
-    }
+# NOTE: $env.config 丸ごと再代入だと直前の show_banner 等が消えるので部分代入にする
+$env.config.shell_integration = {
+    osc133: false  # これが重要
+    osc7: true
+    osc8: true
+    osc9_9: false
+    osc633: true
 }
 
 $env.CLAUDE_CODE_GIT_BASH_PATH = 'C:\Users\shishi\scoop\shims\git-bash.exe'
