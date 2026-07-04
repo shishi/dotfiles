@@ -87,6 +87,13 @@ fi
 # claude-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
 # symlink は dotfiles の .gitignore (claude/* デフォルト無視) により追跡されない。
 CLAUDE_MEMORY_DIR="${CLAUDE_MEMORY_DIR:-$HOME/dev/claude-memory}"
+if [ ! -d "${CLAUDE_MEMORY_DIR}" ]; then
+  # private repo なので認証必須。ssh 鍵 → gh の順に試し、両方だめなら
+  # メッセージだけ出して続行する (setup.sh 全体を止めない)。
+  git clone git@github.com:shishi/claude-memory.git "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
+    || gh repo clone shishi/claude-memory "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
+    || echo "setup.sh: could not clone claude-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/claude-memory.git ${CLAUDE_MEMORY_DIR}"
+fi
 if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
   if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
     MSYS=winsymlinks:nativestrict ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory" 2>/dev/null \
@@ -95,7 +102,7 @@ if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
     echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
   fi
 else
-  echo "setup.sh: ${CLAUDE_MEMORY_DIR} not found; clone first: gh repo clone shishi/claude-memory ${CLAUDE_MEMORY_DIR}"
+  echo "setup.sh: ${CLAUDE_MEMORY_DIR} not available; skip memory symlink"
 fi
 
 if [ -L ~/.codex ]; then

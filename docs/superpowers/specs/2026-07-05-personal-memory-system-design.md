@@ -85,7 +85,7 @@ type: user | feedback | project | reference
 
 ### 5. セットアップ(新マシン)
 
-setup.sh に追記: `~/dev/claude-memory` が存在すれば `claude/memory` symlink を作成、無ければメッセージを出してスキップ(clone は手動 or `gh repo clone`)。プライベートリポジトリ `shishi/claude-memory` の作成は初回のみ(`gh repo create --private`)。
+setup.sh に追記: `~/dev/claude-memory`(`CLAUDE_MEMORY_DIR` で上書き可)が無ければ自動 clone を試みる(ssh → `gh repo clone` の順。認証未設定なら手動 clone を促すメッセージを出して続行)。ディレクトリが存在すれば `claude/memory` symlink を作成。プライベートリポジトリ `shishi/claude-memory` の作成は初回のみ(`gh repo create --private`)。
 
 ## エラーハンドリング
 
