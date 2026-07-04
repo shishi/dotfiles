@@ -21,8 +21,17 @@ INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null | tr -d '\r')
 [[ -z "$SESSION_ID" ]] && exit 0
 
+# path traversal 防止: session_id は英数と ._- のみ許可
+[[ "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
+
 WARN_MARKER="$STATE_DIR/warn/$SESSION_ID"
 [[ -f "$WARN_MARKER" ]] || exit 0
+
+# statusline の warn 書き込みと warned 作成が競合した残骸: cooldown 済みなら再通知しない
+if [[ -f "$STATE_DIR/warned/$SESSION_ID" ]]; then
+  rm -f "$WARN_MARKER" 2>/dev/null || true
+  exit 0
+fi
 
 mkdir -p "$STATE_DIR/warned" 2>/dev/null || true
 printf '%s\n' "$(date +%s)" > "$STATE_DIR/warned/$SESSION_ID" 2>/dev/null || true

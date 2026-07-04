@@ -7,6 +7,8 @@ MODEL_DISPLAY=$(echo "$input" | jq -r '.model.display_name' | tr -d '\r')
 CURRENT_DIR=$(echo "$input" | jq -r '.workspace.current_dir' | tr -d '\r')
 TRANSCRIPT_PATH=$(echo "$input" | jq -r '.transcript_path // empty' | tr -d '\r')
 SESSION_ID=$(echo "$input" | jq -r '.session_id // empty' | tr -d '\r')
+# path traversal 防止: 不正な session_id は marker 書き込みに使わない
+[[ "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || SESSION_ID=""
 USED_PCT_RAW=$(echo "$input" | jq -r '.context_window.used_percentage // empty' | tr -d '\r')
 
 # Get git branch information
@@ -47,6 +49,9 @@ elif [ "$total_tokens" -gt 0 ] 2>/dev/null; then
   CONTEXT_WINDOW_SIZE=200000
   percentage=$((total_tokens * 100 / CONTEXT_WINDOW_SIZE))
 fi
+
+# used_percentage が数値でない場合は未取得扱いにする
+[[ "$percentage" =~ ^[0-9]+$ ]] || percentage=""
 
 if [ -z "$percentage" ]; then
   TOKEN_COUNT="_ tkns. (_%)"

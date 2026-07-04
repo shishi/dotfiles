@@ -93,6 +93,7 @@ printf '# Compact Prep State\nPrepared: 2026-07-05T00:00:00+09:00\n' > "$COMPACT
 OUT=$(printf '{"session_id":"sid-4"}' | bash "$HOOKS/session-start-compaction-recovery.sh" recover)
 check "state file パスに言及" grep -q "sid-4.md" <<<"$OUT"
 check "Prepared 鮮度確認指示" grep -q "Prepared" <<<"$OUT"
+check "CR 混入ファイル名なし" no_cr_filenames
 end
 
 begin "recovery/TTL 30日"
@@ -139,6 +140,48 @@ printf '%s\n' '{"type":"assistant","message":{"usage":{"input_tokens":100000,"ou
 OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-9","transcript_path":"'"$TRANSCRIPT"'"}' | bash "$STATUSLINE")
 check "160K/200K = 80% を表示" grep -q "80%" <<<"$OUT"
 check "80% なので warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-9"
+end
+
+echo "# final-review hardening"
+
+begin "reminder/不正な session_id は拒否"
+mkdir -p "$COMPACT_STATE_DIR/warn"
+printf '83\n' > "$COMPACT_STATE_DIR/warn/evil"
+OUT=$(printf '{"session_id":"../warn/evil"}' | bash "$HOOKS/userpromptsubmit-compact-reminder.sh"); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "無出力" test -z "$OUT"
+check "marker は無傷" test -f "$COMPACT_STATE_DIR/warn/evil"
+end
+
+begin "recovery/不正な session_id は拒否"
+OUTSIDE="$TMP/outside-victim"
+printf 'x\n' > "$OUTSIDE"
+OUT=$(printf '{"session_id":"../../outside-victim"}' | bash "$HOOKS/session-start-compaction-recovery.sh" cleanup); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "無出力" test -z "$OUT"
+check "STATE_DIR 外のファイルが消えない" test -f "$OUTSIDE"
+end
+
+begin "reminder/warn+warned 併存時は再通知しない"
+mkdir -p "$COMPACT_STATE_DIR/warn" "$COMPACT_STATE_DIR/warned"
+printf '85\n' > "$COMPACT_STATE_DIR/warn/sid-r"
+printf '1\n' > "$COMPACT_STATE_DIR/warned/sid-r"
+OUT=$(printf '{"session_id":"sid-r"}' | bash "$HOOKS/userpromptsubmit-compact-reminder.sh"); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "無出力" test -z "$OUT"
+check "warn は掃除される" test ! -f "$COMPACT_STATE_DIR/warn/sid-r"
+end
+
+begin "statusline/不正な session_id では marker を書かない"
+printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"../evil","context_window":{"used_percentage":95}}' | bash "$STATUSLINE" >/dev/null 2>&1
+check "STATE_DIR が作られない" test ! -e "$COMPACT_STATE_DIR"
+end
+
+begin "statusline/非数値 used_percentage は未取得扱い"
+OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-x","context_window":{"used_percentage":"abc"}}' | bash "$STATUSLINE" 2>"$TMP/stderr.txt")
+check "stderr が空" test ! -s "$TMP/stderr.txt"
+check "warn を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-x"
+check "プレースホルダ表示" grep -q "_%" <<<"$OUT"
 end
 
 echo ""

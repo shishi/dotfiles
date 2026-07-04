@@ -18,6 +18,9 @@ INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null | tr -d '\r')
 [[ -z "$SESSION_ID" ]] && exit 0
 
+# path traversal 防止: session_id は英数と ._- のみ許可
+[[ "$SESSION_ID" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
+
 rm -f "$STATE_DIR/warn/$SESSION_ID" "$STATE_DIR/warned/$SESSION_ID" 2>/dev/null || true
 find "$STATE_DIR" -type f -mtime +30 -delete 2>/dev/null || true
 
