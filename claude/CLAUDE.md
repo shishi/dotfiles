@@ -91,3 +91,14 @@ codex exec review --dangerously-bypass-approvals-and-sandbox --uncommitted --tit
 - If Codex returns `401 Unauthorized` or hangs reconnecting to `wss://api.openai.com/v1/responses`, the OpenAI auth token has expired. Ask the user to run `! codex login` (interactive command, Claude Code cannot execute it).
 
 Always write one test at a time, make it run, then improve structure. Always run all the tests (except long-running tests) each time.
+
+# 個人永続記憶 (personal memory)
+
+記憶は `~/.claude/memory/`(private repo の symlink)に置く。ビルトインのプロジェクト記憶(`~/.claude/projects/<slug>/memory/`)は使わない。セッション開始時に索引(MEMORY.md)と現プロジェクトの記憶が `<personal-memory>` ブロックとして自動注入される。詳細が要るときだけ該当ファイルを Read で開く。
+
+- 保存する: ユーザーの好み、訂正されたやり方(理由つき)、コードや git 履歴から導けない確定方針・制約、外部リソースのポインタ。「覚えて」と言われたときも、会話中に自発的に気づいたときも書く。
+- 保存しない: リポジトリが既に記録していること、一回限りのデバッグメモ、経緯・失敗談そのもの(行動を変える技術的因果だけ知見として残す)。
+- 形式: 1 ファイル 1 トピック。frontmatter に `name`(kebab-case)/`description`(1 行要約)/`type`(user | feedback | project | reference)。既存トピックがあれば新規作成せず更新する。相対日付は絶対日付に変換する。
+- プロジェクト記憶は `projects/<slug>.md`(slug は注入ブロックのヘッダに書かれている値を使う)。
+- 書き込み後は索引 `MEMORY.md` を同期し(1 記憶 1 行・200 行未満)、`git -C ~/.claude/memory` で add / commit(`chore(memory): <topic>`)/ `push origin main` まで即実行する。この commit は codex-review ゲートの対象外。
+- 整理(consolidation)は memory-consolidate skill に従う。整理は日常追記と別 commit にし、push せずユーザーレビュー待ちにする。
