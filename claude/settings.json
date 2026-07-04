@@ -136,7 +136,8 @@
       "Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)",
       "Bash(git push origin develop/*)",
       "Bash(git push -u origin develop/*)",
-      "Bash(git push --set-upstream origin develop/*)"
+      "Bash(git push --set-upstream origin develop/*)",
+      "Bash(git -C ~/.claude/memory:*)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
@@ -214,6 +215,16 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh cleanup",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/inject-memory.sh",
+            "timeout": 10,
+            "statusMessage": "個人記憶を注入中..."
           }
         ]
       }
