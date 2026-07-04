@@ -66,6 +66,51 @@ check "exit 0" test "$RC" -eq 0
 check "無出力" test -z "$OUT"
 end
 
+echo "# recovery hook"
+
+begin "recovery/cleanup は注入せず marker を消す"
+mkdir -p "$COMPACT_STATE_DIR/warn" "$COMPACT_STATE_DIR/warned"
+printf '1\n' > "$COMPACT_STATE_DIR/warn/sid-2"
+printf '1\n' > "$COMPACT_STATE_DIR/warned/sid-2"
+OUT=$(printf '{"session_id":"sid-2"}' | bash "$HOOKS/session-start-compaction-recovery.sh" cleanup); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "無出力" test -z "$OUT"
+check "warn 消滅" test ! -f "$COMPACT_STATE_DIR/warn/sid-2"
+check "warned 消滅" test ! -f "$COMPACT_STATE_DIR/warned/sid-2"
+end
+
+begin "recovery/recover state なし"
+OUT=$(printf '{"session_id":"sid-3"}' | bash "$HOOKS/session-start-compaction-recovery.sh" recover); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "SessionStart として注入" grep -q '"hookEventName": "SessionStart"' <<<"$OUT"
+check "サマリー仮説扱い指示" grep -q "仮説" <<<"$OUT"
+check_not "state file には言及しない" grep -q "state file" <<<"$OUT"
+end
+
+begin "recovery/recover state あり"
+mkdir -p "$COMPACT_STATE_DIR"
+printf '# Compact Prep State\nPrepared: 2026-07-05T00:00:00+09:00\n' > "$COMPACT_STATE_DIR/sid-4.md"
+OUT=$(printf '{"session_id":"sid-4"}' | bash "$HOOKS/session-start-compaction-recovery.sh" recover)
+check "state file パスに言及" grep -q "sid-4.md" <<<"$OUT"
+check "Prepared 鮮度確認指示" grep -q "Prepared" <<<"$OUT"
+end
+
+begin "recovery/TTL 30日"
+mkdir -p "$COMPACT_STATE_DIR"
+printf 'old\n' > "$COMPACT_STATE_DIR/old-sid.md"
+touch -m -d "35 days ago" "$COMPACT_STATE_DIR/old-sid.md"
+printf 'new\n' > "$COMPACT_STATE_DIR/new-sid.md"
+printf '{"session_id":"sid-5"}' | bash "$HOOKS/session-start-compaction-recovery.sh" cleanup >/dev/null
+check "35日前のファイルは消える" test ! -f "$COMPACT_STATE_DIR/old-sid.md"
+check "新しいファイルは残る" test -f "$COMPACT_STATE_DIR/new-sid.md"
+end
+
+begin "recovery/session_id なし"
+OUT=$(printf '{}' | bash "$HOOKS/session-start-compaction-recovery.sh" recover); RC=$?
+check "exit 0" test "$RC" -eq 0
+check "無出力" test -z "$OUT"
+end
+
 echo ""
 echo "結果: FAILURES=$FAILURES"
 exit "$FAILURES"
