@@ -25,7 +25,7 @@
 
 | # | 内容 | 箇所 |
 |---|------|------|
-| 1 | codex-review(bypass フラグ・`--uncommitted` と PROMPT 併用不可・401 対処) | CLAUDE.md「Review gate + Workaround」節 / `rules/codex-review.md` / `skills/codex-review/SKILL.md` / codex plugin |
+| 1 | codex-review。技術詳細(bypass フラグ・`--uncommitted` と PROMPT 併用不可・401 対処)は CLAUDE.md「Workaround」節と `skills/codex-review` で重複、レビューゲートの一般規範は CLAUDE.md「Review gate」節と `rules/codex-review.md`(9 行の一般論)で重複 | CLAUDE.md / `rules/codex-review.md` / `skills/codex-review/SKILL.md` / codex plugin |
 | 2 | TDD / Tidy First の詳細手順 | CLAUDE.md の約 60 行(CORE PRINCIPLES〜EXAMPLE WORKFLOW) / `skills/tdd` / `skills/tidying` / superpowers:test-driven-development |
 | 3 | コミット規律 | CLAUDE.md「COMMIT DISCIPLINE」節 / `skills/git-commit` |
 | 4 | scrum ワークフロー | `agents/scrum/`(events + team) / `skills/scrum-*`(同名・同 description で agent と skill の二重登録) |
@@ -62,7 +62,7 @@
 
 ### 2. `claude/rules/` の整理
 
-- `rules/codex-review.md` を削除(CLAUDE.md の短縮 Review gate に一本化。現状ほぼ同内容が 2 系統で全セッションに注入されている)
+- `rules/codex-review.md` を削除(レビューゲートの一般規範が CLAUDE.md の Review gate と二重に全セッション注入されているため、CLAUDE.md 側に一本化)
 - `rules/scrum/` を削除(scrum スイート全削除の一部。トリガー対象の `scrum.ts` がどのプロジェクトにも存在しない)
 - `rules/claude/config-maintenance.md`・`rules/rust/no-mod-rs.md` は現状維持
 
@@ -86,14 +86,16 @@
 
 ### 4. `claude/agents/` の整理
 
-- `agents/scrum/` を削除(skill に一本化)
+- `agents/scrum/` を削除(scrum スイート全削除の一部。決定事項 3 参照)
 - `agent-architect.md`・`agent-improver.md`・`agent-reviewer.md`・`claude-skills-architect.md` は現状維持(重複なし)
 
 ### 5. `codex/skills/` ミラーへの同期
 
 - `codex/skills/tidying/SKILL.md` にも同じ壊れ参照があるため、claude 側と同じ修正を反映する
 - `codex/skills/git-commit/SKILL.md` にも claude 側と同じスリム化を反映する(コンテキスト確認の bash 形式は codex 側が既に正しいので、そこは claude 側を codex 側に合わせる)
+- `codex/skills/codex-review/SKILL.md` にも claude 側の改修(native/adversarial 2 モード・反復上限撤廃・規模判定簡素化)を同期する。同期しないと「反復上限 5 回・規模戦略表」が正反対の規範として codex 側に残る
 - `codex/skills/scrum-*` は scrum スイート全削除の一部として削除する
+- `codex/skills/tdd/` は**保持**する。claude 側の削除理由(superpowers:test-driven-development が正)は Codex CLI に superpowers plugin が無いため成立しない。内容は既に `/tdd-*` 参照なしに書き直し済みで自己完結している
 - Codex CLI は `claude/` を読めないため、ミラー構造自体は意図的なものとして維持する(削除・統合しない)
 
 ## 矛盾の解消結果
@@ -105,11 +107,24 @@
 ## スコープ外
 
 - plugin 側ファイル(`claude/plugins/` 配下)は編集しない(更新で上書きされるため)
-- `codex/skills/` のミラー構造の見直し(今回は壊れ参照の同期修正のみ)
-- `nushell/config.nu` の未コミット変更(本整理と無関係)
+- `codex/skills/` のミラー構造そのもの(統合・廃止)の見直しはしない(内容の同期は「5. codex/skills/ ミラーへの同期」のとおり実施する)
+- `.gitconfig.win` の未コミット変更(本整理と無関係)
 
 ## 検証
 
-- 変更後、`claude/`・`codex/` 配下(`claude/plugins/` を除く)に `/tdd-red|/tdd-green|/tdd-refactor|/tidy-first|/tidy-after` への参照が残っていないこと(grep で確認)
+検索系のチェックは **git 追跡ファイルのみ**を対象にする(`git grep` を使う。`claude/` 配下には gitignore 済みの session transcript・backup が大量にあり、旧名を含むため通常の grep では誤検出する)。
+
+削除・除去の確認:
+
+- `git grep -E '/tdd-red|/tdd-green|/tdd-refactor|/tidy-first|/tidy-after'` が 0 件(本 spec 自身を除く)
 - `claude/CLAUDE.md` に TDD 詳細手順・コミット規律・sandbox workaround の重複記述が残っていないこと
-- 削除した `skills/tdd`・scrum スイート(`skills/scrum-*`・`agents/scrum`・`rules/scrum`)・`rules/codex-review.md` への参照が他ファイルに残っていないこと
+- 削除した `skills/tdd`(claude 側)・scrum スイート(`skills/scrum-*`・`agents/scrum`・`rules/scrum`)・`rules/codex-review.md` への参照が git 追跡ファイルに残っていないこと(本 spec 自身を除く)
+- `claude/skills/git-commit/SKILL.md` に `` !`...` `` 動的注入と `model:` frontmatter が残っていないこと
+
+追加・書き換えの確認:
+
+- `claude/CLAUDE.md` の Review gate 段落にフォールバック順(codex CLI あり → codex-review skill / なし → `/code-review` または superpowers:requesting-code-review)が存在すること
+- `claude/CLAUDE.md` の ROLE 宣言に superpowers:test-driven-development と tidying skill の名前が明記されていること
+- `claude/skills/codex-review/SKILL.md` に native/adversarial 2 モードの使い分け・膠着判定(回数上限なし)・簡素化した規模判定が存在すること
+- `codex/skills/` の tidying・git-commit・codex-review が claude 側と意図どおり同期していること(diff で確認、bash コンテキスト確認形式などの意図差分のみ)
+- `codex/skills/tdd/` が保持されていること
