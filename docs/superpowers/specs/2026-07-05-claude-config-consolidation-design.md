@@ -77,7 +77,12 @@
   - adversarial モード: plugin の `prompts/adversarial-review.md` 相当の懐疑プロンプトを skill 内に持ち、素の `codex exec "<プロンプト>"` で実行(`review --uncommitted` はカスタムプロンプト併用不可のため)。focus テキストを渡せる
   - **反復上限を撤廃**: clean になるまで反復する。ただし同一指摘が解消できず膠着した場合は反復を止めてユーザーに報告する(回数制限ではなく進展判定)
   - **規模判定を簡素化**: small/medium/large の戦略表をやめ、「diff が大きすぎて分割(`--base`/`--commit`)が要るか」「arch パスを先行させるか」の 2 判断だけ残す
-- `skills/git-commit/`・`skills/memory-consolidate/`・`skills/compact-prep/`・`skills/adr/`・`skills/logging/`・`skills/missing-tools/` は保持(plugin に無い差分、または固有システム向け)
+- `skills/git-commit/` は保持しつつスリム化する(plugin に commit crafting 相当は無く置換不可):
+  - Claude が既に知っている内容(Conventional Commits の型一覧・`git commit` 構文・長文サンプル)を削除し、固有の運用ルールだけ残す: t-wada の WHY 哲学(code=HOW / tests=WHAT / log=WHY / comments=WHY NOT)、breaking change は `feat!`/`fix!` のみ、命令形 50 字以内、`git add -p` による論理単位の分割ステージング、短い品質チェックリスト(目安: 165 行 → 40 行前後)
+  - `` !`...` `` の動的コンテキスト注入(コマンド用前処理)をやめ、codex ミラーと同じ「bash で自分で `git status`/`git diff` を確認する」形式に統一
+  - skill で効果が疑わしい `model: sonnet` frontmatter を削除
+  - 対話口調(「show me ...」)を自律実行向けの記述に修正
+- `skills/memory-consolidate/`・`skills/compact-prep/`・`skills/adr/`・`skills/logging/`・`skills/missing-tools/` は保持(plugin に無い差分、または固有システム向け)
 
 ### 4. `claude/agents/` の整理
 
@@ -87,6 +92,7 @@
 ### 5. `codex/skills/` ミラーへの同期
 
 - `codex/skills/tidying/SKILL.md` にも同じ壊れ参照があるため、claude 側と同じ修正を反映する
+- `codex/skills/git-commit/SKILL.md` にも claude 側と同じスリム化を反映する(コンテキスト確認の bash 形式は codex 側が既に正しいので、そこは claude 側を codex 側に合わせる)
 - `codex/skills/scrum-*` は scrum スイート全削除の一部として削除する
 - Codex CLI は `claude/` を読めないため、ミラー構造自体は意図的なものとして維持する(削除・統合しない)
 
