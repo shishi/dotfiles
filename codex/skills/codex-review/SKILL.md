@@ -1,52 +1,51 @@
 ---
 name: codex-review
 description: |
-  Codex CLI の review 機能で working tree の変更を反復的にレビューする
-  (review→fix→re-review、clean になるまで)。bubblewrap sandbox が利用不可な
-  ホスト (OrbStack devcontainer / Docker container 等 unprivileged user
-  namespaces が無効な環境) でも動くように bypass フラグを使う。
-  Triggers: spec/PRD/plan の作成・更新直後、major 実装ステップ完了後
-  (>=5 files / 新規モジュール / 公開 API / infra・config 変更)、および
-  git commit / PR / merge / release の前。
+  Codex CLI を外部レビュアーとして使うレビューゲート。2 モード:
+  native (欠陥検出、codex exec review) / adversarial (設計・前提への挑戦、
+  懐疑プロンプト付き codex exec)。clean になるまで review→fix→re-review を
+  反復する。bubblewrap sandbox が使えないホストでも動く bypass フラグ対応。
+  Triggers: spec/PRD/plan の作成・更新直後 (adversarial モード)、major 実装
+  ステップ完了後 (>=5 files / 新規モジュール / 公開 API / infra・config 変更)
+  および git commit / PR / merge / release の前 (native モード)。
   キーワード: Codex レビュー, codex review, レビューゲート, codex-review,
-  Codex で確認, レビューしてもらう。
+  adversarial review, Codex で確認, レビューしてもらう。
 ---
 
-# Codex Review (sandbox-aware)
+# Codex Review (native / adversarial)
 
-Codex CLI の review 機能で変更を検証するレビューゲート。bubblewrap sandbox
-で失敗する環境向けの workaround を含む。
+Codex CLI を独立レビュアーとして使い、Claude Code が書いた変更を検証する
+レビューゲート。指摘が無くなる (clean) まで review→fix→re-review を反復する。
 
-## When to use
+## モード選択
 
-- 仕様書 / SPEC / PRD / 要件定義 / 設計、実装計画 (`plan.md` 等) の作成・更新直後
-- major 実装ステップ完了後: **5 ファイル以上 / 新規モジュール / 公開 API / infra・config 変更**
-- `git commit` / PR / merge / release の **直前**
+| マイルストーン | モード | 目的 |
+|---|---|---|
+| spec / PRD / plan / 設計ドキュメントの作成・更新直後 | **adversarial** | 設計判断・前提・トレードオフへの挑戦 |
+| major 実装ステップ後、commit / PR / merge / release 前 | **native** | 実装欠陥の検出 |
 
 ## Prerequisites
 
-1. `codex` CLI が PATH にある (`which codex` → 0)
-2. Codex が認証済み (`codex` が `401 Unauthorized` を返さない)
-3. bypass を使う場合、外側の container / VM などで隔離されていること
+1. `codex` CLI が PATH にある (`which codex` → 0)。無ければこの skill は
+   適用不可。CLAUDE.md の Review gate に従い Claude 自身のレビューで代替する
+2. Codex が認証済み (`401 Unauthorized` を返さない)
+3. sandbox が使えない環境では `~/.claude/settings.json` の
+   `permissions.allow` に
+   `Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)`
+   が必要 (built-in "Create Unsafe Agents" safety rule の bypass)。
+   最小権限の観点で `codex *` のような広い rule にはしない
 
-## Workflow
+## 規模判定 (2 つだけ)
 
-### 1. 規模判定
+`git diff --shortstat HEAD` を見て判断する:
 
-```bash
-git diff --shortstat HEAD
-```
+1. **分割が要るか**: diff が巨大 (目安: >10 ファイルかつ互いに独立な変更) なら
+   `--base <branch>` / `--commit <SHA>` で範囲を絞り複数回に分ける。
+   同一パターンの繰り返しなら分割不要
+2. **arch パスを先行させるか**: 新規モジュールや構造変更を含むなら、先に
+   adversarial モードで設計妥当性を 1 回見てから native モードに入る
 
-| 規模 | 基準 | 戦略 |
-|-----|------|-----|
-| small | ≤3 ファイル、≤100 行 | diff 1 回 |
-| medium | 4-10 ファイル、100-500 行 | arch → diff |
-| large | >10 ファイル、>500 行 | arch → diff (並列) → cross-check |
-
-ファイル数と行数で評価が食い違う場合、**変更内容の独立性** で判断する
-(同一パターンの繰り返しなら medium 相当に下げて OK)。
-
-### 2. Review 実行 (sandbox-bypass workaround)
+## Native モード
 
 ```bash
 codex exec review \
@@ -55,120 +54,86 @@ codex exec review \
   --title "<short description of the change>"
 ```
 
-なぜ `--dangerously-bypass-approvals-and-sandbox` を使うか:
-
-- Codex 標準の sandbox 実装は **bubblewrap** に依存し、unprivileged user
-  namespaces (`kernel.unprivileged_userns_clone=1`) を必要とする
-- **OrbStack devcontainer / 多くの Docker container** はこれが無効で、
-  Codex は `bwrap: No permissions to create a new namespace` で失敗
-- `--sandbox read-only` も `--sandbox workspace-write` も全て bubblewrap
-  を使うため、いずれも同じ失敗
-- container 自体が外部の隔離境界を提供しているので、内側で bypass しても
-  ホストへの影響は無い (= `intended solely for running in environments that
-  are externally sandboxed` の条件を満たす)
-
-#### 引数の注意点
-
 - `--uncommitted` は staged + unstaged + untracked をまとめてレビュー
-- **`--uncommitted` と `[PROMPT]` は併用不可**。レビュー意図 (review focus)
-  は `--title` に短く込める。詳細プロンプトを使いたい場合は `--commit <SHA>`
-  または `--base <branch>` を併用する
-- `--title` はコミット時の title 風に書くと Codex が文脈を掴みやすい
+- **`--uncommitted` と `[PROMPT]` は併用不可**。レビュー意図は `--title` に
+  短く込める。特定範囲なら `--commit <SHA>` / `--base <branch>` (PROMPT 併用可)
+- `--title` はコミット title 風に書くと Codex が文脈を掴みやすい
 
-### 3. 結果解釈と反復
+## Adversarial モード
 
-| Codex の応答 | 次のアクション |
-|---|---|
-| "I did not find a discrete defect" / 同等の clean な結論 | **完了** (`ok: true` 相当) |
-| 具体的な指摘 (`[P1]`/`[P2]` 等) あり | 修正 → ステップ 2 を再実行 |
-| `bwrap: ...` / "could not inspect" | bypass フラグ忘れ。コマンドを見直す |
-| `401 Unauthorized` / hang on `wss://api.openai.com/v1/responses` | 認証切れ。下記トラブルシュート参照 |
+素の `codex exec` に懐疑プロンプトを渡す (`review --uncommitted` はカスタム
+プロンプト併用不可のため)。`<FOCUS>` にはユーザー指定の焦点、指定が無ければ
+`the entire change` を入れる。
 
-反復上限は **5 回**。2 回連続でテスト/リンタ失敗が続く場合も停止し、
-未解決として状況を報告する。
+```bash
+codex exec \
+  --dangerously-bypass-approvals-and-sandbox \
+  "$(cat <<'PROMPT'
+You are performing an adversarial review. Your job is to break confidence in the change, not to validate it.
+Inspect the uncommitted changes in this repository yourself: run `git status --short --untracked-files=all` and `git diff HEAD`, and read untracked files.
+Focus: <FOCUS>
+Stance: default to skepticism. Question whether the chosen approach is the right one, what assumptions it depends on, and where the design fails under real-world conditions. Happy-path-only behavior is a weakness. Do not give credit for good intent or likely follow-up work.
+Prioritize failures that are expensive or hard to detect: auth and trust boundaries, data loss or corruption, rollback/retry/partial failure, race conditions and ordering assumptions, empty/null/timeout/degraded paths, version skew and migration hazards, observability gaps.
+Report only material findings you can defend from the actual files. For each finding give: what can go wrong, why this code path is vulnerable, the likely impact, and a concrete change that reduces the risk. No style or naming feedback. Prefer one strong finding over several weak ones. If the change looks safe, say so directly.
+PROMPT
+)"
+```
+
+## bypass フラグを使う理由
+
+- Codex 標準の sandbox は **bubblewrap** に依存し、unprivileged user
+  namespaces を必要とする
+- OrbStack devcontainer / 多くの Docker container / Windows ではこれが
+  使えず `bwrap: No permissions to create a new namespace` で失敗する
+  (`--sandbox read-only` 等も全て同じ失敗)
+- container やローカルマシン自体が隔離・信頼境界を提供している場合に限り
+  bypass する
+
+## 反復
+
+- 指摘があれば Claude Code が修正し、同じモードで再実行する
+- **回数上限は無し。clean になるまで反復する**
+- **膠着判定で停止**: 同一指摘が 2 回連続で解消できない、またはテスト/
+  リンタ失敗が 2 回連続した場合は反復を止め、未解決事項として user に報告する
+- clean の判定: native は "I did not find a discrete defect" 相当の結論、
+  adversarial は "safe" 相当の結論
 
 ## Troubleshooting
 
 ### `Permission for this action has been denied. ... "Create Unsafe Agents block rule"`
 
-Codex CLI 側では `--dangerously-bypass-approvals-and-sandbox` が利用できる。
-通常作業では `sandbox_mode = "workspace-write"` と `approval_policy = "on-request"`
-を優先し、bypass は外側で隔離された環境に限定する。
+`~/.claude/settings.json` の `permissions.allow` に下記を追加:
+
+```json
+"Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)"
+```
 
 ### `401 Unauthorized` または接続 hang
 
-OpenAI auth token が期限切れ。対話環境で再ログインする:
-
-```
-codex login
-```
+OpenAI auth token が期限切れ。interactive command は実行できないため
+user に `! codex login` を依頼し、完了後にこの skill を再開する。
 
 ### Codex 出力が空のまま数分動かない
 
-`ps -ef | grep codex` で CPU 0% かを確認。0% で stuck している場合は
-ほぼ確実に **認証問題** か **API レート制限**。`401` セクションを参照。
+`ps -ef | grep codex` で CPU 0% なら、ほぼ確実に認証問題か API レート制限。
+上の `401` セクションを参照。
 
-### bypass を使いたくないケース (kernel 設定で根本対応)
+### Codex exec 自体の失敗 (timeout / API 障害)
 
-OrbStack なら OrbStack 側、それ以外なら host の Linux で:
-
-```bash
-sudo sysctl kernel.unprivileged_userns_clone=1
-```
-
-を有効化すれば bubblewrap が動作する。ただし host 設定の変更権限が必要。
-
-## Optional: structured JSON output
-
-`--uncommitted` と PROMPT は併用不可だが、特定 commit や branch 相手なら
-PROMPT で出力スキーマを指定可能:
-
-```bash
-codex exec review \
-  --dangerously-bypass-approvals-and-sandbox \
-  --base master \
-  --title "..." \
-  "$(cat <<'PROMPT'
-出力は JSON 1 つのみ。スキーマ:
-{
-  "ok": true|false,
-  "phase": "arch|diff|cross-check",
-  "summary": "string",
-  "issues": [
-    {"severity": "blocking|advisory", "category": "correctness|security|perf|maintainability|testing|style", "file": "path", "lines": "N-M", "problem": "...", "recommendation": "..."}
-  ],
-  "notes_for_next_review": "string"
-}
-ok: blocking が 0 件なら true。
-PROMPT
-)"
-```
-
-structured output は CI 統合や反復ロジックの自動化に便利。
-
-## Error handling
-
-Codex exec が失敗 (timeout / API 障害 / その他) の場合:
-
-1. **1 回リトライ** (timeout の場合はファイル数を半分に分割して `--commit`
-   や `--base` で範囲を絞る)
-2. 再失敗 → 該当フェーズを **スキップ** し、最終レポートに「未レビュー」
-   として理由を記録
-3. arch をスキップした場合は diff のみで続行。diff をスキップしたファイル群
-   は手動レビュー推奨
+1. 1 回リトライ (timeout なら `--commit` / `--base` で範囲を絞る)
+2. 再失敗 → そのフェーズをスキップし、最終レポートに「未レビュー」として
+   理由を記録する
 
 ## Final report
 
 レビュー完了時、以下を含む短いレポートを返す:
 
 ```
-## Codexレビュー結果
-- 規模: <small/medium/large> (<N> ファイル, <M> 行)
-- 反復: <X>/5 / ステータス: ✅ ok | ❌ unresolved
+## Codex レビュー結果
+- モード: native | adversarial / 反復: <X> 回
+- ステータス: ✅ clean | ⚠️ 膠着で停止 (未解決あり)
 - 主な指摘と修正:
   - <file>: <修正内容の要約>
-- Advisory (参考):
-  - <file>: <内容>
-- 未レビュー (エラー時のみ):
+- 未解決・未レビュー (ある場合のみ):
   - <file/scope>: <理由>
 ```
