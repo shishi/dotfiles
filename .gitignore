@@ -13,6 +13,7 @@
 !/claude/statusline.sh
 !/claude/install-plugins.sh
 /codex/*
+!/codex/AGENTS.md
 !/codex/config.toml
 !/codex/skills/
 !/codex/skills/**
