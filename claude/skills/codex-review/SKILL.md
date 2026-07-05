@@ -58,6 +58,8 @@ codex exec review \
 - **`--uncommitted` と `[PROMPT]` は併用不可**。レビュー意図は `--title` に
   短く込める。特定範囲なら `--commit <SHA>` / `--base <branch>` (PROMPT 併用可)
 - `--title` はコミット title 風に書くと Codex が文脈を掴みやすい
+- sandbox が正常に動く環境では `--dangerously-bypass-approvals-and-sandbox`
+  を外す (adversarial モードも同様。下記「bypass フラグを使う理由」参照)
 
 ## Adversarial モード
 
@@ -81,11 +83,13 @@ PROMPT
 
 ## bypass フラグを使う理由
 
-- Codex 標準の sandbox は **bubblewrap** に依存し、unprivileged user
+- Codex の Linux sandbox は **bubblewrap** に依存し、unprivileged user
   namespaces を必要とする
-- OrbStack devcontainer / 多くの Docker container / Windows ではこれが
-  使えず `bwrap: No permissions to create a new namespace` で失敗する
+- OrbStack devcontainer / 多くの Docker container ではこれが使えず
+  `bwrap: No permissions to create a new namespace` で失敗する
   (`--sandbox read-only` 等も全て同じ失敗)
+- bubblewrap は Linux 専用のため Windows では使われない。Windows で sandbox
+  が機能しない場合は bwrap エラーではなく別様態の失敗になる
 - container やローカルマシン自体が隔離・信頼境界を提供している場合に限り
   bypass する
 
