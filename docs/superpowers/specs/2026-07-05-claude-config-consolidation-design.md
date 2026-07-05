@@ -93,7 +93,7 @@
 
 - `codex/skills/tidying/SKILL.md` にも同じ壊れ参照があるため、claude 側と同じ修正を反映する
 - `codex/skills/git-commit/SKILL.md` にも claude 側と同じスリム化を反映する(コンテキスト確認の bash 形式は codex 側が既に正しいので、そこは claude 側を codex 側に合わせる)
-- `codex/skills/codex-review/SKILL.md` にも claude 側の改修(native/adversarial 2 モード・反復上限撤廃・規模判定簡素化)を同期する。同期しないと「反復上限 5 回・規模戦略表」が正反対の規範として codex 側に残る
+- `codex/skills/codex-review/SKILL.md` にも claude 側の改修(native/adversarial 2 モード・反復上限撤廃・規模判定簡素化)を同期する。同期しないと「反復上限 5 回・規模戦略表」が正反対の規範として codex 側に残る。ただし host 固有文言(Review gate の参照先 CLAUDE.md→AGENTS.md・sandbox 許可の対応物 `~/.claude/settings.json` の permissions.allow→`~/.codex/config.toml` の sandbox_mode・`! codex login` の `!` prefix・「Claude Code が修正」の主語)は Codex ホスト向けに書き換え、完全同一コピーにはしない
 - `codex/skills/scrum-*` は scrum スイート全削除の一部として削除する
 - `codex/skills/tdd/` は**保持**する。claude 側の削除理由(superpowers:test-driven-development が正)は Codex CLI に superpowers plugin が無いため成立しない。内容は既に `/tdd-*` 参照なしに書き直し済みで自己完結している
 - Codex CLI は `claude/` を読めないため、ミラー構造自体は意図的なものとして維持する(削除・統合しない)
@@ -126,5 +126,5 @@
 - `claude/CLAUDE.md` の Review gate 段落にフォールバック順(codex CLI あり → codex-review skill / なし → `/code-review` または superpowers:requesting-code-review)が存在すること
 - `claude/CLAUDE.md` の ROLE 宣言に superpowers:test-driven-development と tidying skill の名前が明記されていること
 - `claude/skills/codex-review/SKILL.md` に native/adversarial 2 モードの使い分け・膠着判定(回数上限なし)・簡素化した規模判定が存在すること
-- `codex/skills/` の tidying・git-commit・codex-review が claude 側と意図どおり同期していること(diff で確認、bash コンテキスト確認形式などの意図差分のみ)
+- `codex/skills/` の tidying・git-commit・codex-review が claude 側と意図どおり同期していること(diff で確認。許可される意図差分: git-commit の bash コンテキスト確認形式、codex-review の host 固有文言 — AGENTS.md 参照・`~/.codex/config.toml` の sandbox 設定・`codex login` 依頼形式・修正主語)
 - `codex/skills/tdd/` が保持されていること
