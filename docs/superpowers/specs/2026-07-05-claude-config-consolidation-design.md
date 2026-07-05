@@ -53,7 +53,7 @@
 
 残す(圧縮):
 
-- ROLE 宣言: Kent Beck の TDD / Tidy First に従う senior engineer である旨 + コード品質原則を 2〜3 行
+- ROLE 宣言: Kent Beck の TDD / Tidy First に従う senior engineer である旨 + コード品質原則を 2〜3 行。「実装は superpowers:test-driven-development skill、構造改善は tidying skill に従う」と skill 名を明記する(config-maintenance.md の discoverability 原則。規範は常時ロードの CLAUDE.md に残り、手順詳細だけ skill へ委譲される)
 - Review gate: トリガー条件(spec/plan 更新直後・major 実装ステップ後 ≥5 files/公開 API/infra-config・commit/PR/release 前)+ レビュー手段のフォールバック順を明記した短い段落:
   1. codex CLI が使える環境 → codex-review skill(native/adversarial の使い分け・bypass workaround を内蔵。下記 3 参照)
   2. codex CLI が無い環境 → Claude 自身のレビュー機能で代替: `/code-review` skill(無ければ superpowers:requesting-code-review)で review→fix→re-review を clean まで反復。外部レビュアー同様、独立視点を保つため subagent ベースで実行する
