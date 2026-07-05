@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Git Bash/MSYS では素の ln -s が symlink ではなく「コピー」を作るため、
+# native symlink を強制する (要: Windows 開発者モード or 管理者実行)。
+# export しておけば以降の ln 呼び出しすべてに効く。mac/Linux では何もしない。
+case "$(uname -s)" in
+  MINGW* | MSYS*) export MSYS=winsymlinks:nativestrict ;;
+esac
+
 if [ -d /.jbdevcontainer ]; then
   XDG_CONFIG_HOME=/.jbdevcontainer/config
 elif [ -z $XDG_CONFIG_HOME ]; then
@@ -96,8 +103,7 @@ if [ ! -d "${CLAUDE_MEMORY_DIR}" ]; then
 fi
 if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
   if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
-    MSYS=winsymlinks:nativestrict ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory" 2>/dev/null \
-      || ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory"
+    ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory"
   else
     echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
   fi
@@ -148,7 +154,8 @@ elif [ $(uname) = Linux ]; then
   #    ln -sf ${DOTDIR}/imwheel.desktop ${XDG_CONFIG_HOME}/autostart/imwheel.desktop
   #    ln -sf ${DOTDIR}/fonts.conf ${XDG_CONFIG_HOME}/fontconfig/fonts.conf
   #    fc-cache -fv
-elif [ $(uname) = MINGW64_NT-10.0 ]; then
+elif [[ $(uname -s) == MINGW* ]]; then
+  # uname はビルド番号付き (例: MINGW64_NT-10.0-26200) なのでパターンで判定する
   ln -sf ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
