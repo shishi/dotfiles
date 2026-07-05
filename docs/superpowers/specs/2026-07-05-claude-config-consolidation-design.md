@@ -53,7 +53,10 @@
 残す(圧縮):
 
 - ROLE 宣言: Kent Beck の TDD / Tidy First に従う senior engineer である旨 + コード品質原則を 2〜3 行
-- Review gate: トリガー条件(spec/plan 更新直後・major 実装ステップ後 ≥5 files/公開 API/infra-config・commit/PR/release 前)+「`/codex:review` を使い review→fix→re-review を clean まで反復。sandbox が使えない環境では codex-review skill の workaround に従う」の短い段落
+- Review gate: トリガー条件(spec/plan 更新直後・major 実装ステップ後 ≥5 files/公開 API/infra-config・commit/PR/release 前)+ レビュー手段のフォールバック順を明記した短い段落:
+  1. codex CLI が使える環境 → `/codex:review`(sandbox が使えない場合は codex-review skill の workaround)
+  2. codex CLI が無い環境 → Claude 自身のレビュー機能で代替: `/code-review` skill(無ければ superpowers:requesting-code-review)で review→fix→re-review を clean まで反復。外部レビュアー同様、独立視点を保つため subagent ベースで実行する
+  いずれの手段でも「clean になるまで反復」のゲート自体は必須とする(レビュー手段が無い場合のみスキップし、その旨を報告する)
 - 個人永続記憶セクション: 現状のまま(常時必要・スキル化不適)
 
 ### 2. `claude/rules/` の整理
@@ -81,7 +84,7 @@
 ## 矛盾の解消結果
 
 - コミット形式: COMMIT DISCIPLINE 節の削除により git-commit skill(Conventional Commits)が単一規範になる。structural/behavioral の区別は tidying skill の `refactor:` vs `feat:/fix:` 運用に吸収済み
-- レビュー手順: CLAUDE.md の短縮 Review gate が「通常は `/codex:review`、sandbox 不可環境は codex-review skill」と役割を明示し、二重規範を解消
+- レビュー手順: CLAUDE.md の短縮 Review gate が「codex CLI あり → `/codex:review`(sandbox 不可なら codex-review skill)、codex CLI なし → Claude 自身のレビュー skill で代替」というフォールバック順を明示し、二重規範を解消。codex が無い環境でもゲート自体は維持される
 - 壊れた `/tdd-*` `/tidy-*` 参照: 削除・文言修正で全て解消
 
 ## スコープ外
