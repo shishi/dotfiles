@@ -17,7 +17,7 @@
 2. **棲み分け方針**: plugin を正とし、自作は plugin に無い差分(固有知見)のみ残す
 3. **scrum**: skill に一本化し、`agents/scrum/` は削除する
 4. **plan.md 指示**: CLAUDE.md 冒頭の「Always follow plan.md / "go" ワークフロー」は削除し、superpowers:writing-plans / executing-plans に寄せる
-5. **codex レビューは方針 2 の例外**: adversarial レビューを plugin なしで使えるようにするため、自作 `skills/codex-review` を正とする(native/adversarial の使い分け・bypass workaround を内蔵)。codex plugin のコマンドは補助扱い
+5. **codex レビューは方針 2 の例外**: adversarial レビューを plugin なしで使えるようにするため、自作 `skills/codex-review` を正とする(native/adversarial の使い分け・bypass workaround を内蔵)。codex plugin のコマンドは補助扱い。plugin 自体はアンインストールしない — `codex-rescue` agent(行き詰まり時に Claude が自発的に Codex へ作業委譲する機能)はレビューと別用途で、自作 skill では代替しないため
 
 ## 現状の問題(調査結果)
 
