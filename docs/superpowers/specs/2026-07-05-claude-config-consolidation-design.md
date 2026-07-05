@@ -17,6 +17,7 @@
 2. **棲み分け方針**: plugin を正とし、自作は plugin に無い差分(固有知見)のみ残す
 3. **scrum**: skill に一本化し、`agents/scrum/` は削除する
 4. **plan.md 指示**: CLAUDE.md 冒頭の「Always follow plan.md / "go" ワークフロー」は削除し、superpowers:writing-plans / executing-plans に寄せる
+5. **codex レビューは方針 2 の例外**: adversarial レビューを plugin なしで使えるようにするため、自作 `skills/codex-review` を正とする(native/adversarial の使い分け・bypass workaround を内蔵)。codex plugin のコマンドは補助扱い
 
 ## 現状の問題(調査結果)
 
@@ -54,7 +55,7 @@
 
 - ROLE 宣言: Kent Beck の TDD / Tidy First に従う senior engineer である旨 + コード品質原則を 2〜3 行
 - Review gate: トリガー条件(spec/plan 更新直後・major 実装ステップ後 ≥5 files/公開 API/infra-config・commit/PR/release 前)+ レビュー手段のフォールバック順を明記した短い段落:
-  1. codex CLI が使える環境 → `/codex:review`(sandbox が使えない場合は codex-review skill の workaround)
+  1. codex CLI が使える環境 → codex-review skill(native/adversarial の使い分け・bypass workaround を内蔵。下記 3 参照)
   2. codex CLI が無い環境 → Claude 自身のレビュー機能で代替: `/code-review` skill(無ければ superpowers:requesting-code-review)で review→fix→re-review を clean まで反復。外部レビュアー同様、独立視点を保つため subagent ベースで実行する
   いずれの手段でも「clean になるまで反復」のゲート自体は必須とする(レビュー手段が無い場合のみスキップし、その旨を報告する)
 - 個人永続記憶セクション: 現状のまま(常時必要・スキル化不適)
@@ -69,7 +70,13 @@
 - `skills/tdd/` を削除(superpowers:test-driven-development が正。壊れた `/tdd-*` 参照も消滅)
 - `skills/tidying/SKILL.md` は保持(Tidy First の三タイミング・DRY 判断・behavior contract は plugin に無い差分)。`/tidy-first` `/tidy-after` の壊れ参照をコマンドでない文言(例:「Tidy First のタイミングで」)に修正
 - `skills/scrum-team-developer/SKILL.md` の `/tdd-red` 等の参照を superpowers:test-driven-development skill への参照に書き換え
-- `skills/codex-review/`・`skills/git-commit/`・`skills/memory-consolidate/`・`skills/compact-prep/`・`skills/adr/`・`skills/logging/`・`skills/missing-tools/`・`skills/scrum-*` は保持(plugin に無い差分、または固有システム向け)
+- `skills/codex-review/` を拡張し、plugin なしで完結するレビューゲートの正とする:
+  - **2 モードの使い分け**を定義: spec/plan/設計ドキュメント更新後は **adversarial モード**(設計・前提への挑戦)、実装ステップ後・commit/PR/release 前は **native モード**(欠陥検出)
+  - native モード: 従来どおり `codex exec review --uncommitted`(+ bypass workaround)
+  - adversarial モード: plugin の `prompts/adversarial-review.md` 相当の懐疑プロンプトを skill 内に持ち、素の `codex exec "<プロンプト>"` で実行(`review --uncommitted` はカスタムプロンプト併用不可のため)。focus テキストを渡せる
+  - **反復上限を撤廃**: clean になるまで反復する。ただし同一指摘が解消できず膠着した場合は反復を止めてユーザーに報告する(回数制限ではなく進展判定)
+  - **規模判定を簡素化**: small/medium/large の戦略表をやめ、「diff が大きすぎて分割(`--base`/`--commit`)が要るか」「arch パスを先行させるか」の 2 判断だけ残す
+- `skills/git-commit/`・`skills/memory-consolidate/`・`skills/compact-prep/`・`skills/adr/`・`skills/logging/`・`skills/missing-tools/`・`skills/scrum-*` は保持(plugin に無い差分、または固有システム向け)
 
 ### 4. `claude/agents/` の整理
 
@@ -84,7 +91,7 @@
 ## 矛盾の解消結果
 
 - コミット形式: COMMIT DISCIPLINE 節の削除により git-commit skill(Conventional Commits)が単一規範になる。structural/behavioral の区別は tidying skill の `refactor:` vs `feat:/fix:` 運用に吸収済み
-- レビュー手順: CLAUDE.md の短縮 Review gate が「codex CLI あり → `/codex:review`(sandbox 不可なら codex-review skill)、codex CLI なし → Claude 自身のレビュー skill で代替」というフォールバック順を明示し、二重規範を解消。codex が無い環境でもゲート自体は維持される
+- レビュー手順: CLAUDE.md の短縮 Review gate が「codex CLI あり → codex-review skill(native/adversarial 使い分け・bypass 内蔵)、codex CLI なし → Claude 自身のレビュー skill で代替」というフォールバック順を明示し、二重規範を解消。codex plugin が無くても adversarial レビューを含むゲート全体が機能する
 - 壊れた `/tdd-*` `/tidy-*` 参照: 削除・文言修正で全て解消
 
 ## スコープ外
