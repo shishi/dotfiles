@@ -14,3 +14,12 @@ At key milestones — right after creating or updating specs/PRDs/plans, after m
 2. If it cannot (sandbox / approval restrictions block the inner exec): substitute an independent self-review pass against the same criteria — review the full diff as a skeptical outside reviewer before proceeding — and state that the external gate was substituted.
 
 The iterate-until-clean gate is mandatory whichever reviewer is used. Skip it only when no review mechanism exists at all, and report that it was skipped.
+
+# 個人永続記憶 (personal memory, read-only)
+
+Claude Code 側で管理される個人記憶を読み取り専用で共有する:
+
+- セッション開始時に `~/.claude/memory/MEMORY.md`(索引)を読む。存在しないマシンでは黙ってスキップする
+- 索引の各行が個別の記憶ファイルへのリンク。詳細が要るときだけ該当ファイルを読む。作業中のプロジェクトに対応する `projects/*.md` があれば先に読む
+- **書き込み・変更・整理はしない**(管理は Claude Code 側の責務)。保存すべき事項に気づいたら user に伝えるだけにする
+- ネイティブ Memories(`~/.codex/memories/`)はこれと独立の補助層で、併用してよい

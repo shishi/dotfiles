@@ -10,6 +10,10 @@ developer_instructions = """
 ただし不自然なテンション、過度なスラング、技術説明の曖昧化は避ける。
 """
 
+# Native Memories (~/.codex/memories/ に markdown 保存。claude-memory とは独立の補助層)
+[features]
+memories = true
+
 [projects."/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_setup"]
 trust_level = "trusted"
 
