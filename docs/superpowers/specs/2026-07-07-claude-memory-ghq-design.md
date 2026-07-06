@@ -22,8 +22,12 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 
 優先順位(上が勝ち):
 
-1. `CLAUDE_MEMORY_DIR` が**非空で**セットされていればそのまま使う(devcontainer 等の逃げ道)。
+1. `CLAUDE_MEMORY_DIR` が**非空で**セットされていればそれを使う(devcontainer 等の逃げ道)。
    未設定と空文字は同じく「未指定」として扱う(現行の `${VAR:-default}` の挙動を維持)。
+   値は返す前に絶対化する: 先頭 `~/` は `$HOME/` に展開、相対パスは
+   `$(pwd -P)` 基準で絶対化する。相対パスのまま `ln -sfn` に渡ると symlink
+   target が `$DOTDIR/claude` からの相対として解釈され、clone 先と参照先が
+   ズレるため。
 2. ghq root が見つかれば `<ghq_root>/github.com/shishi/claude-memory`。
    ghq 本体と同じ優先順で解決する:
    - `GHQ_ROOT` 環境変数。値の先頭 `~/` は `$HOME/` に手動展開する
@@ -57,8 +61,10 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
   上書き・削除は一切行わない(重複の解消はユーザーが手動で行う):
   1. `${DOTDIR}/claude/memory` symlink が旧・新どちらかを指していれば
      その指す先を返す(現に使われている側を維持し、書き込み先を変えない)。
-  2. symlink が判定に使えなければ、新パスが origin 検証(条件 3 と同じ)を
-     通る場合のみ新を返す。通らなければ(部分 mv の残骸・別 repo 等)旧を返す。
+  2. symlink で現用側を判定できなければ**旧パスを返す**。origin 一致は
+     「同じ repo らしい」ことしか保証せず、新が古い clone だった場合に
+     書き込み先が勝手に切り替わって旧側の未 push 記憶が orphan になるため、
+     自動で新へ寄せない(警告で手動解消を促す)。
 
 移行が成功した場合の symlink 張り直しは既存の `ln -sfn` 処理がそのまま行う
 (条件 4 により symlink であることが保証済み)。
@@ -71,11 +77,13 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 ## 実装配置(案 A)
 
 - **`claude/resolve-memory-dir.sh`(新規)**: パス解決+移行を担う独立ヘルパー。
-  - stdout に解決済み絶対パスを 1 行 echo する。
+  - exit contract: 成功時は exit 0 で stdout に解決済み**絶対パスを 1 行だけ**
+    echo する。パスを決定できない内部失敗時は非 0 で終了する
+    (移行の中止は失敗ではない — 安全側のパスを返して exit 0)。
   - 移行(mv)もこのスクリプト内で行い、警告は stderr に出す
     (stdout はパスのみに保つ)。
   - 入力はすべて環境変数(`CLAUDE_MEMORY_DIR` / `GHQ_ROOT` / `HOME` /
-    git のグローバル設定)経由なので、テストから差し替え可能。
+    `DOTDIR` / git のグローバル設定)経由なので、テストから差し替え可能。
 - **`setup.sh`(変更 1)**: OS 別 `.gitconfig` symlink のブロックを
   claude-memory 処理より**前**に移動する。現状は後にあるため、fresh 環境の
   初回実行では `git config ghq.root` が引けず旧パスに clone →次回実行で移行、
@@ -86,6 +94,10 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
   に置き換える(`DOTDIR` は setup.sh 内の shell 変数で export されていないため、
   呼び出し時に明示的に渡す)。ヘルパー側は `DOTDIR` が空なら移行を行わない
   (fail closed — 条件 4 が判定できない状態で mv しない)。
+  setup.sh は substitution の終了コードと出力を検証し、ヘルパーが非 0 または
+  stdout が「`/` 始まりの非空 1 行」でない場合は警告を出して claude-memory
+  セクション全体(clone・symlink)をスキップする(setup.sh には `set -e` が
+  ないため、検証しないと壊れた値のまま後続処理へ進んでしまう)。
 - **`setup.sh`(変更 3)**: clone 実行前に
   `mkdir -p "$(dirname "${CLAUDE_MEMORY_DIR}")"` を追加する。ghq root 配下の
   中間ディレクトリ(例: `~/dev/src/github.com/shishi`)は fresh 環境に存在せず、
@@ -99,7 +111,8 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 (`pass`/`fail` カウント、一時ディレクトリ使用)。`GIT_CONFIG_GLOBAL` に偽 gitconfig、
 `HOME` に一時ディレクトリを向けて実挙動を検証する:
 
-1. `CLAUDE_MEMORY_DIR` セット時 → その値がそのまま返る(最優先)。
+1. `CLAUDE_MEMORY_DIR` セット時 → その値(絶対化済み)が返る(最優先)。
+   相対パス・`~/` 始まりの値は絶対パスに変換されて返る。
 2. `CLAUDE_MEMORY_DIR=""`(空文字)→ 未指定扱いで ghq 解決に進む。
 3. `GHQ_ROOT=~/xxx`(チルダ)→ `$HOME/xxx/github.com/shishi/claude-memory` に展開される。
 4. `GHQ_ROOT` なし・gitconfig に `ghq.root = ~/yyy` → gitconfig 側で解決される。
@@ -109,8 +122,8 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 8. 旧パスが claude-memory の clone でない(.git なし or origin 不一致)→ 移行されず旧パスが返る(警告)。
 9. `${DOTDIR}/claude/memory` が実体ディレクトリ → 移行されず旧パスが返る(警告)。
 10. 旧・新両方存在・symlink が旧を指す → 返り値は旧パス(現用側を維持、警告)。
-11. 旧・新両方存在・symlink 判定不能・新が origin 検証を通る → 返り値は新パス(警告)。
-12. 旧・新両方存在・新が origin 検証を通らない(残骸等)→ 返り値は旧パス(警告)。
+11. 旧・新両方存在・symlink が新を指す → 返り値は新パス(警告)。
+12. 旧・新両方存在・symlink 判定不能 → 返り値は旧パス(自動で新へ寄せない、警告)。
 13. `DOTDIR` 未設定でヘルパーを直接呼ぶ → 移行は行われない(fail closed)。
 14. ghq root 配下の中間ディレクトリが未存在の fresh 環境 → 親が作られ clone 先として使える
     (`mkdir -p` は setup.sh 側だが、移行パスではヘルパーの `mkdir -p` を検証)。
