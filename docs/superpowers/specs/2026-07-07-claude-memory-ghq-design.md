@@ -28,6 +28,14 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
    `$(pwd -P)` 基準で絶対化する。相対パスのまま `ln -sfn` に渡ると symlink
    target が `$DOTDIR/claude` からの相対として解釈され、clone 先と参照先が
    ズレるため。
+
+パスの正規化(全経路共通): ヘルパーが stdout に出すパスは POSIX 形式
+(`/` 始まり)に正規化する。Git Bash/MSYS では `CLAUDE_MEMORY_DIR` や
+`git config --type=path` が `C:/Users/...` のような drive-letter 形式を
+返し得るが、そのままでは setup.sh 側の「`/` 始まり」検証で弾かれて
+Windows だけ claude-memory セクションがスキップされてしまう。
+`cygpath` が使える環境では `cygpath -u -a` で `/c/...` 形式へ変換してから
+出力する(cygpath がない環境で drive-letter 形式が来ることは想定しない)。
 2. ghq root が見つかれば `<ghq_root>/github.com/shishi/claude-memory`。
    ghq 本体と同じ優先順で解決する:
    - `GHQ_ROOT` 環境変数。値の先頭 `~/` は `$HOME/` に手動展開する
@@ -128,6 +136,8 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 14. ghq root 配下の中間ディレクトリが未存在の fresh 環境 → 親が作られ clone 先として使える
     (`mkdir -p` は setup.sh 側だが、移行パスではヘルパーの `mkdir -p` を検証)。
 15. stdout は常にパス 1 行のみ(警告が混入しない)。
+16. `CLAUDE_MEMORY_DIR=C:/tmp/memory` かつ `cygpath` が利用可能(PATH 上の
+    stub で模擬)→ `/c/tmp/memory` 形式に正規化されて返る。
 
 加えて setup.sh の順序検証: `.gitconfig` symlink 処理が claude-memory 処理より
 前にあることを確認する(grep ベースの行番号比較で足りる)。
