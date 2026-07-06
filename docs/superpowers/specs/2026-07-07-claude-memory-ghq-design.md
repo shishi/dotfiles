@@ -53,9 +53,12 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
   **旧パスを返す**(動いている状態を壊さない)。
 - `mv` 自体が失敗した、または移行後に `new/.git` が確認できない →
   警告し、旧パスがまだ存在すれば旧パスを返す。中途半端な新パスは採用しない。
-- 旧・新の両方が既に存在する → 移行せず警告する。新パスに `new/.git` が
-  あれば新を返し、なければ(過去の部分 mv の残骸等)旧を返す。
-  上書き・削除は一切行わない(どちらが最新かはユーザーが手動で確認する)。
+- 旧・新の両方が既に存在する → 移行せず警告し、以下の順で返すパスを決める。
+  上書き・削除は一切行わない(重複の解消はユーザーが手動で行う):
+  1. `${DOTDIR}/claude/memory` symlink が旧・新どちらかを指していれば
+     その指す先を返す(現に使われている側を維持し、書き込み先を変えない)。
+  2. symlink が判定に使えなければ、新パスが origin 検証(条件 3 と同じ)を
+     通る場合のみ新を返す。通らなければ(部分 mv の残骸・別 repo 等)旧を返す。
 
 移行が成功した場合の symlink 張り直しは既存の `ln -sfn` 処理がそのまま行う
 (条件 4 により symlink であることが保証済み)。
@@ -79,9 +82,14 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
   という二段階挙動になってしまう。先に張れば初回から ghq 形式に置ける。
 - **`setup.sh`(変更 2)**: 固定の
   `CLAUDE_MEMORY_DIR="${CLAUDE_MEMORY_DIR:-$HOME/dev/claude-memory}"` を
-  `CLAUDE_MEMORY_DIR="$(bash "${DOTDIR}/claude/resolve-memory-dir.sh")"` に置き換える。
-  ヘルパーには `DOTDIR` を環境変数で渡す(条件 4 の判定に必要)。
-  以降の clone・symlink 処理は無変更。
+  `CLAUDE_MEMORY_DIR="$(DOTDIR="$DOTDIR" bash "${DOTDIR}/claude/resolve-memory-dir.sh")"`
+  に置き換える(`DOTDIR` は setup.sh 内の shell 変数で export されていないため、
+  呼び出し時に明示的に渡す)。ヘルパー側は `DOTDIR` が空なら移行を行わない
+  (fail closed — 条件 4 が判定できない状態で mv しない)。
+- **`setup.sh`(変更 3)**: clone 実行前に
+  `mkdir -p "$(dirname "${CLAUDE_MEMORY_DIR}")"` を追加する。ghq root 配下の
+  中間ディレクトリ(例: `~/dev/src/github.com/shishi`)は fresh 環境に存在せず、
+  `git clone` は親を作らないため。以降の clone・symlink 処理は無変更。
 - **`.gitignore`(変更)**: `/claude/*` の無視に対するホワイトリスト行
   `!/claude/resolve-memory-dir.sh` を追加する。
 
@@ -100,9 +108,13 @@ ghq.root が設定されている環境では ghq のディレクトリ規約
 7. 旧パスに正規 clone(.git + origin 一致)あり・新パス未存在 → mv で移行され、返り値は新パス。
 8. 旧パスが claude-memory の clone でない(.git なし or origin 不一致)→ 移行されず旧パスが返る(警告)。
 9. `${DOTDIR}/claude/memory` が実体ディレクトリ → 移行されず旧パスが返る(警告)。
-10. 旧・新両方存在(新に .git あり)→ mv されず両方残り、返り値は新パス(stderr に警告)。
-    新に .git がなければ返り値は旧パス。
-11. stdout は常にパス 1 行のみ(警告が混入しない)。
+10. 旧・新両方存在・symlink が旧を指す → 返り値は旧パス(現用側を維持、警告)。
+11. 旧・新両方存在・symlink 判定不能・新が origin 検証を通る → 返り値は新パス(警告)。
+12. 旧・新両方存在・新が origin 検証を通らない(残骸等)→ 返り値は旧パス(警告)。
+13. `DOTDIR` 未設定でヘルパーを直接呼ぶ → 移行は行われない(fail closed)。
+14. ghq root 配下の中間ディレクトリが未存在の fresh 環境 → 親が作られ clone 先として使える
+    (`mkdir -p` は setup.sh 側だが、移行パスではヘルパーの `mkdir -p` を検証)。
+15. stdout は常にパス 1 行のみ(警告が混入しない)。
 
 加えて setup.sh の順序検証: `.gitconfig` symlink 処理が claude-memory 処理より
 前にあることを確認する(grep ベースの行番号比較で足りる)。
