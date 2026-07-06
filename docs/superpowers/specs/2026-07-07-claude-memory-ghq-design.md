@@ -52,19 +52,28 @@ Windows だけ claude-memory セクションがスキップされてしまう。
 未作成)を作ってから `mv` する。移行(`mv`)は以下の条件を**すべて**満たす
 場合のみ実行する:
 
-1. 解決パス ≠ 旧デフォルト(`~/dev/claude-memory`)。
-2. 旧パスが実体ディレクトリで、解決パスが未存在。
-3. 旧パスが本当に claude-memory の clone であること:
-   `[ -d old/.git ]` かつ `git -C old remote get-url origin` が
-   `shishi/claude-memory`(ssh/https いずれの形式でも)にマッチする。
-4. `${DOTDIR}/claude/memory` が未存在または symlink であること。
+1. 解決経路が **ghq 由来**(`GHQ_ROOT` または gitconfig の `ghq.root`)である。
+   `CLAUDE_MEMORY_DIR` 明示指定時は旧 clone があっても**移行しない**
+   (指定先をそのまま返すだけ)。明示 override は devcontainer・CI の
+   一時パスであることが多く、自動 mv すると記憶 repo が ephemeral な
+   場所へ退避してしまうため。
+2. 解決パス ≠ 旧デフォルト(`~/dev/claude-memory`)。
+3. 旧パスが実体ディレクトリで、解決パスが未存在。
+4. 旧パスが本当に claude-memory の clone であること:
+   `[ -d old/.git ]` かつ `git -C old remote get-url origin` が以下の
+   **anchored な完全一致**(末尾 `.git` 任意)のいずれかであること。
+   緩い部分一致だと `notshishi/claude-memory` 等を誤許可するため:
+   - `git@github.com:shishi/claude-memory(.git)?`
+   - `ssh://git@github.com/shishi/claude-memory(.git)?`
+   - `https://github.com/shishi/claude-memory(.git)?`
+5. `${DOTDIR}/claude/memory` が未存在または symlink であること。
    実体ディレクトリの場合(Git Bash の `ln -s` コピー問題等)は移行しても
    symlink が張り直されず記憶の書き込み先が二重化するため、移行を中止して
    警告し、旧パスを返す(手動修復を促す)。
 
 失敗時の扱い:
 
-- 条件 3 を満たさない(repo でない・origin 不一致)→ 移行せず警告し、
+- 条件 4 を満たさない(repo でない・origin 不一致)→ 移行せず警告し、
   **旧パスを返す**(動いている状態を壊さない)。
 - `mv` 自体が失敗した、または移行後に `new/.git` が確認できない →
   警告し、旧パスがまだ存在すれば旧パスを返す。中途半端な新パスは採用しない。
@@ -78,7 +87,7 @@ Windows だけ claude-memory セクションがスキップされてしまう。
      自動で新へ寄せない(警告で手動解消を促す)。
 
 移行が成功した場合の symlink 張り直しは既存の `ln -sfn` 処理がそのまま行う
-(条件 4 により symlink であることが保証済み)。
+(条件 5 により symlink であることが保証済み)。
 
 ## clone と symlink
 
@@ -104,7 +113,7 @@ Windows だけ claude-memory セクションがスキップされてしまう。
   `CLAUDE_MEMORY_DIR="$(DOTDIR="$DOTDIR" bash "${DOTDIR}/claude/resolve-memory-dir.sh")"`
   に置き換える(`DOTDIR` は setup.sh 内の shell 変数で export されていないため、
   呼び出し時に明示的に渡す)。ヘルパー側は `DOTDIR` が空なら移行を行わない
-  (fail closed — 条件 4 が判定できない状態で mv しない)。
+  (fail closed — 条件 5 が判定できない状態で mv しない)。
   setup.sh は substitution の終了コードと出力を検証し、ヘルパーが非 0 または
   stdout が「`/` 始まりの非空 1 行」でない場合は警告を出して claude-memory
   セクション全体(clone・symlink)をスキップする(setup.sh には `set -e` が
@@ -131,6 +140,10 @@ Windows だけ claude-memory セクションがスキップされてしまう。
 6. どちらもなし → `$HOME/dev/claude-memory` にフォールバック。
 7. 旧パスに正規 clone(.git + origin 一致)あり・新パス未存在 → mv で移行され、返り値は新パス。
 8. 旧パスが claude-memory の clone でない(.git なし or origin 不一致)→ 移行されず旧パスが返る(警告)。
+   origin 不一致には near-match の negative ケースを含める:
+   `notshishi/claude-memory` と `shishi/claude-memory-fork` は許可されない。
+8b. `CLAUDE_MEMORY_DIR` 明示指定+旧パスに正規 clone あり+指定先未存在 →
+   移行されず旧パスはそのまま残り、返り値は指定先(明示 override は mv しない)。
 9. `${DOTDIR}/claude/memory` が実体ディレクトリ → 移行されず旧パスが返る(警告)。
 10. 旧・新両方存在・symlink が旧を指す → 返り値は旧パス(現用側を維持、警告)。
 11. 旧・新両方存在・symlink が新を指す → 返り値は新パス(警告)。
