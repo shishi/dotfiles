@@ -47,7 +47,10 @@ Windows だけ claude-memory セクションがスキップされてしまう。
 
 ## 既存 clone の移行
 
-移行(`mv`)は以下の条件を**すべて**満たす場合のみ実行する:
+移行はヘルパー内で行う。実行時はまず `mkdir -p "$(dirname "$resolved")"` で
+解決先の親ディレクトリ(fresh 環境では `<ghq_root>/github.com/shishi` が
+未作成)を作ってから `mv` する。移行(`mv`)は以下の条件を**すべて**満たす
+場合のみ実行する:
 
 1. 解決パス ≠ 旧デフォルト(`~/dev/claude-memory`)。
 2. 旧パスが実体ディレクトリで、解決パスが未存在。
@@ -133,8 +136,8 @@ Windows だけ claude-memory セクションがスキップされてしまう。
 11. 旧・新両方存在・symlink が新を指す → 返り値は新パス(警告)。
 12. 旧・新両方存在・symlink 判定不能 → 返り値は旧パス(自動で新へ寄せない、警告)。
 13. `DOTDIR` 未設定でヘルパーを直接呼ぶ → 移行は行われない(fail closed)。
-14. ghq root 配下の中間ディレクトリが未存在の fresh 環境 → 親が作られ clone 先として使える
-    (`mkdir -p` は setup.sh 側だが、移行パスではヘルパーの `mkdir -p` を検証)。
+14. 旧パスに正規 clone あり・新パスの親ディレクトリごと未存在 → ヘルパーが
+    親を `mkdir -p` してから mv し、実行後は `new/.git` が存在し旧パスは消えている。
 15. stdout は常にパス 1 行のみ(警告が混入しない)。
 16. `CLAUDE_MEMORY_DIR=C:/tmp/memory` かつ `cygpath` が利用可能(PATH 上の
     stub で模擬)→ `/c/tmp/memory` 形式に正規化されて返る。
