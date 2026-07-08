@@ -40,7 +40,9 @@ Windows だけ claude-memory セクションがスキップされてしまう。
    ghq 本体と同じ優先順で解決する:
    - `GHQ_ROOT` 環境変数。値の先頭 `~/` は `$HOME/` に手動展開する
      (実環境でチルダのまま格納されていることを確認済み)。
-   - なければ `git config --type=path --get-all ghq.root | head -n1`。
+   - なければ `git config --global --type=path --get-all ghq.root | head -n1`。
+     `--global` を明示することで cwd のリポジトリローカル設定を読まない
+     (実行ディレクトリ次第で意図しない root を拾う問題を防ぐ)。
      `--type=path` により git 自身がチルダ展開する。複数値時に先頭を
      採用するのは ghq の primary root の仕様に合わせた挙動。
 3. どちらもなければ従来どおり `~/dev/claude-memory`。

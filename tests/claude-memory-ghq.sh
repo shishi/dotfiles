@@ -17,6 +17,7 @@ TMP=""
 begin() {
   # mktemp の返すパスは symlink を含み得るので物理パスに正規化しておく
   TMP="$(cd "$(mktemp -d)" && pwd -P)"
+  [ -n "$TMP" ] || { echo "fatal: mktemp failed" >&2; exit 1; }
   export HOME="$TMP/home"; mkdir -p "$HOME"
   export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
   export GIT_CONFIG_SYSTEM=/dev/null
@@ -246,6 +247,23 @@ make_clone "$HOME/dev/claude-memory" "$CANON_URL"
 make_clone "$TMP/ghq/github.com/shishi/claude-memory" "$CANON_URL"   # 両方存在 → 警告
 lines="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null | wc -l | tr -d ' ')"
 [ "$lines" = "1" ] && ok "15: stdout is exactly one line" || ng "15: lines=$lines"
+end
+
+# --- 17: CLAUDE_MEMORY_DIR に改行が含まれる場合は拒否される ---
+begin
+out="$(CLAUDE_MEMORY_DIR=$'/tmp/a\nb' bash "$HELPER" 2>/dev/null)"
+status=$?
+[ "$status" -ne 0 ] && [ -z "$out" ] \
+  && ok "17: newline in CLAUDE_MEMORY_DIR is rejected" \
+  || ng "17: expected exit!=0 and empty stdout, got status=$status out=$(printf '%s' "$out" | head -c 40)"
+end
+
+# --- 18: GHQ_ROOT に末尾スラッシュがある場合は正規化される ---
+begin
+out="$(GHQ_ROOT="$TMP/ghq/" bash "$HELPER")"
+[ "$out" = "$TMP/ghq/github.com/shishi/claude-memory" ] \
+  && ok "18: trailing slash on GHQ_ROOT is normalized" \
+  || ng "18: expected $TMP/ghq/github.com/shishi/claude-memory, got $out"
 end
 
 # --- setup.sh: gitconfig symlink が claude-memory 処理より前にあること ---

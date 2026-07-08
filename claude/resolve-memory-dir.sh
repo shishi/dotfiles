@@ -25,6 +25,14 @@ canon() { (cd -P -- "$1" 2>/dev/null && pwd -P); }
 # 検証を単純に保つため)。
 absolutize() {
   local p="$1"
+  # 改行を含むパスは stdout 1 行契約を破るため即拒否
+  case "$p" in
+    *"
+"*)
+      warn "path contains a newline; refusing"
+      return 1
+      ;;
+  esac
   case "$p" in
     "~") p="$HOME" ;;
     "~/"*) p="$HOME/${p#\~/}" ;;
@@ -39,6 +47,9 @@ absolutize() {
       fi
       ;;
   esac
+  # 末尾スラッシュを除去 (例: GHQ_ROOT=~/dev/src/ → .../src//github.com/... を防ぐ)
+  # ただし bare "/" は空にしない
+  [ -n "${p%/}" ] && p="${p%/}"
   printf '%s\n' "$p"
 }
 
