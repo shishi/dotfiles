@@ -12,6 +12,7 @@
 !/claude/skills/**
 !/claude/statusline.sh
 !/claude/install-plugins.sh
+!/claude/resolve-memory-dir.sh
 /codex/*
 !/codex/AGENTS.md
 !/codex/config.toml
