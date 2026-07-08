@@ -91,6 +91,26 @@ else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
+# gitconfig は claude-memory 処理より前に張る。ヘルパーが git config の
+# ghq.root を参照するため、後だと fresh 環境の初回実行だけ旧パスに
+# clone される二段階挙動になってしまう。
+if [ $(uname) = Darwin ]; then
+  ln -sf ${DOTDIR}/.gitconfig.mac ~/.gitconfig
+  ln -sf ${DOTDIR}/Brewfile ~/Brewfile
+elif [ $(uname) = Linux ]; then
+  ln -sf ${DOTDIR}/.gitconfig.linux ~/.gitconfig
+  #    ln -sf ${DOTDIR}/terminator ${XDG_CONFIG_HOME}/terminator
+  #    ln -sf ${DOTDIR}/.xprofile ~/.xprofile
+  #    ln -sf ${DOTDIR}/.xbindkeysrc ~/.xbindkeysrc
+  #    ln -sf ${DOTDIR}/.imwheelrc ~/.imwheelrc
+  #    ln -sf ${DOTDIR}/imwheel.desktop ${XDG_CONFIG_HOME}/autostart/imwheel.desktop
+  #    ln -sf ${DOTDIR}/fonts.conf ${XDG_CONFIG_HOME}/fontconfig/fonts.conf
+  #    fc-cache -fv
+elif [[ $(uname -s) == MINGW* ]]; then
+  # uname はビルド番号付き (例: MINGW64_NT-10.0-26200) なのでパターンで判定する
+  ln -sf ${DOTDIR}/.gitconfig.win ~/.gitconfig
+fi
+
 # agent-memory (個人永続記憶, private repo) を ~/.claude/memory から参照させる。
 # Claude Code 専用 (Codex からの利用は 2026-07-12 に撤回)。
 # link は .gitignore (claude/* デフォルト無視) により追跡されない。
@@ -149,23 +169,6 @@ else
   mkdir -p ${XDG_CONFIG_HOME}/nushell
   ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
   ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
-fi
-
-if [ $(uname) = Darwin ]; then
-  ln -sf ${DOTDIR}/.gitconfig.mac ~/.gitconfig
-  ln -sf ${DOTDIR}/Brewfile ~/Brewfile
-elif [ $(uname) = Linux ]; then
-  ln -sf ${DOTDIR}/.gitconfig.linux ~/.gitconfig
-  #    ln -sf ${DOTDIR}/terminator ${XDG_CONFIG_HOME}/terminator
-  #    ln -sf ${DOTDIR}/.xprofile ~/.xprofile
-  #    ln -sf ${DOTDIR}/.xbindkeysrc ~/.xbindkeysrc
-  #    ln -sf ${DOTDIR}/.imwheelrc ~/.imwheelrc
-  #    ln -sf ${DOTDIR}/imwheel.desktop ${XDG_CONFIG_HOME}/autostart/imwheel.desktop
-  #    ln -sf ${DOTDIR}/fonts.conf ${XDG_CONFIG_HOME}/fontconfig/fonts.conf
-  #    fc-cache -fv
-elif [[ $(uname -s) == MINGW* ]]; then
-  # uname はビルド番号付き (例: MINGW64_NT-10.0-26200) なのでパターンで判定する
-  ln -sf ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
 ln -sf ${DOTDIR}/.gitignore.global ~/.gitignore
