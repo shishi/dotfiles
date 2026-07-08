@@ -130,6 +130,124 @@ out="$(PATH="$TMP/bin:$PATH" HOME="C:/Users/test" bash "$HELPER")"
   && ok "6b: fallback normalized via cygpath" || ng "6b: got $out"
 end
 
+# --- 7: 正規 clone は mv で移行される (親ディレクトリ作成込みは 14 で検証) ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+mkdir -p "$TMP/ghq/github.com/shishi"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$new" ] && [ -d "$new/.git" ] && [ ! -e "$HOME/dev/claude-memory" ] \
+  && ok "7: canonical clone migrated to ghq path" \
+  || ng "7: out=$out new-git=$([ -d "$new/.git" ] && echo y || echo n)"
+end
+
+# --- 8: clone でない/origin 不一致は移行しない (near-match も拒否) ---
+begin
+mkdir -p "$HOME/dev/claude-memory"   # .git なし
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] && [ ! -e "$TMP/ghq/github.com/shishi/claude-memory" ] \
+  && ok "8a: non-repo dir not migrated" || ng "8a: out=$out"
+end
+for bad_url in \
+  "git@github.com:notshishi/claude-memory.git" \
+  "https://github.com/shishi/claude-memory-fork"; do
+  begin
+  make_clone "$HOME/dev/claude-memory" "$bad_url"
+  out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+  [ "$out" = "$HOME/dev/claude-memory" ] && [ -d "$HOME/dev/claude-memory/.git" ] \
+    && ok "8b: near-match origin rejected ($bad_url)" \
+    || ng "8b: out=$out ($bad_url)"
+  end
+done
+
+# --- 8c: 明示 override 時は旧 clone があっても移行しない ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+out="$(CLAUDE_MEMORY_DIR="$TMP/somewhere" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$TMP/somewhere" ] && [ -d "$HOME/dev/claude-memory/.git" ] \
+  && ok "8c: explicit override never migrates" || ng "8c: out=$out"
+end
+
+# --- 9: claude/memory が実体ディレクトリなら移行しない ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+mkdir -p "$DOTDIR/claude/memory"   # symlink ではなく実体
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] && [ ! -e "$TMP/ghq/github.com/shishi/claude-memory" ] \
+  && ok "9: real claude/memory dir blocks migration" || ng "9: out=$out"
+end
+
+# --- 10-12: 旧・新両方存在時の判定 ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+make_clone "$new" "$CANON_URL"
+ln -s "$HOME/dev/claude-memory" "$DOTDIR/claude/memory"
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] \
+  && ok "10: both exist, symlink->old keeps old" || ng "10: out=$out"
+end
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+make_clone "$new" "$CANON_URL"
+ln -s "$new" "$DOTDIR/claude/memory"
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$new" ] \
+  && ok "11: both exist, symlink->new keeps new" || ng "11: out=$out"
+end
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+make_clone "$new" "$CANON_URL"
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] \
+  && ok "12: both exist, undecidable keeps old" || ng "12: out=$out"
+end
+
+# --- 13: DOTDIR 未設定なら移行しない (fail closed) ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+out="$(unset DOTDIR; GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] && [ ! -e "$TMP/ghq/github.com/shishi/claude-memory" ] \
+  && ok "13: unset DOTDIR blocks migration" || ng "13: out=$out"
+end
+
+# --- 14: 新パスの親ごと未存在でもヘルパーが mkdir -p して移行完遂 ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"   # $TMP/ghq 自体を作らない
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$new" ] && [ -d "$new/.git" ] && [ ! -e "$HOME/dev/claude-memory" ] \
+  && ok "14: helper creates parent dirs before mv" || ng "14: out=$out"
+end
+
+# --- 14b/14c: 新パスが regular file / broken symlink なら移行しない ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+mkdir -p "$(dirname "$new")"; : > "$new"   # regular file
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] && [ -f "$new" ] && [ -d "$HOME/dev/claude-memory/.git" ] \
+  && ok "14b: regular file at new path blocks migration" || ng "14b: out=$out"
+end
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+new="$TMP/ghq/github.com/shishi/claude-memory"
+mkdir -p "$(dirname "$new")"; ln -s "$TMP/nowhere" "$new"   # broken symlink
+out="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null)"
+[ "$out" = "$HOME/dev/claude-memory" ] && [ -L "$new" ] && [ -d "$HOME/dev/claude-memory/.git" ] \
+  && ok "14c: broken symlink at new path blocks migration" || ng "14c: out=$out"
+end
+
+# --- 15: 警告が出るケースでも stdout はパス 1 行のみ ---
+begin
+make_clone "$HOME/dev/claude-memory" "$CANON_URL"
+make_clone "$TMP/ghq/github.com/shishi/claude-memory" "$CANON_URL"   # 両方存在 → 警告
+lines="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null | wc -l | tr -d ' ')"
+[ "$lines" = "1" ] && ok "15: stdout is exactly one line" || ng "15: lines=$lines"
+end
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

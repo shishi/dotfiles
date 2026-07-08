@@ -75,6 +75,90 @@ if [ "$new" = "$old" ]; then
   exit 0
 fi
 
-# (移行ロジックは Task 2 で追加。現時点では新パスをそのまま返す)
-printf '%s\n' "$new"
-exit 0
+# --- 旧デフォルトからの移行判定 ---
+# 削除・上書きは一切しない。迷ったら「動いている旧パスを返す」に倒す。
+link="${DOTDIR:+${DOTDIR}/claude/memory}"
+
+# 旧パスが本物の claude-memory clone か (anchored 完全一致。緩い部分一致だと
+# notshishi/claude-memory 等の near-match を誤って mv してしまう)
+is_claude_memory_clone() {
+  local dir="$1" url
+  [ -d "$dir/.git" ] || return 1
+  url="$(git -C "$dir" remote get-url origin 2>/dev/null)" || return 1
+  case "$url" in
+    "git@github.com:shishi/claude-memory" | "git@github.com:shishi/claude-memory.git" | \
+    "ssh://git@github.com/shishi/claude-memory" | "ssh://git@github.com/shishi/claude-memory.git" | \
+    "https://github.com/shishi/claude-memory" | "https://github.com/shishi/claude-memory.git")
+      return 0 ;;
+  esac
+  return 1
+}
+
+if [ -d "$new" ]; then
+  if [ -d "$old" ] && [ ! -L "$old" ]; then
+    # 両方存在: 現に使われている側を維持する。symlink で判定できなければ
+    # 旧を維持 (新が古い clone だと未 push の記憶が orphan になるため)。
+    warn "both $old and $new exist; not touching either. resolve manually."
+    if [ -n "$link" ] && [ -L "$link" ]; then
+      cur="$(canon "$link")"
+      if [ -n "$cur" ] && [ "$cur" = "$(canon "$new")" ]; then
+        printf '%s\n' "$new"; exit 0
+      fi
+      if [ -n "$cur" ] && [ "$cur" = "$(canon "$old")" ]; then
+        printf '%s\n' "$old"; exit 0
+      fi
+    fi
+    printf '%s\n' "$old"
+    exit 0
+  fi
+  printf '%s\n' "$new"
+  exit 0
+fi
+
+# 新パス未存在・旧パスに実体なし → fresh clone 先として新パス
+if [ ! -d "$old" ] || [ -L "$old" ]; then
+  printf '%s\n' "$new"
+  exit 0
+fi
+
+# 新パスが「ディレクトリ以外の何か」(regular file / broken symlink) の場合は
+# mv の挙動が未定義に壊れる (上書き・symlink 先への移動等) ため移行しない
+if [ -e "$new" ] || [ -L "$new" ]; then
+  warn "$new exists but is not a usable directory; skip migration. fix manually."
+  printf '%s\n' "$old"
+  exit 0
+fi
+
+# 旧パスあり・新パス未存在: 安全条件をすべて満たす場合のみ mv 移行
+if [ -z "${DOTDIR:-}" ]; then
+  warn "DOTDIR not set; cannot verify claude/memory symlink. skip migration."
+  printf '%s\n' "$old"
+  exit 0
+fi
+if [ -e "$link" ] && [ ! -L "$link" ]; then
+  warn "$link is a real directory (not a symlink); skip migration. fix manually."
+  printf '%s\n' "$old"
+  exit 0
+fi
+if ! is_claude_memory_clone "$old"; then
+  warn "$old is not a clone of $REPO_PATH; skip migration."
+  printf '%s\n' "$old"
+  exit 0
+fi
+if ! mkdir -p "$(dirname "$new")"; then
+  warn "cannot create $(dirname "$new"); skip migration."
+  printf '%s\n' "$old"
+  exit 0
+fi
+if mv "$old" "$new" 2>/dev/null && [ -d "$new/.git" ]; then
+  warn "migrated $old -> $new"
+  printf '%s\n' "$new"
+  exit 0
+fi
+warn "migration $old -> $new failed"
+if [ -d "$old" ]; then
+  printf '%s\n' "$old"
+  exit 0
+fi
+# 旧も新も使える状態でない → パス決定不能
+exit 1
