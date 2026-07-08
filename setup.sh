@@ -111,33 +111,42 @@ elif [[ $(uname -s) == MINGW* ]]; then
   ln -sf ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
-# agent-memory (個人永続記憶, private repo) を ~/.claude/memory から参照させる。
-# Claude Code 専用 (Codex からの利用は 2026-07-12 に撤回)。
-# link は .gitignore (claude/* デフォルト無視) により追跡されない。
-# 既存マシンの旧配置 (claude-memory) からの移行は spec の手順で手動実施する:
-#   docs/superpowers/specs/2026-07-11-agent-memory-design.md
-AGENT_MEMORY_DIR="${AGENT_MEMORY_DIR:-$HOME/dev/src/github.com/shishi/agent-memory}"
-if [ ! -d "${AGENT_MEMORY_DIR}" ]; then
-  # private repo なので認証必須。ssh 鍵 → gh の順に試し、両方だめなら
-  # メッセージだけ出して続行する (setup.sh 全体を止めない)。
-  mkdir -p "$(dirname "${AGENT_MEMORY_DIR}")"
-  git clone git@github.com:shishi/agent-memory.git "${AGENT_MEMORY_DIR}" 2>/dev/null \
-    || gh repo clone shishi/agent-memory "${AGENT_MEMORY_DIR}" 2>/dev/null \
-    || echo "setup.sh: could not clone agent-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/agent-memory.git ${AGENT_MEMORY_DIR}"
-fi
-link_memory() { # $1=link path
-  # ln -sfn は先が実ディレクトリだと「中へのリンク作成」になる罠があるため、
-  # 実体ディレクトリが居る場合は上書きせず報告して手動確認に回す。
-  if [ -e "$1" ] && [ ! -L "$1" ]; then
-    echo "setup.sh: $1 exists as a real directory; skip (inspect contents and migrate manually)"
-  else
-    ln -sfn "${AGENT_MEMORY_DIR}" "$1"
-  fi
-}
-if [ -d "${AGENT_MEMORY_DIR}" ]; then
-  link_memory "${DOTDIR}/claude/memory"
+# claude-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
+# 配置先は claude/resolve-memory-dir.sh が解決する (ghq.root 対応・旧パスからの
+# 安全な自動移行込み)。symlink は dotfiles の .gitignore により追跡されない。
+CLAUDE_MEMORY_DIR="$(DOTDIR="$DOTDIR" bash "${DOTDIR}/claude/resolve-memory-dir.sh")"
+resolve_status=$?
+# setup.sh には set -e がないため、ヘルパーの失敗や壊れた出力 (空・複数行・
+# 相対パス) をここで検証しないと後続の clone/symlink が変な場所に走る。
+case "$CLAUDE_MEMORY_DIR" in
+  "") resolve_status=1 ;;
+  *"
+"*) resolve_status=1 ;;
+  /*) ;;
+  *) resolve_status=1 ;;
+esac
+if [ "$resolve_status" -ne 0 ]; then
+  echo "setup.sh: could not resolve claude-memory location; skip memory setup"
 else
-  echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory links"
+  if [ ! -d "${CLAUDE_MEMORY_DIR}" ]; then
+    # ghq root 配下の中間ディレクトリ (github.com/shishi) は fresh 環境に
+    # 存在せず、git clone は親を作らない。
+    mkdir -p "$(dirname "${CLAUDE_MEMORY_DIR}")"
+    # private repo なので認証必須。ssh 鍵 → gh の順に試し、両方だめなら
+    # メッセージだけ出して続行する (setup.sh 全体を止めない)。
+    git clone git@github.com:shishi/claude-memory.git "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
+      || gh repo clone shishi/claude-memory "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
+      || echo "setup.sh: could not clone claude-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/claude-memory.git ${CLAUDE_MEMORY_DIR}"
+  fi
+  if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
+    if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
+      ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory"
+    else
+      echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
+    fi
+  else
+    echo "setup.sh: ${CLAUDE_MEMORY_DIR} not available; skip memory symlink"
+  fi
 fi
 
 if [ -L ~/.codex ]; then

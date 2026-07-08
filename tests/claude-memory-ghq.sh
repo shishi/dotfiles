@@ -248,6 +248,15 @@ lines="$(GHQ_ROOT="$TMP/ghq" bash "$HELPER" 2>/dev/null | wc -l | tr -d ' ')"
 [ "$lines" = "1" ] && ok "15: stdout is exactly one line" || ng "15: lines=$lines"
 end
 
+# --- setup.sh: gitconfig symlink が claude-memory 処理より前にあること ---
+gitconfig_line="$(grep -n '\.gitconfig\.mac' "$SETUP" | head -n1 | cut -d: -f1)"
+memory_line="$(grep -n 'resolve-memory-dir\.sh' "$SETUP" | head -n1 | cut -d: -f1)"
+if [ -n "$gitconfig_line" ] && [ -n "$memory_line" ] && [ "$gitconfig_line" -lt "$memory_line" ]; then
+  ok "setup.sh links gitconfig before resolving claude-memory"
+else
+  ng "setup.sh: gitconfig at line ${gitconfig_line:-none}, memory resolve at line ${memory_line:-none}"
+fi
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
