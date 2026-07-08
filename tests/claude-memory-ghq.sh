@@ -266,6 +266,14 @@ out="$(GHQ_ROOT="$TMP/ghq/" bash "$HELPER")"
   || ng "18: expected $TMP/ghq/github.com/shishi/claude-memory, got $out"
 end
 
+# --- 19: 展開結果に改行が混入するケースも拒否される (HOME 由来) ---
+begin
+out="$(HOME=$'/tmp/h\n' CLAUDE_MEMORY_DIR='~' bash "$HELPER" 2>/dev/null)"
+status=$?
+[ "$status" -ne 0 ] && [ -z "$out" ] \
+  && ok "19: newline from expansion rejected" || ng "19: status=$status out=$out"
+end
+
 # --- setup.sh: gitconfig symlink が claude-memory 処理より前にあること ---
 gitconfig_line="$(grep -n '\.gitconfig\.mac' "$SETUP" | head -n1 | cut -d: -f1)"
 memory_line="$(grep -n 'resolve-memory-dir\.sh' "$SETUP" | head -n1 | cut -d: -f1)"
