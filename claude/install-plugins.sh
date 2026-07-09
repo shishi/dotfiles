@@ -34,6 +34,7 @@ declare -A MARKETPLACE_REPO=(
   [claude-plugins-official]="anthropics/claude-plugins-official"
   [openai-codex]="openai/codex-plugin-cc"
   [karpathy-skills]="forrestchang/andrej-karpathy-skills"
+  [claude-code-herdr-plugin]="yigitkonur/claude-code-herdr-plugin"
 )
 
 command -v claude >/dev/null 2>&1 || { echo "install-plugins: claude CLI not found; skip"; exit 0; }

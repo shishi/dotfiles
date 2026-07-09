@@ -173,7 +173,7 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus",
+  "model": "fable",
   "enableAllProjectMcpServers": true,
   "hooks": {
     "PreToolUse": [
@@ -229,6 +229,16 @@
             "statusMessage": "個人記憶を注入中..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/shigenobu.407/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -249,7 +259,9 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": true,
+    "andrej-karpathy-skills@karpathy-skills": false,
+    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
+    "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "codex@openai-codex": true,
     "double-shot-latte@superpowers-marketplace": true,
@@ -264,8 +276,7 @@
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": true,
     "superpowers@superpowers-marketplace": true,
-    "typescript-lsp@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "andrej-karpathy-skills": {
@@ -274,10 +285,22 @@
         "repo": "forrestchang/andrej-karpathy-skills"
       }
     },
+    "claude-code-herdr-plugin": {
+      "source": {
+        "source": "github",
+        "repo": "yigitkonur/claude-code-herdr-plugin"
+      }
+    },
     "claude-plugins-official": {
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "karpathy-skills": {
+      "source": {
+        "source": "github",
+        "repo": "forrestchang/andrej-karpathy-skills"
       }
     },
     "openai-codex": {
@@ -290,12 +313,6 @@
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
-      }
-    },
-    "karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
       }
     }
   },
