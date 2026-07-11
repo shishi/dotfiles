@@ -91,24 +91,33 @@ else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
-# claude-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
-# symlink は dotfiles の .gitignore (claude/* デフォルト無視) により追跡されない。
-CLAUDE_MEMORY_DIR="${CLAUDE_MEMORY_DIR:-$HOME/dev/claude-memory}"
-if [ ! -d "${CLAUDE_MEMORY_DIR}" ]; then
+# agent-memory (個人永続記憶, private repo) を ~/.claude/memory と ~/.codex/memory の
+# 両方から参照させる。link は .gitignore (claude/* / codex/* デフォルト無視) により追跡されない。
+# 既存マシンの旧配置 (claude-memory) からの移行は spec の手順で手動実施する:
+#   docs/superpowers/specs/2026-07-11-agent-memory-design.md
+AGENT_MEMORY_DIR="${AGENT_MEMORY_DIR:-$HOME/dev/src/github.com/shishi/agent-memory}"
+if [ ! -d "${AGENT_MEMORY_DIR}" ]; then
   # private repo なので認証必須。ssh 鍵 → gh の順に試し、両方だめなら
   # メッセージだけ出して続行する (setup.sh 全体を止めない)。
-  git clone git@github.com:shishi/claude-memory.git "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
-    || gh repo clone shishi/claude-memory "${CLAUDE_MEMORY_DIR}" 2>/dev/null \
-    || echo "setup.sh: could not clone claude-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/claude-memory.git ${CLAUDE_MEMORY_DIR}"
+  mkdir -p "$(dirname "${AGENT_MEMORY_DIR}")"
+  git clone git@github.com:shishi/agent-memory.git "${AGENT_MEMORY_DIR}" 2>/dev/null \
+    || gh repo clone shishi/agent-memory "${AGENT_MEMORY_DIR}" 2>/dev/null \
+    || echo "setup.sh: could not clone agent-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/agent-memory.git ${AGENT_MEMORY_DIR}"
 fi
-if [ -d "${CLAUDE_MEMORY_DIR}" ]; then
-  if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
-    ln -sfn "${CLAUDE_MEMORY_DIR}" "${DOTDIR}/claude/memory"
+link_memory() { # $1=link path
+  # ln -sfn は先が実ディレクトリだと「中へのリンク作成」になる罠があるため、
+  # 実体ディレクトリが居る場合は上書きせず報告して手動確認に回す。
+  if [ -e "$1" ] && [ ! -L "$1" ]; then
+    echo "setup.sh: $1 exists as a real directory; skip (inspect contents and migrate manually)"
   else
-    echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
+    ln -sfn "${AGENT_MEMORY_DIR}" "$1"
   fi
+}
+if [ -d "${AGENT_MEMORY_DIR}" ]; then
+  link_memory "${DOTDIR}/claude/memory"
+  link_memory "${DOTDIR}/codex/memory"
 else
-  echo "setup.sh: ${CLAUDE_MEMORY_DIR} not available; skip memory symlink"
+  echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory links"
 fi
 
 if [ -L ~/.codex ]; then
