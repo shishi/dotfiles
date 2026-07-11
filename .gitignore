@@ -17,3 +17,6 @@
 !/codex/config.toml
 !/codex/skills/
 !/codex/skills/**
+!/codex/hooks/
+!/codex/hooks/**
+!/codex/hooks.json

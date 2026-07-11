@@ -1,0 +1,70 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/git-push-guard.sh",
+            "timeout": 10,
+            "statusMessage": "git push ガード確認中..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh recover",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/inject-memory.sh ~/.codex/memory",
+            "timeout": 10,
+            "statusMessage": "個人記憶を注入中..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/userpromptsubmit-compact-reminder.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
