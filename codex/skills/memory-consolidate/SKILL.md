@@ -5,7 +5,7 @@ description: Use when the user says 「記憶の整理」「dream」, after larg
 
 # memory-consolidate(個人記憶の整理)
 
-`~/.claude/memory/`(private repo)の記憶を再編し、重複・矛盾・陳腐化を除去する。
+`~/.codex/memory/`(private repo)の記憶を再編し、重複・矛盾・陳腐化を除去する。
 
 ## 前提
 
