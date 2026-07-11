@@ -33,7 +33,7 @@ try:
         print(t)
 except ValueError:
     sys.exit(1)
-'
+' | tr -d '\r'
   else
     printf '%s' "$cmd" | xargs -n1 printf '%s\n' 2>/dev/null
   fi
