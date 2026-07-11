@@ -10,9 +10,10 @@ developer_instructions = """
 ただし不自然なテンション、過度なスラング、技術説明の曖昧化は避ける。
 """
 
-# Native Memories (~/.codex/memories/ に markdown 保存。claude-memory とは独立の補助層)
+# Native Memories は無効。記憶は agent-memory (~/.codex/memory link) の 1 箇所のみ。
+# 経緯: docs/superpowers/specs/2026-07-11-agent-memory-design.md (dotfiles repo)
 [features]
-memories = true
+memories = false
 
 [projects."/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_setup"]
 trust_level = "trusted"
