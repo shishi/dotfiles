@@ -91,8 +91,9 @@ else
   ln -sf ${DOTDIR}/claude ~/.claude
 fi
 
-# agent-memory (個人永続記憶, private repo) を ~/.claude/memory と ~/.codex/memory の
-# 両方から参照させる。link は .gitignore (claude/* / codex/* デフォルト無視) により追跡されない。
+# agent-memory (個人永続記憶, private repo) を ~/.claude/memory から参照させる。
+# Claude Code 専用 (Codex からの利用は 2026-07-12 に撤回)。
+# link は .gitignore (claude/* デフォルト無視) により追跡されない。
 # 既存マシンの旧配置 (claude-memory) からの移行は spec の手順で手動実施する:
 #   docs/superpowers/specs/2026-07-11-agent-memory-design.md
 AGENT_MEMORY_DIR="${AGENT_MEMORY_DIR:-$HOME/dev/src/github.com/shishi/agent-memory}"
@@ -115,7 +116,6 @@ link_memory() { # $1=link path
 }
 if [ -d "${AGENT_MEMORY_DIR}" ]; then
   link_memory "${DOTDIR}/claude/memory"
-  link_memory "${DOTDIR}/codex/memory"
 else
   echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory links"
 fi

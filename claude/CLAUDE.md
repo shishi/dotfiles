@@ -17,7 +17,7 @@ The iterate-until-clean gate is mandatory whichever reviewer is used. Skip it on
 
 # 個人永続記憶 (personal memory)
 
-記憶は `~/.claude/memory/`(private repo **agent-memory** への link。正本は `~/dev/src/github.com/shishi/agent-memory`)に置く。Claude と Codex が対等に読み書きする共有記憶。ビルトイン auto memory は settings.json の `autoMemoryEnabled: false` で無効化済み(使わない、ではなく使えない)。
+記憶は `~/.claude/memory/`(private repo **agent-memory** への link。正本は `~/dev/src/github.com/shishi/agent-memory`)に置く。Claude Code 専用(Codex からの利用は 2026-07-12 に撤回。複数マシン・複数セッション間の共有は継続)。ビルトイン auto memory は settings.json の `autoMemoryEnabled: false` で無効化済み(使わない、ではなく使えない)。
 
 セッション開始時に索引と現プロジェクト記憶が `<personal-memory>` ブロックとして自動注入される。詳細が要るときだけ該当ファイルを Read で開く。ブロックが無いセッションでは「注入が効いていない」旨をユーザーへ報告し、記憶が要る作業の前に `~/.claude/memory/MEMORY.md` を直接 Read する。
 

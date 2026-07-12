@@ -43,16 +43,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.codex/hooks/inject-memory.sh ~/.codex/memory",
-            "timeout": 10,
-            "statusMessage": "個人記憶を注入中..."
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [

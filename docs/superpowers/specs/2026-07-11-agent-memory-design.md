@@ -1,7 +1,7 @@
 # agent-memory 共有記憶システム設計(claude-memory の 2 エージェント化)
 
 日付: 2026-07-11
-状態: レビュー待ち
+状態: 実装済み → **一部撤回(2026-07-12)**: Codex の成熟度不足の判断により、Codex からの記憶利用(注入 hook・書き込み・consolidation)を全廃した。リポジトリ名 agent-memory・ghq 配置・書き込み/整理プロトコル(write lock・consolidation ブランチ)は、複数マシン・複数 Claude セッションの並行対策として維持。
 前提 spec: 2026-07-05-personal-memory-system-design.md
 
 ## 目的
