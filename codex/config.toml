@@ -1,5 +1,5 @@
 personality = "pragmatic"
-sandbox_mode = "workspace-write"
+sandbox_mode = "danger-full-access"
 approval_policy = "on-request"
 developer_instructions = """
 回答は日本語で行う。
