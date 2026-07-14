@@ -14,10 +14,15 @@
 - push guard は実行形態・refspec の変形(`/usr/bin/git`・`git.exe`・`$(...)` 内の git など)を取りこぼし、逆に git に言及しただけのテキストへ誤爆しうる。
 - Codex の compact 系 hook が Claude の state ディレクトリ(`$HOME/.claude/compact-state`)を読むため、両ツールを併用すると状態が混線する。
 
-## 事実(実測・2026-07-12)
+## 事実(実測・2026-07-12/15)
 
 - codex-cli **0.142.5** の hooks.json は per-handler の **`commandWindows`** フィールドをサポートし、Windows では `command` より優先される(隔離 CODEX_HOME + marker ファイルで検証済み)。`commandWindows` の無い handler は従来どおり `command` を使う。
 - これが検証済みの最低バージョン。**それ未満の codex では `commandWindows` が無視され壊れた `command` に落ちる**可能性があるため、0.142.5 を最低要件とする。
+- この Windows マシンは **Developer Mode 有効**(AllowDevelopmentWithoutDevLicense=0x1)で、git-bash の `MSYS=winsymlinks:nativestrict ln -s` が **native symlink(SYMLINKD)を作成できる**(実測済み)。これにより link 操作を全 OS で `ln -sfn` に統一できる。
+
+## 方針: Windows 専用要素の最小化
+
+hook 本体・テスト・セットアップ・移行手順はすべて全 OS 共通の bash / `ln -sfn` で書く。Windows 専用ファイルは **`run-hook.ps1` の 1 個だけ**に限定する(ブートストラップ問題: Windows の codex が hook 起動時に最初に実行できる native な何かが必要で、それが Git Bash を発見する。bash を見つける前に bash は使えない)。
 
 ## 設計
 
@@ -87,7 +92,28 @@ hook スクリプト自体は既に `COMPACT_STATE_DIR` 環境変数を尊重す
 
 **設計判断(ユーザー決定 2026-07-12)**: `~/.claude` = dotfiles/claude と同じく、`~/.codex` 全体を dotfiles/codex への link にする。auth.json・sessions 等の live 状態が public repo の**作業ツリー内**(git 追跡外)に置かれるリスク(`git clean -fdx` での消失・バックアップ混入・強制 add 事故)は、claude 側と同一の受容済みリスクとして引き受け、`.gitignore` の whitelist を監査して「意図したファイルだけが追跡される」ことをテストで保証する。
 
-**whitelist は再帰 glob をやめ個別列挙にする**: 現行の `!/codex/skills/**`・`!/codex/hooks/**` は、link 化後に codex や skill installer が同ディレクトリへ生成した新ファイルを「通常の `git add .`」で追跡候補にしてしまう(force-add 不要で混入する = 受容済みリスクより広い)。承認済みファイルを個別に unignore する形へ改める(hooks: 各 .sh・.test.sh・run-hook.ps1・hooks-json.test.ps1 / skills: 既知 skill ディレクトリごと)。
+**whitelist は再帰 glob をやめディレクトリ粒度の列挙にする**: 現行の `!/codex/skills/**` は、link 化後に codex や skill installer が生成した**新しい skill ディレクトリ**を「通常の `git add .`」で追跡候補にしてしまう(force-add 不要で混入する = 受容済みリスクより広い)。粒度は次のとおり(ファイル単位の全列挙はメンテ不能なのでしない):
+
+- skills: **既知 skill ディレクトリごと**に unignore。既存 skill 内へのファイル追加は自動追跡(意図的な編集)、新 top-level ディレクトリの追加だけが .gitignore 編集を要する(= 新 skill 作成という意図的イベント時のみ、年数回)
+- hooks: 拡張子パターン — codex が hooks/ にファイルを生成することは想定されず、漏れは監査テストが検出する
+- **規則の構造は「親を再包含 → 子を全 ignore → 承認子だけ再包含」のサンドイッチにする**(親の `!` だけでは配下全部が追跡候補になる — gitignore は「ignore された親の中」は探索しないため、親を開けたら子を明示的に閉じ直す必要がある):
+
+```gitignore
+!/codex/skills/
+/codex/skills/*
+!/codex/skills/adr/
+!/codex/skills/adr/**
+# (skill ごとに 2 行ずつ追加)
+
+!/codex/hooks/
+/codex/hooks/*
+!/codex/hooks/*.sh
+!/codex/hooks/*.ps1
+```
+
+この構造自体をテストで固定する: `git check-ignore` で「未知の skill ディレクトリ配下のファイル(例: `codex/skills/unknown-dir/x`)が ignored」かつ「承認 skill 内の新ファイルが not ignored」を検証する。
+
+なお whitelist への追加忘れの失敗モードは、パス指定 `git add` の明示エラー(ignored 警告)と監査テストの failure で顕在化する(この運用では `git add .` を使わない)。
 
 **監査テストは 3 層**で、移行時だけでなく tests/ に常設する:
 
@@ -95,25 +121,24 @@ hook スクリプト自体は既に `COMPACT_STATE_DIR` 環境変数を尊重す
 2. 代表的な機微パス(auth.json・sessions/・sqlite・plugins cache)が `git check-ignore` で ignored
 3. `git ls-files --others --exclude-standard -- codex` が空(= 追跡候補になる untracked ゼロ。`git status --porcelain` は tracked な config.toml の live 変更で常時失敗するため使わない)
 
-**全プラットフォームで同じ最終形にする**: `~/.codex` → `<dotfiles>/codex` の link + 個別列挙 whitelist + 常設監査テスト。プラットフォーム別の到達方法:
+**全プラットフォームで同じ最終形・同じ操作にする**: `~/.codex` → `<dotfiles>/codex` の symlink + ディレクトリ粒度 whitelist + 常設監査テスト。**link 操作は全 OS で `ln -sfn` に統一**(Windows は Developer Mode + `MSYS=winsymlinks:nativestrict` による native symlink — 実測済み。setup.sh が Windows 検出時にこの環境変数を設定する。`mklink` は使わない)。既存の junction(~/.claude/memory 等)は symlink と機能等価なので張り替え不要。プラットフォーム別の到達方法:
 
-- **Windows(このマシン)**: 下記の junction 移行手順
-- **WSL / Linux(実ディレクトリ持ち)**: 同じ手順の `ln -sfn` 版(preflight → backup → tracked 衝突解決 → live 状態 move → symlink → 検証)。WSL の `~/.codex` 操作は wsl.exe 経由で行う
+- **Windows(このマシン)/ WSL / Linux(実ディレクトリ持ち)**: 下記の共通移行手順(全 OS 同一コマンド)。WSL の `~/.codex` 操作は wsl.exe 経由で行う
 - **macOS(既に symlink 運用)**: dotfiles pull + 監査テスト実行のみ(移行不要。config.toml に他マシン状態が混ざる既知問題は tracked のまま運用の受容範囲)
-- **新規マシン**: setup.sh の既存分岐(`~/.codex` 不在なら symlink 作成)がそのまま最終形を作る。実ディレクトリを検出した場合のメッセージに本 spec の移行手順への参照を足す
+- **新規マシン**: setup.sh の既存分岐(`~/.codex` 不在なら symlink 作成)がそのまま最終形を作る。実ディレクトリを検出した場合のメッセージに本 spec の移行手順への参照を足す。Windows 新規マシンは Developer Mode 有効化が前提(無効なら setup.sh が警告してスキップ)
 
-移行手順(Windows):
+移行手順(全 OS 共通。Windows は git-bash 上で実行):
 
 1. **preflight**: codex のプロセス(CLI・デスクトップアプリ・app-server)が動いていないこと。dotfiles/codex 側と `~/.codex` 側の名前衝突を列挙し、tracked ファイル(AGENTS.md・config.toml・hooks/・hooks.json・skills/)以外に衝突が無いこと
 2. **backup**: `~/.codex` を `~/.codex.bak-<date>` へコピー(rollback 用。検証完了後にユーザー承認で削除)
 3. tracked ファイルの衝突解決: config.toml は live 版の内容を dotfiles/codex/config.toml(tracked)へ移す(tracked のまま運用 — ユーザー決定。機械状態の commit はユーザーが取捨)。hooks/・hooks.json・AGENTS.md・skills は本設計実装後は tracked 版が正
 4. live 状態(auth.json・sessions・sqlite・plugins cache・その他全部)を dotfiles/codex/ 配下へ move
-5. `~/.codex` を除去し `cmd /c mklink /J` で junction 作成
+5. `~/.codex` を除去し `ln -sfn <dotfiles>/codex ~/.codex` で symlink 作成(Windows は `MSYS=winsymlinks:nativestrict` 下で実行)
 6. **検証**: 上記 3 層監査テスト・codex 起動・hook trust 再承認・全 hook 発火・`codex plugin list` が移行前と一致・**skills ディレクトリの inventory 比較**(移行前後で一致)・rollback 手順の文書化
 
-### 7. hooks-json.test.ps1(設計が正、既存ドラフトを置き換え)
+### 7. hooks.json 検証テスト(bash 版、既存 ps1 ドラフトを置き換え)
 
-既存ドラフトの「scoop パス直書き・`-lc` 必須」assertion は本設計(ランチャー・machine 固有パス禁止・login shell 廃止)と矛盾するため置き換える。新 assertion:
+既存ドラフト `hooks-json.test.ps1` は「scoop パス直書き・`-lc` 必須」assertion が本設計(ランチャー・machine 固有パス禁止・login shell 廃止)と矛盾し、かつ PowerShell 依存で他 OS で走らない。**bash + jq の `hooks-json.test.sh`** に置き換え、全 OS で同一テストを実行する(ps1 ドラフトは削除)。assertion:
 
 - 全 handler に非空の `commandWindows` があり、tracked launcher(`run-hook.ps1`)を参照する
 - 対応する tracked hook スクリプトを参照する
@@ -121,11 +146,13 @@ hook スクリプト自体は既に `COMPACT_STATE_DIR` 環境変数を尊重す
 - portable な POSIX `command` が維持されている
 - `bash.exe` を直接呼ばない
 
+launcher の挙動テスト(discovery・契約・failure-mode)も bash テストとして書き、git-bash から pwsh を呼んで検証する(Windows 以外では skip。inject-memory.test.sh の壊れ symlink テストと同じ skip パターン)。**テストはすべて bash — PowerShell で書くのは launcher 本体 1 ファイルのみ**。
+
 ## 検証(受け入れ条件)
 
 テストは実装前に失敗することを確認し、以下を網羅する:
 
-- 全 Codex handler にポータブルな Windows override がある(新 hooks-json.test.ps1)
+- 全 Codex handler にポータブルな Windows override がある(新 hooks-json.test.sh、全 OS で実行)
 - launcher discovery: 各発見段階、**PATH 先頭に偽の WSL launcher(System32 相当)を置いても Git Bash を選ぶ**、Git Bash ゼロ時の handler 種別ごとの fail 挙動
 - launcher 契約: スペース・アポストロフィ・Unicode・空引数を含むパス/引数、stdin 転送、stdout/stderr 分離、exit code 伝播
 - push-guard: named bypass corpus(§4 の全項目)を両コピーでパス
