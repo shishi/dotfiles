@@ -1,6 +1,30 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "alwaysThinkingEnabled": true,
+  "autoCompactEnabled": false,
   "autoMemoryEnabled": false,
+  "autoUpdates": false,
+  "enableAllProjectMcpServers": true,
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": false,
+    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
+    "claude-code-setup@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "codex@openai-codex": true,
+    "double-shot-latte@superpowers-marketplace": true,
+    "elements-of-style@superpowers-marketplace": true,
+    "episodic-memory@superpowers-marketplace": false,
+    "feature-dev@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true,
+    "superpowers-chrome@superpowers-marketplace": true,
+    "superpowers-developing-for-claude-code@superpowers-marketplace": true,
+    "superpowers-lab@superpowers-marketplace": true,
+    "superpowers@superpowers-marketplace": true,
+    "typescript-lsp@claude-plugins-official": true
+  },
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -22,7 +46,129 @@
     "MAX_MCP_OUTPUT_TOKENS": "50000",
     "MCP_TOOL_TIMEOUT": "120000"
   },
+  "extraKnownMarketplaces": {
+    "andrej-karpathy-skills": {
+      "source": {
+        "repo": "forrestchang/andrej-karpathy-skills",
+        "source": "github"
+      }
+    },
+    "claude-code-herdr-plugin": {
+      "source": {
+        "repo": "yigitkonur/claude-code-herdr-plugin",
+        "source": "github"
+      }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "repo": "anthropics/claude-plugins-official",
+        "source": "github"
+      }
+    },
+    "karpathy-skills": {
+      "source": {
+        "repo": "forrestchang/andrej-karpathy-skills",
+        "source": "github"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    },
+    "superpowers-marketplace": {
+      "source": {
+        "repo": "obra/superpowers-marketplace",
+        "source": "github"
+      }
+    }
+  },
+  "feedbackSurveyState": {
+    "lastShownTime": 1754089004345
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/git-push-guard.sh",
+            "statusMessage": "git push ガード確認中...",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh recover",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "compact"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh cleanup",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "clear"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh cleanup",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/inject-memory.sh",
+            "statusMessage": "個人記憶を注入中...",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/Users/shigenobu.407/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
   "includeCoAuthoredBy": false,
+  "language": "日本語。回答は明るくギャルのような口調でフレンドリーに。口調と衝突するなら正確性を優先。常に事実に基いた情報しか出さない。事実か判断がついてないときは明言し、ユーザーに問いあわせる。ユーザーのことはshishiと呼ぶ。",
+  "model": "fable",
+  "outputStyle": "Explanatory",
   "permissions": {
     "allow": [
       "Bash(serena)",
@@ -141,6 +287,7 @@
       "Bash(git push --set-upstream origin develop/*)",
       "Bash(git -C ~/.claude/memory:*)"
     ],
+    "defaultMode": "auto",
     "deny": [
       "Bash(rm -rf /*)",
       "Bash(rm -rf /)",
@@ -170,160 +317,17 @@
       "Bash(git push -f:*)",
       "Bash(git push --delete:*)",
       "Bash(git push origin --delete:*)"
-    ],
-    "defaultMode": "auto"
-  },
-  "model": "fable",
-  "enableAllProjectMcpServers": true,
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/git-push-guard.sh",
-            "timeout": 10,
-            "statusMessage": "git push ガード確認中..."
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh recover",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh cleanup",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/session-start-compaction-recovery.sh cleanup",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/inject-memory.sh",
-            "timeout": 10,
-            "statusMessage": "個人記憶を注入中..."
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/Users/shigenobu.407/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "bash ~/.claude/statusline.sh",
-    "padding": 0
-  },
-  "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": false,
-    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
-    "claude-code-setup@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "codex@openai-codex": true,
-    "double-shot-latte@superpowers-marketplace": true,
-    "elements-of-style@superpowers-marketplace": true,
-    "episodic-memory@superpowers-marketplace": false,
-    "feature-dev@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "pyright-lsp@claude-plugins-official": true,
-    "ruby-lsp@claude-plugins-official": true,
-    "superpowers-chrome@superpowers-marketplace": true,
-    "superpowers-developing-for-claude-code@superpowers-marketplace": true,
-    "superpowers-lab@superpowers-marketplace": true,
-    "superpowers@superpowers-marketplace": true,
-    "typescript-lsp@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "andrej-karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
-      }
-    },
-    "claude-code-herdr-plugin": {
-      "source": {
-        "source": "github",
-        "repo": "yigitkonur/claude-code-herdr-plugin"
-      }
-    },
-    "claude-plugins-official": {
-      "source": {
-        "source": "github",
-        "repo": "anthropics/claude-plugins-official"
-      }
-    },
-    "karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
-      }
-    },
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    },
-    "superpowers-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "obra/superpowers-marketplace"
-      }
-    }
-  },
-  "outputStyle": "Explanatory",
-  "language": "日本語。回答は明るくギャルのような口調でフレンドリーに。口調と衝突するなら正確性を優先。常に事実に基いた情報しか出さない。事実か判断がついてないときは明言し、ユーザーに問いあわせる。ユーザーのことはshishiと呼ぶ。",
+  "preferredNotifChannel": "terminal_bell",
   "sandbox": {
     "excludedCommands": [
       "git",
       "gh"
     ]
   },
+  "skipAutoPermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
   "spinnerVerbs": {
     "mode": "replace",
     "verbs": [
@@ -349,14 +353,10 @@
       "はにゃ？…あ、わかった"
     ]
   },
-  "alwaysThinkingEnabled": true,
-  "skipWorkflowUsageWarning": true,
-  "theme": "dark",
-  "preferredNotifChannel": "terminal_bell",
-  "autoCompactEnabled": false,
-  "skipAutoPermissionPrompt": true,
-  "autoUpdates": false,
-  "feedbackSurveyState": {
-    "lastShownTime": 1754089004345
-  }
+  "statusLine": {
+    "command": "bash ~/.claude/statusline.sh",
+    "padding": 0,
+    "type": "command"
+  },
+  "theme": "dark"
 }
