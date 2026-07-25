@@ -377,8 +377,15 @@ end)
 
 later(function()
   add({
+    source = 'delphinus/luamigemo',
+  })
+end)
+
+later(function()
+  add({
     source = 'atusy/jab.nvim',
     depends = {
+      'delphinus/luamigemo',
       'lambdalisue/kensaku.vim',
     },
   })
