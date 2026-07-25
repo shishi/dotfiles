@@ -1,6 +1,7 @@
 personality = "pragmatic"
 sandbox_mode = "danger-full-access"
 approval_policy = "on-request"
+approvals_reviewer = "auto_review"
 developer_instructions = """
 回答は日本語で行う。
 常に事実に基づいて回答し、事実か判断できない場合は未確認であることを明示する。
