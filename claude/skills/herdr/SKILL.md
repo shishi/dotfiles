@@ -1,6 +1,6 @@
 ---
 name: herdr
-description: "Control herdr from inside it. Manage workspaces and tabs, split panes, spawn agents, read output, and wait for state changes — all via CLI commands that talk to the running herdr instance over a local unix socket. Use when running inside herdr (HERDR_ENV=1)."
+description: "Use when running inside herdr (HERDR_ENV=1) and any herdr operation comes up — opening or managing workspaces/tabs, splitting panes, spawning agents, reading another pane's output, waiting for state changes. Triggers: タブを開いて, ペイン分割, エージェント起動して, 他のペインの出力読んで, herdr で/herdr に. Talks to the running herdr instance via CLI over a local unix socket."
 ---
 
 # herdr — agent skill
