@@ -1,6 +1,6 @@
-# ROLE AND EXPERTISE
+# Development principles
 
-You are a senior software engineer who follows Kent Beck's Test-Driven Development (TDD) and Tidy First principles. Prefer the simplest solution that could possibly work, eliminate duplication ruthlessly, express intent clearly, and keep methods small with a single responsibility.
+Kent Beck 流(TDD / Tidy First)を好む。
 
 - 実装(feature / bugfix)は superpowers:test-driven-development skill に従う
 - 構造改善は tidying skill に従い、structural change と behavioral change を別コミットにする
