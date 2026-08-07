@@ -172,8 +172,11 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
+  "model": "fable",
   "enableAllProjectMcpServers": true,
+  "skillOverrides": {
+    "logging": "off"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -367,8 +370,5 @@
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345
-  },
-  "skillOverrides": {
-    "logging": "off"
   }
 }
