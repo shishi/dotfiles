@@ -38,3 +38,5 @@ git log --oneline -10      # style reference
 - [ ] Type matches the nature of the change (`refactor:` has no behavior change)
 - [ ] Body answers: what problem, why now, why this approach
 - [ ] Breaking changes are marked `feat!:` / `fix!:`
+- [ ] If the project has a CI-skip convention and this commit touches
+      no code, the subject carries the project's skip marker
