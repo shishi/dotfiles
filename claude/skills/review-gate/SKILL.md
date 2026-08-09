@@ -38,7 +38,7 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
 
 - codex エンジンのレーン(correctness / adversarial)= **codex**(平日・CLI 健在)/
   **Claude subagent**(土日 or codex 不能)
-- 曜日判定: `date +%u`(ローカル = JST)で 6 or 7 → 土日
+- 曜日判定: `TZ=Asia/Tokyo date +%u` で 6 or 7 → 土日(ホストのローカル TZ に依存させない)
 - spec-scope は常時 Claude subagent、secrets は常時 gitleaks(曜日無関係)
 - Claude subagent エンジンでの実行 = 対応する観点 agent
   (correctness-reviewer / adversarial-reviewer)を Task tool で dispatch し、

@@ -41,12 +41,12 @@ Codex CLI を独立レビューエンジンとして使う。観点はこの ski
 1. 観点ファイル(`~/.claude/agents/<mode>-reviewer.md`)を Read し、2 つ目の `---` までの
    frontmatter を除去して観点コアを得る
 2. 下記の codex 前置き + 観点コアを、**リポジトリ外**の一時ファイル
-   (例: `$TMPDIR/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
+   (例: `${TMPDIR:-/tmp}/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
    失敗しうるため使わない):
    ```bash
-   codex exec --dangerously-bypass-approvals-and-sandbox - < "$TMPDIR/codex-review-prompt.md"
+   codex exec --dangerously-bypass-approvals-and-sandbox - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
 4. 実行後に一時ファイルを削除する
 
