@@ -20,12 +20,13 @@ worktree vs HEAD の全変更 + untracked ファイル。staged だけを見る�
 
 1. 対象列挙:
    ```bash
-   git diff --name-only --diff-filter=d HEAD
-   git ls-files --others --exclude-standard
+   { git diff --name-only -z --diff-filter=d HEAD; git ls-files --others --exclude-standard -z; } > "${TMPDIR:-/tmp}/secrets-scan-files.z"
    ```
-2. 各対象ファイルを検査(検出時 exit 1):
+2. 各対象ファイルを検査(NUL 区切りで空白入りファイル名にも安全。検出時 exit 1):
    ```bash
-   gitleaks detect --no-git --source "<file>" --exit-code 1 --no-banner
+   while IFS= read -r -d '' f; do
+     gitleaks detect --no-git --source "$f" --exit-code 1 --no-banner || echo "LEAK: $f"
+   done < "${TMPDIR:-/tmp}/secrets-scan-files.z"
    ```
 3. 検出があれば該当箇所を除去・置換して再スキャン。**検出ゼロになるまで通過しない。**
 
