@@ -36,7 +36,8 @@ worktree vs HEAD の全変更 + untracked ファイル。staged だけを見る�
 
 ## gitleaks が無い場合
 
-missing-tools skill で導入を試みる(scoop: `scoop install gitleaks`)。導入不能なら
+missing-tools skill で導入を試みる(Windows は同 skill の "Windows without nix" 節が
+scoop / winget の経路を持つ。scoop のパッケージ名は `gitleaks`)。導入不能なら
 **このレーンをスキップせず停止してユーザーへ報告する**(public repo で secrets の
 静かな素通りは偽の安心になる)。
 
