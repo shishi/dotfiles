@@ -187,6 +187,12 @@
             "command": "bash ~/.claude/hooks/git-push-guard.sh",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/gh-body-file-guard.sh",
+            "timeout": 10,
+            "statusMessage": "gh の本文受け渡しを確認中..."
           }
         ]
       }
@@ -259,6 +265,19 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/outward-write-readback.sh",
+            "timeout": 30,
+            "statusMessage": "投稿された実物を取得中..."
           }
         ]
       }
