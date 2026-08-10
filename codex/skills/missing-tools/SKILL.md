@@ -10,8 +10,10 @@ Use this workflow when a command is unavailable in the current shell.
 ## Priority Order
 
 On Windows, if `command -v nix` finds nothing, steps 2–4 cannot succeed. Try step 1
-only if `direnv` exists; if step 1 fails or direnv is absent, go to "Windows without
-nix" below.
+only if `direnv` exists; go to "Windows without nix" below only when direnv is absent
+or step 1 cannot resolve the command (`direnv exec . sh -c 'command -v <command>'`
+finds nothing). A non-zero exit from the tool itself means the tool ran — that is not
+a missing tool.
 
 1. Try the current project's direnv environment:
 
