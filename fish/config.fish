@@ -25,6 +25,9 @@ set -x VISUAL (status dirname)/nvim-edit
 #     set -x VISUAL vim
 # end
 
+# nh(nix-config)の対象 flake。引数なし `nh home switch` / preflight 検査用。非 nix マシンでは無害
+set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
+
 set -x GO111MODULE on
 set -x GOBIN ~/.local/bin
 set -x GOPATH ~/dev/
@@ -117,12 +120,6 @@ end
 #     set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
 #     set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
 # end
-
-# rust tools
-if type cargo &>/dev/null
-    set -x PATH ~/.cargo/bin $PATH
-    set -x CARGO_NET_GIT_FETCH_WITH_CLI true
-end
 
 if type bat &>/dev/null
     set -x BAT_THEME zenburn
@@ -475,3 +472,11 @@ end
 #########################################
 
 # source ~/.config/fish/functions/github_copilot_cli.fish
+
+# rust tools / PATH 契約(nix > cargo > システム既定)
+# conf.d(nix.fish → rustup.fish)が cargo > nix の逆順で前方挿入してくるため、
+# 最後に無条件で並べ直す。存在しないディレクトリは無害(非 nix / 非 rust マシン)
+set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin ~/.cargo/bin $PATH
+if type cargo &>/dev/null
+    set -x CARGO_NET_GIT_FETCH_WITH_CLI true
+end
