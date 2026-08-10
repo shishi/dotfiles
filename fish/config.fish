@@ -25,7 +25,7 @@ set -x VISUAL (status dirname)/nvim-edit
 #     set -x VISUAL vim
 # end
 
-# nh(nix-config)の対象 flake。引数なし `nh home switch` / preflight 検査用。非 nix マシンでは無害
+# nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
 set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
 
 set -x GO111MODULE on
