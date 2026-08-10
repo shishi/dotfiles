@@ -323,3 +323,5 @@ devenv.local.nix
 doc/superpowers/
 docs/superpowers/
 docs/plans/
+
+**/.claude/.cc-writes/

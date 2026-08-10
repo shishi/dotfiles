@@ -134,7 +134,7 @@
       "Bash(git pull:*)",
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
-      "Bash(codex exec review --dangerously-bypass-approvals-and-sandbox:*)",
+      "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
       "Bash(git push origin develop/*)",
       "Bash(git push -u origin develop/*)",
       "Bash(git push --set-upstream origin develop/*)",
@@ -172,8 +172,11 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
+  "model": "fable",
   "enableAllProjectMcpServers": true,
+  "skillOverrides": {
+    "logging": "off"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -184,6 +187,12 @@
             "command": "bash ~/.claude/hooks/git-push-guard.sh",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/gh-body-file-guard.sh",
+            "timeout": 10,
+            "statusMessage": "gh の本文受け渡しを確認中..."
           }
         ]
       }
@@ -230,6 +239,15 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/herdr-skill-nudge.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "*",
         "hooks": [
           {
@@ -250,6 +268,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/outward-write-readback.sh",
+            "timeout": 30,
+            "statusMessage": "投稿された実物を取得中..."
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -264,16 +295,16 @@
     "code-review@claude-plugins-official": true,
     "codex@openai-codex": true,
     "double-shot-latte@superpowers-marketplace": true,
-    "elements-of-style@superpowers-marketplace": true,
+    "elements-of-style@superpowers-marketplace": false,
     "episodic-memory@superpowers-marketplace": false,
-    "feature-dev@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": false,
     "lua-lsp@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true,
     "ruby-lsp@claude-plugins-official": true,
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
-    "superpowers-lab@superpowers-marketplace": true,
+    "superpowers-lab@superpowers-marketplace": false,
     "superpowers@superpowers-marketplace": true,
     "typescript-lsp@claude-plugins-official": true
   },
