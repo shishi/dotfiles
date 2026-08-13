@@ -120,6 +120,8 @@ assert_contains "(i) healthy git repo injects" "$out" "REPO-MEMORY"
 # degraded: HEAD は健全で、他エージェントの書き込みが進行中なだけの状態。注入は
 #   snapshot 経由で commit 済み内容しか読まないため、注入を続けても編集途中は掴まない。
 # degraded 行の目印は「最後の commit 時点」(fatal の personal-memory-warning と排他)。
+# `⚠` 接頭辞は degraded を組み立てる 1 行でのみ付くため、(k)(l)(l2)(l3)(o) の 5 本で
+# 全文言を押さえれば足りる。経過時間の分岐ケース ((l2b)(l4)(l5)) では重複検証しない。
 
 # (j) main 以外のブランチ -> fatal(スキップ + 復旧手順の提示)
 make_repo_mem "$TMP/branchmem"
