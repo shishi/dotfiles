@@ -18,7 +18,11 @@ Required on every review path (explicitly in scope — do not filter these out a
 
 記憶は `~/.claude/memory/`(private repo **agent-memory** への link。正本は `~/dev/src/github.com/shishi/agent-memory`)に置く。Claude Code 専用(Codex からの利用は 2026-07-12 に撤回。複数マシン・複数セッション間の共有は継続)。ビルトイン auto memory は settings.json の `autoMemoryEnabled: false` で無効化済み(使わない、ではなく使えない)。
 
-セッション開始時に索引と現プロジェクト記憶が `<personal-memory>` ブロックとして自動注入される。詳細が要るときだけ該当ファイルを Read で開く。ブロックが無いセッションでは「注入が効いていない」旨をユーザーへ報告し、記憶が要る作業の前に `~/.claude/memory/MEMORY.md` を直接 Read する。
+セッション開始時に索引と現プロジェクト記憶が `<personal-memory>` ブロックとして自動注入される。詳細が要るときだけ該当ファイルを Read で開く。ブロックが無いセッションでは「注入が効いていない」旨をユーザーへ報告する。このとき `<personal-memory-warning>` が出ていればその警告文の復旧手順に従う。worktree を直接 Read してよいのは、警告文が明示的にそう指示した場合だけ(記憶 repo の状態が信用できないという判定なので、既定では読まない)。警告も無い場合は `~/.claude/memory/MEMORY.md` を直接 Read する。
+
+ブロック内に `⚠ 記憶 repo` で始まる行があるときは **degraded 注入**(別セッションの書き込み進行中、または worktree が dirty)で、内容は**最後の commit 時点**。注入された内容は commit 済みなので信頼してよい。この状態では該当ファイルを worktree から Read しない(編集途中を掴む)。詳細が要るときは `git -C ~/.claude/memory show HEAD:<repo 相対パス>` で commit 済みの本文を読む(書き込みが完了していれば注入時点より新しいことがある)。lock が 10 分以上残存している旨の警告は stale の可能性を示すだけで、lock の除去は必ずユーザーに確認してから行う。
+
+`⚠ 未 push` で始まる行は degraded ではない。ローカルに確定済みの記憶が push 未了であることの警告で、注入内容はそのまま信頼できる。
 
 - **書き込み前 bootstrap**(この 5 手順だけが本ファイルの正。詳細ルールは repo 内 CONVENTIONS.md):
   1. write lock 取得(`mkdir <repo>/.git/memory-write.lock`。取れなければ書き込み進行中として報告)
