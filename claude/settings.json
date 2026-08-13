@@ -172,7 +172,7 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "fable",
+  "model": "opus",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "logging": "off"
@@ -193,6 +193,26 @@
             "command": "bash ~/.claude/hooks/gh-body-file-guard.sh",
             "timeout": 10,
             "statusMessage": "gh の本文受け渡しを確認中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/doc-no-narrative.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/verify-before-asking.sh",
+            "timeout": 10
           }
         ]
       }
@@ -301,12 +321,13 @@
     "lua-lsp@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true,
-    "ruby-lsp@claude-plugins-official": true,
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": false,
     "superpowers@superpowers-marketplace": true,
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true,
+    "vue-lsp@teachme-web-lsp": true
   },
   "extraKnownMarketplaces": {
     "andrej-karpathy-skills": {
@@ -343,6 +364,12 @@
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "teachme-web-lsp": {
+      "source": {
+        "source": "directory",
+        "path": "/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_web_duvel/.claude/lsp-marketplace"
       }
     }
   },

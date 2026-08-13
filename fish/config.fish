@@ -25,6 +25,9 @@ set -x VISUAL (status dirname)/nvim-edit
 #     set -x VISUAL vim
 # end
 
+# nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
+set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
+
 set -x GO111MODULE on
 set -x GOBIN ~/.local/bin
 set -x GOPATH ~/dev/
@@ -102,6 +105,14 @@ end
 #   set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
 # end
 
+# rust tools / PATH 契約(nix > cargo > システム既定)
+# conf.d(nix.fish → rustup.fish)が cargo > nix の逆順で前方挿入してくるため、
+# 最後に無条件で並べ直す。存在しないディレクトリは無害(非 nix / 非 rust マシン)
+if type cargo &>/dev/null
+    set -x PATH ~/.cargo/bin $PATH
+    set -x CARGO_NET_GIT_FETCH_WITH_CLI true
+end
+
 # tfenv
 if test -f ~/.tfenv/bin/tfenv
     set -x PATH ~/.tfenv/bin $PATH
@@ -117,12 +128,6 @@ end
 #     set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
 #     set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
 # end
-
-# rust tools
-if type cargo &>/dev/null
-    set -x PATH ~/.cargo/bin $PATH
-    set -x CARGO_NET_GIT_FETCH_WITH_CLI true
-end
 
 if type bat &>/dev/null
     set -x BAT_THEME zenburn
@@ -443,11 +448,6 @@ if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
 end
 
 # nix
-## nom
-function nom-home-manager-switch
-    nix run home-manager/master -- switch --flake .#shishi@ubuntu 2>&1 | nom
-end
-
 ## ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
     function add_current_gem_path
@@ -455,19 +455,46 @@ if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&
     end
     add_current_gem_path
 
-    function ruby_switch
+    # ruby_switch <version>: 現在のシェルの ruby を nixpkgs の任意バージョンへ切り替える
+    # 例: ruby_switch 3.3 / ruby_switch 3_4 / ruby_switch ruby_3_3
+    function ruby_switch --description "switch ruby in current shell via nixpkgs"
         if test (count $argv) -eq 0
-            echo "Usage: ruby-switch <version>"
+            echo "Usage: ruby_switch <version>  (e.g. ruby_switch 3.3)"
             return 1
         end
 
-        if test -d $HOME/.nix-profile-ruby-$argv[1]/bin
-            set -x PATH $HOME/.nix-profile-ruby-$argv[1]/bin $PATH
-            add_current_gem_path
-            echo "switched to ruby $argv[1]"
-        else
-            echo "you do not have version $argv[1]"
+        if not type -q nix
+            echo "ruby_switch: nix not found (this function requires nix)" >&2
+            return 1
         end
+
+        set -l attr $argv[1]
+        string match -q 'ruby*' $attr; or set attr ruby_(string replace -a . _ $attr)
+
+        set -l outs (nix build --no-link --print-out-paths nixpkgs#$attr)
+        if test $status -ne 0; or test -z "$outs[1]"
+            echo "ruby_switch: you do not have version $argv[1] (nixpkgs#$attr not available)" >&2
+            set -l sys (uname -m | string replace arm64 aarch64)-(string lower (uname -s))
+            set -l avail (nix eval --raw nixpkgs#legacyPackages.$sys --apply 'p: builtins.concatStringsSep " " (builtins.filter (n: builtins.match "ruby(_[0-9]+_[0-9]+)?" n != null) (builtins.attrNames p))' 2>/dev/null)
+            test -n "$avail"; and echo "ruby_switch: available: $avail" >&2
+            return 1
+        end
+
+        # 前回の切り替え分(store の ruby と対応する gem bin)を PATH から掃除して重複を防ぐ
+        set -l keep
+        for p in $PATH
+            if string match -q '/nix/store/*-ruby-*/bin' $p
+                continue
+            end
+            if string match -q "$HOME/.local/share/gem/ruby/*/bin" $p
+                continue
+            end
+            set -a keep $p
+        end
+        set -x PATH $outs[1]/bin $keep
+
+        functions -q add_current_gem_path; and add_current_gem_path
+        echo "switched to "(ruby --version)
     end
 end
 
@@ -475,3 +502,9 @@ end
 #########################################
 
 # source ~/.config/fish/functions/github_copilot_cli.fish
+
+# ensure
+#########################################
+if type nix &>/dev/null
+    set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin $PATH
+end
