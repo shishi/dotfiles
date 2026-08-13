@@ -97,6 +97,15 @@ if ($ambiguousOutdated.Count -gt 0)
 }
 
 if ($skipped.Count -gt 0) { Write-Host ("Skipping: {0}" -f ($skipped -join ', ')) -ForegroundColor DarkGray }
+
+# This script is meant to be callable from pwsh, and a live pwsh session is the
+# one thing that blocks its own update (see the header). Say so up front rather
+# than letting pwsh look like a permanent unexplained failure at the end.
+$pwshDir = Join-Path $env:USERPROFILE 'scoop\apps\pwsh'
+if ($targets -contains 'pwsh' -and @(Get-Process | Where-Object { $_.Path -like "$pwshDir\*" }).Count -gt 0)
+{
+    Write-Host 'pwsh is running, so scoop will skip it. Run this from nushell, cmd or 5.1 to update pwsh.' -ForegroundColor Yellow
+}
 if ($globalOutdated.Count -gt 0)
 {
     Write-Host ("Global, update by hand with ``gsudo scoop update -g <app>``: {0}" -f ($globalOutdated -join ', ')) -ForegroundColor DarkGray
