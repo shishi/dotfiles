@@ -29,6 +29,21 @@ def ll [...args] {
     }
 }
 
+# scoop は 1 件の失敗で abort（= exit）して残り全部を巻き添えにするので、
+# アプリごとに子プロセスへ分けて更新する。子を 5.1 で起動するので pwsh 自身も
+# 同じループで更新できる。理由の詳細は PowerShell/scoop-update-all.ps1 のコメント。
+#
+# NOTE: rest パラメータ（...args）にすると nu が `-Skip` を自分のフラグとして
+# 食うため、`-- -Skip makemkv` と書かされる。nu 側のフラグとして受けて詰め替える。
+def scoop-update-all [
+    --skip: string = ""   # カンマ区切りで除外するアプリ
+] {
+    let ps1 = 'C:\Users\shishi\dev\src\github.com\shishi\dotfiles\PowerShell\scoop-update-all.ps1'
+    mut args = ['-NoProfile' '-ExecutionPolicy' 'Bypass' '-File' $ps1]
+    if ($skip | is-not-empty) { $args = ($args | append ['-Skip' $skip]) }
+    ^powershell.exe ...$args
+}
+
 # weztermとの相性で勝手にスクロールするのをとめる
 # NOTE: $env.config 丸ごと再代入だと直前の show_banner 等が消えるので部分代入にする
 $env.config.shell_integration = {
