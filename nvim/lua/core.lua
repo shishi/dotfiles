@@ -62,7 +62,7 @@ vim.opt.wildignorecase = true
 vim.opt.completeopt = 'menu,menuone,preview,noinsert'
 
 if vim.fn.executable('rg') == 1 then
-  vim.opt.grepprg = 'rg --vimgrep --color=never --smart-case --uu --glob "!.git/"'
+  vim.opt.grepprg = 'rg --vimgrep --color=never --smart-case -uu --glob "!.git/"'
 end
 
 -- indent
