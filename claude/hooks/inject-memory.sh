@@ -18,6 +18,10 @@ if [ ! -e "$MEMORY_DIR" ]; then
   exit 0
 fi
 
+is_num() { # $1 が空でない十進数か(外部コマンドの出力を算術展開へ渡す前の検査)
+  case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
+}
+
 # --- git-state aware 読み取りの準備 ---
 # 記憶ディレクトリが git repo(root)のときは、MEMORY.md の存在確認より先に
 # 健全性を検査する(編集途中で MEMORY.md が消えている dirty repo を無言スキップに
@@ -77,17 +81,13 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
     # ポイントを返すため、`A || B` で合成すると非数値を exit 0 で掴んでしまい、GNU 環境で
     # stale 検知が永久に発火しない。数値検査が本体で、試行順そのものは結果を変えない。
     lock_epoch=$(stat -c %Y "$gitdir/memory-write.lock" 2>/dev/null | tr -d '\r')
-    case "$lock_epoch" in
-      ''|*[!0-9]*) lock_epoch=$(stat -f %m "$gitdir/memory-write.lock" 2>/dev/null | tr -d '\r') ;;
-    esac
+    is_num "$lock_epoch" || lock_epoch=$(stat -f %m "$gitdir/memory-write.lock" 2>/dev/null | tr -d '\r')
     # 経過時間は「両端が数値で、かつ lock が過去」のときだけ算出する。非数値を算術展開に
     # 入れると set -u が hook を落とし、注入も警告も消える(冒頭の exit 0 契約に反する)。
     # 未来 mtime(時計ずれ)で負の分数を表示しないためにも、ここで弾いてから計算する。
     now_epoch=$(date +%s 2>/dev/null | tr -d '\r')
     lock_min=""
-    if [ -n "$lock_epoch" ] && [ -z "${lock_epoch//[0-9]/}" ] \
-      && [ -n "$now_epoch" ] && [ -z "${now_epoch//[0-9]/}" ] \
-      && [ "$now_epoch" -ge "$lock_epoch" ]; then
+    if is_num "$lock_epoch" && is_num "$now_epoch" && [ "$now_epoch" -ge "$lock_epoch" ]; then
       lock_min=$(( (now_epoch - lock_epoch) / 60 ))
     fi
     if [ -z "$lock_min" ]; then
@@ -111,10 +111,9 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
   snapshot=$(git -C "$MEMORY_DIR" rev-parse HEAD 2>/dev/null | tr -d '\r')
   # 未 push commit はローカルに実在する確定済み記憶なので注入するが、警告を添える
   ahead=$(git -C "$MEMORY_DIR" rev-list --count '@{u}..HEAD' 2>/dev/null | tr -d '\r')
-  case "$ahead" in
-    ''|0|*[!0-9]*) : ;;
-    *) ahead_warn="⚠ 未 push の記憶 commit が ${ahead} 件あります(前回 push 失敗の可能性。次の書き込み前に解消すること)" ;;
-  esac
+  if is_num "$ahead" && [ "$ahead" -gt 0 ]; then
+    ahead_warn="⚠ 未 push の記憶 commit が ${ahead} 件あります(前回 push 失敗の可能性。次の書き込み前に解消すること)"
+  fi
 fi
 
 emit_file() { # $1=repo 相対パス
