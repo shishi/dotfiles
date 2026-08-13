@@ -30,8 +30,9 @@ def ll [...args] {
 }
 
 # scoop は 1 件の失敗で abort（= exit）して残り全部を巻き添えにするので、
-# アプリごとに子プロセスへ分けて更新する。子を 5.1 で起動するので pwsh 自身も
-# 同じループで更新できる。理由の詳細は PowerShell/scoop-update-all.ps1 のコメント。
+# アプリごとに子プロセスへ分けて更新する。nu から呼ぶ分には pwsh 自身も同じ
+# ループで更新できる（pwsh セッションが動いていないため）。pwsh から呼ぶと
+# pwsh だけスキップされる。理由の詳細は PowerShell/scoop-update-all.ps1 のコメント。
 #
 # NOTE: rest パラメータ（...args）にすると nu が `-Skip` を自分のフラグとして
 # 食うため、`-- -Skip makemkv` と書かされる。nu 側のフラグとして受けて詰め替える。
