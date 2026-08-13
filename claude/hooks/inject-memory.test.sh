@@ -3,15 +3,24 @@
 set -u
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK="${HOOK_DIR}/inject-memory.sh"
-TMP=$(mktemp -d)
+# テンプレートを渡さない mktemp -d は BSD 版が TMPDIR を無視して固定の
+# darwin user temp dir を使うため、sandbox 下で mkdtemp が落ちる。テンプレートで
+# TMPDIR 配下を明示する(GNU / BSD どちらも受け付ける)。
+tmproot="${TMPDIR:-/tmp}"; tmproot="${tmproot%/}"
+TMP=$(mktemp -d "${tmproot}/inject-memory.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
+# ghq は root を物理パスで返すため、cwd 側も物理パスに揃える。macOS の /tmp は
+# /private/tmp への symlink なので、揃えないと (d)(f) の ghq 相対判定が前方一致で外れる。
+TMP=$(cd "$TMP" && pwd -P)
 PASS=0; FAIL=0
 
+# GHQ_ROOT は実環境の値が fake HOME の ghq.root を上書きしてしまうため落とす
+# (Claude Code のセッション env には GHQ_ROOT が入っている)
 run_hook() { # $1=cwd [$2=memory_dir]
   if [ $# -ge 2 ]; then
-    printf '{"cwd":"%s"}' "$1" | HOME="$TMP/home" bash "$HOOK" "$2"
+    printf '{"cwd":"%s"}' "$1" | env -u GHQ_ROOT HOME="$TMP/home" bash "$HOOK" "$2"
   else
-    printf '{"cwd":"%s"}' "$1" | HOME="$TMP/home" bash "$HOOK"
+    printf '{"cwd":"%s"}' "$1" | env -u GHQ_ROOT HOME="$TMP/home" bash "$HOOK"
   fi
 }
 assert_contains() { # $1=desc $2=haystack $3=needle
@@ -87,7 +96,8 @@ else
 fi
 
 # git repo な記憶ディレクトリの準備ヘルパ
-GITC="git -c user.name=t -c user.email=t@t"
+# gpgsign は実ユーザーの設定を継承すると gpg-agent 依存で commit が落ちるので切る
+GITC="git -c user.name=t -c user.email=t@t -c commit.gpgsign=false"
 make_repo_mem() { # $1=path
   mkdir -p "$1"
   git -C "$1" init -q -b main
