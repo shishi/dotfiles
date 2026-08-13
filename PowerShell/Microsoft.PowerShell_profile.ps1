@@ -52,6 +52,15 @@ function gd
     git diff $args
 }
 
+# One scoop app per child process, so one failure does not abort the rest.
+# See PowerShell/scoop-update-all.ps1 for why.
+# Launched as an external 5.1 process rather than dot-called, so the exit code
+# propagates the same way it does from nushell.
+function scoop-update-all
+{
+    & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "C:\Users\shishi\dev\src\github.com\shishi\dotfiles\PowerShell\scoop-update-all.ps1" @args
+}
+
 #f45873b3-b655-43a6-b217-97c00aa0db58 PowerToys CommandNotFound module
 
 Import-Module -Name Microsoft.WinGet.CommandNotFound

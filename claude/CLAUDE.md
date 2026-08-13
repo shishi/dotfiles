@@ -12,6 +12,8 @@ At key milestones — right after creating or updating specs/PRDs/plans, after m
 
 If the review-gate skill is unavailable (undeployed machine etc.): substitute a subagent-based run of the `/code-review` skill (or superpowers:requesting-code-review if that is unavailable). Skip the gate only when no review mechanism exists at all, and report that it was skipped.
 
+Required on every review path (explicitly in scope — do not filter these out as documentation nitpicks): comments and docs that state an operational or recovery procedure are reviewed for content correctness, the same standard as code. Flag (a) a documented recipe that fails when followed literally, (b) a quantity stated without the limit or budget it consumes, (c) a non-general term used without definition. These mislead at the moment they are read, which is during an incident.
+
 # 個人永続記憶 (personal memory)
 
 記憶は `~/.claude/memory/`(private repo **agent-memory** への link。正本は `~/dev/src/github.com/shishi/agent-memory`)に置く。Claude Code 専用(Codex からの利用は 2026-07-12 に撤回。複数マシン・複数セッション間の共有は継続)。ビルトイン auto memory は settings.json の `autoMemoryEnabled: false` で無効化済み(使わない、ではなく使えない)。
