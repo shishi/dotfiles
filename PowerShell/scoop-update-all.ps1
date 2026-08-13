@@ -17,10 +17,17 @@
 # ASCII only on purpose: this is meant to run under Windows PowerShell 5.1,
 # which reads a BOM-less file as ANSI. Staying ASCII keeps it correct with no BOM.
 #
-# The per-app child is always launched with 5.1, never pwsh. scoop's shims
-# prefer pwsh (`where /q pwsh.exe`), so updating pwsh from pwsh self-locks:
-# scoop holds the very binary it is replacing. Going through 5.1 lets pwsh be
-# updated by the same loop as everything else.
+# The per-app child is always launched with 5.1, never pwsh. scoop's shims all
+# prefer pwsh (`command -v pwsh.exe` / `where /q pwsh.exe`), so running scoop
+# from pwsh means scoop itself holds the binary it is trying to replace.
+#
+# That fixes the shim side but not the caller side. scoop also skips any app
+# whose binaries are currently running, and a pwsh session is exactly that:
+# measured 2026-08-13, a live pwsh session is visible as
+# C:\...\scoop\apps\pwsh\current\pwsh.exe, while from 5.1 the same query
+# returns zero. So launching this from pwsh leaves pwsh itself un-updated.
+# It does not stop the run -- that is the skip path, not abort -- everything
+# else still updates. To update pwsh too, run this from nushell, cmd or 5.1.
 #
 # Global apps are listed but not updated. They need elevation, and doing that
 # here would mean deciding how to elevate, what happens when the elevation
