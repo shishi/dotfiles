@@ -35,6 +35,10 @@ class SubprocessRunner:
         )
 
 
+def dotfiles_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
 def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> int:
     if codex_path is None:
         return 0
@@ -208,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments:
         return 2
     return reconcile(
-        config_path=Path(__file__).resolve().parent.parent / "codex" / "config.toml",
+        config_path=dotfiles_root() / "codex" / "config.toml",
         runner=SubprocessRunner(),
         codex_path=shutil.which("codex"),
     )

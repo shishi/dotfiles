@@ -609,22 +609,39 @@ class InstallPluginsTest(unittest.TestCase):
             self.assertEqual(1, status)
             self.assertEqual(original, config_path.read_bytes())
 
-    def test_normal_main_returns_reconcile_status(self) -> None:
-        with patch.object(
-            install_plugins, "reconcile", return_value=7
-        ) as reconcile_mock, patch.object(
-            install_plugins.shutil, "which", return_value="C:/tools/codex.exe"
-        ):
-            status = install_plugins.main([])
-
-        self.assertEqual(7, status)
-        call = reconcile_mock.call_args.kwargs
-        self.assertEqual(
-            CODEX_DIR.parent / "codex" / "config.toml",
-            call["config_path"],
+    def test_main_reads_codex_home_config(self) -> None:
+        codex = "codex"
+        marketplace_list = [codex, "plugin", "marketplace", "list", "--json"]
+        plugin_list = [codex, "plugin", "list", "--json"]
+        runner = RecordingRunner(
+            {
+                tuple(marketplace_list): completed(
+                    marketplace_list, {"marketplaces": []}
+                ),
+                tuple(plugin_list): completed(plugin_list, {"installed": []}),
+            }
         )
-        self.assertEqual("C:/tools/codex.exe", call["codex_path"])
-        self.assertIsInstance(call["runner"], install_plugins.SubprocessRunner)
+        with tempfile.TemporaryDirectory() as directory:
+            dotfiles_root = Path(directory) / "dotfiles"
+            tools_dir = dotfiles_root / "codex-tools"
+            home_config = dotfiles_root / "codex" / "config.toml"
+            tools_dir.mkdir(parents=True)
+            home_config.parent.mkdir()
+            home_config.write_text("", encoding="utf-8")
+            fake_installer = tools_dir / "install_plugins.py"
+            fake_installer.write_text("", encoding="utf-8")
+
+            with patch.object(
+                install_plugins, "__file__", str(fake_installer)
+            ), patch.object(
+                install_plugins, "SubprocessRunner", return_value=runner
+            ), patch.object(
+                install_plugins.shutil, "which", return_value=codex
+            ):
+                status = install_plugins.main([])
+
+        self.assertEqual(0, status)
+        self.assertEqual([marketplace_list, plugin_list], runner.calls)
 
 
 if __name__ == "__main__":

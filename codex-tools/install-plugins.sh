@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$(cd "${TOOLS_DIR}/.." && pwd)"
 
 if ! command -v codex >/dev/null 2>&1; then
   echo "install-plugins: Codex CLI not found; skipping plugin reconciliation" >&2
@@ -27,4 +28,4 @@ if [ -z "$PYTHON" ]; then
   exit 1
 fi
 
-exec "$PYTHON" "$SCRIPT_DIR/install_plugins.py" "$@"
+exec "$PYTHON" "${DOTFILES_DIR}/codex-tools/install_plugins.py" "$@"

@@ -5,7 +5,13 @@ case "$(uname -s)" in
   MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;;
 esac
 
-DOTFILES_DIR="${1:?usage: setup-home-links.sh DOTFILES_DIR}"
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_ROOT="$(cd "${TOOLS_DIR}/.." && pwd)"
+if [ "$#" -gt 1 ]; then
+  echo "setup-home-links: usage: setup-home-links.sh" >&2
+  exit 2
+fi
+DOTFILES_DIR="${1:-$DOTFILES_ROOT}"
 CODEX_SOURCE="${DOTFILES_DIR}/codex"
 SKILLS_SOURCE="${CODEX_SOURCE}/skills"
 CODEX_TARGET="${HOME}/.codex"
