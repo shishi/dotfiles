@@ -98,7 +98,7 @@ NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3
 NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
 
 [desktop]
-conversationDetailMode = "STEPS_COMMANDS"
+conversationDetailMode = "STEPS_PROSE"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
@@ -342,3 +342,4 @@ CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a26
 [memories]
 generate_memories = true
 use_memories = true
+
