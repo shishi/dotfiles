@@ -19,7 +19,7 @@
 
 ## 検証
 
-- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（71 tests）
+- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（74 tests）
 - `bash -n codex-tools/bootstrap-home.sh`: PASS
 - `git diff --check`: PASS
 - テストはすべて`tempfile.TemporaryDirectory()`配下を使用し、実ユーザーホームは変更していない。
@@ -28,7 +28,7 @@
 
 - snapshot順は`codex_home -> agents_skills -> repo_home -> commit_stage`。
 - rollback順は`owned links -> installed repo -> repo snapshot -> agents snapshot -> codex snapshot`。
-- owned linkは登録時と削除直前の両方で、link種別と期待targetを確認する。差し替えられたpathは削除しない。
+- owned linkは作成時の`lstat` identityを記録し、rollback時にidentity、link種別、期待targetを再検証する。削除は非再帰`unlink`だけを使う。
 - secretを含む`backup/codex`と`backup/agents-skills`は削除せず、repo rollback失敗時も残りのlive復元を継続する。
 - restoreはrepo snapshotを入力検証にだけ使い、通常restoreで上書きしない。
 - 残存する既知の問題はない。
@@ -39,3 +39,15 @@
   - owned link path差し替え後の削除競合。
   - 3ディレクトリ不足backupへの無効なrestore案内。
 - 両方をREDテストから修正し、再レビューで`APPROVED`。P0/P1/P2/P3はすべて0件。
+
+## 追加独立レビュー対応
+
+- commit `4a1158e`への追加独立レビューで、check/use間にpathを差し替えるTOCTOU P1を2件再現した。
+  - owned link確認後、汎用`remove_path`入口で実directoryへ差し替えるとforeign dataを再帰削除した。
+  - `repo_installed`後、repo削除入口で外部directoryへ差し替えるとforeign dataを再帰削除した。
+- 両PoCを`TemporaryDirectory`内の自動テストとして先に追加し、foreign file欠落のREDを確認した。
+- link rollbackは作成時identityの再検証と専用non-recursive unlinkへ変更した。check後に実directoryへ差し替えられてもunlinkが安全に失敗し、foreign dataを残す。
+- repo rollbackは現`repo_home`を削除せず、backup内の一意な`repo-codex-rollback-quarantine`へrenameしてからsnapshotを復元する。
+- 同じ非破壊方針をrestore rollbackにも適用し、swap済みlive pathを`failed-restore` quarantineへrenameしてから旧live pathを復元する。対応テストもREDからGREENを確認した。
+- 追加修正後の全74テスト、`bash -n`、`git diff --check`はPASSした。
+- 新規独立再レビューは`APPROVED`。P0/P1/P2/P3はすべて0件。Windows実機でもdirectory symlinkとjunctionのidentity取得、非再帰unlink、target保持を確認した。

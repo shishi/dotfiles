@@ -201,6 +201,27 @@ def _remove_path(path: Path) -> None:
             )
 
 
+def _directory_link_identity(
+    path: Path, target: Path
+) -> tuple[int, int, int, int, int] | None:
+    if not (path.is_symlink() or _is_junction(path)):
+        return None
+    if path.resolve() != target.resolve():
+        return None
+    metadata = os.lstat(path)
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_ctime_ns,
+        getattr(metadata, "st_reparse_tag", 0),
+    )
+
+
+def _unlink_directory_link(path: Path) -> None:
+    path.unlink()
+
+
 def _rollback(
     *,
     codex_home: Path,
@@ -214,7 +235,9 @@ def _rollback(
     repo_home: Path | None = None,
     repo_snapshot: Path | None = None,
     repo_installed: bool = False,
-    created_links: tuple[tuple[Path, Path], ...] = (),
+    created_links: tuple[
+        tuple[Path, Path, tuple[int, int, int, int, int]], ...
+    ] = (),
     rename_path: Callable[[Path, Path], None] | None = None,
 ) -> bool:
     failed = False
@@ -236,20 +259,27 @@ def _rollback(
         rename_entry = rename_path or (
             lambda source, destination: source.rename(destination)
         )
-        for link, target in reversed(created_links):
+        for link, target, identity in reversed(created_links):
             try:
-                owned = (
-                    link.is_symlink() or _is_junction(link)
-                ) and link.resolve() == target.resolve()
+                owned = _directory_link_identity(link, target) == identity
             except OSError:
                 owned = False
             if owned:
-                attempt("remove link", link, lambda link=link: remove_path(link))
+                attempt(
+                    "unlink link",
+                    link,
+                    lambda link=link: _unlink_directory_link(link),
+                )
         if repo_installed and repo_home is not None:
+            repo_quarantine = backup / "repo-codex-rollback-quarantine"
+            suffix = 0
+            while _lexists(repo_quarantine):
+                suffix += 1
+                repo_quarantine = backup / f"repo-codex-rollback-quarantine-{suffix}"
             attempt(
-                "remove repository",
+                "quarantine repository",
                 repo_home,
-                lambda: remove_path(repo_home),
+                lambda: rename_entry(repo_home, repo_quarantine),
             )
         if repo_snapshot is not None and repo_home is not None:
             attempt(
@@ -345,7 +375,20 @@ def restore(
     previous_skills = agents_skills.with_name(
         f"{agents_skills.name}.pre-restore-{timestamp_value}"
     )
-    reserved_paths = (codex_stage, skills_stage, previous_codex, previous_skills)
+    failed_codex = codex_home.with_name(
+        f"{codex_home.name}.failed-restore-{timestamp_value}"
+    )
+    failed_skills = agents_skills.with_name(
+        f"{agents_skills.name}.failed-restore-{timestamp_value}"
+    )
+    reserved_paths = (
+        codex_stage,
+        skills_stage,
+        previous_codex,
+        previous_skills,
+        failed_codex,
+        failed_skills,
+    )
     if any(_lexists(path) for path in reserved_paths):
         print("migrate-home: restore staging path already exists", file=sys.stderr)
         return 1
@@ -423,9 +466,17 @@ def restore(
                 )
 
         if swapped_codex:
-            rollback("remove", codex_home, lambda: _remove_path(codex_home))
+            rollback(
+                "quarantine",
+                codex_home,
+                lambda: rename_entry(codex_home, failed_codex),
+            )
         if swapped_skills:
-            rollback("remove", agents_skills, lambda: _remove_path(agents_skills))
+            rollback(
+                "quarantine",
+                agents_skills,
+                lambda: rename_entry(agents_skills, failed_skills),
+            )
         if saved_codex:
             rollback(
                 "rename",
@@ -517,21 +568,25 @@ def bootstrap(
     agents_skills_snapshot: Path | None = None
     repo_snapshot: Path | None = None
     repo_installed = False
-    created_links: list[tuple[Path, Path]] = []
+    created_links: list[
+        tuple[Path, Path, tuple[int, int, int, int, int]]
+    ] = []
 
     def create_tracked_link(source: Path, destination: Path) -> None:
         try:
             create_link(source, destination)
         except OSError:
             try:
-                if (
-                    destination.is_symlink() or _is_junction(destination)
-                ) and destination.resolve() == source.resolve():
-                    created_links.append((destination, source))
+                identity = _directory_link_identity(destination, source)
+                if identity is not None:
+                    created_links.append((destination, source, identity))
             except OSError:
                 pass
             raise
-        created_links.append((destination, source))
+        identity = _directory_link_identity(destination, source)
+        if identity is None:
+            raise OSError("directory link ownership verification failed")
+        created_links.append((destination, source, identity))
 
     stage_root = repo_home.with_name(
         f".{repo_home.name}.bootstrap-stage-{timestamp_value}"

@@ -541,6 +541,79 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertFalse(previous_skills.exists())
             self.assertTrue((backup / "codex" / "restored.txt").is_file())
 
+    def test_restore_rollback_quarantines_replaced_swapped_live_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            backup = root / "backup"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (backup / "codex").mkdir(parents=True)
+            (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
+            (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
+            (agents_skills / "live.txt").write_text(
+                "live skills", encoding="utf-8"
+            )
+            (backup / "codex" / "restored.txt").write_text(
+                "backup codex", encoding="utf-8"
+            )
+            (backup / "agents-skills" / "restored.txt").write_text(
+                "backup skills", encoding="utf-8"
+            )
+            timestamp_value = "20260815-230000"
+            codex_stage = codex_home.with_name(
+                f".codex.restore-stage-{timestamp_value}"
+            )
+            skills_stage = agents_skills.with_name(
+                f"skills.restore-stage-{timestamp_value}"
+            )
+            displaced_stage = root / "displaced-restored-codex"
+            failed_codex = codex_home.with_name(
+                f".codex.failed-restore-{timestamp_value}"
+            )
+
+            def replace_codex_before_second_swap(
+                source: Path, destination: Path
+            ) -> None:
+                if source == skills_stage and destination == agents_skills:
+                    codex_home.rename(displaced_stage)
+                    codex_home.mkdir()
+                    (codex_home / "foreign.txt").write_text(
+                        "foreign", encoding="utf-8"
+                    )
+                    raise OSError("injected second restore swap failure")
+                source.rename(destination)
+
+            status = migrate_home.restore(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                backup=backup,
+                process_running=lambda: False,
+                timestamp=lambda: timestamp_value,
+                rename_path=replace_codex_before_second_swap,
+            )
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "foreign", (failed_codex / "foreign.txt").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                "backup codex",
+                (displaced_stage / "restored.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "live codex", (codex_home / "live.txt").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                "live skills",
+                (agents_skills / "live.txt").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((backup / "repo-codex-before-bootstrap").is_dir())
+            self.assertFalse(codex_stage.exists())
+            self.assertFalse(skills_stage.exists())
+
     def test_restore_stage_copy_failure_cleans_stages_without_mutating_live_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1461,6 +1534,86 @@ class BootstrapHomeTest(unittest.TestCase):
             )
             self.assertIn("rollback rename failed", stderr.getvalue())
 
+    def test_owned_link_swap_between_check_and_unlink_preserves_foreign_directory(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            backup_root = root / "backups"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "live.txt").write_text("live", encoding="utf-8")
+            (agents_skills / "personal.txt").write_text(
+                "personal", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text("managed", encoding="utf-8")
+            link_calls = 0
+
+            def fail_second_link(source: Path, destination: Path) -> None:
+                nonlocal link_calls
+                link_calls += 1
+                if link_calls == 2:
+                    raise OSError("injected second link failure")
+                os.symlink(source, destination, target_is_directory=True)
+
+            def install_foreign_directory(path: Path) -> None:
+                path.unlink()
+                path.mkdir()
+                (path / "foreign.txt").write_text("foreign", encoding="utf-8")
+
+            def unsafe_recursive_remove(path: Path) -> None:
+                if path == codex_home:
+                    install_foreign_directory(path)
+                migrate_home._remove_path(path)
+
+            def swap_before_nonrecursive_unlink(path: Path) -> None:
+                if path == codex_home:
+                    install_foreign_directory(path)
+                path.unlink()
+
+            stderr = io.StringIO()
+            with patch.object(
+                migrate_home,
+                "_unlink_directory_link",
+                side_effect=swap_before_nonrecursive_unlink,
+                create=True,
+            ), redirect_stderr(stderr):
+                status = migrate_home.bootstrap(
+                    codex_home=codex_home,
+                    agents_skills=agents_skills,
+                    repo_home=repo_home,
+                    backup_root=backup_root,
+                    process_running=lambda: False,
+                    timestamp=lambda: "20260815-210000",
+                    link_directory=fail_second_link,
+                    remove_path=unsafe_recursive_remove,
+                )
+
+            backup = backup_root / "codex-home-20260815-210000"
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "foreign", (codex_home / "foreign.txt").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                "live",
+                (backup / "live-codex-at-commit" / "live.txt").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertFalse(agents_skills.is_symlink())
+            self.assertEqual(
+                "personal",
+                (agents_skills / "personal.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
+            )
+            self.assertIn("rollback unlink link failed", stderr.getvalue())
+
     def test_second_live_snapshot_rename_failure_restores_first_snapshot_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1574,6 +1727,83 @@ class BootstrapHomeTest(unittest.TestCase):
                 (
                     backup / "repo-codex-before-bootstrap" / "config.toml"
                 ).read_text(encoding="utf-8"),
+            )
+
+    def test_repo_swap_before_rollback_quarantine_preserves_foreign_directory(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            backup_root = root / "backups"
+            backup = backup_root / "codex-home-20260815-220000"
+            quarantine = backup / "repo-codex-rollback-quarantine"
+            displaced_installed = root / "displaced-installed-repo"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text("secret", encoding="utf-8")
+            (agents_skills / "personal.txt").write_text(
+                "personal", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text("managed", encoding="utf-8")
+            link_calls = 0
+            repo_swapped = False
+
+            def fail_second_link(source: Path, destination: Path) -> None:
+                nonlocal link_calls
+                link_calls += 1
+                if link_calls == 2:
+                    raise OSError("injected second link failure")
+                os.symlink(source, destination, target_is_directory=True)
+
+            def install_foreign_repo() -> None:
+                nonlocal repo_swapped
+                if repo_swapped:
+                    return
+                repo_swapped = True
+                repo_home.rename(displaced_installed)
+                repo_home.mkdir()
+                (repo_home / "foreign.txt").write_text("foreign", encoding="utf-8")
+
+            def unsafe_recursive_remove(path: Path) -> None:
+                if path == repo_home:
+                    install_foreign_repo()
+                migrate_home._remove_path(path)
+
+            def swap_before_quarantine(source: Path, destination: Path) -> None:
+                if source == repo_home and destination == quarantine:
+                    install_foreign_repo()
+                source.rename(destination)
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=backup_root,
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-220000",
+                link_directory=fail_second_link,
+                remove_path=unsafe_recursive_remove,
+                rename_path=swap_before_quarantine,
+            )
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "foreign", (quarantine / "foreign.txt").read_text(encoding="utf-8")
+            )
+            self.assertTrue((displaced_installed / "auth.json").is_file())
+            self.assertEqual(
+                "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
+            )
+            self.assertFalse(codex_home.is_symlink())
+            self.assertTrue((codex_home / "auth.json").is_file())
+            self.assertFalse(agents_skills.is_symlink())
+            self.assertEqual(
+                "personal",
+                (agents_skills / "personal.txt").read_text(encoding="utf-8"),
             )
 
     def test_repo_rollback_failure_still_restores_both_live_directories(self) -> None:
