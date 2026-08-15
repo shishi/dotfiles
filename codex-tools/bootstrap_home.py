@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from datetime import datetime
-from fnmatch import fnmatchcase
 import hashlib
 import os
 from pathlib import Path
@@ -20,54 +19,6 @@ MANAGED_NAMES = {
     "hooks.json",
     "skills",
 }
-RUNTIME_PATTERNS = {
-    ".sandbox",
-    ".sandbox-bin",
-    ".sandbox-secrets",
-    ".tmp",
-    "ambient-suggestions",
-    "archived_sessions",
-    "bin",
-    "cache",
-    "claude-cowork-transcript-imports",
-    "computer-use",
-    "memories",
-    "node_repl",
-    "pets",
-    "plugins",
-    "process_manager",
-    "sessions",
-    "shell_snapshots",
-    "sqlite",
-    "tmp",
-    "vendor_imports",
-    "visualizations",
-    ".codex-global-state.json*",
-    ".personality_migration",
-    ".sandbox_migration",
-    "auth.json",
-    "cap_sid",
-    "chrome-native-hosts-v2.json",
-    "claude-cowork-import-history.json",
-    "config.toml.bak-*",
-    "external_agent_session_imports.json",
-    "goals_*.sqlite*",
-    "history.jsonl",
-    "installation_id",
-    "logs_*.sqlite*",
-    "memories_*.sqlite*",
-    "models_cache.json",
-    "sandbox.*.log",
-    "session_index.jsonl",
-    "state_*.sqlite*",
-    "version.json",
-}
-
-
-def is_runtime_name(name: str) -> bool:
-    return any(fnmatchcase(name, pattern) for pattern in RUNTIME_PATTERNS)
-
-
 def default_process_running() -> bool:
     if os.name == "nt":
         result = subprocess.run(
@@ -453,11 +404,11 @@ def restore(
     return 0
 
 
-def migrate(
+def bootstrap(
     *,
     codex_home: Path,
     agents_skills: Path,
-    repo_codex: Path,
+    repo_home: Path,
     backup_root: Path,
     process_running: Callable[[], bool],
     timestamp: Callable[[], str] | None = None,
@@ -472,18 +423,10 @@ def migrate(
         return 1
     if _kind(codex_home) != "directory" or _kind(agents_skills) != "directory":
         return 1
-    unknown = {
-        path.name
-        for path in codex_home.iterdir()
-        if path.name not in MANAGED_NAMES and not is_runtime_name(path.name)
-    }
-    if unknown:
-        return 1
-
     runtime_entries = [
         path.relative_to(codex_home)
         for path in codex_home.iterdir()
-        if is_runtime_name(path.name)
+        if path.name not in MANAGED_NAMES
     ]
     nested_system = codex_home / "skills" / ".system"
     managed_skills = nested_system.parent
@@ -494,7 +437,7 @@ def migrate(
         and _lexists(nested_system)
     ):
         runtime_entries.append(nested_system.relative_to(codex_home))
-    if any(_lexists(repo_codex / path) for path in runtime_entries):
+    if any(_lexists(repo_home / path) for path in runtime_entries):
         return 1
     timestamp_value = (timestamp or (lambda: datetime.now().strftime("%Y%m%d-%H%M%S")))()
     backup = backup_root / f"codex-home-{timestamp_value}"
@@ -508,8 +451,18 @@ def migrate(
     )
     codex_snapshot: Path | None = None
     agents_skills_snapshot: Path | None = None
+    stage_root = repo_home.with_name(
+        f".{repo_home.name}.bootstrap-stage-{timestamp_value}"
+    )
+    suffix = 0
+    while _lexists(stage_root):
+        suffix += 1
+        stage_root = repo_home.with_name(
+            f".{repo_home.name}.bootstrap-stage-{timestamp_value}-{suffix}"
+        )
+    stage = stage_root / "home"
     try:
-        if backup.resolve().is_relative_to(repo_codex.parent.resolve()):
+        if backup.resolve().is_relative_to(repo_home.parent.resolve()):
             return 1
         backup.mkdir(parents=True)
         _copy_tree(codex_home, backup / "codex")
@@ -519,13 +472,39 @@ def migrate(
         if not verify_copy(agents_skills, backup / "agents-skills"):
             return 1
 
+        stage_root.mkdir()
+        (stage_root / ".gitignore").write_text("*\n", encoding="utf-8")
+        _copy_tree(backup / "codex", stage)
+        if not verify_copy(backup / "codex", stage):
+            raise OSError("full Codex home staging verification failed")
+
+        for name in MANAGED_NAMES:
+            source = repo_home / name
+            destination = stage / name
+            if _lexists(destination):
+                _remove_path(destination)
+            if not _lexists(source):
+                continue
+            _copy_entry(source, destination)
+            if not verify_copy(source, destination):
+                raise OSError(f"managed overlay verification failed: {name}")
+
+        staged_system = stage / "skills" / ".system"
+        backup_system = backup / "codex" / "skills" / ".system"
+        if nested_system.relative_to(codex_home) in runtime_entries:
+            _copy_entry(backup_system, staged_system)
+            if not verify_copy(backup_system, staged_system):
+                raise OSError("skills/.system staging verification failed")
+
         for source in runtime_entries:
-            destination = repo_codex / source
+            destination = repo_home / source
             journal.append(destination)
             _persist_journal(backup / "transaction-journal.txt", journal)
-            copy_runtime(backup / "codex" / source, destination)
-            if not verify_copy(backup / "codex" / source, destination):
+            copy_runtime(stage / source, destination)
+            if not verify_copy(stage / source, destination):
                 raise OSError(f"runtime copy verification failed: {source}")
+
+        _remove_path(stage_root)
 
         if process_running():
             _rollback(
@@ -544,11 +523,11 @@ def migrate(
         pending_agents_skills_snapshot = backup / "live-agents-skills-at-commit"
         rename_live(agents_skills, pending_agents_skills_snapshot)
         agents_skills_snapshot = pending_agents_skills_snapshot
-        create_link(repo_codex, codex_home)
-        create_link(repo_codex / "skills", agents_skills)
-        if codex_home.resolve() != repo_codex.resolve():
+        create_link(repo_home, codex_home)
+        create_link(repo_home / "skills", agents_skills)
+        if codex_home.resolve() != repo_home.resolve():
             raise OSError("Codex home link verification failed")
-        if agents_skills.resolve() != (repo_codex / "skills").resolve():
+        if agents_skills.resolve() != (repo_home / "skills").resolve():
             raise OSError("personal skills link verification failed")
     except OSError:
         _rollback(
@@ -562,6 +541,15 @@ def migrate(
             agents_skills_snapshot=agents_skills_snapshot,
             rename_path=rename_live,
         )
+        if _lexists(stage_root):
+            try:
+                _remove_path(stage_root)
+            except OSError as cleanup_error:
+                print(
+                    f"migrate-home: stage cleanup failed for {stage_root}: "
+                    f"{cleanup_error}",
+                    file=sys.stderr,
+                )
         return 1
     if on_filesystem_commit is not None:
         on_filesystem_commit()
@@ -575,6 +563,37 @@ def migrate(
             )
             return 1
     return 0
+
+
+def migrate(
+    *,
+    codex_home: Path,
+    agents_skills: Path,
+    repo_codex: Path,
+    backup_root: Path,
+    process_running: Callable[[], bool],
+    timestamp: Callable[[], str] | None = None,
+    link_directory: Callable[[Path, Path], None] | None = None,
+    plugin_reconciler: Callable[[], int] | None = None,
+    copy_entry: Callable[[Path, Path], None] | None = None,
+    remove_path: Callable[[Path], None] | None = None,
+    on_filesystem_commit: Callable[[], None] | None = None,
+    rename_path: Callable[[Path, Path], None] | None = None,
+) -> int:
+    return bootstrap(
+        codex_home=codex_home,
+        agents_skills=agents_skills,
+        repo_home=repo_codex,
+        backup_root=backup_root,
+        process_running=process_running,
+        timestamp=timestamp,
+        link_directory=link_directory,
+        plugin_reconciler=plugin_reconciler,
+        copy_entry=copy_entry,
+        remove_path=remove_path,
+        on_filesystem_commit=on_filesystem_commit,
+        rename_path=rename_path,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

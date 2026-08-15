@@ -16,7 +16,7 @@ sys.path.insert(0, str(CODEX_DIR))
 import bootstrap_home as migrate_home
 
 
-class MigrateHomeTest(unittest.TestCase):
+class BootstrapHomeTest(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows junction semantics")
     def test_is_junction_supports_python_311_path_api(self) -> None:
         class PathWithoutIsJunction:
@@ -750,7 +750,7 @@ class MigrateHomeTest(unittest.TestCase):
             )
             self.assertFalse(migrate_home.verify_copy(source, copy))
 
-    def test_unclassified_top_level_entry_is_rejected_before_backup(self) -> None:
+    def test_unknown_top_level_entry_is_backed_up_and_copied_from_stage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             codex_home = root / "home" / ".codex"
@@ -761,18 +761,105 @@ class MigrateHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (repo_codex / "skills").mkdir(parents=True)
             (codex_home / "unknown-new-state").write_text("unknown", encoding="utf-8")
+            (codex_home / "hooks").mkdir()
+            (codex_home / "hooks" / "legacy.sh").write_text(
+                "legacy", encoding="utf-8"
+            )
+            staged_sources: list[Path] = []
+            staged_legacy_hooks: list[bool] = []
+            staging_ignore_contents: list[str | None] = []
 
-            status = migrate_home.migrate(
+            def copy_from_stage(source: Path, destination: Path) -> None:
+                staged_sources.append(source)
+                staged_legacy_hooks.append((source.parent / "hooks").exists())
+                ignore = source.parents[1] / ".gitignore"
+                staging_ignore_contents.append(
+                    ignore.read_text(encoding="utf-8") if ignore.is_file() else None
+                )
+                migrate_home._copy_entry(source, destination)
+
+            status = migrate_home.bootstrap(
                 codex_home=codex_home,
                 agents_skills=agents_skills,
-                repo_codex=repo_codex,
+                repo_home=repo_codex,
                 backup_root=backup_root,
                 process_running=lambda: False,
+                timestamp=lambda: "20260815-130000",
+                copy_entry=copy_from_stage,
             )
 
-            self.assertEqual(1, status)
-            self.assertTrue((codex_home / "unknown-new-state").is_file())
-            self.assertFalse(backup_root.exists())
+            backup = backup_root / "codex-home-20260815-130000"
+            self.assertEqual(0, status)
+            self.assertEqual(
+                "unknown",
+                (backup / "codex" / "unknown-new-state").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertEqual(1, len(staged_sources))
+            self.assertIn("bootstrap-stage", staged_sources[0].parents[1].name)
+            self.assertEqual([False], staged_legacy_hooks)
+            self.assertEqual(["*\n"], staging_ignore_contents)
+            self.assertEqual(
+                "unknown",
+                (repo_codex / "unknown-new-state").read_text(encoding="utf-8"),
+            )
+
+    def test_bootstrap_copies_unknown_runtime_and_overlays_repository_managed_paths(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            (codex_home / "browser").mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills" / "managed").mkdir(parents=True)
+            (codex_home / "browser" / "state.json").write_text(
+                "runtime", encoding="utf-8"
+            )
+            (codex_home / "unknown-state").write_text(
+                "unknown", encoding="utf-8"
+            )
+            (codex_home / "config.toml").write_text(
+                "live", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text(
+                "managed", encoding="utf-8"
+            )
+            (repo_home / "skills" / "managed" / "SKILL.md").write_text(
+                "managed skill", encoding="utf-8"
+            )
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=root / "backups",
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-120000",
+            )
+
+            self.assertEqual(0, status)
+            self.assertEqual(
+                "runtime",
+                (repo_home / "browser" / "state.json").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertTrue((repo_home / "unknown-state").is_file())
+            self.assertEqual(
+                "managed",
+                (repo_home / "config.toml").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "managed skill",
+                (repo_home / "skills" / "managed" / "SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertTrue(codex_home.is_symlink())
 
     def test_success_migrates_models_cache_runtime_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
