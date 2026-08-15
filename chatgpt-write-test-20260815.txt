@@ -1,1 +1,0 @@
-This is a harmless write-access test created by ChatGPT after reconnecting the GitHub plugin on 2026-08-15.

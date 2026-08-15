@@ -2,8 +2,6 @@
 # agent-memory (個人永続記憶) の配置先を解決し、stdout に絶対パスを 1 行だけ出力する。
 # ghq.root がある環境では <root>/github.com/shishi/agent-memory を使い、なければ
 # 既定 root ~/dev/src 配下を返す。配置先の「解決」だけを行い、実体の移動はしない。
-# 旧 claude-memory からの移行は spec の手順で手動実施する
-# (docs/superpowers/specs/2026-07-11-agent-memory-design.md)。
 #
 # 入力はすべて環境変数:
 #   AGENT_MEMORY_DIR  明示 override (最優先)

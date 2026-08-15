@@ -112,10 +112,10 @@ elif [[ $(uname -s) == MINGW* ]]; then
 fi
 
 # agent-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
-# 配置先は claude/resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
+# 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
 # 移動しない — 旧 claude-memory からの移行は spec 手順で手動)。
 # symlink は dotfiles の .gitignore により追跡されない。
-AGENT_MEMORY_DIR="$(bash "${DOTDIR}/claude/resolve-memory-dir.sh")"
+AGENT_MEMORY_DIR="$(bash "${DOTDIR}/resolve-memory-dir.sh")"
 resolve_status=$?
 # setup.sh には set -e がないため、ヘルパーの失敗や壊れた出力 (空・複数行・
 # 相対パス) をここで検証しないと後続の clone/symlink が変な場所に走る。

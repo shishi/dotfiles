@@ -319,6 +319,7 @@ devenv.local.nix
 .pre-commit-config.yaml
 
 # agent 作業ドキュメント (superpowers spec/plan/brainstorm, handoff)
+.worktrees/
 .handoff.md
 doc/superpowers/
 docs/superpowers/
