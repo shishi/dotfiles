@@ -6,6 +6,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -114,6 +115,27 @@ class BootstrapHomeTest(unittest.TestCase):
             runner.call_args.args[0],
         )
 
+    def test_windows_process_check_fails_closed_when_tasklist_errors(self) -> None:
+        tasklist = subprocess.CompletedProcess([], 5, "", "Access is denied")
+        stderr = io.StringIO()
+        with patch.object(migrate_home.os, "name", "nt"), patch.object(
+            migrate_home.subprocess, "run", return_value=tasklist
+        ), redirect_stderr(stderr):
+            running = migrate_home.default_process_running()
+
+        self.assertTrue(running)
+        self.assertIn("process check failed", stderr.getvalue())
+
+    def test_windows_process_check_fails_closed_when_tasklist_cannot_start(self) -> None:
+        stderr = io.StringIO()
+        with patch.object(migrate_home.os, "name", "nt"), patch.object(
+            migrate_home.subprocess, "run", side_effect=OSError("not found")
+        ), redirect_stderr(stderr):
+            running = migrate_home.default_process_running()
+
+        self.assertTrue(running)
+        self.assertIn("process check failed", stderr.getvalue())
+
     def test_migrate_rejects_codex_home_symlink_before_backup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -209,6 +231,40 @@ class BootstrapHomeTest(unittest.TestCase):
 
         runner.assert_not_called()
 
+    def test_directory_link_identity_ignores_ctime_changed_by_quarantine_rename(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target"
+            link = root / "link"
+            quarantine = root / "link-quarantine"
+            target.mkdir()
+            link.symlink_to(target, target_is_directory=True)
+            before = SimpleNamespace(
+                st_dev=1,
+                st_ino=2,
+                st_mode=3,
+                st_ctime_ns=4,
+                st_reparse_tag=0,
+            )
+            after = SimpleNamespace(
+                st_dev=1,
+                st_ino=2,
+                st_mode=3,
+                st_ctime_ns=5,
+                st_reparse_tag=0,
+            )
+
+            with patch.object(migrate_home.os, "lstat", side_effect=(before, after)):
+                identity = migrate_home._directory_link_identity(link, target)
+                link.rename(quarantine)
+                quarantined_identity = migrate_home._directory_link_identity(
+                    quarantine, target
+                )
+
+            self.assertEqual(identity, quarantined_identity)
+
     def test_copy_broken_directory_symlink_does_not_follow_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -281,6 +337,30 @@ class BootstrapHomeTest(unittest.TestCase):
 
         self.assertFalse(running)
         self.assertEqual(2, runner.call_count)
+
+    def test_unix_process_check_fails_closed_when_pgrep_errors(self) -> None:
+        error = subprocess.CompletedProcess([], 2, "", "permission denied")
+        stderr = io.StringIO()
+        with patch.object(migrate_home.os, "name", "posix"), patch.object(
+            migrate_home.subprocess,
+            "run",
+            side_effect=(error, AssertionError("uppercase check must not run")),
+        ) as runner, redirect_stderr(stderr):
+            running = migrate_home.default_process_running()
+
+        self.assertTrue(running)
+        self.assertEqual(1, runner.call_count)
+        self.assertIn("process check failed", stderr.getvalue())
+
+    def test_unix_process_check_fails_closed_when_pgrep_cannot_start(self) -> None:
+        stderr = io.StringIO()
+        with patch.object(migrate_home.os, "name", "posix"), patch.object(
+            migrate_home.subprocess, "run", side_effect=OSError("not found")
+        ), redirect_stderr(stderr):
+            running = migrate_home.default_process_running()
+
+        self.assertTrue(running)
+        self.assertIn("process check failed", stderr.getvalue())
 
     def test_restore_refuses_before_inspecting_backup_while_codex_is_running(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1516,13 +1596,15 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertEqual(1, status)
             self.assertEqual(
                 "not owned",
-                (codex_home / "foreign.txt").read_text(encoding="utf-8"),
+                (
+                    backup
+                    / "codex-link-rollback-quarantine"
+                    / "foreign.txt"
+                ).read_text(encoding="utf-8"),
             )
             self.assertEqual(
                 "live",
-                (backup / "live-codex-at-commit" / "live.txt").read_text(
-                    encoding="utf-8"
-                ),
+                (codex_home / "live.txt").read_text(encoding="utf-8"),
             )
             self.assertFalse(agents_skills.is_symlink())
             self.assertEqual(
@@ -1532,11 +1614,9 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertEqual(
                 "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
             )
-            self.assertIn("rollback rename failed", stderr.getvalue())
+            self.assertIn("rollback ownership changed", stderr.getvalue())
 
-    def test_owned_link_swap_between_check_and_unlink_preserves_foreign_directory(
-        self,
-    ) -> None:
+    def test_link_replaced_with_regular_file_is_quarantined_not_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             codex_home = root / "home" / ".codex"
@@ -1560,28 +1640,17 @@ class BootstrapHomeTest(unittest.TestCase):
                     raise OSError("injected second link failure")
                 os.symlink(source, destination, target_is_directory=True)
 
-            def install_foreign_directory(path: Path) -> None:
-                path.unlink()
-                path.mkdir()
-                (path / "foreign.txt").write_text("foreign", encoding="utf-8")
+            backup = backup_root / "codex-home-20260815-210000"
+            quarantine = backup / "codex-link-rollback-quarantine"
 
-            def unsafe_recursive_remove(path: Path) -> None:
-                if path == codex_home:
-                    install_foreign_directory(path)
-                migrate_home._remove_path(path)
-
-            def swap_before_nonrecursive_unlink(path: Path) -> None:
-                if path == codex_home:
-                    install_foreign_directory(path)
-                path.unlink()
+            def replace_link_before_quarantine(source: Path, destination: Path) -> None:
+                if source == codex_home and destination == quarantine:
+                    source.unlink()
+                    source.write_text("foreign", encoding="utf-8")
+                source.rename(destination)
 
             stderr = io.StringIO()
-            with patch.object(
-                migrate_home,
-                "_unlink_directory_link",
-                side_effect=swap_before_nonrecursive_unlink,
-                create=True,
-            ), redirect_stderr(stderr):
+            with redirect_stderr(stderr):
                 status = migrate_home.bootstrap(
                     codex_home=codex_home,
                     agents_skills=agents_skills,
@@ -1590,19 +1659,14 @@ class BootstrapHomeTest(unittest.TestCase):
                     process_running=lambda: False,
                     timestamp=lambda: "20260815-210000",
                     link_directory=fail_second_link,
-                    remove_path=unsafe_recursive_remove,
+                    rename_path=replace_link_before_quarantine,
                 )
 
-            backup = backup_root / "codex-home-20260815-210000"
             self.assertEqual(1, status)
-            self.assertEqual(
-                "foreign", (codex_home / "foreign.txt").read_text(encoding="utf-8")
-            )
+            self.assertEqual("foreign", quarantine.read_text(encoding="utf-8"))
             self.assertEqual(
                 "live",
-                (backup / "live-codex-at-commit" / "live.txt").read_text(
-                    encoding="utf-8"
-                ),
+                (codex_home / "live.txt").read_text(encoding="utf-8"),
             )
             self.assertFalse(agents_skills.is_symlink())
             self.assertEqual(
@@ -1612,7 +1676,7 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertEqual(
                 "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
             )
-            self.assertIn("rollback unlink link failed", stderr.getvalue())
+            self.assertIn("rollback ownership changed", stderr.getvalue())
 
     def test_second_live_snapshot_rename_failure_restores_first_snapshot_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

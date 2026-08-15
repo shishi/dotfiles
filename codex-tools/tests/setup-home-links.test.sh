@@ -119,26 +119,27 @@ if HOME="$TEST_ROOT/cleanup-failure/home" \
   LN_COUNT_FILE="$TEST_ROOT/cleanup-failure/ln-count" REAL_LN="$REAL_LN" \
   VERIFY_BREAK_PATH="$TEST_ROOT/cleanup-failure/dotfiles/codex/skills" \
   RM_ATTEMPTS_FILE="$TEST_ROOT/cleanup-failure/rm-attempts" REAL_RM="$REAL_RM" \
-  RM_FAIL_TARGET="$TEST_ROOT/cleanup-failure/home/.agents/skills" \
+  RM_FAIL_TARGET="$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
   PATH="$TEST_ROOT/cleanup-failure/bin:$PATH" \
   bash "$HELPER" "$TEST_ROOT/cleanup-failure/dotfiles" \
   >/dev/null 2>"$TEST_ROOT/cleanup-failure/stderr"; then
   echo "cleanup failure unexpectedly succeeded" >&2
   exit 1
 fi
-[ -L "$TEST_ROOT/cleanup-failure/home/.agents/skills" ]
+[ -L "$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" ]
+[ ! -e "$TEST_ROOT/cleanup-failure/home/.agents/skills" ]
 [ ! -e "$TEST_ROOT/cleanup-failure/home/.codex" ]
 [ ! -L "$TEST_ROOT/cleanup-failure/home/.codex" ]
 grep -F "symlink verification failed" "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing original verification failure diagnostic" >&2; exit 1; }
-grep -F "could not remove created link: $TEST_ROOT/cleanup-failure/home/.agents/skills" \
+grep -F "could not remove quarantined link: $TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
   "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing skills cleanup failure diagnostic" >&2; exit 1; }
 grep -F "rollback incomplete" "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing rollback incomplete diagnostic" >&2; exit 1; }
 expected_rm_attempts=$(printf '%s\n%s' \
-  "$TEST_ROOT/cleanup-failure/home/.agents/skills" \
-  "$TEST_ROOT/cleanup-failure/home/.codex")
+  "$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
+  "$TEST_ROOT/cleanup-failure/home/.codex.rollback-quarantine")
 [ "$(cat "$TEST_ROOT/cleanup-failure/rm-attempts")" = "$expected_rm_attempts" ]
 
 # An existing lock rejects a concurrent setup without touching links.
@@ -185,11 +186,12 @@ if HOME="$TEST_ROOT/ownership-change/home" \
   echo "ownership change unexpectedly succeeded" >&2
   exit 1
 fi
-if [ ! -L "$TEST_ROOT/ownership-change/home/.agents/skills" ]; then
+if [ ! -L "$TEST_ROOT/ownership-change/home/.agents/skills.rollback-quarantine" ]; then
   echo "ownership-changed skills link was removed" >&2
   exit 1
 fi
-[ "$(readlink "$TEST_ROOT/ownership-change/home/.agents/skills")" \
+[ ! -e "$TEST_ROOT/ownership-change/home/.agents/skills" ]
+[ "$(readlink "$TEST_ROOT/ownership-change/home/.agents/skills.rollback-quarantine")" \
   = "$TEST_ROOT/ownership-change/wrong-target" ]
 [ ! -e "$TEST_ROOT/ownership-change/home/.codex" ]
 [ ! -L "$TEST_ROOT/ownership-change/home/.codex" ]
@@ -351,3 +353,41 @@ grep -F "ownership changed: $TEST_ROOT/skills-wrong-post-create/home/.agents/ski
   || { echo "missing wrong skills ownership diagnostic" >&2; exit 1; }
 grep -F "rollback incomplete" "$TEST_ROOT/skills-wrong-post-create/stderr" >/dev/null \
   || { echo "missing wrong skills rollback diagnostic" >&2; exit 1; }
+
+# A regular file swapped in immediately before cleanup is quarantined, never removed.
+mkdir -p "$TEST_ROOT/regular-file-swap/dotfiles/codex/skills" \
+  "$TEST_ROOT/regular-file-swap/home" "$TEST_ROOT/regular-file-swap/bin"
+printf '0\n' > "$TEST_ROOT/regular-file-swap/ln-count"
+cat > "$TEST_ROOT/regular-file-swap/bin/ln" <<'FAKE_LN'
+#!/usr/bin/env bash
+count=$(($(cat "$LN_COUNT_FILE") + 1))
+printf '%s\n' "$count" > "$LN_COUNT_FILE"
+[ "$count" -ne 3 ] || exit 1
+exec "$REAL_LN" "$@"
+FAKE_LN
+cat > "$TEST_ROOT/regular-file-swap/bin/mv" <<'FAKE_MV'
+#!/usr/bin/env bash
+if [ "$1" = "$CODEX_TARGET" ]; then
+  rm "$1"
+  printf 'foreign\n' > "$1"
+fi
+exec "$REAL_MV" "$@"
+FAKE_MV
+chmod +x "$TEST_ROOT/regular-file-swap/bin/ln" \
+  "$TEST_ROOT/regular-file-swap/bin/mv"
+REAL_MV="$(command -v mv)"
+if HOME="$TEST_ROOT/regular-file-swap/home" \
+  LN_COUNT_FILE="$TEST_ROOT/regular-file-swap/ln-count" REAL_LN="$REAL_LN" \
+  CODEX_TARGET="$TEST_ROOT/regular-file-swap/home/.codex" REAL_MV="$REAL_MV" \
+  PATH="$TEST_ROOT/regular-file-swap/bin:$PATH" \
+  bash "$HELPER" "$TEST_ROOT/regular-file-swap/dotfiles" \
+  >/dev/null 2>"$TEST_ROOT/regular-file-swap/stderr"; then
+  echo "regular-file swap unexpectedly succeeded" >&2
+  exit 1
+fi
+[ "$(cat "$TEST_ROOT/regular-file-swap/home/.codex.rollback-quarantine")" = "foreign" ]
+grep -F "ownership changed: $TEST_ROOT/regular-file-swap/home/.codex" \
+  "$TEST_ROOT/regular-file-swap/stderr" >/dev/null \
+  || { echo "missing regular-file ownership diagnostic" >&2; exit 1; }
+grep -F "rollback incomplete" "$TEST_ROOT/regular-file-swap/stderr" >/dev/null \
+  || { echo "missing regular-file rollback diagnostic" >&2; exit 1; }

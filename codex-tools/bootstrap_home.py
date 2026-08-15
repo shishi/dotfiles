@@ -27,22 +27,37 @@ SAFE_REPOSITORY_GITIGNORE = (
 
 
 def default_process_running() -> bool:
-    if os.name == "nt":
-        result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq Codex.exe", "/FO", "CSV", "/NH"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return result.returncode == 0 and '"codex.exe"' in result.stdout.casefold()
+    try:
+        if os.name == "nt":
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Codex.exe", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                print("migrate-home: process check failed: tasklist", file=sys.stderr)
+                return True
+            return '"codex.exe"' in result.stdout.casefold()
+    except OSError as error:
+        print(f"migrate-home: process check failed: {error}", file=sys.stderr)
+        return True
+
     for process_name in ("codex", "Codex"):
-        result = subprocess.run(
-            ["pgrep", "-x", process_name],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["pgrep", "-x", process_name],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as error:
+            print(f"migrate-home: process check failed: {error}", file=sys.stderr)
+            return True
         if result.returncode == 0:
+            return True
+        if result.returncode != 1:
+            print("migrate-home: process check failed: pgrep", file=sys.stderr)
             return True
     return False
 
@@ -203,7 +218,7 @@ def _remove_path(path: Path) -> None:
 
 def _directory_link_identity(
     path: Path, target: Path
-) -> tuple[int, int, int, int, int] | None:
+) -> tuple[int, int, int, int] | None:
     if not (path.is_symlink() or _is_junction(path)):
         return None
     if path.resolve() != target.resolve():
@@ -213,7 +228,6 @@ def _directory_link_identity(
         metadata.st_dev,
         metadata.st_ino,
         metadata.st_mode,
-        metadata.st_ctime_ns,
         getattr(metadata, "st_reparse_tag", 0),
     )
 
@@ -236,7 +250,7 @@ def _rollback(
     repo_snapshot: Path | None = None,
     repo_installed: bool = False,
     created_links: tuple[
-        tuple[Path, Path, tuple[int, int, int, int, int]], ...
+        tuple[Path, Path, tuple[int, int, int, int]], ...
     ] = (),
     rename_path: Callable[[Path, Path], None] | None = None,
 ) -> bool:
@@ -260,16 +274,36 @@ def _rollback(
             lambda source, destination: source.rename(destination)
         )
         for link, target, identity in reversed(created_links):
+            quarantine = backup / f"{link.name.lstrip('.')}-link-rollback-quarantine"
+            suffix = 0
+            while _lexists(quarantine):
+                suffix += 1
+                quarantine = backup / (
+                    f"{link.name.lstrip('.')}-link-rollback-quarantine-{suffix}"
+                )
+            if not attempt(
+                "quarantine link",
+                link,
+                lambda link=link, quarantine=quarantine: rename_entry(link, quarantine),
+            ):
+                continue
             try:
-                owned = _directory_link_identity(link, target) == identity
+                owned = _directory_link_identity(quarantine, target) == identity
             except OSError:
                 owned = False
-            if owned:
-                attempt(
-                    "unlink link",
-                    link,
-                    lambda link=link: _unlink_directory_link(link),
+            if not owned:
+                failed = True
+                print(
+                    f"migrate-home: rollback ownership changed for {link}; "
+                    f"retained at {quarantine}",
+                    file=sys.stderr,
                 )
+                continue
+            attempt(
+                "unlink quarantined link",
+                quarantine,
+                lambda quarantine=quarantine: _unlink_directory_link(quarantine),
+            )
         if repo_installed and repo_home is not None:
             repo_quarantine = backup / "repo-codex-rollback-quarantine"
             suffix = 0
@@ -569,7 +603,7 @@ def bootstrap(
     repo_snapshot: Path | None = None
     repo_installed = False
     created_links: list[
-        tuple[Path, Path, tuple[int, int, int, int, int]]
+        tuple[Path, Path, tuple[int, int, int, int]]
     ] = []
 
     def create_tracked_link(source: Path, destination: Path) -> None:

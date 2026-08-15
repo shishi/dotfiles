@@ -76,13 +76,23 @@ link_matches_source() {
 remove_created_link() {
   local expected_source="$1"
   local target_path="$2"
+  local quarantine_path="${target_path}.rollback-quarantine"
+  local suffix=0
 
-  if ! link_matches_source "$expected_source" "$target_path"; then
-    fail "ownership changed: $target_path"
+  while [ -e "$quarantine_path" ] || [ -L "$quarantine_path" ]; do
+    suffix=$((suffix + 1))
+    quarantine_path="${target_path}.rollback-quarantine-${suffix}"
+  done
+  if ! mv "$target_path" "$quarantine_path"; then
+    fail "could not quarantine created link: $target_path"
     return 1
   fi
-  if ! rm "$target_path"; then
-    fail "could not remove created link: $target_path"
+  if ! link_matches_source "$expected_source" "$quarantine_path"; then
+    fail "ownership changed: $target_path (retained at $quarantine_path)"
+    return 1
+  fi
+  if ! rm "$quarantine_path"; then
+    fail "could not remove quarantined link: $quarantine_path"
     return 1
   fi
 }

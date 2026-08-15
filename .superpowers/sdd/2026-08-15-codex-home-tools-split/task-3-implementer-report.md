@@ -51,3 +51,24 @@
 - 同じ非破壊方針をrestore rollbackにも適用し、swap済みlive pathを`failed-restore` quarantineへrenameしてから旧live pathを復元する。対応テストもREDからGREENを確認した。
 - 追加修正後の全74テスト、`bash -n`、`git diff --check`はPASSした。
 - 新規独立再レビューは`APPROVED`。P0/P1/P2/P3はすべて0件。Windows実機でもdirectory symlinkとjunctionのidentity取得、非再帰unlink、target保持を確認した。
+
+## 最終レビューP1対応
+
+- `tasklist`の非ゼロ終了、`pgrep`の終了値2以上、各プロセス検査コマンドの`OSError`をすべてfail-closedにした。検査不能時はstderrへ理由を出し、Codexが動作中として移行・復元を停止する。
+- bootstrap rollbackはlive linkを直接unlinkしない。backup内の一意なquarantineへrenameしてから、移動先のlink種別・target・作成時identityを再検証する。検証に失敗したentryは削除せず保持してrollback不完全として報告する。
+- `setup-home-links.sh`も同じ順序で、親ディレクトリ内の一意なquarantineへ`mv`後にlink sourceを検証する。通常ファイルへの差し替えはquarantineに残る。
+- TDDとして、Windows/Unixの検査失敗4ケースと、bootstrap・shell helperの通常ファイル差し替え2ケースを先にREDで確認してから最小実装を追加した。
+
+## 最終検証
+
+- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（79 tests）
+- `bash -n codex-tools/setup-home-links.sh`: PASS
+- `bash codex-tools/tests/setup-home-links.test.sh`: PASS
+- `python -B -m unittest discover -s tests -p '*_test.py' -v`: PASS（19 tests）
+- `git diff --check`: PASS
+- 全テストはtemporary directoryのみを使用し、実ユーザーホームのbootstrap/restoreは実行していない。
+
+## P1修正後の独立再レビュー
+
+- 新規レビューエージェントがPOSIX renameによる`st_ctime_ns`更新をP1として検出した。ctimeをidentityから除外し、ctimeだけが変わるquarantine rename再現テストをREDから追加した。
+- 再レビューはP0/P1なし。inode/dev・mode・target・reparse tagによる差し替え検知は維持されることを確認した。
