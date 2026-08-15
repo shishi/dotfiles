@@ -15,10 +15,6 @@ APP_SUPPLIED_MARKETPLACES = {
     "openai-primary-runtime",
     "openai-api-curated",
 }
-REMOVAL_PROTECTED_MARKETPLACES = {
-    "openai-bundled",
-    "openai-primary-runtime",
-}
 
 
 class Runner(Protocol):
@@ -53,7 +49,10 @@ def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> i
         desired_plugins, dict
     ):
         return 1
+    desired_git_marketplaces = {}
     for name, desired in desired_marketplaces.items():
+        if name in APP_SUPPLIED_MARKETPLACES:
+            continue
         if not isinstance(desired, dict) or set(desired) != {
             "source_type",
             "source",
@@ -61,14 +60,9 @@ def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> i
             return 1
         if not isinstance(desired["source"], str):
             return 1
-        if desired["source_type"] == "git":
-            continue
-        if (
-            name in APP_SUPPLIED_MARKETPLACES
-            and desired["source_type"] == "local"
-        ):
-            continue
-        return 1
+        if desired["source_type"] != "git":
+            return 1
+        desired_git_marketplaces[name] = desired
     for plugin_id, desired in desired_plugins.items():
         if (
             not isinstance(desired, dict)
@@ -90,7 +84,7 @@ def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> i
         config_path=config_path,
         runner=runner,
         codex_path=codex_path,
-        desired_marketplaces=desired_marketplaces,
+        desired_marketplaces=desired_git_marketplaces,
         desired_plugins=desired_plugins,
     )
 
@@ -190,21 +184,21 @@ def _run_reconciliation(
     }
     for plugin_id, desired in desired_plugins.items():
         marketplace_name = plugin_id.rsplit("@", 1)[-1]
-        if desired["enabled"] and plugin_id not in installed:
-            if marketplace_name not in APP_SUPPLIED_MARKETPLACES:
-                result = runner.run([codex_path, "plugin", "add", plugin_id])
-                if result.returncode != 0:
-                    return 1
-            else:
+        if marketplace_name in APP_SUPPLIED_MARKETPLACES:
+            if desired["enabled"] and plugin_id not in installed:
                 print(
                     f"install-plugins: WARN app-supplied plugin unavailable: {plugin_id}",
                     file=sys.stderr,
                 )
+            continue
+        if desired["enabled"] and plugin_id not in installed:
+            result = runner.run([codex_path, "plugin", "add", plugin_id])
+            if result.returncode != 0:
+                return 1
         elif not desired["enabled"] and plugin_id in installed:
-            if marketplace_name not in REMOVAL_PROTECTED_MARKETPLACES:
-                result = runner.run([codex_path, "plugin", "remove", plugin_id])
-                if result.returncode != 0:
-                    return 1
+            result = runner.run([codex_path, "plugin", "remove", plugin_id])
+            if result.returncode != 0:
+                return 1
     return 0
 
 

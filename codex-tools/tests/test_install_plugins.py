@@ -134,6 +134,26 @@ class InstallPluginsTest(unittest.TestCase):
         self.assertEqual(1, status)
         self.assertEqual([], runner.calls)
 
+    def test_non_app_marketplace_metadata_is_rejected_without_running_cli(self) -> None:
+        runner = RecordingRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            config_path.write_text(
+                '[marketplaces.example]\nsource_type = "git"\n'
+                'source = "https://example.invalid/plugins.git"\n'
+                'last_updated = "2026-08-16T00:00:00Z"\n',
+                encoding="utf-8",
+            )
+
+            status = install_plugins.reconcile(
+                config_path=config_path,
+                runner=runner,
+                codex_path="codex",
+            )
+
+        self.assertEqual(1, status)
+        self.assertEqual([], runner.calls)
+
     def test_converged_external_plugin_only_lists_state(self) -> None:
         codex = "codex"
         marketplace_command = [codex, "plugin", "marketplace", "list", "--json"]
@@ -219,6 +239,58 @@ class InstallPluginsTest(unittest.TestCase):
         self.assertEqual(0, status)
         self.assertEqual([marketplace_command, plugin_command], runner.calls)
 
+    def test_runtime_marketplace_metadata_is_not_reconciled_as_desired_state(self) -> None:
+        codex = "codex"
+        marketplace_command = [codex, "plugin", "marketplace", "list", "--json"]
+        plugin_command = [codex, "plugin", "list", "--json"]
+        runner = RecordingRunner(
+            {
+                tuple(marketplace_command): completed(
+                    marketplace_command,
+                    {
+                        "marketplaces": [
+                            {"name": "openai-bundled", "marketplaceSource": {}},
+                            {
+                                "name": "example",
+                                "marketplaceSource": {
+                                    "sourceType": "git",
+                                    "source": "https://example.invalid/plugins.git",
+                                },
+                            },
+                        ]
+                    },
+                ),
+                tuple(plugin_command): completed(
+                    plugin_command,
+                    {"installed": [{"pluginId": "tool@example"}]},
+                ),
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            config_path.write_text(
+                '[marketplaces.openai-bundled]\nsource_type = "local"\n'
+                'source = "C:/Codex/plugins/openai-bundled"\n'
+                'last_updated = "2026-08-16T00:00:00Z"\n'
+                'last_revision = "runtime"\n\n'
+                '[marketplaces.example]\nsource_type = "git"\n'
+                'source = "https://example.invalid/plugins.git"\n\n'
+                '[plugins."browser@openai-bundled"]\nenabled = true\n\n'
+                '[plugins."tool@example"]\nenabled = true\n',
+                encoding="utf-8",
+            )
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                status = install_plugins.reconcile(
+                    config_path=config_path,
+                    runner=runner,
+                    codex_path=codex,
+                )
+
+        self.assertEqual(0, status)
+        self.assertEqual([marketplace_command, plugin_command], runner.calls)
+        self.assertIn("browser@openai-bundled", stderr.getvalue())
+
     def test_missing_marketplace_is_added_before_enabled_plugin(self) -> None:
         codex = "codex"
         marketplace_list = [codex, "plugin", "marketplace", "list", "--json"]
@@ -296,16 +368,10 @@ class InstallPluginsTest(unittest.TestCase):
         self.assertEqual(0, status)
         self.assertEqual([marketplace_list, plugin_list, plugin_remove], runner.calls)
 
-    def test_app_supplied_plugins_follow_removal_policy(self) -> None:
+    def test_app_supplied_plugins_are_not_managed(self) -> None:
         codex = "codex"
         marketplace_list = [codex, "plugin", "marketplace", "list", "--json"]
         plugin_list = [codex, "plugin", "list", "--json"]
-        curated_remove = [
-            codex,
-            "plugin",
-            "remove",
-            "superpowers@openai-api-curated",
-        ]
         runner = RecordingRunner(
             {
                 tuple(marketplace_list): completed(
@@ -315,18 +381,16 @@ class InstallPluginsTest(unittest.TestCase):
                     plugin_list,
                     {
                         "installed": [
-                            {"pluginId": "documents@openai-primary-runtime"},
                             {"pluginId": "superpowers@openai-api-curated"},
                         ]
                     },
                 ),
-                tuple(curated_remove): succeeded(curated_remove),
             }
         )
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "config.toml"
             config_path.write_text(
-                '[plugins."documents@openai-primary-runtime"]\nenabled = false\n\n'
+                '[plugins."documents@openai-primary-runtime"]\nenabled = true\n\n'
                 '[plugins."browser@openai-bundled"]\nenabled = true\n\n'
                 '[plugins."codex-security@openai-api-curated"]\nenabled = true\n\n'
                 '[plugins."superpowers@openai-api-curated"]\nenabled = false\n',
@@ -342,7 +406,8 @@ class InstallPluginsTest(unittest.TestCase):
                 )
 
         self.assertEqual(0, status)
-        self.assertEqual([marketplace_list, plugin_list, curated_remove], runner.calls)
+        self.assertEqual([marketplace_list, plugin_list], runner.calls)
+        self.assertIn("documents@openai-primary-runtime", stderr.getvalue())
         self.assertIn("browser@openai-bundled", stderr.getvalue())
         self.assertIn("codex-security@openai-api-curated", stderr.getvalue())
 
@@ -381,12 +446,7 @@ class InstallPluginsTest(unittest.TestCase):
             "https://example.invalid/plugins.git",
         ]
         plugin_add = [codex, "plugin", "add", "tool@example"]
-        plugin_remove = [
-            codex,
-            "plugin",
-            "remove",
-            "tool@openai-api-curated",
-        ]
+        plugin_remove = [codex, "plugin", "remove", "tool@example"]
         external_config = (
             '[marketplaces.example]\nsource_type = "git"\n'
             'source = "https://example.invalid/plugins.git"\n\n'
@@ -441,14 +501,16 @@ class InstallPluginsTest(unittest.TestCase):
                 },
             ),
             "plugin-remove": (
-                '[plugins."tool@openai-api-curated"]\nenabled = false\n',
+                '[marketplaces.example]\nsource_type = "git"\n'
+                'source = "https://example.invalid/plugins.git"\n\n'
+                '[plugins."tool@example"]\nenabled = false\n',
                 {
                     tuple(marketplace_list): completed(
                         marketplace_list, {"marketplaces": []}
                     ),
                     tuple(plugin_list): completed(
                         plugin_list,
-                        {"installed": [{"pluginId": "tool@openai-api-curated"}]},
+                        {"installed": [{"pluginId": "tool@example"}]},
                     ),
                     tuple(plugin_remove): subprocess.CompletedProcess(
                         plugin_remove, 5, "", "failed"
@@ -557,13 +619,12 @@ class InstallPluginsTest(unittest.TestCase):
         codex = "codex"
         marketplace_list = [codex, "plugin", "marketplace", "list", "--json"]
         plugin_list = [codex, "plugin", "list", "--json"]
-        plugin_remove = [
-            codex,
-            "plugin",
-            "remove",
-            "tool@openai-api-curated",
-        ]
-        original = b'[plugins."tool@openai-api-curated"]\r\nenabled = false\r\n'
+        plugin_remove = [codex, "plugin", "remove", "tool@example"]
+        original = (
+            b'[marketplaces.example]\r\nsource_type = "git"\r\n'
+            b'source = "https://example.invalid/plugins.git"\r\n\r\n'
+            b'[plugins."tool@example"]\r\nenabled = false\r\n'
+        )
 
         for returncode in (0, 9):
             with self.subTest(returncode=returncode), tempfile.TemporaryDirectory() as directory:
@@ -577,7 +638,7 @@ class InstallPluginsTest(unittest.TestCase):
                         ),
                         tuple(plugin_list): completed(
                             plugin_list,
-                            {"installed": [{"pluginId": "tool@openai-api-curated"}]},
+                            {"installed": [{"pluginId": "tool@example"}]},
                         ),
                         tuple(plugin_remove): subprocess.CompletedProcess(
                             plugin_remove, returncode, "", "failed" if returncode else ""
