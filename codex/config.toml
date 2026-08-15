@@ -1,4 +1,4 @@
-personality = "pragmatic"
+personality = "friendly"
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
@@ -15,9 +15,10 @@ developer_instructions = """
 
 # Native Memories は無効。記憶は agent-memory (~/.codex/memory link) の 1 箇所のみ。
 # 経緯: docs/superpowers/specs/2026-07-11-agent-memory-design.md (dotfiles repo)
+notify = [ "C:\\Users\\shishi\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 [features]
 js_repl = false
-memories = false
+memories = true
 
 [projects.'c:\users\shishi\dev\dotfiles']
 trust_level = "trusted"
@@ -92,6 +93,9 @@ DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
 DISABLE_TELEMETRY = "1"
 MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
 
 [desktop]
 conversationDetailMode = "STEPS_COMMANDS"
@@ -104,6 +108,8 @@ localeOverride = "ja-JP"
 show-context-window-usage = true
 codeFontSize = 16
 sansFontSize = 16
+git-pull-request-merge-method = "merge"
+git-worktree-root = ".worktrees"
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -141,20 +147,33 @@ skill = "#ad7bf9"
 global = "fileManager"
 
 [marketplaces.claude-plugins-official]
+last_updated = "2026-08-15T15:27:11Z"
+last_revision = "263bb97c0d28fa15b411af908694964616524396"
 source_type = "git"
 source = "https://github.com/anthropics/claude-plugins-official.git"
 
 [marketplaces.karpathy-skills]
+last_updated = "2026-08-15T15:27:18Z"
+last_revision = "2c606141936f1eeef17fa3043a72095b4765b9c2"
 source_type = "git"
 source = "https://github.com/forrestchang/andrej-karpathy-skills.git"
 
 [marketplaces.openai-codex]
+last_updated = "2026-08-15T15:27:23Z"
+last_revision = "db52e28f4d9ded852ab3942cea316258ae4ef346"
 source_type = "git"
 source = "https://github.com/openai/codex-plugin-cc.git"
 
 [marketplaces.superpowers-marketplace]
+last_updated = "2026-08-15T15:27:28Z"
+last_revision = "1ab7b8eeef707f21565471f11d3782fac3dd1c61"
 source_type = "git"
 source = "https://github.com/obra/superpowers-marketplace.git"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-08-15T16:28:31Z"
+source_type = "local"
+source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\.worktrees\codex-home-tools-split\codex\.tmp\bundled-marketplaces\openai-bundled'
 
 [plugins."documents@openai-primary-runtime"]
 enabled = true
@@ -237,28 +256,37 @@ enabled = false
 [plugins."codex-security@openai-api-curated"]
 enabled = true
 
+[plugins."sites@openai-bundled"]
+enabled = true
+
 [hooks.state]
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:0']
 trusted_hash = "sha256:c270ed9f7fa0f3d2b0fedb7b05e0058ee2dfe04a1c10ef94dc44b65fba031fee"
+enabled = false
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:0:0']
 trusted_hash = "sha256:a04c6a8b728904ad91daaa439b6a731ac42134b0e00ed5ed5c9fa218d000c6a9"
+enabled = false
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:2:0']
 trusted_hash = "sha256:35a9671bc2c089858eafb0c5220282da420746aac739c4ffd4edf5d603308a98"
+enabled = false
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:3:0']
 trusted_hash = "sha256:14cbbb9020fe4deb5a52309208d862fc1e4f8e4a7b63b039503a852c57e5c9ac"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:1:0']
 trusted_hash = "sha256:e5a7980a8f9bdf3021d2bb243bcec4c3d87f3b6c27c1917abf1a048af7d70378"
+enabled = false
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:0:0']
 trusted_hash = "sha256:cffdfaa0fb40f4cf2474d9c3900c3a95c31987c0fa5373cb7bbe1925fe58c4b8"
+enabled = false
 
 [hooks.state."double-shot-latte@superpowers-marketplace:hooks/hooks.json:stop:0:0"]
 trusted_hash = "sha256:300a408c65b3d29d2f7a6866cb142775ec10231077a17d7f96defa2222427697"
+enabled = false
 
 [hooks.state."codex@openai-codex:hooks/hooks.json:session_start:0:0"]
 trusted_hash = "sha256:e6b9df143de11443eb576c38874cf6e0c48358f948170948fdf630f1c047c098"
@@ -289,3 +317,28 @@ trusted_hash = "sha256:bc55a03ac0094c5deb4af95c405b75b34735f318b3d9bd64a2f990297
 
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
+
+[mcp_servers.node_repl]
+args = []
+command = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node_repl.exe'
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node_modules'
+NODE_REPL_NODE_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node.exe'
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
+CODEX_HOME = 'C:\Users\shishi\.codex'
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "public-beta"
+BROWSER_USE_CODEX_APP_VERSION = "26.727.40816"
+SKY_CUA_NATIVE_PIPE = "1"
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-078b7f7c-ce2c-491d-8e22-cf823a99b6ac'
+CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe'
+
+[memories]
+generate_memories = true
+use_memories = true
