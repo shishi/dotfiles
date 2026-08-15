@@ -1,0 +1,3 @@
+ChatGPT GitHub connector write-permission test.
+Created: 2026-08-15 22:36 JST
+Safe to delete.
