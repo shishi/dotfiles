@@ -1,0 +1,50 @@
+personality = "pragmatic"
+model = "gpt-current"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+developer_instructions = "fixture repository policy"
+
+[projects.'c:\\users\\example\\project']
+trust_level = "trusted"
+
+[projects."/Users/example/repository-project"]
+trust_level = "trusted"
+
+[features]
+js_repl = false
+memories = false
+
+[windows]
+sandbox = "elevated"
+
+[marketplaces.example-marketplace]
+source_type = "git"
+source = "https://example.invalid/marketplace.git"
+
+[plugins."example@example-marketplace"]
+enabled = true
+
+[plugins."superpowers@openai-api-curated"]
+enabled = false
+
+[plugins."codex-security@openai-api-curated"]
+enabled = true
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+BASH_DEFAULT_TIMEOUT_MS = "300000"
+DISABLE_TELEMETRY = "1"
+
+[desktop]
+localeOverride = "ja-JP"
+codeFontSize = 16
+
+[hooks.state.'C:\\Users\\example\\.codex\\hooks.json:session_start:0:0']
+trusted_hash = "sha256:fixture"
+
+[computer_use.windows.always_allowed_app_ids]
+"Browser.EXAMPLE" = true

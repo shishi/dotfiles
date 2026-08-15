@@ -1,5 +1,7 @@
 personality = "pragmatic"
-sandbox_mode = "danger-full-access"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
 developer_instructions = """
@@ -14,7 +16,47 @@ developer_instructions = """
 # Native Memories は無効。記憶は agent-memory (~/.codex/memory link) の 1 箇所のみ。
 # 経緯: docs/superpowers/specs/2026-07-11-agent-memory-design.md (dotfiles repo)
 [features]
+js_repl = false
 memories = false
+
+[projects.'c:\users\shishi\dev\dotfiles']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\shishi\agent-memory']
+trust_level = "trusted"
+
+[projects."/mnt/c/Users/shishi/dev/dotfiles"]
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\voice-activate-claude']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\shishi\voice-activate-claude']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\misc\rclone\windows']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\misc\rclone']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\tddbc\javascript-jest']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\shishi\scoop_shishi']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\shishi\dotfiles']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\appdata\local\temp']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi']
+trust_level = "trusted"
 
 [projects."/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_setup"]
 trust_level = "trusted"
@@ -25,5 +67,225 @@ trust_level = "trusted"
 [projects."/Users/shigenobu.407/dev/src/github.com/shishi/dotfiles"]
 trust_level = "trusted"
 
-[tui.model_availability_nux]
-"gpt-5.5" = 2
+[windows]
+sandbox = "elevated"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+BASH_DEFAULT_TIMEOUT_MS = "300000"
+BASH_MAX_TIMEOUT_MS = "1200000"
+CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR = "1"
+CLAUDE_CODE_AUTO_CONNECT_IDE = "0"
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+CLAUDE_CODE_ENABLE_TELEMETRY = "0"
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL = "1"
+CLAUDE_CODE_IDE_SKIP_VALID_CHECK = "1"
+CLAUDE_CODE_MAX_OUTPUT_TOKENS = "32000"
+DISABLE_AUTOUPDATER = "1"
+DISABLE_ERROR_REPORTING = "1"
+DISABLE_INTERLEAVED_THINKING = "1"
+DISABLE_MICROCOMPACT = "1"
+DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
+DISABLE_TELEMETRY = "1"
+MAX_MCP_OUTPUT_TOKENS = "50000"
+MCP_TOOL_TIMEOUT = "120000"
+
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = true
+followUpQueueMode = "steer"
+runCodexInWindowsSubsystemForLinux = false
+integratedTerminalShell = "wsl"
+composerEnterBehavior = "cmdAlways"
+localeOverride = "ja-JP"
+show-context-window-usage = true
+codeFontSize = 16
+sansFontSize = 16
+
+[desktop.appearanceLightChromeTheme]
+accent = "#339cff"
+contrast = 45
+ink = "#1a1c1f"
+opaqueWindows = false
+surface = "#ffffff"
+
+[desktop.appearanceLightChromeTheme.fonts]
+code = "UDEV Gothic NF"
+ui = "Noto Sans JP"
+
+[desktop.appearanceLightChromeTheme.semanticColors]
+diffAdded = "#00a240"
+diffRemoved = "#ba2623"
+skill = "#924ff7"
+
+[desktop.appearanceDarkChromeTheme]
+accent = "#339cff"
+contrast = 60
+ink = "#ffffff"
+opaqueWindows = false
+surface = "#181818"
+
+[desktop.appearanceDarkChromeTheme.fonts]
+code = "UDEV Gothic NF"
+ui = "Noto Sans JP"
+
+[desktop.appearanceDarkChromeTheme.semanticColors]
+diffAdded = "#40c977"
+diffRemoved = "#fa423e"
+skill = "#ad7bf9"
+
+[desktop.open-in-target-preferences]
+global = "fileManager"
+
+[marketplaces.claude-plugins-official]
+source_type = "git"
+source = "https://github.com/anthropics/claude-plugins-official.git"
+
+[marketplaces.karpathy-skills]
+source_type = "git"
+source = "https://github.com/forrestchang/andrej-karpathy-skills.git"
+
+[marketplaces.openai-codex]
+source_type = "git"
+source = "https://github.com/openai/codex-plugin-cc.git"
+
+[marketplaces.superpowers-marketplace]
+source_type = "git"
+source = "https://github.com/obra/superpowers-marketplace.git"
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."claude-code-setup@claude-plugins-official"]
+enabled = true
+
+[plugins."code-review@claude-plugins-official"]
+enabled = true
+
+[plugins."feature-dev@claude-plugins-official"]
+enabled = true
+
+[plugins."lua-lsp@claude-plugins-official"]
+enabled = true
+
+[plugins."pr-review-toolkit@claude-plugins-official"]
+enabled = true
+
+[plugins."pyright-lsp@claude-plugins-official"]
+enabled = true
+
+[plugins."ruby-lsp@claude-plugins-official"]
+enabled = true
+
+[plugins."typescript-lsp@claude-plugins-official"]
+enabled = true
+
+[plugins."andrej-karpathy-skills@karpathy-skills"]
+enabled = true
+
+[plugins."codex@openai-codex"]
+enabled = true
+
+[plugins."double-shot-latte@superpowers-marketplace"]
+enabled = true
+
+[plugins."elements-of-style@superpowers-marketplace"]
+enabled = true
+
+[plugins."superpowers@superpowers-marketplace"]
+enabled = true
+
+[plugins."superpowers-chrome@superpowers-marketplace"]
+enabled = true
+
+[plugins."superpowers-developing-for-claude-code@superpowers-marketplace"]
+enabled = true
+
+[plugins."superpowers-lab@superpowers-marketplace"]
+enabled = true
+
+[plugins."computer-use@openai-bundled"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."superpowers@openai-api-curated"]
+enabled = false
+
+[plugins."codex-security@openai-api-curated"]
+enabled = true
+
+[hooks.state]
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:0']
+trusted_hash = "sha256:c270ed9f7fa0f3d2b0fedb7b05e0058ee2dfe04a1c10ef94dc44b65fba031fee"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:0:0']
+trusted_hash = "sha256:a04c6a8b728904ad91daaa439b6a731ac42134b0e00ed5ed5c9fa218d000c6a9"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:2:0']
+trusted_hash = "sha256:35a9671bc2c089858eafb0c5220282da420746aac739c4ffd4edf5d603308a98"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:3:0']
+trusted_hash = "sha256:14cbbb9020fe4deb5a52309208d862fc1e4f8e4a7b63b039503a852c57e5c9ac"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:1:0']
+trusted_hash = "sha256:e5a7980a8f9bdf3021d2bb243bcec4c3d87f3b6c27c1917abf1a048af7d70378"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:0:0']
+trusted_hash = "sha256:cffdfaa0fb40f4cf2474d9c3900c3a95c31987c0fa5373cb7bbe1925fe58c4b8"
+
+[hooks.state."double-shot-latte@superpowers-marketplace:hooks/hooks.json:stop:0:0"]
+trusted_hash = "sha256:300a408c65b3d29d2f7a6866cb142775ec10231077a17d7f96defa2222427697"
+
+[hooks.state."codex@openai-codex:hooks/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:e6b9df143de11443eb576c38874cf6e0c48358f948170948fdf630f1c047c098"
+
+[hooks.state."codex@openai-codex:hooks/hooks.json:stop:0:0"]
+trusted_hash = "sha256:3dfaa7e4f022570b260b8a8cf4ac7585c986175256b887a4723fac4f358a482f"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:20cb5bb2d9c306f6d8bd1451f8f2c8b71ffa43248e11fc27cfcdacffccb1691e"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:3c17f360e366caa9502acce7ce295f8b3f55a883666ad6c78fb697e111df9477"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:session_start:1:0"]
+trusted_hash = "sha256:ef012e8c7fd8bfe8bd360fc2824307efe08f25cd4f6386ff3a484ee0c1116b59"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:session_start:2:0"]
+trusted_hash = "sha256:d1557b78dd6081a9d9359ed632f8724f9ebb4e2ac1aa7b45c967a7a2138d4502"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:session_start:3:0"]
+trusted_hash = "sha256:14cbbb9020fe4deb5a52309208d862fc1e4f8e4a7b63b039503a852c57e5c9ac"
+
+[hooks.state."/mnt/c/Users/shishi/.codex/hooks.json:user_prompt_submit:0:0"]
+trusted_hash = "sha256:5ba279a9b1c37afcf03730d7c775937905d8d8d1af687912c4a19ad93e1dd57b"
+
+[hooks.state."codex@openai-codex:hooks/hooks.json:session_end:0:0"]
+trusted_hash = "sha256:bc55a03ac0094c5deb4af95c405b75b34735f318b3d9bd64a2f9902973861606"
+
+[computer_use.windows.always_allowed_app_ids]
+"Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true

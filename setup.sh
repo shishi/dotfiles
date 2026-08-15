@@ -150,23 +150,7 @@ else
   fi
 fi
 
-if [ -L ~/.codex ]; then
-  rm ~/.codex
-  ln -sf ${DOTDIR}/codex ~/.codex
-elif mountpoint -q ~/.codex 2>/dev/null \
-  || grep -qE "[[:space:]]$HOME/\.codex[[:space:]]" /proc/mounts 2>/dev/null; then
-  # ~/.codex が bind mount (devcontainer等) の場合は破壊しない。
-  # bind mount 越しに ${DOTDIR}/codex/ の中身は既に同じ実体を指している想定。
-  echo "setup.sh: ~/.codex is a mount point; skip codex symlink (functional equivalent already in place)"
-elif [ -d ~/.codex ]; then
-  # auth.json / sessions / logs などを含む実体ディレクトリの可能性が高いので、
-  # Claude と同じく破壊的な rm -fr は行わない。
-  # 本当に symlink 化したい場合は手動で:
-  #   rm -fr ~/.codex && ln -sf ${DOTDIR}/codex ~/.codex
-  echo "setup.sh: ~/.codex exists as a directory; skip (manual setup required if intended as symlink)"
-else
-  ln -sf ${DOTDIR}/codex ~/.codex
-fi
+bash "${DOTDIR}/codex/setup-home-links.sh" "${DOTDIR}" || exit $?
 
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
   rm ${XDG_CONFIG_HOME}/nushell
@@ -206,5 +190,9 @@ if command -v claude >/dev/null 2>&1; then
   bash "${DOTDIR}/claude/install-plugins.sh" \
     || echo "setup.sh: plugin install step reported issues (continuing)"
 fi
+
+# config.toml の plugin desired state に実インストールを収束させる。
+# Codex CLI 未導入はinstaller側で成功扱い、それ以外の失敗はsetupへ伝播する。
+bash "${DOTDIR}/codex/install-plugins.sh" || exit $?
 
 echo "please reload shell"

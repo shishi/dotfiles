@@ -1,0 +1,60 @@
+{
+  "adopt-live": [
+    "model",
+    "model_reasoning_effort",
+    "sandbox_mode",
+    "approval_policy",
+    "features.js_repl",
+    "windows.*",
+    "marketplaces.*.source_type",
+    "marketplaces.*.source",
+    "plugins.*.enabled",
+    "shell_environment_policy.inherit",
+    "shell_environment_policy.set.BASH_DEFAULT_TIMEOUT_MS",
+    "shell_environment_policy.set.BASH_MAX_TIMEOUT_MS",
+    "shell_environment_policy.set.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR",
+    "shell_environment_policy.set.CLAUDE_CODE_AUTO_CONNECT_IDE",
+    "shell_environment_policy.set.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "shell_environment_policy.set.CLAUDE_CODE_ENABLE_TELEMETRY",
+    "shell_environment_policy.set.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
+    "shell_environment_policy.set.CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL",
+    "shell_environment_policy.set.CLAUDE_CODE_IDE_SKIP_VALID_CHECK",
+    "shell_environment_policy.set.CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+    "shell_environment_policy.set.DISABLE_AUTOUPDATER",
+    "shell_environment_policy.set.DISABLE_ERROR_REPORTING",
+    "shell_environment_policy.set.DISABLE_INTERLEAVED_THINKING",
+    "shell_environment_policy.set.DISABLE_MICROCOMPACT",
+    "shell_environment_policy.set.DISABLE_NON_ESSENTIAL_MODEL_CALLS",
+    "shell_environment_policy.set.DISABLE_TELEMETRY",
+    "shell_environment_policy.set.MAX_MCP_OUTPUT_TOKENS",
+    "shell_environment_policy.set.MCP_TOOL_TIMEOUT",
+    "desktop.*",
+    "hooks.state.*",
+    "computer_use.windows.always_allowed_app_ids.*"
+  ],
+  "merge": [
+    "projects.*"
+  ],
+  "repo-wins": [
+    "personality",
+    "developer_instructions",
+    "approvals_reviewer",
+    "features.memories",
+    "plugins.superpowers@openai-api-curated.enabled"
+  ],
+  "reject-generated": [
+    "notify",
+    "tui.model_availability_nux.*",
+    "mcp_servers.*",
+    "memories.*",
+    "marketplaces.*.last_updated",
+    "marketplaces.*.last_revision",
+    "marketplaces.openai-bundled.*",
+    "marketplaces.openai-primary-runtime.*",
+    "marketplaces.openai-api-curated.*",
+    "shell_environment_policy.set.BROWSER_USE_*",
+    "shell_environment_policy.set.CLAUDE_CODE_GIT_BASH_PATH",
+    "shell_environment_policy.set.NODE_REPL_*",
+    "shell_environment_policy.set.CODEX_HOME"
+  ]
+}

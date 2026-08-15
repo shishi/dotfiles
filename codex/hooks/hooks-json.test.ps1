@@ -15,6 +15,9 @@ foreach ($event in $config.hooks.PSObject.Properties) {
             if ($handler.commandWindows -notmatch 'scoop[/\\]apps[/\\]git[/\\]current[/\\]bin[/\\]bash\.exe') {
                 $failures += "$label does not select Git Bash on Windows"
             }
+            if ($handler.commandWindows -notmatch '^\s*&\s+') {
+                $failures += "$label does not use the PowerShell call operator"
+            }
             if ($handler.commandWindows -notmatch '(?:^|\s)-lc(?:\s|$)') {
                 $failures += "$label does not start a login shell"
             }
