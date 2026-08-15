@@ -115,6 +115,25 @@ class InstallPluginsTest(unittest.TestCase):
         self.assertEqual(1, status)
         self.assertEqual([], runner.calls)
 
+    def test_local_non_app_marketplace_is_rejected_without_running_cli(self) -> None:
+        runner = RecordingRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            config_path.write_text(
+                '[marketplaces.example]\nsource_type = "local"\n'
+                'source = "C:/plugins/example"\n',
+                encoding="utf-8",
+            )
+
+            status = install_plugins.reconcile(
+                config_path=config_path,
+                runner=runner,
+                codex_path="codex",
+            )
+
+        self.assertEqual(1, status)
+        self.assertEqual([], runner.calls)
+
     def test_converged_external_plugin_only_lists_state(self) -> None:
         codex = "codex"
         marketplace_command = [codex, "plugin", "marketplace", "list", "--json"]
@@ -147,6 +166,47 @@ class InstallPluginsTest(unittest.TestCase):
                 '[marketplaces.example]\nsource_type = "git"\n'
                 'source = "https://example.invalid/plugins.git"\n\n'
                 '[plugins."tool@example"]\nenabled = true\n',
+                encoding="utf-8",
+            )
+
+            status = install_plugins.reconcile(
+                config_path=config_path,
+                runner=runner,
+                codex_path=codex,
+            )
+
+        self.assertEqual(0, status)
+        self.assertEqual([marketplace_command, plugin_command], runner.calls)
+
+    def test_runtime_app_marketplace_with_local_source_is_reconciled(self) -> None:
+        codex = "codex"
+        marketplace_command = [codex, "plugin", "marketplace", "list", "--json"]
+        plugin_command = [codex, "plugin", "list", "--json"]
+        source = "C:/Codex/plugins/openai-bundled"
+        runner = RecordingRunner(
+            {
+                tuple(marketplace_command): completed(
+                    marketplace_command,
+                    {
+                        "marketplaces": [
+                            {
+                                "name": "openai-bundled",
+                                "marketplaceSource": {
+                                    "sourceType": "local",
+                                    "source": source,
+                                },
+                            }
+                        ]
+                    },
+                ),
+                tuple(plugin_command): completed(plugin_command, {"installed": []}),
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            config_path.write_text(
+                '[marketplaces.openai-bundled]\nsource_type = "local"\n'
+                f'source = "{source}"\n',
                 encoding="utf-8",
             )
 

@@ -53,14 +53,22 @@ def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> i
         desired_plugins, dict
     ):
         return 1
-    for desired in desired_marketplaces.values():
+    for name, desired in desired_marketplaces.items():
         if not isinstance(desired, dict) or set(desired) != {
             "source_type",
             "source",
         }:
             return 1
-        if desired["source_type"] != "git" or not isinstance(desired["source"], str):
+        if not isinstance(desired["source"], str):
             return 1
+        if desired["source_type"] == "git":
+            continue
+        if (
+            name in APP_SUPPLIED_MARKETPLACES
+            and desired["source_type"] == "local"
+        ):
+            continue
+        return 1
     for plugin_id, desired in desired_plugins.items():
         if (
             not isinstance(desired, dict)
