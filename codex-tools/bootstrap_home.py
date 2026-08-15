@@ -19,6 +19,9 @@ MANAGED_NAMES = {
     "hooks.json",
     "skills",
 }
+REPOSITORY_EXCLUDED_NAMES = {".gitignore"}
+
+
 def default_process_running() -> bool:
     if os.name == "nt":
         result = subprocess.run(
@@ -427,6 +430,7 @@ def bootstrap(
         path.relative_to(codex_home)
         for path in codex_home.iterdir()
         if path.name not in MANAGED_NAMES
+        and path.name not in REPOSITORY_EXCLUDED_NAMES
     ]
     nested_system = codex_home / "skills" / ".system"
     managed_skills = nested_system.parent
@@ -477,6 +481,11 @@ def bootstrap(
         _copy_tree(backup / "codex", stage)
         if not verify_copy(backup / "codex", stage):
             raise OSError("full Codex home staging verification failed")
+
+        for name in REPOSITORY_EXCLUDED_NAMES:
+            excluded = stage / name
+            if _lexists(excluded):
+                _remove_path(excluded)
 
         for name in MANAGED_NAMES:
             source = repo_home / name

@@ -861,6 +861,65 @@ class BootstrapHomeTest(unittest.TestCase):
             )
             self.assertTrue(codex_home.is_symlink())
 
+    def test_bootstrap_does_not_copy_live_gitignore_that_reincludes_auth(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_root = root / "dotfiles"
+            repo_home = repo_root / "codex"
+            backup_root = root / "backups"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text(
+                "secret", encoding="utf-8"
+            )
+            (codex_home / ".gitignore").write_text(
+                "!auth.json\n", encoding="utf-8"
+            )
+            (repo_root / ".gitignore").write_text(
+                "/codex/*\n!/codex/config.toml\n", encoding="utf-8"
+            )
+            subprocess.run(
+                ["git", "init", "--quiet"],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=backup_root,
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-140000",
+            )
+
+            ignored = subprocess.run(
+                ["git", "check-ignore", "--quiet", "--", "codex/auth.json"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            backup = backup_root / "codex-home-20260815-140000"
+            self.assertEqual(0, status)
+            self.assertFalse((repo_home / ".gitignore").exists())
+            self.assertEqual(0, ignored.returncode)
+            self.assertEqual(
+                "!auth.json\n",
+                (backup / "codex" / ".gitignore").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "secret",
+                (repo_home / "auth.json").read_text(encoding="utf-8"),
+            )
+
     def test_success_migrates_models_cache_runtime_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
