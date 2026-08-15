@@ -784,7 +784,8 @@ def bootstrap(
         if agents_skills.resolve() != (repo_home / "skills").resolve():
             raise OSError("personal skills link verification failed")
         _remove_path(stage_root)
-    except OSError:
+    except OSError as error:
+        print(f"migrate-home: bootstrap failed: {error}", file=sys.stderr)
         _rollback(
             codex_home=codex_home,
             agents_skills=agents_skills,

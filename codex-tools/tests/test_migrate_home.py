@@ -1343,6 +1343,38 @@ class BootstrapHomeTest(unittest.TestCase):
                 (repo_home / ".gitignore").read_text(encoding="utf-8"),
             )
 
+    def test_bootstrap_copy_failure_prints_error_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text("runtime", encoding="utf-8")
+
+            def fail_runtime_copy(source: Path, destination: Path) -> None:
+                raise OSError("injected runtime copy failure")
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                status = migrate_home.bootstrap(
+                    codex_home=codex_home,
+                    agents_skills=agents_skills,
+                    repo_home=repo_home,
+                    backup_root=root / "backups",
+                    process_running=lambda: False,
+                    timestamp=lambda: "20260815-230000",
+                    copy_entry=fail_runtime_copy,
+                )
+
+            self.assertEqual(1, status)
+            self.assertIn(
+                "migrate-home: bootstrap failed: injected runtime copy failure",
+                stderr.getvalue(),
+            )
+
     def test_success_migrates_models_cache_runtime_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
