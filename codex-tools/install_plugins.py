@@ -15,6 +15,8 @@ APP_SUPPLIED_MARKETPLACES = {
     "openai-primary-runtime",
     "openai-api-curated",
 }
+GIT_MARKETPLACE_KEYS = {"source_type", "source"}
+GIT_MARKETPLACE_RUNTIME_METADATA = {"last_updated", "last_revision"}
 
 
 class Runner(Protocol):
@@ -53,16 +55,19 @@ def reconcile(*, config_path: Path, runner: Runner, codex_path: str | None) -> i
     for name, desired in desired_marketplaces.items():
         if name in APP_SUPPLIED_MARKETPLACES:
             continue
-        if not isinstance(desired, dict) or set(desired) != {
-            "source_type",
-            "source",
-        }:
+        if (
+            not isinstance(desired, dict)
+            or not GIT_MARKETPLACE_KEYS <= set(desired)
+            or set(desired) - GIT_MARKETPLACE_KEYS - GIT_MARKETPLACE_RUNTIME_METADATA
+        ):
             return 1
         if not isinstance(desired["source"], str):
             return 1
         if desired["source_type"] != "git":
             return 1
-        desired_git_marketplaces[name] = desired
+        desired_git_marketplaces[name] = {
+            key: desired[key] for key in GIT_MARKETPLACE_KEYS
+        }
     for plugin_id, desired in desired_plugins.items():
         if (
             not isinstance(desired, dict)

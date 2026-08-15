@@ -134,14 +134,56 @@ class InstallPluginsTest(unittest.TestCase):
         self.assertEqual(1, status)
         self.assertEqual([], runner.calls)
 
-    def test_non_app_marketplace_metadata_is_rejected_without_running_cli(self) -> None:
+    def test_git_marketplace_runtime_metadata_is_ignored(self) -> None:
+        codex = "codex"
+        marketplace_command = [codex, "plugin", "marketplace", "list", "--json"]
+        plugin_command = [codex, "plugin", "list", "--json"]
+        runner = RecordingRunner(
+            {
+                tuple(marketplace_command): completed(
+                    marketplace_command,
+                    {
+                        "marketplaces": [
+                            {
+                                "name": "example",
+                                "marketplaceSource": {
+                                    "sourceType": "git",
+                                    "source": "https://example.invalid/plugins.git",
+                                },
+                            }
+                        ]
+                    },
+                ),
+                tuple(plugin_command): completed(plugin_command, {"installed": []}),
+            }
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.toml"
+            config_path.write_text(
+                '[marketplaces.example]\nsource_type = "git"\n'
+                'source = "https://example.invalid/plugins.git"\n'
+                'last_updated = "2026-08-16T00:00:00Z"\n'
+                'last_revision = "0123456789abcdef"\n',
+                encoding="utf-8",
+            )
+
+            status = install_plugins.reconcile(
+                config_path=config_path,
+                runner=runner,
+                codex_path=codex,
+            )
+
+        self.assertEqual(0, status)
+        self.assertEqual([marketplace_command, plugin_command], runner.calls)
+
+    def test_unknown_marketplace_metadata_is_rejected_without_running_cli(self) -> None:
         runner = RecordingRunner()
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "config.toml"
             config_path.write_text(
                 '[marketplaces.example]\nsource_type = "git"\n'
                 'source = "https://example.invalid/plugins.git"\n'
-                'last_updated = "2026-08-16T00:00:00Z"\n',
+                'unknown_metadata = "value"\n',
                 encoding="utf-8",
             )
 
@@ -153,6 +195,34 @@ class InstallPluginsTest(unittest.TestCase):
 
         self.assertEqual(1, status)
         self.assertEqual([], runner.calls)
+
+    def test_git_marketplace_missing_or_invalid_required_fields_are_rejected(self) -> None:
+        configs = {
+            "missing-source-type": (
+                '[marketplaces.example]\nsource = "https://example.invalid/plugins.git"\n'
+            ),
+            "missing-source": '[marketplaces.example]\nsource_type = "git"\n',
+            "invalid-source-type": (
+                '[marketplaces.example]\nsource_type = 7\n'
+                'source = "https://example.invalid/plugins.git"\n'
+            ),
+            "invalid-source": '[marketplaces.example]\nsource_type = "git"\nsource = 7\n',
+        }
+
+        for name, config_text in configs.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                config_path = Path(directory) / "config.toml"
+                config_path.write_text(config_text, encoding="utf-8")
+                runner = RecordingRunner()
+
+                status = install_plugins.reconcile(
+                    config_path=config_path,
+                    runner=runner,
+                    codex_path="codex",
+                )
+
+                self.assertEqual(1, status)
+                self.assertEqual([], runner.calls)
 
     def test_converged_external_plugin_only_lists_state(self) -> None:
         codex = "codex"
