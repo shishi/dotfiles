@@ -171,9 +171,9 @@ source_type = "git"
 source = "https://github.com/obra/superpowers-marketplace.git"
 
 [marketplaces.openai-bundled]
-last_updated = "2026-08-15T16:28:31Z"
+last_updated = "2026-08-15T17:49:45Z"
 source_type = "local"
-source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\.worktrees\codex-home-tools-split\codex\.tmp\bundled-marketplaces\openai-bundled'
+source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\codex\.tmp\bundled-marketplaces\openai-bundled'
 
 [plugins."documents@openai-primary-runtime"]
 enabled = true
