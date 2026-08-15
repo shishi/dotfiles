@@ -51,7 +51,7 @@
 
 - [ ] **Step 2: テストが失敗することを確認する**
 
-  Run: python -B -m unittest tests.codex_managed_state_test -v
+  Run: python -B -m unittest discover -s tests -p "codex_managed_state_test.py" -v
 
   Expected: codex-tools が未作成のため FAIL。
 
@@ -61,7 +61,7 @@
 
 - [ ] **Step 4: 配置テストをGREENにする**
 
-  Run: python -B -m unittest tests.codex_managed_state_test -v
+  Run: python -B -m unittest discover -s tests -p "codex_managed_state_test.py" -v
 
   Expected: PASS。
 
@@ -99,7 +99,7 @@
 
 - [ ] **Step 2: テストが現行の許可リスト拒否で失敗することを確認する**
 
-  Run: python -B -m unittest codex_tools.tests.test_migrate_home.BootstrapHomeTest.test_bootstrap_copies_unknown_runtime_and_overlays_repository_managed_paths -v
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_migrate_home.py" -v
 
   Expected: status 1 または未知entry拒否による FAIL。
 
@@ -109,7 +109,7 @@
 
 - [ ] **Step 4: 全量snapshotテストをGREENにする**
 
-  Run: python -B -m unittest codex_tools.tests.test_migrate_home.BootstrapHomeTest.test_bootstrap_copies_unknown_runtime_and_overlays_repository_managed_paths -v
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_migrate_home.py" -v
 
   Expected: PASS。
 
@@ -144,7 +144,7 @@
 
 - [ ] **Step 2: テストがrollback不足で失敗することを確認する**
 
-  Run: python -B -m unittest codex_tools.tests.test_migrate_home.BootstrapHomeTest.test_bootstrap_repo_swap_failure_restores_live_paths_and_repo_home -v
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_migrate_home.py" -v
 
   Expected: FAIL。
 
@@ -158,7 +158,7 @@
 
 - [ ] **Step 5: 切替・restoreテストをGREENにする**
 
-  Run: python -B -m unittest codex_tools.tests.test_migrate_home -v
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_migrate_home.py" -v
 
   Expected: PASS。ReadOnly、symlink、junction、process-race、partial-swapの既存ケースもPASS。
 
@@ -187,7 +187,7 @@
 
 - [ ] **Step 2: テストが旧SCRIPT_DIR基準で失敗することを確認する**
 
-  Run: python -B -m unittest codex_tools.tests.test_install_plugins.InstallPluginsTest.test_main_reads_codex_home_config -v
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_install_plugins.py" -v
 
   Expected: FAIL。
 
@@ -197,7 +197,7 @@
 
 - [ ] **Step 4: installerとsetupのGREENを確認する**
 
-  Run: python -B -m unittest codex_tools.tests.test_install_plugins -v; bash codex-tools/tests/setup-integration.test.sh
+  Run: python -B -m unittest discover -s codex-tools/tests -p "test_install_plugins.py" -v; bash codex-tools/tests/setup-integration.test.sh
 
   Expected: exit 0。
 
@@ -230,7 +230,7 @@
 
 - [ ] **Step 2: テストが旧ツールallowlistで失敗することを確認する**
 
-  Run: python -B -m unittest tests.codex_managed_state_test.CodexManagedStateTest.test_git_ignore_boundary_matches_managed_and_runtime_paths -v
+  Run: python -B -m unittest discover -s tests -p "codex_managed_state_test.py" -v
 
   Expected: FAIL。
 
@@ -240,7 +240,7 @@
 
 - [ ] **Step 4: Git境界テストをGREENにする**
 
-  Run: python -B -m unittest tests.codex_managed_state_test -v
+  Run: python -B -m unittest discover -s tests -p "codex_managed_state_test.py" -v
 
   Expected: PASS。
 

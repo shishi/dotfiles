@@ -56,3 +56,18 @@ codex-tools/bootstrap-home.sh はPython実装を呼ぶ。一回限りのbootstra
 - bootstrap前・切替途中・切替後の障害から、元のライブ2ディレクトリを回復できる。
 - WindowsのReadOnlyファイル、symlink、junction、Python 3.11以上を扱える。
 - 新規エージェントレビューと全テストが成功する。
+
+## 検証手順
+
+`codex-tools` はハイフンを含むディレクトリ名であり、Python module名ではない。テストはmodule指定ではなくdiscoveryで実行する。
+
+    python -B -m unittest discover -s codex-tools/tests -p "test_*.py" -v
+    python -B -m unittest discover -s tests -p "*_test.py" -v
+    bash codex-tools/tests/migrate-home-wrapper.test.sh
+    bash codex-tools/tests/install-plugins-wrapper.test.sh
+    bash codex-tools/tests/setup-home-links.test.sh
+    bash codex-tools/tests/setup-integration.test.sh
+    bash -n codex-tools/bootstrap-home.sh
+    git diff --check
+
+実bootstrapはこの検証に含めない。Codexを完全終了した外部端末からだけ `codex-tools/bootstrap-home.sh` を実行する。
