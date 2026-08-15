@@ -26,15 +26,8 @@
 !/codex/hooks/
 !/codex/hooks/**
 !/codex/hooks.json
-!/codex/install-plugins.sh
-!/codex/install_plugins.py
-!/codex/setup-home-links.sh
-!/codex/migrate-home.sh
-!/codex/migrate_home.py
-!/codex/tests/
-!/codex/tests/**
-/codex/tests/**/__pycache__/
-/codex/tests/**/*.py[co]
+/codex-tools/**/__pycache__/
+/codex-tools/**/*.py[co]
 /tests/__pycache__/
 /tests/**/*.py[co]
 /.worktrees/

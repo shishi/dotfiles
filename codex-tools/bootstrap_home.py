@@ -598,7 +598,8 @@ def main(argv: list[str] | None = None) -> int:
             backup=restore_backup,
             process_running=default_process_running,
         )
-    repo_codex = Path(__file__).resolve().parent
+    tools_dir = Path(__file__).resolve().parent
+    repo_codex = tools_dir.parent / "codex"
     backup_root = user_home / ".codex-backups"
     timestamp_value = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = backup_root / f"codex-home-{timestamp_value}"
@@ -611,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     def run_plugins() -> int:
         try:
             return subprocess.run(
-                ["bash", str(repo_codex / "install-plugins.sh")],
+                ["bash", str(tools_dir / "install-plugins.sh")],
                 check=False,
             ).returncode
         except OSError as error:
@@ -638,14 +639,14 @@ def main(argv: list[str] | None = None) -> int:
     elif filesystem_committed:
         print(
             f"migrate-home: plugin reconciliation failed; retry: "
-            f'bash "{repo_codex / "install-plugins.sh"}"',
+            f'bash "{tools_dir / "install-plugins.sh"}"',
             file=sys.stderr,
         )
     else:
         if backup.exists():
             print(
                 "migrate-home: migration failed; restore with: "
-                f'bash "{repo_codex / "migrate-home.sh"}" --restore "{backup}"',
+                f'bash "{tools_dir / "bootstrap-home.sh"}" --restore "{backup}"',
                 file=sys.stderr,
             )
         else:

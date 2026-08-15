@@ -22,4 +22,4 @@ if [ -z "$PYTHON" ]; then
   exit 1
 fi
 
-exec "$PYTHON" "$SCRIPT_DIR/migrate_home.py" "$@"
+exec "$PYTHON" "$SCRIPT_DIR/bootstrap_home.py" "$@"

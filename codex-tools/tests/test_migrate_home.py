@@ -13,7 +13,7 @@ from unittest.mock import patch
 CODEX_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CODEX_DIR))
 
-import migrate_home
+import bootstrap_home as migrate_home
 
 
 class MigrateHomeTest(unittest.TestCase):
@@ -1355,7 +1355,7 @@ class MigrateHomeTest(unittest.TestCase):
         call = migrate_mock.call_args.kwargs
         self.assertEqual(fake_home / ".codex", call["codex_home"])
         self.assertEqual(fake_home / ".agents" / "skills", call["agents_skills"])
-        self.assertEqual(CODEX_DIR, call["repo_codex"])
+        self.assertEqual(CODEX_DIR.parent / "codex", call["repo_codex"])
         self.assertEqual(fake_home / ".codex-backups", call["backup_root"])
         self.assertFalse(call["process_running"]())
         self.assertTrue(callable(call["plugin_reconciler"]))
@@ -1385,7 +1385,7 @@ class MigrateHomeTest(unittest.TestCase):
             backups = list((fake_home / ".codex-backups").iterdir())
             self.assertEqual(1, len(backups))
             expected = (
-                f'bash "{CODEX_DIR / "migrate-home.sh"}" '
+                f'bash "{CODEX_DIR / "bootstrap-home.sh"}" '
                 f'--restore "{backups[0]}"'
             )
             self.assertEqual(1, status)
@@ -1498,7 +1498,7 @@ class MigrateHomeTest(unittest.TestCase):
             backups = list((fake_home / ".codex-backups").iterdir())
             self.assertEqual(1, len(backups))
             expected = (
-                f'bash "{CODEX_DIR / "migrate-home.sh"}" '
+                f'bash "{CODEX_DIR / "bootstrap-home.sh"}" '
                 f'--restore "{backups[0]}"'
             )
             self.assertEqual(1, status)

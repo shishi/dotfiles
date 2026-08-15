@@ -619,7 +619,10 @@ class InstallPluginsTest(unittest.TestCase):
 
         self.assertEqual(7, status)
         call = reconcile_mock.call_args.kwargs
-        self.assertEqual(CODEX_DIR / "config.toml", call["config_path"])
+        self.assertEqual(
+            CODEX_DIR.parent / "codex" / "config.toml",
+            call["config_path"],
+        )
         self.assertEqual("C:/tools/codex.exe", call["codex_path"])
         self.assertIsInstance(call["runner"], install_plugins.SubprocessRunner)
 

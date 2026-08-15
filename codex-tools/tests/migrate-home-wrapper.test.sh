@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CODEX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WRAPPER="${CODEX_DIR}/migrate-home.sh"
+WRAPPER="${CODEX_DIR}/bootstrap-home.sh"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
@@ -37,7 +37,7 @@ set -e
 [ "$status" -eq 8 ]
 [ "$(<"$TEST_ROOT/interpreter")" = python3 ]
 mapfile -t args < "$TEST_ROOT/args"
-[ "${args[0]}" = "${CODEX_DIR}/migrate_home.py" ]
+[ "${args[0]}" = "${CODEX_DIR}/bootstrap_home.py" ]
 [ "${args[1]}" = "--probe" ]
 
 set +e
@@ -52,7 +52,7 @@ set -e
 [ "$status" -eq 9 ]
 [ "$(<"$TEST_ROOT/fallback-interpreter")" = python ]
 mapfile -t fallback_args < "$TEST_ROOT/fallback-args"
-[ "${fallback_args[0]}" = "${CODEX_DIR}/migrate_home.py" ]
+[ "${fallback_args[0]}" = "${CODEX_DIR}/bootstrap_home.py" ]
 [ "${fallback_args[1]}" = "--fallback" ]
 
 set +e

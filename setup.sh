@@ -150,7 +150,7 @@ else
   fi
 fi
 
-bash "${DOTDIR}/codex/setup-home-links.sh" "${DOTDIR}" || exit $?
+bash "${DOTDIR}/codex-tools/setup-home-links.sh" "${DOTDIR}" || exit $?
 
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
   rm ${XDG_CONFIG_HOME}/nushell
@@ -193,6 +193,6 @@ fi
 
 # config.toml の plugin desired state に実インストールを収束させる。
 # Codex CLI 未導入はinstaller側で成功扱い、それ以外の失敗はsetupへ伝播する。
-bash "${DOTDIR}/codex/install-plugins.sh" || exit $?
+bash "${DOTDIR}/codex-tools/install-plugins.sh" || exit $?
 
 echo "please reload shell"

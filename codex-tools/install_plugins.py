@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments:
         return 2
     return reconcile(
-        config_path=Path(__file__).with_name("config.toml"),
+        config_path=Path(__file__).resolve().parent.parent / "codex" / "config.toml",
         runner=SubprocessRunner(),
         codex_path=shutil.which("codex"),
     )
