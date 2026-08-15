@@ -82,7 +82,32 @@
 - `bash -n codex-tools/setup-home-links.sh`、`bash codex-tools/tests/setup-home-links.test.sh`、`python -B -m unittest discover -s tests -p '*_test.py' -v`（19 tests）、`git diff --check`: PASS
 - 実ユーザーホームのbootstrap/restoreは未実行。
 
+## 最終 no-replace 再レビュー対応
+
+- POSIX final entryのno-replace helperがbootstrapの`rename_live`ラッパー経由で迂回されるP1を検出した。snapshot復元用`rename_path`とquarantine用`quarantine_rename_path`を分離し、通常bootstrapは必ずLinux no-replace primitiveへ到達する。
+- Shellの`mv -n`はプラットフォーム間でatomic no-clobberを保証しないため廃止し、inline PythonでWindows `os.rename`、Linux `renameat2(RENAME_NOREPLACE)`、未対応POSIXの`ENOTSUP`に統一した。
+- 独立最終再レビューはP0/P1なし。Python 83件、root 19件、shell test、syntax、`git diff --check`を再実行済み。
+- 実ユーザーホームのbootstrap/restoreは未実行。
+
+## POSIX final-entry 衝突P1対応
+
+- 専用quarantine directoryを予約した後、その内部entryへ通常renameするとforeign fileを上書きし得るP1を独立レビューで検出した。
+- Linuxでは`renameat2(RENAME_NOREPLACE)`をctypes経由で使用し、final entryもno-clobberにした。`renameat2`が使えないPOSIXでは`ENOTSUP`で安全に移動を失敗させる。
+- 最終entry直前にforeign fileを作るRED、予約parent直前のRED、Windows no-clobberのREDを追加した。
+- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（82 tests）
+- `bash -n codex-tools/setup-home-links.sh`、`bash codex-tools/tests/setup-home-links.test.sh`、`python -B -m unittest discover -s tests -p '*_test.py' -v`（19 tests）、`git diff --check`: PASS
+- 実ユーザーホームのbootstrap/restoreは未実行。
+
 ## 最終独立レビュー
 
 - 新規レビューエージェントによる最終レビューはP0/P1なし。bootstrap rollbackはquarantine後にunlinkせず、Shellも`mv`→検証後に`rm`せず、restoreのfailed-restore artifactも削除しないことを確認した。
 - PythonとShellのpost-check差し替えテストは、旧identity/sourceを返した直後にquarantineを通常ファイルへ置換する位置であることを確認済み。
+
+## quarantine destination 衝突P1対応
+
+- quarantine pathの空き確認後にforeign fileが作られるraceを、PythonとShellでREDから追加した。
+- Pythonは通常のWindows実行で既存destinationを上書きしない`os.rename`を使う。POSIXではdestination専用directoryを`mkdir`で予約してからentryを内部へ移し、予約が衝突した場合はsource・foreign fileとも保持して失敗する。bootstrap link、repo rollback、restore failed artifactに適用した。
+- Shellは`mv -n`とsource残存確認でno-clobber移動を強制し、destination衝突をrollback incompleteとして報告する。
+- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（80 tests）
+- `bash -n codex-tools/setup-home-links.sh`、`bash codex-tools/tests/setup-home-links.test.sh`、`python -B -m unittest discover -s tests -p '*_test.py' -v`（19 tests）、`git diff --check`: PASS
+- 実ユーザーホームのbootstrap/restoreは未実行。

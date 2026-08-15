@@ -62,6 +62,35 @@ created_codex=0
 created_skills=0
 created_codex_source=""
 created_skills_source=""
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
+move_no_replace() {
+  "$PYTHON_BIN" - "$1" "$2" <<'PY'
+import ctypes
+import errno
+import os
+import sys
+
+source, destination = sys.argv[1:]
+if os.name == "nt":
+    os.rename(source, destination)
+elif sys.platform.startswith("linux"):
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError:
+        raise OSError(errno.ENOTSUP, "no-replace rename is unavailable")
+    renameat2.argtypes = (
+        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint
+    )
+    renameat2.restype = ctypes.c_int
+    if renameat2(-100, os.fsencode(source), -100, os.fsencode(destination), 1) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), destination)
+else:
+    raise OSError(errno.ENOTSUP, "no-replace rename is unavailable")
+PY
+}
 
 link_matches_source() {
   local expected_source="$1"
@@ -83,7 +112,7 @@ remove_created_link() {
     suffix=$((suffix + 1))
     quarantine_path="${target_path}.rollback-quarantine-${suffix}"
   done
-  if ! mv "$target_path" "$quarantine_path"; then
+  if ! move_no_replace "$target_path" "$quarantine_path"; then
     fail "could not quarantine created link: $target_path"
     return 1
   fi

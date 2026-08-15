@@ -105,19 +105,21 @@ fi
 exec "$REAL_LN" "$@"
 FAKE_LN
 chmod +x "$TEST_ROOT/cleanup-failure/bin/ln"
-REAL_MV="$(command -v mv)"
-cat > "$TEST_ROOT/cleanup-failure/bin/mv" <<'FAKE_MV'
+REAL_PYTHON="$(command -v python)"
+cat > "$TEST_ROOT/cleanup-failure/bin/python" <<'FAKE_PYTHON'
 #!/usr/bin/env bash
-printf '%s\n' "$1" >> "$MV_ATTEMPTS_FILE"
-[ "$1" != "$MV_FAIL_TARGET" ] || exit 1
-exec "$REAL_MV" "$@"
-FAKE_MV
-chmod +x "$TEST_ROOT/cleanup-failure/bin/mv"
+source_path="$2"
+printf '%s\n' "$source_path" >> "$MV_ATTEMPTS_FILE"
+[ "$source_path" != "$MV_FAIL_TARGET" ] || exit 1
+exec "$REAL_PYTHON" "$@"
+FAKE_PYTHON
+chmod +x "$TEST_ROOT/cleanup-failure/bin/python"
 if HOME="$TEST_ROOT/cleanup-failure/home" \
   LN_COUNT_FILE="$TEST_ROOT/cleanup-failure/ln-count" REAL_LN="$REAL_LN" \
   VERIFY_BREAK_PATH="$TEST_ROOT/cleanup-failure/dotfiles/codex/skills" \
-  MV_ATTEMPTS_FILE="$TEST_ROOT/cleanup-failure/mv-attempts" REAL_MV="$REAL_MV" \
+  MV_ATTEMPTS_FILE="$TEST_ROOT/cleanup-failure/mv-attempts" REAL_PYTHON="$REAL_PYTHON" \
   MV_FAIL_TARGET="$TEST_ROOT/cleanup-failure/home/.agents/skills" \
+  PYTHON_BIN="$TEST_ROOT/cleanup-failure/bin/python" \
   PATH="$TEST_ROOT/cleanup-failure/bin:$PATH" \
   bash "$HELPER" "$TEST_ROOT/cleanup-failure/dotfiles" \
   >/dev/null 2>"$TEST_ROOT/cleanup-failure/stderr"; then
@@ -387,3 +389,46 @@ if HOME="$TEST_ROOT/regular-file-swap/home" \
   exit 1
 fi
 [ "$(cat "$TEST_ROOT/regular-file-swap/home/.codex.rollback-quarantine")" = "foreign" ]
+
+# A foreign file created at the selected quarantine destination is never overwritten.
+mkdir -p "$TEST_ROOT/quarantine-collision/dotfiles/codex/skills" \
+  "$TEST_ROOT/quarantine-collision/home" "$TEST_ROOT/quarantine-collision/bin"
+printf '0\n' > "$TEST_ROOT/quarantine-collision/ln-count"
+cat > "$TEST_ROOT/quarantine-collision/bin/ln" <<'FAKE_LN'
+#!/usr/bin/env bash
+count=$(($(cat "$LN_COUNT_FILE") + 1))
+printf '%s\n' "$count" > "$LN_COUNT_FILE"
+[ "$count" -ne 3 ] || exit 1
+exec "$REAL_LN" "$@"
+FAKE_LN
+cat > "$TEST_ROOT/quarantine-collision/bin/python" <<'FAKE_PYTHON'
+#!/usr/bin/env bash
+source_path="$2"
+destination_path="$3"
+if [ "$source_path" = "$CODEX_TARGET" ] \
+  && [ "$destination_path" = "$QUARANTINE_PATH" ]; then
+  printf 'foreign\n' > "$destination_path"
+fi
+exec "$REAL_PYTHON" "$@"
+FAKE_PYTHON
+chmod +x "$TEST_ROOT/quarantine-collision/bin/ln" \
+  "$TEST_ROOT/quarantine-collision/bin/python"
+REAL_PYTHON="$(command -v python)"
+if HOME="$TEST_ROOT/quarantine-collision/home" \
+  LN_COUNT_FILE="$TEST_ROOT/quarantine-collision/ln-count" REAL_LN="$REAL_LN" \
+  CODEX_TARGET="$TEST_ROOT/quarantine-collision/home/.codex" \
+  QUARANTINE_PATH="$TEST_ROOT/quarantine-collision/home/.codex.rollback-quarantine" \
+  REAL_PYTHON="$REAL_PYTHON" PYTHON_BIN="$TEST_ROOT/quarantine-collision/bin/python" \
+  PATH="$TEST_ROOT/quarantine-collision/bin:$PATH" \
+  bash "$HELPER" "$TEST_ROOT/quarantine-collision/dotfiles" \
+  >/dev/null 2>"$TEST_ROOT/quarantine-collision/stderr"; then
+  echo "quarantine collision unexpectedly succeeded" >&2
+  exit 1
+fi
+[ "$(cat "$TEST_ROOT/quarantine-collision/home/.codex.rollback-quarantine")" = "foreign" ]
+[ -L "$TEST_ROOT/quarantine-collision/home/.codex" ]
+grep -F "could not quarantine created link: $TEST_ROOT/quarantine-collision/home/.codex" \
+  "$TEST_ROOT/quarantine-collision/stderr" >/dev/null \
+  || { echo "missing quarantine collision diagnostic" >&2; exit 1; }
+grep -F "rollback incomplete" "$TEST_ROOT/quarantine-collision/stderr" >/dev/null \
+  || { echo "missing quarantine collision rollback diagnostic" >&2; exit 1; }

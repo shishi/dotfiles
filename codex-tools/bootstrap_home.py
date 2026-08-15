@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from datetime import datetime
+import ctypes
+import errno
 import hashlib
 import os
 from pathlib import Path
@@ -88,6 +90,50 @@ def _kind(path: Path) -> str:
 
 def _lexists(path: Path) -> bool:
     return path.exists() or path.is_symlink() or _is_junction(path)
+
+
+def _move_to_quarantine_no_replace(
+    source: Path,
+    destination: Path,
+    rename_path: Callable[[Path, Path], None] | None = None,
+) -> Path:
+    if os.name == "nt":
+        (rename_path or os.rename)(source, destination)
+        return destination
+    destination.mkdir()
+    quarantined_entry = destination / source.name
+    if rename_path is not None:
+        rename_path(source, quarantined_entry)
+    else:
+        _posix_rename_no_replace(source, quarantined_entry)
+    return quarantined_entry
+
+
+def _posix_rename_no_replace(source: Path, destination: Path) -> None:
+    if not sys.platform.startswith("linux"):
+        raise OSError(errno.ENOTSUP, "no-replace rename is unavailable")
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError as error:
+        raise OSError(errno.ENOTSUP, "no-replace rename is unavailable") from error
+    renameat2.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameat2.restype = ctypes.c_int
+    if renameat2(
+        -100,
+        os.fsencode(source),
+        -100,
+        os.fsencode(destination),
+        1,
+    ) != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number), destination)
 
 
 def _symlink_is_directory(path: Path) -> bool:
@@ -249,6 +295,7 @@ def _rollback(
         tuple[Path, Path, tuple[int, int, int, int]], ...
     ] = (),
     rename_path: Callable[[Path, Path], None] | None = None,
+    quarantine_rename_path: Callable[[Path, Path], None] | None = None,
 ) -> bool:
     failed = False
 
@@ -277,21 +324,25 @@ def _rollback(
                 quarantine = backup / (
                     f"{link.name.lstrip('.')}-link-rollback-quarantine-{suffix}"
                 )
-            if not attempt(
-                "quarantine link",
-                link,
-                lambda link=link, quarantine=quarantine: rename_entry(link, quarantine),
-            ):
+            quarantined_link: Path | None = None
+
+            def quarantine_link() -> None:
+                nonlocal quarantined_link
+                quarantined_link = _move_to_quarantine_no_replace(
+                    link, quarantine, quarantine_rename_path
+                )
+
+            if not attempt("quarantine link", link, quarantine_link):
                 continue
             try:
-                owned = _directory_link_identity(quarantine, target) == identity
+                owned = _directory_link_identity(quarantined_link, target) == identity
             except OSError:
                 owned = False
             if not owned:
                 failed = True
                 print(
                     f"migrate-home: rollback ownership changed for {link}; "
-                    f"retained at {quarantine}",
+                    f"retained at {quarantined_link}",
                     file=sys.stderr,
                 )
                 continue
@@ -306,7 +357,9 @@ def _rollback(
             attempt(
                 "quarantine repository",
                 repo_home,
-                lambda: rename_entry(repo_home, repo_quarantine),
+                lambda: _move_to_quarantine_no_replace(
+                    repo_home, repo_quarantine, quarantine_rename_path
+                ),
             )
         if repo_snapshot is not None and repo_home is not None:
             attempt(
@@ -496,13 +549,17 @@ def restore(
             rollback(
                 "quarantine",
                 codex_home,
-                lambda: rename_entry(codex_home, failed_codex),
+                lambda: _move_to_quarantine_no_replace(
+                    codex_home, failed_codex, rename_path
+                ),
             )
         if swapped_skills:
             rollback(
                 "quarantine",
                 agents_skills,
-                lambda: rename_entry(agents_skills, failed_skills),
+                lambda: _move_to_quarantine_no_replace(
+                    agents_skills, failed_skills, rename_path
+                ),
             )
         if saved_codex:
             rollback(
@@ -742,6 +799,7 @@ def bootstrap(
             repo_installed=repo_installed,
             created_links=tuple(created_links),
             rename_path=rename_live,
+            quarantine_rename_path=rename_path,
         )
         if _lexists(stage_root):
             try:

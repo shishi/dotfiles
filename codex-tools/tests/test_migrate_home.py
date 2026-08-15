@@ -265,6 +265,127 @@ class BootstrapHomeTest(unittest.TestCase):
 
             self.assertEqual(identity, quarantined_identity)
 
+    def test_posix_quarantine_reservation_does_not_replace_new_foreign_file(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "created-link"
+            quarantine = root / "quarantine"
+            source.write_text("owned", encoding="utf-8")
+            original_mkdir = Path.mkdir
+
+            def create_collision_before_reservation(
+                path: Path,
+                mode: int = 0o777,
+                parents: bool = False,
+                exist_ok: bool = False,
+            ) -> None:
+                if path == quarantine:
+                    path.write_text("foreign", encoding="utf-8")
+                original_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+            with patch.object(migrate_home.os, "name", "posix"), patch.object(
+                Path, "mkdir", new=create_collision_before_reservation
+            ):
+                with self.assertRaises(FileExistsError):
+                    migrate_home._move_to_quarantine_no_replace(source, quarantine)
+
+            self.assertEqual("owned", source.read_text(encoding="utf-8"))
+            self.assertEqual("foreign", quarantine.read_text(encoding="utf-8"))
+
+    def test_windows_quarantine_rename_does_not_replace_new_foreign_file(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "created-link"
+            quarantine = root / "quarantine"
+            source.write_text("owned", encoding="utf-8")
+
+            def fail_if_destination_appears(old: Path, new: Path) -> None:
+                self.assertEqual(source, old)
+                self.assertEqual(quarantine, new)
+                quarantine.write_text("foreign", encoding="utf-8")
+                raise FileExistsError("destination appeared")
+
+            with patch.object(migrate_home.os, "name", "nt"), patch.object(
+                migrate_home.os, "rename", side_effect=fail_if_destination_appears
+            ):
+                with self.assertRaises(FileExistsError):
+                    migrate_home._move_to_quarantine_no_replace(source, quarantine)
+
+            self.assertEqual("owned", source.read_text(encoding="utf-8"))
+            self.assertEqual("foreign", quarantine.read_text(encoding="utf-8"))
+
+    def test_posix_quarantine_entry_does_not_replace_new_foreign_file(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "created-link"
+            quarantine = root / "quarantine"
+            quarantined_entry = quarantine / source.name
+            source.write_text("owned", encoding="utf-8")
+
+            def create_entry_collision(old: Path, new: Path) -> None:
+                self.assertEqual(source, old)
+                self.assertEqual(quarantined_entry, new)
+                new.write_text("foreign", encoding="utf-8")
+                raise FileExistsError("quarantine entry appeared")
+
+            with patch.object(migrate_home.os, "name", "posix"), patch.object(
+                migrate_home,
+                "_posix_rename_no_replace",
+                side_effect=create_entry_collision,
+                create=True,
+            ):
+                with self.assertRaises(FileExistsError):
+                    migrate_home._move_to_quarantine_no_replace(source, quarantine)
+
+            self.assertEqual("owned", source.read_text(encoding="utf-8"))
+            self.assertEqual("foreign", quarantined_entry.read_text(encoding="utf-8"))
+
+    def test_posix_rollback_uses_no_replace_for_quarantine_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "live-link"
+            target = root / "target"
+            backup = root / "backup"
+            target.mkdir()
+            backup.mkdir()
+            source.symlink_to(target, target_is_directory=True)
+            identity = migrate_home._directory_link_identity(source, target)
+            self.assertIsNotNone(identity)
+            quarantine = backup / "live-link-link-rollback-quarantine"
+            quarantined_entry = quarantine / source.name
+
+            def create_entry_collision(old: Path, new: Path) -> None:
+                self.assertEqual(source, old)
+                self.assertEqual(quarantined_entry, new)
+                new.write_text("foreign", encoding="utf-8")
+                raise FileExistsError("quarantine entry appeared")
+
+            with patch.object(migrate_home.os, "name", "posix"), patch.object(
+                migrate_home,
+                "_posix_rename_no_replace",
+                side_effect=create_entry_collision,
+            ):
+                status = migrate_home._rollback(
+                    codex_home=source,
+                    agents_skills=root / "skills",
+                    backup=backup,
+                    journal=[],
+                    restore_live=True,
+                    created_links=((source, target, identity),),
+                    rename_path=lambda old, new: old.rename(new),
+                    quarantine_rename_path=None,
+                )
+
+            self.assertFalse(status)
+            self.assertTrue(source.is_symlink())
+            self.assertEqual("foreign", quarantined_entry.read_text(encoding="utf-8"))
+
     def test_copy_broken_directory_symlink_does_not_follow_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
