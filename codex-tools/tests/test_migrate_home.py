@@ -861,7 +861,7 @@ class BootstrapHomeTest(unittest.TestCase):
             )
             self.assertTrue(codex_home.is_symlink())
 
-    def test_bootstrap_does_not_copy_live_gitignore_that_reincludes_auth(
+    def test_bootstrap_preserves_live_gitignore_without_weakening_git_boundary(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -878,7 +878,7 @@ class BootstrapHomeTest(unittest.TestCase):
                 "secret", encoding="utf-8"
             )
             (codex_home / ".gitignore").write_text(
-                "!auth.json\n", encoding="utf-8"
+                "!auth.json\n# live runtime rule\n", encoding="utf-8"
             )
             (repo_root / ".gitignore").write_text(
                 "/codex/*\n!/codex/config.toml\n", encoding="utf-8"
@@ -907,17 +907,120 @@ class BootstrapHomeTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
+            ignored_runtime_gitignore = subprocess.run(
+                [
+                    "git",
+                    "check-ignore",
+                    "--quiet",
+                    "--",
+                    "codex/.codex-runtime-gitignore",
+                ],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
             backup = backup_root / "codex-home-20260815-140000"
+            runtime_gitignore = repo_home / ".codex-runtime-gitignore"
+            repository_gitignore = repo_home / ".gitignore"
             self.assertEqual(0, status)
-            self.assertFalse((repo_home / ".gitignore").exists())
-            self.assertEqual(0, ignored.returncode)
+            self.assertTrue(runtime_gitignore.is_file())
             self.assertEqual(
-                "!auth.json\n",
+                "!auth.json\n# live runtime rule\n",
+                runtime_gitignore.read_text(encoding="utf-8"),
+            )
+            self.assertTrue(repository_gitignore.is_file())
+            self.assertNotIn(
+                "!", repository_gitignore.read_text(encoding="utf-8")
+            )
+            self.assertEqual(0, ignored.returncode)
+            self.assertEqual(0, ignored_runtime_gitignore.returncode)
+            self.assertEqual(
+                "!auth.json\n# live runtime rule\n",
                 (backup / "codex" / ".gitignore").read_text(encoding="utf-8"),
             )
             self.assertEqual(
                 "secret",
                 (repo_home / "auth.json").read_text(encoding="utf-8"),
+            )
+
+    def test_bootstrap_preserves_existing_runtime_gitignore_on_name_collision(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / ".gitignore").write_text(
+                "live gitignore", encoding="utf-8"
+            )
+            (codex_home / ".codex-runtime-gitignore").write_text(
+                "existing runtime", encoding="utf-8"
+            )
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=root / "backups",
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-150000",
+            )
+
+            self.assertEqual(0, status)
+            self.assertEqual(
+                "live gitignore",
+                (repo_home / ".codex-runtime-gitignore").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            collision_sidecar = (
+                repo_home / ".codex-runtime-gitignore.pre-bootstrap"
+            )
+            self.assertTrue(collision_sidecar.is_file())
+            self.assertEqual(
+                "existing runtime",
+                collision_sidecar.read_text(encoding="utf-8"),
+            )
+
+    def test_bootstrap_failure_restores_existing_repository_gitignore(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text("secret", encoding="utf-8")
+            (repo_home / ".gitignore").write_text(
+                "original repository boundary", encoding="utf-8"
+            )
+
+            def fail_runtime_copy(source: Path, destination: Path) -> None:
+                raise OSError("injected runtime copy failure")
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=root / "backups",
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-160000",
+                copy_entry=fail_runtime_copy,
+            )
+
+            self.assertEqual(1, status)
+            self.assertTrue((repo_home / ".gitignore").is_file())
+            self.assertEqual(
+                "original repository boundary",
+                (repo_home / ".gitignore").read_text(encoding="utf-8"),
             )
 
     def test_success_migrates_models_cache_runtime_file(self) -> None:

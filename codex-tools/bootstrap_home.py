@@ -20,6 +20,10 @@ MANAGED_NAMES = {
     "skills",
 }
 REPOSITORY_EXCLUDED_NAMES = {".gitignore"}
+RUNTIME_GITIGNORE_NAME = ".codex-runtime-gitignore"
+SAFE_REPOSITORY_GITIGNORE = (
+    "# Runtime ignore rules are controlled by the repository root.\n"
+)
 
 
 def default_process_running() -> bool:
@@ -432,6 +436,23 @@ def bootstrap(
         if path.name not in MANAGED_NAMES
         and path.name not in REPOSITORY_EXCLUDED_NAMES
     ]
+    live_gitignore = codex_home / ".gitignore"
+    runtime_gitignore_collision: Path | None = None
+    if _lexists(live_gitignore):
+        runtime_gitignore = Path(RUNTIME_GITIGNORE_NAME)
+        if runtime_gitignore in runtime_entries:
+            runtime_entries.remove(runtime_gitignore)
+            collision_name = f"{RUNTIME_GITIGNORE_NAME}.pre-bootstrap"
+            runtime_gitignore_collision = Path(collision_name)
+            suffix = 0
+            while (
+                runtime_gitignore_collision in runtime_entries
+                or _lexists(repo_home / runtime_gitignore_collision)
+            ):
+                suffix += 1
+                runtime_gitignore_collision = Path(f"{collision_name}-{suffix}")
+            runtime_entries.append(runtime_gitignore_collision)
+        runtime_entries.append(runtime_gitignore)
     nested_system = codex_home / "skills" / ".system"
     managed_skills = nested_system.parent
     if (
@@ -455,6 +476,27 @@ def bootstrap(
     )
     codex_snapshot: Path | None = None
     agents_skills_snapshot: Path | None = None
+    repository_gitignore = repo_home / ".gitignore"
+    repository_gitignore_snapshot: Path | None = None
+
+    def restore_repository_gitignore() -> None:
+        if repository_gitignore_snapshot is None:
+            return
+        try:
+            if _lexists(repository_gitignore):
+                _remove_path(repository_gitignore)
+            _copy_entry(repository_gitignore_snapshot, repository_gitignore)
+            if not verify_copy(
+                repository_gitignore_snapshot, repository_gitignore
+            ):
+                raise OSError("verification failed")
+        except OSError as rollback_error:
+            print(
+                "migrate-home: repository .gitignore rollback failed: "
+                f"{rollback_error}",
+                file=sys.stderr,
+            )
+
     stage_root = repo_home.with_name(
         f".{repo_home.name}.bootstrap-stage-{timestamp_value}"
     )
@@ -476,6 +518,19 @@ def bootstrap(
         if not verify_copy(agents_skills, backup / "agents-skills"):
             return 1
 
+        if _lexists(repository_gitignore):
+            pending_repository_gitignore_snapshot = backup / "repo-home-gitignore"
+            _copy_entry(
+                repository_gitignore, pending_repository_gitignore_snapshot
+            )
+            if not verify_copy(
+                repository_gitignore, pending_repository_gitignore_snapshot
+            ):
+                raise OSError("repository .gitignore backup verification failed")
+            repository_gitignore_snapshot = (
+                pending_repository_gitignore_snapshot
+            )
+
         stage_root.mkdir()
         (stage_root / ".gitignore").write_text("*\n", encoding="utf-8")
         _copy_tree(backup / "codex", stage)
@@ -486,6 +541,24 @@ def bootstrap(
             excluded = stage / name
             if _lexists(excluded):
                 _remove_path(excluded)
+
+        backup_gitignore = backup / "codex" / ".gitignore"
+        staged_runtime_gitignore = stage / RUNTIME_GITIGNORE_NAME
+        if runtime_gitignore_collision is not None:
+            collision_source = backup / "codex" / RUNTIME_GITIGNORE_NAME
+            collision_destination = stage / runtime_gitignore_collision
+            _copy_entry(collision_source, collision_destination)
+            if not verify_copy(collision_source, collision_destination):
+                raise OSError("runtime .gitignore collision staging failed")
+        if _lexists(backup_gitignore):
+            if _lexists(staged_runtime_gitignore):
+                _remove_path(staged_runtime_gitignore)
+            _copy_entry(backup_gitignore, staged_runtime_gitignore)
+            if not verify_copy(backup_gitignore, staged_runtime_gitignore):
+                raise OSError("runtime .gitignore staging verification failed")
+        (stage / ".gitignore").write_text(
+            SAFE_REPOSITORY_GITIGNORE, encoding="utf-8"
+        )
 
         for name in MANAGED_NAMES:
             source = repo_home / name
@@ -504,6 +577,14 @@ def bootstrap(
             _copy_entry(backup_system, staged_system)
             if not verify_copy(backup_system, staged_system):
                 raise OSError("skills/.system staging verification failed")
+
+        journal.append(repository_gitignore)
+        _persist_journal(backup / "transaction-journal.txt", journal)
+        if _lexists(repository_gitignore):
+            _remove_path(repository_gitignore)
+        _copy_entry(stage / ".gitignore", repository_gitignore)
+        if not verify_copy(stage / ".gitignore", repository_gitignore):
+            raise OSError("repository .gitignore copy verification failed")
 
         for source in runtime_entries:
             destination = repo_home / source
@@ -524,6 +605,7 @@ def bootstrap(
                 restore_live=False,
                 remove_path=remove_runtime,
             )
+            restore_repository_gitignore()
             return 1
         live_mutation_started = True
         pending_codex_snapshot = backup / "live-codex-at-commit"
@@ -559,6 +641,7 @@ def bootstrap(
                     f"{cleanup_error}",
                     file=sys.stderr,
                 )
+        restore_repository_gitignore()
         return 1
     if on_filesystem_commit is not None:
         on_filesystem_commit()
