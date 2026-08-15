@@ -211,6 +211,10 @@ def _rollback(
     remove_path: Callable[[Path], None] = _remove_path,
     codex_snapshot: Path | None = None,
     agents_skills_snapshot: Path | None = None,
+    repo_home: Path | None = None,
+    repo_snapshot: Path | None = None,
+    repo_installed: bool = False,
+    created_links: tuple[tuple[Path, Path], ...] = (),
     rename_path: Callable[[Path, Path], None] | None = None,
 ) -> bool:
     failed = False
@@ -232,13 +236,46 @@ def _rollback(
         rename_entry = rename_path or (
             lambda source, destination: source.rename(destination)
         )
+        for link, target in reversed(created_links):
+            try:
+                owned = (
+                    link.is_symlink() or _is_junction(link)
+                ) and link.resolve() == target.resolve()
+            except OSError:
+                owned = False
+            if owned:
+                attempt("remove link", link, lambda link=link: remove_path(link))
+        if repo_installed and repo_home is not None:
+            attempt(
+                "remove repository",
+                repo_home,
+                lambda: remove_path(repo_home),
+            )
+        if repo_snapshot is not None and repo_home is not None:
+            attempt(
+                "rename repository",
+                repo_snapshot,
+                lambda: rename_entry(repo_snapshot, repo_home),
+            )
+        retained_repo_snapshot = backup / "repo-codex-before-bootstrap"
+        if repo_home is not None and not _lexists(retained_repo_snapshot):
+            retention_stage = backup / ".repo-codex-before-bootstrap-rollback-stage"
+
+            def retain_repository_snapshot() -> None:
+                _copy_tree(repo_home, retention_stage)
+                if not verify_copy(repo_home, retention_stage):
+                    raise OSError("verification failed")
+                retention_stage.rename(retained_repo_snapshot)
+
+            attempt(
+                "retain repository snapshot",
+                retained_repo_snapshot,
+                retain_repository_snapshot,
+            )
         restore_specs = (
-            (codex_home, codex_snapshot, backup / "codex"),
             (agents_skills, agents_skills_snapshot, backup / "agents-skills"),
+            (codex_home, codex_snapshot, backup / "codex"),
         )
-        for live, snapshot, _ in restore_specs:
-            if snapshot is not None:
-                attempt("remove", live, lambda live=live: remove_path(live))
         for live, snapshot, verified_copy in restore_specs:
             if snapshot is None:
                 continue
@@ -267,6 +304,17 @@ def _persist_journal(path: Path, entries: list[Path]) -> None:
         os.fsync(journal.fileno())
 
 
+def _restore_backup_is_safe(backup: Path) -> bool:
+    backup_sources = (
+        backup / "codex",
+        backup / "agents-skills",
+        backup / "repo-codex-before-bootstrap",
+    )
+    return _kind(backup) == "directory" and all(
+        _kind(source) == "directory" for source in backup_sources
+    )
+
+
 def restore(
     *,
     codex_home: Path,
@@ -279,16 +327,7 @@ def restore(
 ) -> int:
     if process_running():
         return 1
-    backup_sources = (backup / "codex", backup / "agents-skills")
-    if (
-        backup.is_symlink()
-        or _is_junction(backup)
-        or not backup.is_dir()
-        or any(
-            source.is_symlink() or _is_junction(source) or not source.is_dir()
-            for source in backup_sources
-        )
-    ):
+    if not _restore_backup_is_safe(backup):
         print(
             f"migrate-home: restore backup is incomplete or unsafe: {backup}",
             file=sys.stderr,
@@ -476,26 +515,23 @@ def bootstrap(
     )
     codex_snapshot: Path | None = None
     agents_skills_snapshot: Path | None = None
-    repository_gitignore = repo_home / ".gitignore"
-    repository_gitignore_snapshot: Path | None = None
+    repo_snapshot: Path | None = None
+    repo_installed = False
+    created_links: list[tuple[Path, Path]] = []
 
-    def restore_repository_gitignore() -> None:
-        if repository_gitignore_snapshot is None:
-            return
+    def create_tracked_link(source: Path, destination: Path) -> None:
         try:
-            if _lexists(repository_gitignore):
-                _remove_path(repository_gitignore)
-            _copy_entry(repository_gitignore_snapshot, repository_gitignore)
-            if not verify_copy(
-                repository_gitignore_snapshot, repository_gitignore
-            ):
-                raise OSError("verification failed")
-        except OSError as rollback_error:
-            print(
-                "migrate-home: repository .gitignore rollback failed: "
-                f"{rollback_error}",
-                file=sys.stderr,
-            )
+            create_link(source, destination)
+        except OSError:
+            try:
+                if (
+                    destination.is_symlink() or _is_junction(destination)
+                ) and destination.resolve() == source.resolve():
+                    created_links.append((destination, source))
+            except OSError:
+                pass
+            raise
+        created_links.append((destination, source))
 
     stage_root = repo_home.with_name(
         f".{repo_home.name}.bootstrap-stage-{timestamp_value}"
@@ -507,6 +543,7 @@ def bootstrap(
             f".{repo_home.name}.bootstrap-stage-{timestamp_value}-{suffix}"
         )
     stage = stage_root / "home"
+    commit_stage = stage_root / "commit-home"
     try:
         if backup.resolve().is_relative_to(repo_home.parent.resolve()):
             return 1
@@ -517,19 +554,6 @@ def bootstrap(
             return 1
         if not verify_copy(agents_skills, backup / "agents-skills"):
             return 1
-
-        if _lexists(repository_gitignore):
-            pending_repository_gitignore_snapshot = backup / "repo-home-gitignore"
-            _copy_entry(
-                repository_gitignore, pending_repository_gitignore_snapshot
-            )
-            if not verify_copy(
-                repository_gitignore, pending_repository_gitignore_snapshot
-            ):
-                raise OSError("repository .gitignore backup verification failed")
-            repository_gitignore_snapshot = (
-                pending_repository_gitignore_snapshot
-            )
 
         stage_root.mkdir()
         (stage_root / ".gitignore").write_text("*\n", encoding="utf-8")
@@ -578,23 +602,18 @@ def bootstrap(
             if not verify_copy(backup_system, staged_system):
                 raise OSError("skills/.system staging verification failed")
 
-        journal.append(repository_gitignore)
-        _persist_journal(backup / "transaction-journal.txt", journal)
-        if _lexists(repository_gitignore):
-            _remove_path(repository_gitignore)
-        _copy_entry(stage / ".gitignore", repository_gitignore)
-        if not verify_copy(stage / ".gitignore", repository_gitignore):
-            raise OSError("repository .gitignore copy verification failed")
-
-        for source in runtime_entries:
-            destination = repo_home / source
-            journal.append(destination)
-            _persist_journal(backup / "transaction-journal.txt", journal)
-            copy_runtime(stage / source, destination)
-            if not verify_copy(stage / source, destination):
-                raise OSError(f"runtime copy verification failed: {source}")
-
-        _remove_path(stage_root)
+        commit_stage.mkdir()
+        for source in stage.iterdir():
+            destination = commit_stage / source.name
+            if source.name in MANAGED_NAMES or source.name in REPOSITORY_EXCLUDED_NAMES:
+                _copy_entry(source, destination)
+            else:
+                copy_runtime(source, destination)
+            if not verify_copy(source, destination):
+                raise OSError(f"commit staging verification failed: {source.name}")
+        if not verify_copy(stage, commit_stage):
+            raise OSError("full commit staging verification failed")
+        _remove_path(stage)
 
         if process_running():
             _rollback(
@@ -605,7 +624,7 @@ def bootstrap(
                 restore_live=False,
                 remove_path=remove_runtime,
             )
-            restore_repository_gitignore()
+            _remove_path(stage_root)
             return 1
         live_mutation_started = True
         pending_codex_snapshot = backup / "live-codex-at-commit"
@@ -614,12 +633,18 @@ def bootstrap(
         pending_agents_skills_snapshot = backup / "live-agents-skills-at-commit"
         rename_live(agents_skills, pending_agents_skills_snapshot)
         agents_skills_snapshot = pending_agents_skills_snapshot
-        create_link(repo_home, codex_home)
-        create_link(repo_home / "skills", agents_skills)
+        pending_repo_snapshot = backup / "repo-codex-before-bootstrap"
+        rename_live(repo_home, pending_repo_snapshot)
+        repo_snapshot = pending_repo_snapshot
+        rename_live(commit_stage, repo_home)
+        repo_installed = True
+        create_tracked_link(repo_home, codex_home)
+        create_tracked_link(repo_home / "skills", agents_skills)
         if codex_home.resolve() != repo_home.resolve():
             raise OSError("Codex home link verification failed")
         if agents_skills.resolve() != (repo_home / "skills").resolve():
             raise OSError("personal skills link verification failed")
+        _remove_path(stage_root)
     except OSError:
         _rollback(
             codex_home=codex_home,
@@ -630,6 +655,10 @@ def bootstrap(
             remove_path=remove_runtime,
             codex_snapshot=codex_snapshot,
             agents_skills_snapshot=agents_skills_snapshot,
+            repo_home=repo_home,
+            repo_snapshot=repo_snapshot,
+            repo_installed=repo_installed,
+            created_links=tuple(created_links),
             rename_path=rename_live,
         )
         if _lexists(stage_root):
@@ -641,7 +670,6 @@ def bootstrap(
                     f"{cleanup_error}",
                     file=sys.stderr,
                 )
-        restore_repository_gitignore()
         return 1
     if on_filesystem_commit is not None:
         on_filesystem_commit()
@@ -754,7 +782,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
     else:
-        if backup.exists():
+        if _restore_backup_is_safe(backup):
             print(
                 "migrate-home: migration failed; restore with: "
                 f'bash "{tools_dir / "bootstrap-home.sh"}" --restore "{backup}"',
@@ -762,7 +790,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(
-                "migrate-home: migration failed before a backup was retained",
+                "migrate-home: migration failed; automatic restore unavailable "
+                f"for incomplete backup: {backup}",
                 file=sys.stderr,
             )
     return status

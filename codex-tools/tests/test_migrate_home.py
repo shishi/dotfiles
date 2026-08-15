@@ -340,6 +340,38 @@ class BootstrapHomeTest(unittest.TestCase):
                 (agents_skills / "live.txt").read_text(encoding="utf-8"),
             )
 
+    def test_restore_rejects_backup_without_repository_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            backup = root / "backup"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (backup / "codex").mkdir(parents=True)
+            (backup / "agents-skills").mkdir(parents=True)
+            (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
+            (agents_skills / "live.txt").write_text(
+                "live skills", encoding="utf-8"
+            )
+
+            status = migrate_home.restore(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                backup=backup,
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-180000",
+            )
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "live codex", (codex_home / "live.txt").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                "live skills",
+                (agents_skills / "live.txt").read_text(encoding="utf-8"),
+            )
+
     def test_restore_rejects_backup_root_symlink_before_live_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -384,6 +416,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -393,6 +426,9 @@ class BootstrapHomeTest(unittest.TestCase):
             )
             (backup / "agents-skills" / "restored.txt").write_text(
                 "backup skills", encoding="utf-8"
+            )
+            (backup / "repo-codex-before-bootstrap" / "config.toml").write_text(
+                "original repository", encoding="utf-8"
             )
             previous_codex = codex_home.with_name(
                 ".codex.pre-restore-20260814-140000"
@@ -428,6 +464,12 @@ class BootstrapHomeTest(unittest.TestCase):
                 (previous_skills / "live.txt").read_text(encoding="utf-8"),
             )
             self.assertTrue((backup / "codex" / "restored.txt").is_file())
+            self.assertEqual(
+                "original repository",
+                (
+                    backup / "repo-codex-before-bootstrap" / "config.toml"
+                ).read_text(encoding="utf-8"),
+            )
             self.assertIn(str(previous_codex), stdout.getvalue())
             self.assertIn(str(previous_skills), stdout.getvalue())
 
@@ -441,6 +483,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -508,6 +551,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -563,6 +607,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -612,6 +657,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -1308,6 +1354,113 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertEqual("managed config", (repo_codex / "config.toml").read_text(encoding="utf-8"))
             self.assertTrue(backup.is_dir())
 
+    def test_link_failure_after_creation_removes_only_owned_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "config.toml").write_text("live", encoding="utf-8")
+            (agents_skills / "personal.txt").write_text(
+                "personal", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text("managed", encoding="utf-8")
+
+            def fail_after_second_link(source: Path, destination: Path) -> None:
+                os.symlink(source, destination, target_is_directory=True)
+                if destination == agents_skills:
+                    raise OSError("injected failure after link creation")
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=root / "backups",
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-190000",
+                link_directory=fail_after_second_link,
+            )
+
+            self.assertEqual(1, status)
+            self.assertFalse(codex_home.is_symlink())
+            self.assertEqual(
+                "live", (codex_home / "config.toml").read_text(encoding="utf-8")
+            )
+            self.assertFalse(agents_skills.is_symlink())
+            self.assertEqual(
+                "personal",
+                (agents_skills / "personal.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
+            )
+
+    def test_rollback_does_not_remove_replaced_owned_link_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            backup_root = root / "backups"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "live.txt").write_text("live", encoding="utf-8")
+            (agents_skills / "personal.txt").write_text(
+                "personal", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text("managed", encoding="utf-8")
+
+            def replace_first_link_before_failure(
+                source: Path, destination: Path
+            ) -> None:
+                if destination == codex_home:
+                    os.symlink(source, destination, target_is_directory=True)
+                    return
+                codex_home.unlink()
+                codex_home.mkdir()
+                (codex_home / "foreign.txt").write_text(
+                    "not owned", encoding="utf-8"
+                )
+                raise OSError("injected failure after link replacement")
+
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                status = migrate_home.bootstrap(
+                    codex_home=codex_home,
+                    agents_skills=agents_skills,
+                    repo_home=repo_home,
+                    backup_root=backup_root,
+                    process_running=lambda: False,
+                    timestamp=lambda: "20260815-200000",
+                    link_directory=replace_first_link_before_failure,
+                )
+
+            backup = backup_root / "codex-home-20260815-200000"
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "not owned",
+                (codex_home / "foreign.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "live",
+                (backup / "live-codex-at-commit" / "live.txt").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertFalse(agents_skills.is_symlink())
+            self.assertEqual(
+                "personal",
+                (agents_skills / "personal.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
+            )
+            self.assertIn("rollback rename failed", stderr.getvalue())
+
     def test_second_live_snapshot_rename_failure_restores_first_snapshot_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1361,8 +1514,69 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertFalse((repo_codex / "auth.json").exists())
             self.assertTrue((backup / "codex" / "auth.json").is_file())
             self.assertFalse((backup / "live-codex-at-commit").exists())
+            self.assertTrue(
+                (backup / "repo-codex-before-bootstrap" / "skills").is_dir()
+            )
 
-    def test_journal_cleanup_failure_still_restores_both_live_directories(self) -> None:
+    def test_bootstrap_repo_swap_failure_restores_live_paths_and_repo_home(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codex_home = root / "home" / ".codex"
+            agents_skills = root / "home" / ".agents" / "skills"
+            repo_home = root / "dotfiles" / "codex"
+            backup_root = root / "backups"
+            codex_home.mkdir(parents=True)
+            agents_skills.mkdir(parents=True)
+            (repo_home / "skills").mkdir(parents=True)
+            (codex_home / "auth.json").write_text("secret", encoding="utf-8")
+            (agents_skills / "personal").mkdir()
+            (agents_skills / "personal" / "SKILL.md").write_text(
+                "personal", encoding="utf-8"
+            )
+            (repo_home / "config.toml").write_text("managed", encoding="utf-8")
+
+            def fail_repo_swap(source: Path, destination: Path) -> None:
+                if destination == repo_home and "bootstrap-stage" in source.parent.name:
+                    raise OSError("injected repository swap failure")
+                source.rename(destination)
+
+            status = migrate_home.bootstrap(
+                codex_home=codex_home,
+                agents_skills=agents_skills,
+                repo_home=repo_home,
+                backup_root=backup_root,
+                process_running=lambda: False,
+                timestamp=lambda: "20260815-170000",
+                rename_path=fail_repo_swap,
+            )
+
+            backup = backup_root / "codex-home-20260815-170000"
+            self.assertEqual(1, status)
+            self.assertTrue(codex_home.is_dir())
+            self.assertFalse(codex_home.is_symlink())
+            self.assertEqual(
+                "secret", (codex_home / "auth.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(agents_skills.is_dir())
+            self.assertFalse(agents_skills.is_symlink())
+            self.assertEqual(
+                "personal",
+                (agents_skills / "personal" / "SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            self.assertEqual(
+                "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
+            )
+            self.assertTrue(backup.is_dir())
+            self.assertEqual(
+                "managed",
+                (
+                    backup / "repo-codex-before-bootstrap" / "config.toml"
+                ).read_text(encoding="utf-8"),
+            )
+
+    def test_repo_rollback_failure_still_restores_both_live_directories(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             codex_home = root / "home" / ".codex"
@@ -1372,6 +1586,7 @@ class BootstrapHomeTest(unittest.TestCase):
             codex_home.mkdir(parents=True)
             agents_skills.mkdir(parents=True)
             (repo_codex / "skills").mkdir(parents=True)
+            (repo_codex / "config.toml").write_text("managed", encoding="utf-8")
             (codex_home / "config.toml").write_text("old config", encoding="utf-8")
             (codex_home / "auth.json").write_text("runtime auth", encoding="utf-8")
             (agents_skills / "old-skill").mkdir()
@@ -1387,10 +1602,16 @@ class BootstrapHomeTest(unittest.TestCase):
                     raise OSError("second link failed")
                 os.symlink(source, destination, target_is_directory=True)
 
-            def fail_journal_cleanup(path: Path) -> None:
-                if path == repo_codex / "auth.json":
-                    raise OSError("injected journal cleanup failure")
-                migrate_home._remove_path(path)
+            repo_snapshot = (
+                backup_root
+                / "codex-home-20260814-130000"
+                / "repo-codex-before-bootstrap"
+            )
+
+            def fail_repo_restore(source: Path, destination: Path) -> None:
+                if source == repo_snapshot and destination == repo_codex:
+                    raise OSError("injected repository rollback failure")
+                source.rename(destination)
 
             stderr = io.StringIO()
             with redirect_stderr(stderr):
@@ -1402,7 +1623,7 @@ class BootstrapHomeTest(unittest.TestCase):
                     process_running=lambda: False,
                     timestamp=lambda: "20260814-130000",
                     link_directory=fail_second_link,
-                    remove_path=fail_journal_cleanup,
+                    rename_path=fail_repo_restore,
                 )
 
             backup = backup_root / "codex-home-20260814-130000"
@@ -1418,12 +1639,18 @@ class BootstrapHomeTest(unittest.TestCase):
                     encoding="utf-8"
                 ),
             )
-            self.assertEqual(
-                "runtime auth", (repo_codex / "auth.json").read_text(encoding="utf-8")
-            )
+            self.assertFalse(repo_codex.exists())
             self.assertTrue(backup.is_dir())
-            self.assertIn(str(repo_codex / "auth.json"), stderr.getvalue())
-            self.assertIn("injected journal cleanup failure", stderr.getvalue())
+            self.assertEqual(
+                "managed",
+                (repo_snapshot / "config.toml").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "runtime auth",
+                (backup / "codex" / "auth.json").read_text(encoding="utf-8"),
+            )
+            self.assertIn(str(repo_snapshot), stderr.getvalue())
+            self.assertIn("injected repository rollback failure", stderr.getvalue())
 
     def test_plugin_failure_after_commit_keeps_verified_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1553,6 +1780,7 @@ class BootstrapHomeTest(unittest.TestCase):
             agents_skills.mkdir(parents=True)
             (backup / "codex").mkdir(parents=True)
             (backup / "agents-skills").mkdir(parents=True)
+            (backup / "repo-codex-before-bootstrap").mkdir(parents=True)
             (codex_home / "live.txt").write_text("live codex", encoding="utf-8")
             (agents_skills / "live.txt").write_text(
                 "live skills", encoding="utf-8"
@@ -1609,7 +1837,7 @@ class BootstrapHomeTest(unittest.TestCase):
         self.assertFalse(call["process_running"]())
         self.assertTrue(callable(call["plugin_reconciler"]))
 
-    def test_main_prints_exact_restore_command_after_filesystem_failure(self) -> None:
+    def test_main_does_not_print_restore_command_for_incomplete_backup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fake_home = Path(directory) / "home"
 
@@ -1633,12 +1861,9 @@ class BootstrapHomeTest(unittest.TestCase):
 
             backups = list((fake_home / ".codex-backups").iterdir())
             self.assertEqual(1, len(backups))
-            expected = (
-                f'bash "{CODEX_DIR / "bootstrap-home.sh"}" '
-                f'--restore "{backups[0]}"'
-            )
             self.assertEqual(1, status)
-            self.assertIn(expected, stderr.getvalue())
+            self.assertNotIn("--restore", stderr.getvalue())
+            self.assertIn("automatic restore unavailable", stderr.getvalue())
 
     def test_main_plugin_failure_uses_commit_callback_and_prints_retry_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1653,6 +1878,9 @@ class BootstrapHomeTest(unittest.TestCase):
                 assert isinstance(backup_root, Path)
                 backup = backup_root / f"codex-home-{timestamp()}"
                 backup.mkdir(parents=True)
+                (backup / "codex").mkdir()
+                (backup / "agents-skills").mkdir()
+                (backup / "repo-codex-before-bootstrap").mkdir()
                 codex_home = fake_home / ".codex"
                 agents_skills = fake_home / ".agents" / "skills"
                 codex_home.parent.mkdir(parents=True, exist_ok=True)
@@ -1722,6 +1950,9 @@ class BootstrapHomeTest(unittest.TestCase):
                 assert isinstance(backup_root, Path)
                 backup = backup_root / f"codex-home-{timestamp()}"
                 backup.mkdir(parents=True)
+                (backup / "codex").mkdir()
+                (backup / "agents-skills").mkdir()
+                (backup / "repo-codex-before-bootstrap").mkdir()
                 codex_home = fake_home / ".codex"
                 agents_skills = fake_home / ".agents" / "skills"
                 codex_home.parent.mkdir(parents=True, exist_ok=True)
