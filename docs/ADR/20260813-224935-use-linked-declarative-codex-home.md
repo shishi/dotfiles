@@ -90,6 +90,6 @@ Automated tests verify the ignore boundary (including unknown browser runtime an
 
 The original allowlist migration copied only known runtime paths into the repository home. It is superseded by the 2026-08-15 full-snapshot bootstrap: rejecting or omitting an unknown path during migration would make later Codex runtime additions non-recoverable. The Git allowlist remains a version-control boundary only; it is not a bootstrap copy filter.
 
-See `docs/superpowers/specs/2026-08-13-declarative-codex-home-design.md` for implementation requirements.
+The binding implementation requirements are in `docs/superpowers/specs/2026-08-15-codex-home-tools-split-design.md`. `docs/superpowers/specs/2026-08-13-declarative-codex-home-design.md` is retained as historical context for the superseded allowlist migration only.
 
 The design was verified against Codex CLI 0.145.0. At that version, `codex plugin list --json` returns plugin IDs in `installed[].pluginId`, while installation uses `codex plugin marketplace add` and `codex plugin add`. Recheck these interfaces when upgrading the installer. See the [official plugin documentation](https://developers.openai.com/plugins/) for the supported installation flow.
