@@ -91,10 +91,8 @@ remove_created_link() {
     fail "ownership changed: $target_path (retained at $quarantine_path)"
     return 1
   fi
-  if ! rm "$quarantine_path"; then
-    fail "could not remove quarantined link: $quarantine_path"
-    return 1
-  fi
+  # Keep verified links in quarantine. A later rm would create another
+  # check/use race against an entry replaced after link_matches_source.
 }
 
 cleanup_created_links() {

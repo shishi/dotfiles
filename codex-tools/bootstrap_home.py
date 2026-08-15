@@ -232,10 +232,6 @@ def _directory_link_identity(
     )
 
 
-def _unlink_directory_link(path: Path) -> None:
-    path.unlink()
-
-
 def _rollback(
     *,
     codex_home: Path,
@@ -299,11 +295,8 @@ def _rollback(
                     file=sys.stderr,
                 )
                 continue
-            attempt(
-                "unlink quarantined link",
-                quarantine,
-                lambda quarantine=quarantine: _unlink_directory_link(quarantine),
-            )
+            # Keep even a verified link in quarantine: a pathname can be replaced
+            # between this validation and any later unlink operation.
         if repo_installed and repo_home is not None:
             repo_quarantine = backup / "repo-codex-rollback-quarantine"
             suffix = 0

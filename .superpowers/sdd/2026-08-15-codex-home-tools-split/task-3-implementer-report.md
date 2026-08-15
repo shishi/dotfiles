@@ -72,3 +72,17 @@
 
 - 新規レビューエージェントがPOSIX renameによる`st_ctime_ns`更新をP1として検出した。ctimeをidentityから除外し、ctimeだけが変わるquarantine rename再現テストをREDから追加した。
 - 再レビューはP0/P1なし。inode/dev・mode・target・reparse tagによる差し替え検知は維持されることを確認した。
+
+## 最終再レビューP1対応
+
+- quarantine側でidentity/sourceを確認した後にもpathnameの差し替え競合が残ることを独立レビューで確認した。
+- Rulingに従い、bootstrap rollbackと`setup-home-links.sh`はquarantineへ移動したentryを以後一切削除しない。restore rollbackは元からfailed-restore quarantineを削除せず保持する。
+- Pythonはidentity確認直後に通常ファイルへ差し替えるRED、Shellはsource確認直後に通常ファイルへ差し替えるREDを追加し、いずれも`foreign`内容がquarantineに残ることを確認した。
+- `python -B -m unittest discover -s codex-tools/tests -p 'test_*.py' -v`: PASS（79 tests）
+- `bash -n codex-tools/setup-home-links.sh`、`bash codex-tools/tests/setup-home-links.test.sh`、`python -B -m unittest discover -s tests -p '*_test.py' -v`（19 tests）、`git diff --check`: PASS
+- 実ユーザーホームのbootstrap/restoreは未実行。
+
+## 最終独立レビュー
+
+- 新規レビューエージェントによる最終レビューはP0/P1なし。bootstrap rollbackはquarantine後にunlinkせず、Shellも`mv`→検証後に`rm`せず、restoreのfailed-restore artifactも削除しないことを確認した。
+- PythonとShellのpost-check差し替えテストは、旧identity/sourceを返した直後にquarantineを通常ファイルへ置換する位置であることを確認済み。

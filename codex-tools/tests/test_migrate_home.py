@@ -1616,7 +1616,7 @@ class BootstrapHomeTest(unittest.TestCase):
             )
             self.assertIn("rollback ownership changed", stderr.getvalue())
 
-    def test_link_replaced_with_regular_file_is_quarantined_not_deleted(self) -> None:
+    def test_quarantined_link_replaced_after_identity_check_is_not_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             codex_home = root / "home" / ".codex"
@@ -1643,14 +1643,26 @@ class BootstrapHomeTest(unittest.TestCase):
             backup = backup_root / "codex-home-20260815-210000"
             quarantine = backup / "codex-link-rollback-quarantine"
 
-            def replace_link_before_quarantine(source: Path, destination: Path) -> None:
-                if source == codex_home and destination == quarantine:
-                    source.unlink()
-                    source.write_text("foreign", encoding="utf-8")
-                source.rename(destination)
+            original_identity = migrate_home._directory_link_identity
+            replaced = False
+
+            def replace_quarantine_after_identity_check(
+                path: Path, target: Path
+            ) -> tuple[int, int, int, int] | None:
+                nonlocal replaced
+                identity = original_identity(path, target)
+                if path == quarantine and not replaced:
+                    replaced = True
+                    path.unlink()
+                    path.write_text("foreign", encoding="utf-8")
+                return identity
 
             stderr = io.StringIO()
-            with redirect_stderr(stderr):
+            with patch.object(
+                migrate_home,
+                "_directory_link_identity",
+                side_effect=replace_quarantine_after_identity_check,
+            ), redirect_stderr(stderr):
                 status = migrate_home.bootstrap(
                     codex_home=codex_home,
                     agents_skills=agents_skills,
@@ -1659,7 +1671,6 @@ class BootstrapHomeTest(unittest.TestCase):
                     process_running=lambda: False,
                     timestamp=lambda: "20260815-210000",
                     link_directory=fail_second_link,
-                    rename_path=replace_link_before_quarantine,
                 )
 
             self.assertEqual(1, status)
@@ -1676,7 +1687,7 @@ class BootstrapHomeTest(unittest.TestCase):
             self.assertEqual(
                 "managed", (repo_home / "config.toml").read_text(encoding="utf-8")
             )
-            self.assertIn("rollback ownership changed", stderr.getvalue())
+            self.assertTrue(replaced)
 
     def test_second_live_snapshot_rename_failure_restores_first_snapshot_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

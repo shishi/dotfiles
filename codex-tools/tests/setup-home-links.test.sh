@@ -92,7 +92,7 @@ fi
 mkdir -p "$TEST_ROOT/cleanup-failure/dotfiles/codex/skills" \
   "$TEST_ROOT/cleanup-failure/home" "$TEST_ROOT/cleanup-failure/bin"
 printf '0\n' > "$TEST_ROOT/cleanup-failure/ln-count"
-: > "$TEST_ROOT/cleanup-failure/rm-attempts"
+: > "$TEST_ROOT/cleanup-failure/mv-attempts"
 cat > "$TEST_ROOT/cleanup-failure/bin/ln" <<'FAKE_LN'
 #!/usr/bin/env bash
 count=$(($(cat "$LN_COUNT_FILE") + 1))
@@ -105,42 +105,39 @@ fi
 exec "$REAL_LN" "$@"
 FAKE_LN
 chmod +x "$TEST_ROOT/cleanup-failure/bin/ln"
-REAL_RM="$(command -v rm)"
-cat > "$TEST_ROOT/cleanup-failure/bin/rm" <<'FAKE_RM'
+REAL_MV="$(command -v mv)"
+cat > "$TEST_ROOT/cleanup-failure/bin/mv" <<'FAKE_MV'
 #!/usr/bin/env bash
-if [ "$#" -eq 1 ]; then
-  printf '%s\n' "$1" >> "$RM_ATTEMPTS_FILE"
-  [ "$1" != "$RM_FAIL_TARGET" ] || exit 1
-fi
-exec "$REAL_RM" "$@"
-FAKE_RM
-chmod +x "$TEST_ROOT/cleanup-failure/bin/rm"
+printf '%s\n' "$1" >> "$MV_ATTEMPTS_FILE"
+[ "$1" != "$MV_FAIL_TARGET" ] || exit 1
+exec "$REAL_MV" "$@"
+FAKE_MV
+chmod +x "$TEST_ROOT/cleanup-failure/bin/mv"
 if HOME="$TEST_ROOT/cleanup-failure/home" \
   LN_COUNT_FILE="$TEST_ROOT/cleanup-failure/ln-count" REAL_LN="$REAL_LN" \
   VERIFY_BREAK_PATH="$TEST_ROOT/cleanup-failure/dotfiles/codex/skills" \
-  RM_ATTEMPTS_FILE="$TEST_ROOT/cleanup-failure/rm-attempts" REAL_RM="$REAL_RM" \
-  RM_FAIL_TARGET="$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
+  MV_ATTEMPTS_FILE="$TEST_ROOT/cleanup-failure/mv-attempts" REAL_MV="$REAL_MV" \
+  MV_FAIL_TARGET="$TEST_ROOT/cleanup-failure/home/.agents/skills" \
   PATH="$TEST_ROOT/cleanup-failure/bin:$PATH" \
   bash "$HELPER" "$TEST_ROOT/cleanup-failure/dotfiles" \
   >/dev/null 2>"$TEST_ROOT/cleanup-failure/stderr"; then
   echo "cleanup failure unexpectedly succeeded" >&2
   exit 1
 fi
-[ -L "$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" ]
-[ ! -e "$TEST_ROOT/cleanup-failure/home/.agents/skills" ]
+[ -L "$TEST_ROOT/cleanup-failure/home/.agents/skills" ]
 [ ! -e "$TEST_ROOT/cleanup-failure/home/.codex" ]
-[ ! -L "$TEST_ROOT/cleanup-failure/home/.codex" ]
+[ -L "$TEST_ROOT/cleanup-failure/home/.codex.rollback-quarantine" ]
 grep -F "symlink verification failed" "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing original verification failure diagnostic" >&2; exit 1; }
-grep -F "could not remove quarantined link: $TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
+grep -F "could not quarantine created link: $TEST_ROOT/cleanup-failure/home/.agents/skills" \
   "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing skills cleanup failure diagnostic" >&2; exit 1; }
 grep -F "rollback incomplete" "$TEST_ROOT/cleanup-failure/stderr" >/dev/null \
   || { echo "missing rollback incomplete diagnostic" >&2; exit 1; }
-expected_rm_attempts=$(printf '%s\n%s' \
-  "$TEST_ROOT/cleanup-failure/home/.agents/skills.rollback-quarantine" \
-  "$TEST_ROOT/cleanup-failure/home/.codex.rollback-quarantine")
-[ "$(cat "$TEST_ROOT/cleanup-failure/rm-attempts")" = "$expected_rm_attempts" ]
+expected_mv_attempts=$(printf '%s\n%s' \
+  "$TEST_ROOT/cleanup-failure/home/.agents/skills" \
+  "$TEST_ROOT/cleanup-failure/home/.codex")
+[ "$(cat "$TEST_ROOT/cleanup-failure/mv-attempts")" = "$expected_mv_attempts" ]
 
 # An existing lock rejects a concurrent setup without touching links.
 mkdir -p "$TEST_ROOT/locked/dotfiles/codex/skills" \
@@ -365,20 +362,24 @@ printf '%s\n' "$count" > "$LN_COUNT_FILE"
 [ "$count" -ne 3 ] || exit 1
 exec "$REAL_LN" "$@"
 FAKE_LN
-cat > "$TEST_ROOT/regular-file-swap/bin/mv" <<'FAKE_MV'
+cat > "$TEST_ROOT/regular-file-swap/bin/readlink" <<'FAKE_READLINK'
 #!/usr/bin/env bash
-if [ "$1" = "$CODEX_TARGET" ]; then
+actual_source="$("$REAL_READLINK" "$@")"
+status=$?
+printf '%s\n' "$actual_source"
+if [ "$1" = "$QUARANTINE_PATH" ]; then
   rm "$1"
   printf 'foreign\n' > "$1"
 fi
-exec "$REAL_MV" "$@"
-FAKE_MV
+exit "$status"
+FAKE_READLINK
 chmod +x "$TEST_ROOT/regular-file-swap/bin/ln" \
-  "$TEST_ROOT/regular-file-swap/bin/mv"
-REAL_MV="$(command -v mv)"
+  "$TEST_ROOT/regular-file-swap/bin/readlink"
+REAL_READLINK="$(command -v readlink)"
 if HOME="$TEST_ROOT/regular-file-swap/home" \
   LN_COUNT_FILE="$TEST_ROOT/regular-file-swap/ln-count" REAL_LN="$REAL_LN" \
-  CODEX_TARGET="$TEST_ROOT/regular-file-swap/home/.codex" REAL_MV="$REAL_MV" \
+  QUARANTINE_PATH="$TEST_ROOT/regular-file-swap/home/.codex.rollback-quarantine" \
+  REAL_READLINK="$REAL_READLINK" \
   PATH="$TEST_ROOT/regular-file-swap/bin:$PATH" \
   bash "$HELPER" "$TEST_ROOT/regular-file-swap/dotfiles" \
   >/dev/null 2>"$TEST_ROOT/regular-file-swap/stderr"; then
@@ -386,8 +387,3 @@ if HOME="$TEST_ROOT/regular-file-swap/home" \
   exit 1
 fi
 [ "$(cat "$TEST_ROOT/regular-file-swap/home/.codex.rollback-quarantine")" = "foreign" ]
-grep -F "ownership changed: $TEST_ROOT/regular-file-swap/home/.codex" \
-  "$TEST_ROOT/regular-file-swap/stderr" >/dev/null \
-  || { echo "missing regular-file ownership diagnostic" >&2; exit 1; }
-grep -F "rollback incomplete" "$TEST_ROOT/regular-file-swap/stderr" >/dev/null \
-  || { echo "missing regular-file rollback diagnostic" >&2; exit 1; }
