@@ -116,13 +116,12 @@ if [ ! -L "${T2}/home/.codex" ] \
 else
   ng "existing real ~/.codex was replaced or its contents were lost"
 fi
-# 「退避しろ」で終わると、退避先に auth.json が残ったまま Codex がサインアウトする。
-# 戻す手順と、再実行先が worktree でないことの確認まで含まれていること。
-if grep -q '\.codex exists as a real path' "${T2}/setup.log"   && grep -q '\.codex exists as a real path.*move back from there' "${T2}/setup.log"   && grep -q '\.codex exists as a real path.*temporary worktree' "${T2}/setup.log" \
-  && grep -q '\.codex exists as a real path.*nests inside it' "${T2}/setup.log"; then
-  ok "setup.sh reports why it skipped the Codex link, and how to adopt it without signing out"
+# 黙って飛ばさない。パスと、runtime を戻す必要があることが 1 行に出ていること。
+if grep -q '\.codex is a real path; skip' "${T2}/setup.log" \
+  && grep -q '\.codex is a real path.*runtime' "${T2}/setup.log"; then
+  ok "setup.sh reports the skipped Codex path and that its runtime has to move"
 else
-  ng "setup.sh skipped the Codex link silently, or gave a remedy that strands the runtime"
+  ng "setup.sh skipped the Codex link silently"
 fi
 
 # (4) 別 checkout / worktree を指す既存リンクは張り替えない。張り替えると Codex は
@@ -138,40 +137,20 @@ if resolves_to "${T3}/home/.codex" "${T3}/other-checkout/codex"; then
 else
   ng "setup.sh repointed a link that belonged to another checkout"
 fi
-# 報告は「どこを指しているか」と「runtime を移してから外すこと」を含む。これが無いと
-# 読者はリンクを消して再実行し、Codex をサインアウトさせてしまう。
-# 移送先は実行中の checkout なので、worktree から叩いたときに移すと worktree ごと
-# 消える。この分岐が出る主因が worktree からの実行なので、それを先に言う。
-if grep -q '\.codex links to .*other-checkout/codex; skip' "${T3}/setup.log" \
-  && grep -q '\.codex links to .*; skip .*auth\.json' "${T3}/setup.log" \
-  && grep -q "\.codex links to .*; skip .*${T3}/dotfiles is a temporary worktree" "${T3}/setup.log"   && grep -q '\.codex links to .*; skip .*ls-files -o -i --exclude-standard --directory' "${T3}/setup.log"; then
-  ok "setup.sh names the foreign link target and how to move its runtime"
+# 報告は指し先を名指しする。どこへ runtime が溜まっているか判らないと動けない。
+if grep -q '\.codex links to .*other-checkout/codex; skip' "${T3}/setup.log"; then
+  ok "setup.sh names the foreign link target"
 else
-  ng "setup.sh repointed the foreign Codex link, or reported it without a usable remedy"
+  ng "setup.sh reported the foreign Codex link without naming its target"
 fi
-# skills 側は同じ remedy を使えない。codex/skills/ は .gitignore で再包含された
-# tracked サブツリーなので、runtime を移す手順を出すと資格情報を追跡対象へ入れる
-# 手順になる。
+# skills 側も同じ扱い。張り替えると .system/ が参照から外れる。
 ln -sfn "${T3}/other-checkout/codex/skills" "${T3}/home/.agents/skills"
 run_setup "$T3"
-if grep -q 'skills links to .*; skip' "${T3}/setup.log" \
-  && ! grep -q 'skills links to .*auth\.json' "${T3}/setup.log"; then
-  ok "the skills remedy does not tell the operator to move runtime into a tracked path"
+if resolves_to "${T3}/home/.agents/skills" "${T3}/other-checkout/codex/skills" \
+  && grep -q 'skills links to .*; skip' "${T3}/setup.log"; then
+  ok "a foreign skills link is left alone and reported"
 else
-  ng "the skills link was repointed, or its remedy moves runtime into codex/skills"
-fi
-# skills 側も remedy の締めは「外して再実行」なので、worktree から再実行させると
-# ~/.agents/skills が消える予定のディレクトリを指す。同じ but を先に言う。
-# 存在/不在の grep では順序を測れない (注意書きを末尾へ動かしても通ってしまう)。
-# 行を取り出し、"temporary worktree" より前に "re-run" が無いことで順序を見る。
-skills_line="$(grep -o 'skills links to .*' "${T3}/setup.log" | head -1)"
-before_caveat="${skills_line%%temporary worktree*}"
-if [ "$skills_line" != "$before_caveat" ] \
-  && [ "$before_caveat" = "${before_caveat%re-run*}" ] \
-  && printf '%s' "$skills_line" | grep -q 'git-common-dir'; then
-  ok "the skills remedy warns about a temporary worktree before telling the operator to re-run"
-else
-  ng "the skills remedy tells the operator to re-run before warning about a temporary worktree"
+  ng "the skills link was repointed, or the skip was silent"
 fi
 # 一方で dangling link は張り直す (checkout を移動した後の復旧経路)。捨てたリンク先を
 # 報告することが、その値が残る唯一の経路なので併せて固定する。
@@ -198,8 +177,8 @@ if [ ! -e "${T4}/home/.codex" ] && [ ! -L "${T4}/home/.codex" ]; then
 else
   ng "setup.sh created a link even though dotfiles/codex is missing"
 fi
-if grep -q 'missing link source' "${T4}/setup.log"; then
-  ok "setup.sh reports the missing link source"
+if grep -q 'missing .*/dotfiles/codex; skip' "${T4}/setup.log"; then
+  ok "setup.sh names the missing link source"
 else
   ng "setup.sh skipped the missing link source silently"
 fi
@@ -241,16 +220,12 @@ if [ ! -L "${T5}/home/.claude" ] \
 else
   ng "existing real ~/.claude was replaced or its contents were lost"
 fi
-# 実パスの remedy は「退避しろ」で終われない。(a) bind mount の検出はすり抜けうるので
-# 確認を挟まないと mount 元へ mv を撃たせる。(b) 退避して張り直すだけでは、runtime が
-# 退避先に残ったまま Claude Code がサインアウト状態で起動する。戻す手順まで要る。
-if grep -q '\.claude exists as a real path' "${T5}/setup.log" \
-  && grep -q '\.claude exists as a real path.*bind mount' "${T5}/setup.log" \
-  && grep -q '\.claude exists as a real path.*\.credentials\.json' "${T5}/setup.log"   && grep -q '\.claude exists as a real path.*ls-files | cut -d/ -f1' "${T5}/setup.log"   && ! grep -q '\.claude exists as a real path.*ls-files -o' "${T5}/setup.log"   && grep -q '\.claude exists as a real path.*temporary worktree' "${T5}/setup.log" \
-  && grep -q '\.claude exists as a real path.*nests inside it' "${T5}/setup.log"; then
-  ok "setup.sh reports why it skipped the Claude link, and how to adopt it without signing out"
+# 黙って飛ばさない。パスと、runtime を戻す必要があることが 1 行に出ていること。
+if grep -q '\.claude is a real path; skip' "${T5}/setup.log" \
+  && grep -q '\.claude is a real path.*runtime' "${T5}/setup.log"; then
+  ok "setup.sh reports the skipped Claude path and that its runtime has to move"
 else
-  ng "setup.sh skipped the Claude link silently, or gave a remedy that strands the runtime"
+  ng "setup.sh skipped the Claude link silently"
 fi
 
 # 別 checkout / worktree を指すリンクは張り替えない。実体は消えないが、Claude Code
@@ -273,17 +248,11 @@ if [ -f "${T5}/other-checkout/claude/history.jsonl" ]; then
 else
   ng "the other checkout's Claude runtime was destroyed"
 fi
-# 報告は「どこを指しているか」と「runtime を移してから外すこと」を含む。remedy が
-# 無いと、読者はリンクを消して再実行し、session 履歴を参照から外してしまう。
-# 資格情報を落とすとサインアウトするので、それが名指しされていることも固定する。
-# 移送先は実行中の checkout なので、worktree では移してはいけないことも先に言う。
-if grep -q '\.claude links to .*other-checkout/claude; skip' "${T5}/setup.log" \
-  && grep -q '\.claude links to .*; skip .*sessions/' "${T5}/setup.log" \
-  && grep -q '\.claude links to .*; skip .*\.credentials\.json' "${T5}/setup.log" \
-  && grep -q '\.claude links to .*; skip .*temporary worktree' "${T5}/setup.log"   && grep -q "\.claude links to .*; skip .*${T5}/dotfiles is a temporary worktree" "${T5}/setup.log"   && grep -q '\.claude links to .*; skip .*git-common-dir' "${T5}/setup.log"   && grep -q '\.claude links to .*; skip .*ls-files -o -i --exclude-standard --directory' "${T5}/setup.log"; then
-  ok "setup.sh names the foreign Claude link target and how to move its runtime"
+# 報告は指し先を名指しする。どこに session 履歴が残っているか判らないと動けない。
+if grep -q '\.claude links to .*other-checkout/claude; skip' "${T5}/setup.log"; then
+  ok "setup.sh names the foreign Claude link target"
 else
-  ng "setup.sh reported the foreign Claude link without a usable remedy"
+  ng "setup.sh reported the foreign Claude link without naming its target"
 fi
 
 # dangling link は張り直す。捨てたリンク先を報告することが、その値が残る唯一の経路。
@@ -332,14 +301,13 @@ if [ ! -L "${T6}/home/.agents/skills" ]   && [ -f "${T6}/home/.agents/skills/.sy
 else
   ng "an existing real ~/.agents/skills was replaced or its contents were lost"
 fi
-# 実パスの手順は収束しなければならない。「.system/ だけ退避して再実行」では実
-# ディレクトリが残るのでリンクは永久に張られず、最後の移送で live path から
-# runtime が消える。他 2 target と同じく「ディレクトリごと退避」であること。
-if grep -q 'skills exists as a real path.*\.system/' "${T6}/setup.log"   && grep -q 'skills exists as a real path.*temporary worktree' "${T6}/setup.log"   && grep -q 'skills exists as a real path.*move it aside under a name that does not exist yet' "${T6}/setup.log"   && grep -q 'skills exists as a real path.*back from there' "${T6}/setup.log" \
-  && grep -q 'skills exists as a real path.*nests inside it' "${T6}/setup.log"; then
-  ok "the real-path skills remedy converges: aside, re-run, then move .system/ back"
+# 3 target で同じ扱い。ディレクトリごと退避させる形でないと、実ディレクトリが残って
+# リンクは永久に張られない。
+if grep -q 'skills is a real path; skip' "${T6}/setup.log" \
+  && grep -q 'skills is a real path.*move it aside' "${T6}/setup.log"; then
+  ok "setup.sh reports the skipped skills path and says to move it aside"
 else
-  ng "the real-path skills remedy does not converge, or omits the worktree check"
+  ng "setup.sh skipped the real skills path silently"
 fi
 
 # (9) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で

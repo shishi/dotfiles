@@ -46,135 +46,50 @@ link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
 link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
 link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
-# 判定は「解決できた実パス」で行う。文字列比較だけだと cd の失敗 (空文字) を
-# 「別の場所を指している」と取り違える。
+# agent のホーム (~/.claude ~/.codex ~/.agents/skills) を張る。エディタ設定と違い、
+# ignore された runtime (auth.json / sessions/ / history.jsonl / plugins/) が中に
+# 同居するので、ウチのものと確認できないパスは触らずに報告して飛ばす。
 #
-# remedy = 触らずに飛ばしたときに続けて印字する復旧手順文。この関数は runtime を
-# 抱えたパスを壊さない代わりに何もしないので、読者がその場で取り込めるだけの手順が
-# 出力に無いと詰む。飛ばす理由 (どこを指しているか / 実パスであること) は関数が書き、
-# 取り込み方は呼び出し側が渡す。
+# 比較は解決した実パスで行う。文字列比較だと cd の失敗 (空文字) を「別の場所を
+# 指している」と取り違える。
 link_agent_home() {
   local source_path="$1" target_path="$2"
-  # 別 checkout / worktree を指すリンクを見つけたときの手順。
-  local foreign_remedy="$3"
-  # 実ディレクトリだったときの手順。target ごとに違うので既定値は置かない: 3 target は
-  # どれも戻すべき runtime を持ち、汎用の「退避して張り直せ」はそれを取り残すうえ、
-  # 検出をすり抜けた bind mount には mount 元へ作用する誤手順にもなる。
-  local real_remedy="$4"
   local source_real target_real
 
-  # 空の source_real で比較を続けると、target も解決できないときに「空 = 空」で
-  # 一致してしまい、両方壊れているのに黙って何もしない。ここで打ち切る。
   source_real="$(cd "$source_path" 2>/dev/null && pwd -P)"
   if [ -z "$source_real" ]; then
-    echo "setup.sh: missing link source ${source_path}; skip"
-    return 0
-  fi
-  if [ ! -L "$target_path" ] && [ -e "$target_path" ]; then
-    echo "setup.sh: ${target_path} exists as a real path; skip (${real_remedy})"
+    echo "setup.sh: missing ${source_path}; skip"
     return 0
   fi
   if [ -L "$target_path" ]; then
     target_real="$(cd "$target_path" 2>/dev/null && pwd -P)"
-    # 既に正しいリンク。張り替えないので、symlink を作れない環境で再実行しても
-    # 動いているリンクを失わない。
-    if [ "$target_real" = "$source_real" ]; then
-      return 0
-    fi
-    if [ -n "$target_real" ]; then
-      # 別 checkout / worktree を指している。張り替えると Codex はサインアウト状態に
-      # なり、以後の auth.json や sessions は旧 checkout ではなくこちら側へ書かれる。
-      echo "setup.sh: ${target_path} links to ${target_real}; skip (${foreign_remedy})"
-      return 0
-    fi
-    # 解決できないリンク。dangling と区別せずに張り替えると、中身を確かめられな
-    # かったリンク先を捨てることになる。
+    # 既に正しい。張り替えないので、symlink を作れない環境で再実行しても失わない。
+    [ "$target_real" = "$source_real" ] && return 0
+    # 別 checkout を指している、または解決できない。どちらも「ウチのものと確認
+    # できない」ので同じ扱い。張り替えると runtime は残るが参照から外れる。
     if [ -e "$target_path" ]; then
-      echo "setup.sh: ${target_path} links to a path that could not be resolved (not a directory, or no traversal permission); skip"
+      echo "setup.sh: ${target_path} links to ${target_real:-an unreadable path}; skip (remove the link to relink, moving its runtime here first)"
       return 0
     fi
-    # ここだけが dangling link。リンク先を失うので、捨てた値を残す。
-    echo "setup.sh: ${target_path} was a dangling link to $(readlink "$target_path"); relinking to ${source_path}"
+    echo "setup.sh: ${target_path} was a dangling link to $(readlink "$target_path")"
+  elif [ -e "$target_path" ]; then
+    echo "setup.sh: ${target_path} is a real path; skip (move it aside to relink, then move its runtime back)"
+    return 0
   fi
-  # ln -sf は既存の dir symlink を辿って中に張ってしまうので -n が必須。
-  # 失敗しても setup.sh 全体は続くため、原因が分かる 1 行を残す。
   ln -sfn "$source_path" "$target_path" \
     || echo "setup.sh: could not link ${target_path} (Windows: enable Developer Mode or run elevated)"
 }
 
-# ~/.claude も ~/.codex と同じ構造なので同じ関数に通す。ignore が既定拒否する
-# runtime をホームごと抱えており、別 checkout を指すリンクを張り替えると実体は
-# 残ったまま Claude Code から参照できなくなる。
-#
-# remedy が挙げる名前は目印で、網羅ではない。列挙手段そのものを渡すことで「残りは
-# 自分で数えろ」を実行可能にしている。-o 単体は ignored でない untracked (まだ
-# commit していない新規ファイル) も出すため、ignored に限る -i --exclude-standard
-# が要る。実パス側は退避先を列挙できない (git repo ではない) ので、逆に repo が持つ
-# 名前 (ls-files) を除外集合として渡す。粒度は top-level 名なので、その配下にある
-# repo に無いファイルは移送側に含める。memory リンクは列挙から除く:
-# この実行の後段が ${DOTDIR}/claude/memory を必ず張り直すので、移す必要がない。
-#
-# 移送先は実行中の checkout なので、worktree から叩いたときは移してはいけない。
-# worktree を消せば runtime ごと消える。remedy はそれを最初に言う。
-#
-# bind mount (devcontainer 等) だけは先に見る。link_agent_home は実パスを「退避して
-# 張り直せ」と報告するが、bind mount 越しには既に同じ実体が見えており、退避は不要な
-# うえマウント元を壊しかねない。symlink でないときだけ判定するのは、bind mount が
-# 実パスとして現れるため。リンク済みのホームをこの枝へ落とさない。
-# mountpoint で検出できない bind mount (Docker Desktop の virtiofs/9p 等) も
-# /proc/mounts のフォールバックで拾う。ただし取りこぼしは残る (mount 元が
-# ${DOTDIR}/claude と同じかは照合していない。$HOME に正規表現メタ文字を含む場合や
-# mount point に空白がある場合はフォールバックが外れる) ため、実パス側の remedy に
-# も bind mount の確認を求めている。
-claude_mount_note="setup.sh: ~/.claude is a mount point; skip claude symlink \
-(mount source not compared -- readlink cannot see through a mount -- check the \
-source with findmnt -no SOURCE ~/.claude where util-linux is present, or in the \
-container definition, and confirm the path it names is the host path this checkout \
-is mounted from; an in-container path such as ${DOTDIR}/claude cannot be compared \
-with it directly)"
-
-claude_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
-rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a \
-worktree goes when the worktree does. Otherwise stop Claude Code and list what Git \
-ignores under the path above with git -C <that path> ls-files -o -i \
---exclude-standard --directory (.credentials.json projects/ sessions/ history.jsonl \
-plugins/ and more). If that path is not inside a checkout, git cannot list it; treat \
-everything there as runtime except the top-level names the repository has. The \
-repository's top-level names are what git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 \
-| sort -u prints. Move each entry except memory if ${DOTDIR}/claude/memory is a \
-symlink once this run finishes -- if it is not, this run could not recreate it and \
-memory has to move too -- to the same relative path under ${DOTDIR}/claude without \
-overwriting what is already there (the paths are printed relative to the listed \
-directory; moving onto an existing directory nests inside it), then remove the link \
-and re-run"
-
-# 実パス側は退避先を列挙できない (git repo ではない)。だから ls-files -o は使わず、
-# repo が持つ top-level 名を除外集合として渡す。
-claude_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
-rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the \
-permanent checkout instead. First confirm it is not a bind mount that the checks \
-above missed -- moving one aside acts on the mount source; findmnt -no SOURCE \
-~/.claude names the source where util-linux is present, otherwise grep '\.claude' \
-/proc/self/mountinfo, and if either prints anything stop here and leave the path \
-alone. Then stop Claude Code, move it aside under a name that does not exist yet, \
-re-run this script, and move back from there everything except memory if \
-${DOTDIR}/claude/memory is a symlink once the re-run finishes -- if it is not, move \
-memory too; and if the backup's memory is a real directory it holds a clone, so check \
-it for unpushed commits before discarding it -- and except the top-level names git -C \
-${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints, which the repository owns \
-at those paths -- anything under them that the repository does not have is yours to \
-move too (the rest is runtime: .credentials.json projects/ sessions/ history.jsonl \
-plugins/ and more) without overwriting what is already there (moving onto an existing \
-directory nests inside it, and the re-run itself creates some of these directories); \
-skipping that last step leaves a working but signed-out home"
-
+# bind mount (devcontainer 等) は実パスとして現れるので、実パス扱いの前に見る。
+# 越しに同じ実体が見えているため退避は不要で、退避すると mount 元へ作用する。
+# mountpoint で検出できない実装 (Docker Desktop の virtiofs/9p 等) は /proc/mounts で
+# 拾う。mount 元が ${DOTDIR}/claude と同じかは照合していない。
 if [ ! -L ~/.claude ] \
   && { mountpoint -q ~/.claude 2>/dev/null \
     || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
-  echo "$claude_mount_note"
+  echo "setup.sh: ~/.claude is a mount point; skip (check the source with findmnt -no SOURCE ~/.claude)"
 else
-  link_agent_home "${DOTDIR}/claude" "$HOME/.claude" \
-    "$claude_foreign_remedy" "$claude_real_remedy"
+  link_agent_home "${DOTDIR}/claude" "$HOME/.claude"
 fi
 
 # gitconfig は agent-memory 処理より前に張る。ヘルパーが git config の
@@ -240,67 +155,11 @@ else
   fi
 fi
 
-# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読むため、~/.claude と
-# 同じくホームごと symlink で差し込む。~/.agents/skills は同じ実体の skills/ を指す
-# (personal skills の参照先)。
-#
-# 実ディレクトリだった場合は auth.json / sessions が入っているため壊さない。手順は
-# この下の remedy 文字列が唯一の正本で、実行時に印字される。ここに二重に書くと
-# 片方だけが更新されて食い違う (退避先の名前を衝突させないこと、移すのは ignore が
-# 拒否している分だけであること、AGENTS.md・config.toml・agents/・rules/・skills/
-# (.system/ 以外)・hooks/・hooks.json は repo 側が正本であることは、すべて remedy
-# 側が持っている)。
-
-# remedy は target ごとに違う。skills 側に runtime の移設を書くと、資格情報を
-# tracked な codex/skills/ へ入れる手順になってしまう。
-#
-# どちらも締めが「外して再実行」で、再実行はこの checkout を指す。この分岐が出る
-# 主因は worktree からの実行なので、移送も再実行も先に条件を付ける。worktree へ
-# 移した runtime は worktree を消せば消え、worktree を指したリンクは残らない。
-codex_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
-rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a \
-worktree goes when the worktree does. Otherwise stop Codex, list what Git ignores \
-under the path above with git -C <that path> ls-files -o -i --exclude-standard \
---directory (auth.json sessions/ plugins/ sqlite/ browser/ and more). If that path is \
-not inside a checkout, git cannot list it; treat everything there as runtime except \
-the top-level names the repository has. The repository's top-level names are what git \
--C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints. Move each entry to the \
-same relative path under ${DOTDIR}/codex without overwriting what is already there \
-(the paths are printed relative to the listed directory, so skills/.system/ stays \
-under skills/; moving onto an existing directory nests inside it), then remove the \
-link and re-run"
-
-codex_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse \
---git-dir differs from --git-common-dir -- run the adoption below from the permanent \
-checkout instead. Then stop Codex, move it aside under a name that does not exist \
-yet, re-run this script, and move back from there everything except the top-level \
-names git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints, which the \
-repository owns at those paths -- anything under them that the repository does not \
-have is yours to move too (the rest is runtime: auth.json sessions/ plugins/ sqlite/ \
-browser/ and more) without overwriting what is already there (moving onto an existing \
-directory nests inside it, and the re-run itself creates some of these directories); \
-skipping that last step leaves a working but signed-out home"
-
-# skills 配下の runtime は .system/ だけ (.gitignore が再包含から除いている唯一の
-# 名前)。集合が閉じているので列挙手段ではなく名前を直接渡す。
-skills_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
-rev-parse --git-dir differs from --git-common-dir -- do nothing; otherwise move the \
-.system/ directory under the path above -- the only runtime here -- into \
-${DOTDIR}/codex/skills/, then remove the link and re-run"
-
-skills_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
-rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the \
-permanent checkout instead. Then move it aside under a name that does not exist yet, \
-re-run this script, and move .system/ back from there into ~/.agents/skills -- it is \
-the only runtime here, and the rest is tracked without overwriting what is already \
-there (moving onto an existing directory nests inside it, and the re-run itself \
-creates some of these directories)"
-
-link_agent_home "${DOTDIR}/codex" "$HOME/.codex" \
-  "$codex_foreign_remedy" "$codex_real_remedy"
+# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents/skills
+# は同じ実体の skills/ を指す (personal skills の参照先)。
+link_agent_home "${DOTDIR}/codex" "$HOME/.codex"
 if mkdir -p ~/.agents; then
-  link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills" \
-    "$skills_foreign_remedy" "$skills_real_remedy"
+  link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills"
 else
   echo "setup.sh: could not create ~/.agents; skip the skills link"
 fi
