@@ -56,9 +56,19 @@ resolves_to() {
   [ "$actual" = "$expected" ]
 }
 
+# ファイルへのリンク用。resolves_to は cd するのでディレクトリしか見られない。
+# 解決できない側は空文字になるため、空同士が一致して通らないよう非空も見る。
+resolves_to_file() {
+  local link="$1" expected="$2" actual target
+  [ -L "$link" ] || return 1
+  actual="$(readlink -f "$link" 2>/dev/null)" || return 1
+  target="$(readlink -f "$expected" 2>/dev/null)" || return 1
+  [ -n "$actual" ] && [ -n "$target" ] && [ "$actual" = "$target" ]
+}
+
 # (1) fresh 環境で 2 本のリンクが張られる
 T1="$(mktemp -d)"
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -330,6 +340,63 @@ if grep -q 'skills exists as a real path.*\.system/' "${T6}/setup.log"   && grep
   ok "the real-path skills remedy converges: aside, re-run, then move .system/ back"
 else
   ng "the real-path skills remedy does not converge, or omits the worktree check"
+fi
+
+# (9) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
+# 上書きしてよいが、リンクの形は同じ規則で張られること。
+T7="$(mktemp -d)"
+make_fixture "$T7"
+mkdir -p "${T7}/dotfiles/wezterm" "${T7}/dotfiles/fish" "${T7}/dotfiles/nvim" \
+  "${T7}/dotfiles/helix"
+run_setup "$T7"
+# wezterm と emacs は REMOTE_CONTAINERS ゲートの内側にあり、この fixture
+# (emacs の clone を避けるため true) では走らない。ゲート外の 3 つで見る。
+config_dirs_ok=1
+for d in fish nvim helix; do
+  resolves_to "${T7}/config/$d" "${T7}/dotfiles/$d" || config_dirs_ok=0
+done
+if [ "$config_dirs_ok" = 1 ]; then
+  ok "fish / nvim / helix link into the checkout"
+else
+  ng "a config directory link is missing or points elsewhere"
+fi
+
+# nushell はディレクトリではなく中の 2 ファイルを張る。~/.config/nushell 自体が
+# リンクになってしまうと、nushell は config.nu の中身を env.nu として読む。
+if [ -d "${T7}/config/nushell" ] && [ ! -L "${T7}/config/nushell" ] \
+  && resolves_to_file "${T7}/config/nushell/config.nu" "${T7}/dotfiles/nushell/config.nu" \
+  && resolves_to_file "${T7}/config/nushell/env.nu" "${T7}/dotfiles/nushell/env.nu"; then
+  ok "nushell keeps a real directory holding one link per file"
+else
+  ng "nushell is not a directory of per-file links"
+fi
+
+# 既にディレクトリを指すリンクが在るときも張り替わること。ln -sf は既存の dir
+# symlink を辿って中に張るので、-n が無いと ${d}/${d} ができて元のリンクが残る。
+mkdir -p "${T7}/other/fish"
+ln -sfn "${T7}/other/fish" "${T7}/config/fish"
+run_setup "$T7"
+if resolves_to "${T7}/config/fish" "${T7}/dotfiles/fish" \
+  && [ ! -e "${T7}/other/fish/fish" ]; then
+  ok "a config link pointing elsewhere is repointed, not nested inside"
+else
+  ng "setup.sh nested a link inside the old target instead of replacing it"
+fi
+
+# nushell が symlink になっていたら実ディレクトリへ戻す。Nushell は history を同じ
+# 場所へ書くので、指し先が repo でも他所でも、生成物の置き場がリンク越しになる。
+# リンク先は source 以外にする。source 自身を指させると「中の 2 ファイルを張る」が
+# source を自分で置換する退化した操作になり、何を測っているのか判らなくなる。
+rm -rf "${T7}/config/nushell"
+mkdir -p "${T7}/other/nushell"
+ln -sfn "${T7}/other/nushell" "${T7}/config/nushell"
+run_setup "$T7"
+if [ ! -L "${T7}/config/nushell" ] && [ -d "${T7}/config/nushell" ] \
+  && resolves_to_file "${T7}/config/nushell/config.nu" "${T7}/dotfiles/nushell/config.nu" \
+  && resolves_to_file "${T7}/config/nushell/env.nu" "${T7}/dotfiles/nushell/env.nu"; then
+  ok "a symlinked nushell directory becomes real, holding both per-file links"
+else
+  ng "nushell stayed a symlink, or its per-file links are missing"
 fi
 
 echo "---"

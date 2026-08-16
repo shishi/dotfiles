@@ -17,59 +17,35 @@ fi
 DOTDIR=$(realpath $(dirname "$0"))
 #$EMACSDIR=~/dev/src/github.com/shishi/emacs
 
+# リンクはすべて ln -sfn で張る。-n (--no-dereference) が無いと、既にディレクトリを
+# 指す symlink が張り替えではなく「その中へ」張られる (ln -sf が L を辿って
+# L/basename(T) を作る)。ファイルへのリンクでは -n は無害なので例外を作らない。
+#
+# エディタ設定は repo が正本で runtime を持たないため、実ディレクトリは中身ごと
+# 捨てて置き換える。auth.json や session を抱える agent home (link_agent_home) とは
+# 方針が違うのはここ。
+link_config_dir() {
+  local source_path="$1" target_path="$2"
+
+  if [ ! -L "$target_path" ] && [ -d "$target_path" ]; then
+    rm -fr "$target_path"
+  fi
+  ln -sfn "$source_path" "$target_path"
+}
+
 if [ "$REMOTE_CONTAINERS" != true ]; then
-  if [ -L ${XDG_CONFIG_HOME}/wezterm ]; then
-    rm ${XDG_CONFIG_HOME}/wezterm
-    ln -sf ${DOTDIR}/wezterm ${XDG_CONFIG_HOME}/wezterm
-  elif [ -d ${XDG_CONFIG_HOME}/wezterm ]; then
-    rm -fr ${XDG_CONFIG_HOME}/wezterm
-    ln -sf ${DOTDIR}/wezterm ${XDG_CONFIG_HOME}/wezterm
-  else
-    ln -sf ${DOTDIR}/wezterm ${XDG_CONFIG_HOME}/wezterm
-  fi
+  link_config_dir "${DOTDIR}/wezterm" "${XDG_CONFIG_HOME}/wezterm"
 
-  if [ -L ~/.emacs.d ]; then
-    rm ~/.emacs.d
-    ln -sf $(dirname ${DOTDIR})/emacs ~/.emacs.d
-  elif [ -d ~/.emacs.d ]; then
+  # symlink でないときだけ clone する。既にリンク済みなら repo は取得済み。
+  if [ ! -L ~/.emacs.d ]; then
     git -C $(dirname ${DOTDIR}) clone git@github.com:shishi/emacs.git
-    rm -fr ~/.emacs.d
-    ln -sf $(dirname ${DOTDIR})/emacs ~/.emacs.d
-  else
-    git -C $(dirname ${DOTDIR}) clone git@github.com:shishi/emacs.git
-    ln -sf $(dirname ${DOTDIR})/emacs ~/.emacs.d
   fi
+  link_config_dir "$(dirname ${DOTDIR})/emacs" ~/.emacs.d
 fi
 
-if [ -L ${XDG_CONFIG_HOME}/fish ]; then
-  rm ${XDG_CONFIG_HOME}/fish
-  ln -sf ${DOTDIR}/fish ${XDG_CONFIG_HOME}/fish
-elif [ -d ${XDG_CONFIG_HOME}/fish ]; then
-  rm -fr ${XDG_CONFIG_HOME}/fish
-  ln -sf ${DOTDIR}/fish ${XDG_CONFIG_HOME}/fish
-else
-  ln -sf ${DOTDIR}/fish ${XDG_CONFIG_HOME}/fish
-fi
-
-if [ -L ${XDG_CONFIG_HOME}/nvim ]; then
-  rm ${XDG_CONFIG_HOME}/nvim
-  ln -sf ${DOTDIR}/nvim ${XDG_CONFIG_HOME}/nvim
-elif [ -d ${XDG_CONFIG_HOME}/nvim ]; then
-  rm -fr ${XDG_CONFIG_HOME}/nvim
-  ln -sf ${DOTDIR}/nvim ${XDG_CONFIG_HOME}/nvim
-else
-  ln -sf ${DOTDIR}/nvim ${XDG_CONFIG_HOME}/nvim
-fi
-
-if [ -L ${XDG_CONFIG_HOME}/helix ]; then
-  rm ${XDG_CONFIG_HOME}/helix
-  ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
-elif [ -d ${XDG_CONFIG_HOME}/helix ]; then
-  rm -fr ${XDG_CONFIG_HOME}/helix
-  ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
-else
-  ln -sf ${DOTDIR}/helix ${XDG_CONFIG_HOME}/helix
-fi
+link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
+link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
+link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
 # 判定は「解決できた実パス」で行う。文字列比較だけだと cd の失敗 (空文字) を
 # 「別の場所を指している」と取り違える。
@@ -158,20 +134,20 @@ fi
 # ghq.root を参照するため、後だと fresh 環境の初回実行だけ既定 root へ
 # clone される二段階挙動になってしまう。
 if [ $(uname) = Darwin ]; then
-  ln -sf ${DOTDIR}/.gitconfig.mac ~/.gitconfig
-  ln -sf ${DOTDIR}/Brewfile ~/Brewfile
+  ln -sfn ${DOTDIR}/.gitconfig.mac ~/.gitconfig
+  ln -sfn ${DOTDIR}/Brewfile ~/Brewfile
 elif [ $(uname) = Linux ]; then
-  ln -sf ${DOTDIR}/.gitconfig.linux ~/.gitconfig
-  #    ln -sf ${DOTDIR}/terminator ${XDG_CONFIG_HOME}/terminator
-  #    ln -sf ${DOTDIR}/.xprofile ~/.xprofile
-  #    ln -sf ${DOTDIR}/.xbindkeysrc ~/.xbindkeysrc
-  #    ln -sf ${DOTDIR}/.imwheelrc ~/.imwheelrc
-  #    ln -sf ${DOTDIR}/imwheel.desktop ${XDG_CONFIG_HOME}/autostart/imwheel.desktop
-  #    ln -sf ${DOTDIR}/fonts.conf ${XDG_CONFIG_HOME}/fontconfig/fonts.conf
+  ln -sfn ${DOTDIR}/.gitconfig.linux ~/.gitconfig
+  #    link_config_dir ${DOTDIR}/terminator ${XDG_CONFIG_HOME}/terminator
+  #    ln -sfn ${DOTDIR}/.xprofile ~/.xprofile
+  #    ln -sfn ${DOTDIR}/.xbindkeysrc ~/.xbindkeysrc
+  #    ln -sfn ${DOTDIR}/.imwheelrc ~/.imwheelrc
+  #    ln -sfn ${DOTDIR}/imwheel.desktop ${XDG_CONFIG_HOME}/autostart/imwheel.desktop
+  #    ln -sfn ${DOTDIR}/fonts.conf ${XDG_CONFIG_HOME}/fontconfig/fonts.conf
   #    fc-cache -fv
 elif [[ $(uname -s) == MINGW* ]]; then
   # uname はビルド番号付き (例: MINGW64_NT-10.0-26200) なのでパターンで判定する
-  ln -sf ${DOTDIR}/.gitconfig.win ~/.gitconfig
+  ln -sfn ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
 # agent-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
@@ -245,31 +221,31 @@ else
   echo "setup.sh: could not create ~/.agents; skip the skills link"
 fi
 
+# nushell はディレクトリ単位で差し替えない。Nushell 自身が同じ場所へ history や
+# plugin registry を書くため、ディレクトリは実体のまま残し、中の 2 ファイルだけを張る。
+# symlink になっていたら実ディレクトリへ戻す。repo のディレクトリを直接指していると、
+# Nushell の生成物が worktree の中へ落ちる。
+# 宛先はファイル名まで書く。ディレクトリを宛先にすると、そこが symlink だったときに
+# ディレクトリ自身が最後の 1 ファイルへのリンクに化ける。
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
   rm ${XDG_CONFIG_HOME}/nushell
-  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
-  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
-elif [ -d ${XDG_CONFIG_HOME}/nushell ]; then
-  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
-  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
-else
-  mkdir -p ${XDG_CONFIG_HOME}/nushell
-  ln -sf ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell
-  ln -sf ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell
 fi
+mkdir -p ${XDG_CONFIG_HOME}/nushell
+ln -sfn ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell/config.nu
+ln -sfn ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell/env.nu
 
-ln -sf ${DOTDIR}/.gitignore.global ~/.gitignore
+ln -sfn ${DOTDIR}/.gitignore.global ~/.gitignore
 
-ln -sf ${DOTDIR}/.ideavimrc ~/.ideavimrc
-ln -sf ${DOTDIR}/.vimrc ~/.vimrc
-ln -sf ${DOTDIR}/.gvimrc ~/.gvimrc
-#ln -sf ${DOTDIR}/.vim ~/.vim
+ln -sfn ${DOTDIR}/.ideavimrc ~/.ideavimrc
+ln -sfn ${DOTDIR}/.vimrc ~/.vimrc
+ln -sfn ${DOTDIR}/.gvimrc ~/.gvimrc
+#ln -sfn ${DOTDIR}/.vim ~/.vim
 
-ln -sf ${DOTDIR}/.gemrc ~/.gemrc
-ln -sf ${DOTDIR}/.rspec ~/.rspec
-ln -sf ${DOTDIR}/.pryrc ~/.pryrc
+ln -sfn ${DOTDIR}/.gemrc ~/.gemrc
+ln -sfn ${DOTDIR}/.rspec ~/.rspec
+ln -sfn ${DOTDIR}/.pryrc ~/.pryrc
 
-ln -sf ${DOTDIR}/.npmrc ~/.npmrc
+ln -sfn ${DOTDIR}/.npmrc ~/.npmrc
 
 # ln -sf ${DOTDIR}/.bashrc ~/.bashrc
 
