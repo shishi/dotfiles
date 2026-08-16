@@ -48,10 +48,17 @@ link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
 # 判定は「解決できた実パス」で行う。文字列比較だけだと cd の失敗 (空文字) を
 # 「別の場所を指している」と取り違える。
+#
+# remedy = 触らずに飛ばしたときに続けて印字する復旧手順文。この関数は runtime を
+# 抱えたパスを壊さない代わりに何もしないので、読者がその場で取り込めるだけの手順が
+# 出力に無いと詰む。飛ばす理由 (どこを指しているか / 実パスであること) は関数が書き、
+# 取り込み方は呼び出し側が渡す。
 link_agent_home() {
-  local source_path="$1" target_path="$2" foreign_remedy="$3"
-  # 実パスの remedy は target ごとに違う。既定値は置かない: 3 target はどれも
-  # 戻すべき runtime を持ち、汎用の「退避して張り直せ」はそれを取り残すうえ、
+  local source_path="$1" target_path="$2"
+  # 別 checkout / worktree を指すリンクを見つけたときの手順。
+  local foreign_remedy="$3"
+  # 実ディレクトリだったときの手順。target ごとに違うので既定値は置かない: 3 target は
+  # どれも戻すべき runtime を持ち、汎用の「退避して張り直せ」はそれを取り残すうえ、
   # 検出をすり抜けた bind mount には mount 元へ作用する誤手順にもなる。
   local real_remedy="$4"
   local source_real target_real
