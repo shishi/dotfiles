@@ -15,7 +15,6 @@ elif [ -z $XDG_CONFIG_HOME ]; then
 fi
 
 DOTDIR=$(realpath $(dirname "$0"))
-#$EMACSDIR=~/dev/src/github.com/shishi/emacs
 
 # リンクはすべて ln -sfn で張る。-n (--no-dereference) が無いと、既にディレクトリを
 # 指す symlink が張り替えではなく「その中へ」張られる (ln -sf が L を辿って
@@ -120,14 +119,55 @@ link_agent_home() {
 # ${DOTDIR}/claude と同じかは照合していない。$HOME に正規表現メタ文字を含む場合や
 # mount point に空白がある場合はフォールバックが外れる) ため、実パス側の remedy に
 # も bind mount の確認を求めている。
+claude_mount_note="setup.sh: ~/.claude is a mount point; skip claude symlink \
+(mount source not compared -- readlink cannot see through a mount -- check the \
+source with findmnt -no SOURCE ~/.claude where util-linux is present, or in the \
+container definition, and confirm the path it names is the host path this checkout \
+is mounted from; an in-container path such as ${DOTDIR}/claude cannot be compared \
+with it directly)"
+
+claude_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
+rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a \
+worktree goes when the worktree does. Otherwise stop Claude Code and list what Git \
+ignores under the path above with git -C <that path> ls-files -o -i \
+--exclude-standard --directory (.credentials.json projects/ sessions/ history.jsonl \
+plugins/ and more). If that path is not inside a checkout, git cannot list it; treat \
+everything there as runtime except the top-level names the repository has. The \
+repository's top-level names are what git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 \
+| sort -u prints. Move each entry except memory if ${DOTDIR}/claude/memory is a \
+symlink once this run finishes -- if it is not, this run could not recreate it and \
+memory has to move too -- to the same relative path under ${DOTDIR}/claude without \
+overwriting what is already there (the paths are printed relative to the listed \
+directory; moving onto an existing directory nests inside it), then remove the link \
+and re-run"
+
+# 実パス側は退避先を列挙できない (git repo ではない)。だから ls-files -o は使わず、
+# repo が持つ top-level 名を除外集合として渡す。
+claude_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
+rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the \
+permanent checkout instead. First confirm it is not a bind mount that the checks \
+above missed -- moving one aside acts on the mount source; findmnt -no SOURCE \
+~/.claude names the source where util-linux is present, otherwise grep '\.claude' \
+/proc/self/mountinfo, and if either prints anything stop here and leave the path \
+alone. Then stop Claude Code, move it aside under a name that does not exist yet, \
+re-run this script, and move back from there everything except memory if \
+${DOTDIR}/claude/memory is a symlink once the re-run finishes -- if it is not, move \
+memory too; and if the backup's memory is a real directory it holds a clone, so check \
+it for unpushed commits before discarding it -- and except the top-level names git -C \
+${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints, which the repository owns \
+at those paths -- anything under them that the repository does not have is yours to \
+move too (the rest is runtime: .credentials.json projects/ sessions/ history.jsonl \
+plugins/ and more) without overwriting what is already there (moving onto an existing \
+directory nests inside it, and the re-run itself creates some of these directories); \
+skipping that last step leaves a working but signed-out home"
+
 if [ ! -L ~/.claude ] \
   && { mountpoint -q ~/.claude 2>/dev/null \
     || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
-  echo "setup.sh: ~/.claude is a mount point; skip claude symlink (mount source not compared -- readlink cannot see through a mount -- check the source with findmnt -no SOURCE ~/.claude where util-linux is present, or in the container definition, and confirm the path it names is the host path this checkout is mounted from; an in-container path such as ${DOTDIR}/claude cannot be compared with it directly)"
+  echo "$claude_mount_note"
 else
   link_agent_home "${DOTDIR}/claude" "$HOME/.claude" \
-    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a worktree goes when the worktree does. Otherwise stop Claude Code and list what Git ignores under the path above with git -C <that path> ls-files -o -i --exclude-standard --directory (.credentials.json projects/ sessions/ history.jsonl plugins/ and more). If that path is not inside a checkout, git cannot list it; treat everything there as runtime except the top-level names the repository has. The repository's top-level names are what git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints. Move each entry except memory if ${DOTDIR}/claude/memory is a symlink once this run finishes -- if it is not, this run could not recreate it and memory has to move too -- to the same relative path under ${DOTDIR}/claude without overwriting what is already there (the paths are printed relative to the listed directory; moving onto an existing directory nests inside it), then remove the link and re-run" \
-    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. First confirm it is not a bind mount that the checks above missed -- moving one aside acts on the mount source; findmnt -no SOURCE ~/.claude names the source where util-linux is present, otherwise grep '\.claude' /proc/self/mountinfo, and if either prints anything stop here and leave the path alone. Then stop Claude Code, move it aside under a name that does not exist yet, re-run this script, and move back from there everything except memory if ${DOTDIR}/claude/memory is a symlink once the re-run finishes -- if it is not, move memory too; and if the backup's memory is a real directory it holds a clone, so check it for unpushed commits before discarding it -- and except the top-level names git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints, which the repository owns at those paths -- anything under them that the repository does not have is yours to move too (the rest is runtime: .credentials.json projects/ sessions/ history.jsonl plugins/ and more) without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories); skipping that last step leaves a working but signed-out home"
+    "$claude_foreign_remedy" "$claude_real_remedy"
 fi
 
 # gitconfig は agent-memory 処理より前に張る。ヘルパーが git config の
@@ -210,13 +250,50 @@ fi
 # どちらも締めが「外して再実行」で、再実行はこの checkout を指す。この分岐が出る
 # 主因は worktree からの実行なので、移送も再実行も先に条件を付ける。worktree へ
 # 移した runtime は worktree を消せば消え、worktree を指したリンクは残らない。
+codex_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
+rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a \
+worktree goes when the worktree does. Otherwise stop Codex, list what Git ignores \
+under the path above with git -C <that path> ls-files -o -i --exclude-standard \
+--directory (auth.json sessions/ plugins/ sqlite/ browser/ and more). If that path is \
+not inside a checkout, git cannot list it; treat everything there as runtime except \
+the top-level names the repository has. The repository's top-level names are what git \
+-C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints. Move each entry to the \
+same relative path under ${DOTDIR}/codex without overwriting what is already there \
+(the paths are printed relative to the listed directory, so skills/.system/ stays \
+under skills/; moving onto an existing directory nests inside it), then remove the \
+link and re-run"
+
+codex_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse \
+--git-dir differs from --git-common-dir -- run the adoption below from the permanent \
+checkout instead. Then stop Codex, move it aside under a name that does not exist \
+yet, re-run this script, and move back from there everything except the top-level \
+names git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints, which the \
+repository owns at those paths -- anything under them that the repository does not \
+have is yours to move too (the rest is runtime: auth.json sessions/ plugins/ sqlite/ \
+browser/ and more) without overwriting what is already there (moving onto an existing \
+directory nests inside it, and the re-run itself creates some of these directories); \
+skipping that last step leaves a working but signed-out home"
+
+# skills 配下の runtime は .system/ だけ (.gitignore が再包含から除いている唯一の
+# 名前)。集合が閉じているので列挙手段ではなく名前を直接渡す。
+skills_foreign_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
+rev-parse --git-dir differs from --git-common-dir -- do nothing; otherwise move the \
+.system/ directory under the path above -- the only runtime here -- into \
+${DOTDIR}/codex/skills/, then remove the link and re-run"
+
+skills_real_remedy="if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} \
+rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the \
+permanent checkout instead. Then move it aside under a name that does not exist yet, \
+re-run this script, and move .system/ back from there into ~/.agents/skills -- it is \
+the only runtime here, and the rest is tracked without overwriting what is already \
+there (moving onto an existing directory nests inside it, and the re-run itself \
+creates some of these directories)"
+
 link_agent_home "${DOTDIR}/codex" "$HOME/.codex" \
-  "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a worktree goes when the worktree does. Otherwise stop Codex, list what Git ignores under the path above with git -C <that path> ls-files -o -i --exclude-standard --directory (auth.json sessions/ plugins/ sqlite/ browser/ and more). If that path is not inside a checkout, git cannot list it; treat everything there as runtime except the top-level names the repository has. The repository's top-level names are what git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints. Move each entry to the same relative path under ${DOTDIR}/codex without overwriting what is already there (the paths are printed relative to the listed directory, so skills/.system/ stays under skills/; moving onto an existing directory nests inside it), then remove the link and re-run" \
-  "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. Then stop Codex, move it aside under a name that does not exist yet, re-run this script, and move back from there everything except the top-level names git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints, which the repository owns at those paths -- anything under them that the repository does not have is yours to move too (the rest is runtime: auth.json sessions/ plugins/ sqlite/ browser/ and more) without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories); skipping that last step leaves a working but signed-out home"
+  "$codex_foreign_remedy" "$codex_real_remedy"
 if mkdir -p ~/.agents; then
   link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills" \
-    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; otherwise move the .system/ directory under the path above -- the only runtime here -- into ${DOTDIR}/codex/skills/, then remove the link and re-run" \
-    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. Then move it aside under a name that does not exist yet, re-run this script, and move .system/ back from there into ~/.agents/skills -- it is the only runtime here, and the rest is tracked without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories)"
+    "$skills_foreign_remedy" "$skills_real_remedy"
 else
   echo "setup.sh: could not create ~/.agents; skip the skills link"
 fi
@@ -234,24 +311,16 @@ mkdir -p ${XDG_CONFIG_HOME}/nushell
 ln -sfn ${DOTDIR}/nushell/config.nu ${XDG_CONFIG_HOME}/nushell/config.nu
 ln -sfn ${DOTDIR}/nushell/env.nu ${XDG_CONFIG_HOME}/nushell/env.nu
 
+# 単一ファイルは HOME 直下に同名で張る。ディレクトリと違い repo が唯一の実体で、
+# runtime を持たないので実ファイルが在っても置き換えてよい。
+for f in .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
+  ln -sfn "${DOTDIR}/${f}" "$HOME/${f}"
+done
+
+# 名前が変わるのはこれだけ。gitconfig の core.excludesFile が ~/.gitignore を見る。
 ln -sfn ${DOTDIR}/.gitignore.global ~/.gitignore
 
-ln -sfn ${DOTDIR}/.ideavimrc ~/.ideavimrc
-ln -sfn ${DOTDIR}/.vimrc ~/.vimrc
-ln -sfn ${DOTDIR}/.gvimrc ~/.gvimrc
-#ln -sfn ${DOTDIR}/.vim ~/.vim
-
-ln -sfn ${DOTDIR}/.gemrc ~/.gemrc
-ln -sfn ${DOTDIR}/.rspec ~/.rspec
-ln -sfn ${DOTDIR}/.pryrc ~/.pryrc
-
-ln -sfn ${DOTDIR}/.npmrc ~/.npmrc
-
-# ln -sf ${DOTDIR}/.bashrc ~/.bashrc
-
-# ln -s ${DOTDIR}/.zsh ~/.zsh
-# ln -s ${DOTDIR}/.zshenv ~/.zshenv
-# ln -s ${DOTDIR}/.zshrc ~/.zshrc
+# .bashrc / .zsh 系 / .vim は追跡しているが張らない。
 
 # settings.json の enabledPlugins に従って Claude Code plugin を install する。
 # claude 未導入の環境では install-plugins.sh 側で黙ってスキップする。
