@@ -129,9 +129,17 @@ printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"s
 check "warn を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-7"
 end
 
-begin "statusline/50% は warn しない"
-printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-8","context_window":{"used_percentage":50}}' | bash "$STATUSLINE" >/dev/null
+# 閾値は両側から固定する。未満で warn しないことだけを見ると、閾値を上げる変更が
+# 素通りする。
+begin "statusline/閾値未満 (49%) は warn しない"
+printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-8","context_window":{"used_percentage":49}}' | bash "$STATUSLINE" >/dev/null
 check "warn を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-8"
+end
+
+begin "statusline/閾値ちょうど (50%) で warn する"
+printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-8b","context_window":{"used_percentage":50}}' | bash "$STATUSLINE" >/dev/null
+check "warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-8b"
+check "使用率が記録される" grep -qx 50 "$COMPACT_STATE_DIR/warn/sid-8b"
 end
 
 begin "statusline/fallback は分母 200000"

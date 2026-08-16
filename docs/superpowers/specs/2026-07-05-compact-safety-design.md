@@ -1,7 +1,7 @@
 # compact 対策 3点セット 設計書
 
 日付: 2026-07-05
-状態: 実装済み・実セッション通し確認済み(2026-07-05: /compact-prep → /compact → state file 自動 Read、sid の compact 跨ぎ連続性を確認。80% 通知はスモークテスト済み・実発火は自然待ち)
+状態: 実装済み・実セッション通し確認済み(2026-07-05: /compact-prep → /compact → state file 自動 Read、sid の compact 跨ぎ連続性を確認。warn 通知はスモークテストのみで実発火は未観測)
 
 ## 背景と問題
 
@@ -24,7 +24,7 @@ Claude Code の compact(手動 `/compact` / 自動)は会話履歴を LLM 要約
 
 ```
 [通常運転]
-statusline.sh ──(used_percentage >= 80)──> warn marker 書き込み
+statusline.sh ──(used_percentage >= 50)──> warn marker 書き込み
       │ 次のユーザープロンプト
       ▼
 UserPromptSubmit hook (reminder) ──> additionalContext で /compact-prep を提案 (one-shot)
@@ -70,7 +70,7 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
 |---|------|------|
 | 1 | PostCompact 2 段リレー → `SessionStart(compact)` 1 段 | 上記事実 1。marker(claude-compacted)が丸ごと不要になり、注入も次プロンプト待ちでなく即時 |
 | 2 | session_id 取得を `$CLAUDE_CODE_SESSION_ID` に | 上記事実 4。ハードゲート(空なら停止)は維持 |
-| 3 | 閾値 60% → 80%、公式 `used_percentage` を使用 | この環境の context は 200K 前提。記事も 200K なら 80% 台を推奨。公式フィールドなら context サイズ非依存 |
+| 3 | 閾値は公式 `used_percentage` 基準の 1 定数 | 公式フィールドなら context サイズ非依存。値は実発火の観測で決める。高いほど手詰まりに近づいてから通知するので、人が動ける余地が減る |
 | 4 | state 置き場を `/tmp` → `~/.claude/compact-state/` | Git Bash では hook 実行時と Bash tool 実行時で TMPDIR 解決がズレうる。symlink 先の固定パスなら両方から同一に見える |
 | 5 | Worker Topology(tmux-bridge)→ Delegated Work に一般化 | tmux-bridge 未使用。agent teams / background task の委譲状況を記録する欄として残す |
 
@@ -124,10 +124,10 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
 - % 計算を stdin の `context_window.used_percentage` 優先に変更。
 - fallback(フィールドが取れない場合): 現行の transcript 自前計算を使うが、
   **分母は 819200(1M の 80%)ではなく 200000(200K context の実サイズ)に変更**する。
-  現行値のままだと実際の使用率の約 1/5 に過小表示され、閾値 80 が実質 64% 相当の
-  別スケールになるため。fallback 値でも warn marker は同じ閾値 80 で書く。
+  1M 系の分母は実際の使用率を約 1/5 に過小表示し、閾値が別スケールの数字になるため。
+  fallback 値でも warn marker は同じ閾値で書く。
 - 色分け(70%/90%)は「実使用率」基準としてそのまま維持(分母修正で意味が正しくなる)。
-- `使用率 >= 80` かつ warned marker が無ければ
+- `使用率 >= COMPACT_WARN_THRESHOLD`(現在 50)かつ warned marker が無ければ
   `~/.claude/compact-state/warn/<session_id>` に使用率を書く(書き込み前に `mkdir -p`)。
   session_id は stdin JSON から `jq -r` + `tr -d '\r'` で取得する。
 - 表示フォーマットは現行を維持。
@@ -215,7 +215,9 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
    - **CR 検査**: 各スクリプト実行後、`find "$COMPACT_STATE_DIR" -name $'*\r*'` が
      空であること(検証済みの事実 6 の回帰テスト)
 2. **statusline スモーク**: `used_percentage` 入り JSON で % 表示と warn marker 作成、
-   フィールド欠落 JSON で fallback 計算(分母 200000)と閾値 80 での marker 作成を確認。
+   フィールド欠落 JSON で fallback 計算(分母 200000)による marker 作成を確認。
+   閾値は両側から見る(未満で作らない・ちょうどで作る)。片側だけだと閾値を
+   上げる変更が素通りする。
 3. **実セッション通し**: 実セッションで `/compact-prep` → state file 生成
    (`Prepared:` 行付き)を確認 → `/compact` → 直後のターンに復旧指示が
    効いているか(state file 参照言及)を確認。session_id が compact 前後で

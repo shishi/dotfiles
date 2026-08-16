@@ -77,7 +77,10 @@ else
 
   # 閾値超過で compact-prep 警告 marker を書く(cooldown 中でなければ)。
   # warn は reminder hook が消費し、warned は recovery hook が消す。
-  COMPACT_WARN_THRESHOLD=80
+  # 閾値は実発火の観測で決める調整値。80 では marker が 1 度も書かれなかった。
+  # 原因は未確定 (実 payload の % が届かない / SESSION_ID が空 / 単に到達しない)。
+  # この環境は auto compact 無効なので、上限前に人へ渡すのはこの経路だけ。
+  COMPACT_WARN_THRESHOLD=50
   STATE_DIR="${COMPACT_STATE_DIR:-$HOME/.claude/compact-state}"
   if [ -n "$SESSION_ID" ] && [ "$percentage" -ge "$COMPACT_WARN_THRESHOLD" ] 2>/dev/null; then
     if [ ! -f "$STATE_DIR/warned/$SESSION_ID" ]; then
