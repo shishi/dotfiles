@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "bash ~/.codex/hooks/git-push-guard.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -lc '~/.codex/hooks/git-push-guard.sh'",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/hooks/git-push-guard.sh'",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
           }
@@ -20,8 +20,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh recover",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -lc '~/.codex/hooks/session-start-compaction-recovery.sh recover'",
+            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh recover",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh recover'",
             "timeout": 10
           }
         ]
@@ -31,8 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -lc '~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
+            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
             "timeout": 10
           }
         ]
@@ -42,8 +42,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -lc '~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
+            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
             "timeout": 10
           }
         ]
@@ -54,8 +54,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.codex/hooks/userpromptsubmit-compact-reminder.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -lc '~/.codex/hooks/userpromptsubmit-compact-reminder.sh'",
+            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/userpromptsubmit-compact-reminder.sh",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/userpromptsubmit-compact-reminder.sh'",
             "timeout": 10
           }
         ]
