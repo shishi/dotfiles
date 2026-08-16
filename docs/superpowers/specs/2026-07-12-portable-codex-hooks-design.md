@@ -3,9 +3,10 @@
 日付: 2026-07-12
 状態: adversarial review clean(4 反復)。実装済み、ただし 2 節の実行契約だけ別方式。**この doc を「未着手」として通しで実行しない。**
 
-- `commandWindows`(1 節)・compact-state の分離(5 節)・push guard 強化(4 節、実行形態とコマンド置換と refspec 変形)は実装済み。
+- `commandWindows`(1 節)・push guard 強化(4 節、実行形態とコマンド置換と refspec 変形)は実装済み。
+- **compact-state の分離(5 節)には対象が無い。** Codex 側の hook は push guard 1 件で、`hooks.json` に `SessionStart` と `UserPromptSubmit` は無く、`codex/hooks/` にも該当する実装は無い。Codex は分離すべき compact state を持たない。Claude Code 側は `claude/hooks/` に独立した実装と `claude/settings.json` の登録を持ち、そちらとは無関係。
 - 2 節の launcher は別方式。`codex/hooks/run-hook.ps1` は存在せず、`hooks.json` が Git Bash の `bash.exe` を直接呼ぶ。したがって `--failure-mode` による deny JSON も無く、Git Bash 不在時に push guard は fail-closed しない。
-- **Windows のポータビリティは未達。** `commandWindows` 5 件すべてが `C:/Users/shishi/scoop/...` の絶対パスを持ち、本 doc が禁じる machine 固有パスを含む。別マシン(scoop 未使用・別ユーザー名・Git for Windows 標準インストール)では Windows 側 hook が起動せず、push guard もそこでは働かない。露見するのは移行時ではなく新マシン導入時。
+- **Windows のポータビリティは未達。** 残る `commandWindows` 1 件が `C:/Users/shishi/scoop/...` の絶対パスを持ち、本 doc が禁じる machine 固有パスを含む。別マシン(scoop 未使用・別ユーザー名・Git for Windows 標準インストール)では Windows 側 hook が起動せず、push guard もそこでは働かない。露見するのは移行時ではなく新マシン導入時。
 ゴールの先: 本設計の実装後、各マシンの `~/.codex` を dotfiles/codex への link(Windows: junction / POSIX: symlink)に変換し、手動コピー配備を廃止する
 
 ## 目的

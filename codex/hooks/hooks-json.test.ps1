@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $configPath = Join-Path $PSScriptRoot '..\hooks.json'
 $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
 $failures = @()
+$registered = @()
 
 foreach ($event in $config.hooks.PSObject.Properties) {
     foreach ($group in $event.Value) {
@@ -33,16 +34,24 @@ foreach ($event in $config.hooks.PSObject.Properties) {
             if ($handler.commandWindows -notmatch '(?:^|\s)-c(?:\s|$)') {
                 $failures += "$label does not pass -c"
             }
-            # compact 系 hook は Codex 専用の state を使う。既定のままだと
-            # Claude の $HOME/.claude/compact-state を読んで状態が混線する。
-            if ($handler.command -match 'compact') {
-                foreach ($form in @($handler.command, $handler.commandWindows)) {
-                    if ($form -notmatch 'COMPACT_STATE_DIR=\$HOME/\.codex/compact-state') {
-                        $failures += "$label does not isolate COMPACT_STATE_DIR"
-                    }
+            # 参照先が実在すること。ハンドラとスクリプトは別ファイルなので、
+            # 片方だけ消しても Codex が起動して hook を撃つまで判らない。
+            foreach ($ref in [regex]::Matches($handler.command, '~/\.codex/hooks/([A-Za-z0-9._-]+)')) {
+                $script = Join-Path $PSScriptRoot $ref.Groups[1].Value
+                if (-not (Test-Path -LiteralPath $script)) {
+                    $failures += "$label references a script that is not in this directory"
                 }
+                $registered += $ref.Groups[1].Value
             }
         }
+    }
+}
+
+# 逆向き: hooks.json から到達できない実装が残っていないこと。テストは除く。
+foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -File) {
+    if ($file.Name -like '*.test.*') { continue }
+    if ($registered -notcontains $file.Name) {
+        $failures += "$($file.Name) is not registered in hooks.json"
     }
 }
 
@@ -51,4 +60,4 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Output 'ok: every Codex hook invokes Git Bash non-login on Windows and isolates compact state'
+Write-Output 'ok: every Codex hook invokes Git Bash non-login on Windows, and hooks.json and hooks/ agree on what exists'

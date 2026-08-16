@@ -13,53 +13,6 @@
           }
         ]
       }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh recover",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh recover'",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/session-start-compaction-recovery.sh cleanup",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/session-start-compaction-recovery.sh cleanup'",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "COMPACT_STATE_DIR=$HOME/.codex/compact-state bash ~/.codex/hooks/userpromptsubmit-compact-reminder.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'COMPACT_STATE_DIR=$HOME/.codex/compact-state ~/.codex/hooks/userpromptsubmit-compact-reminder.sh'",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   }
 }
