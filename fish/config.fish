@@ -299,6 +299,15 @@ abbr --add gmc 'git merge --continue'
 abbr --add gma 'git merge --abort'
 abbr --add gcl 'git clean --force'
 
+# git worktree (git-wt)
+# 関数ではなく abbr にすることで、展開後のコマンド行が `git wt ...` になり
+# git-wt が提供する補完 (ブランチ名 / worktree 名) がそのまま効く。
+if type git-wt &>/dev/null
+    abbr --add gwt 'git wt'
+    abbr --add gwtd 'git wt -d'
+    abbr --add gwtD 'git wt -D'
+end
+
 # rails
 abbr --add be 'bundle exec'
 abbr --add rs 'bundle exec rails server'
@@ -377,51 +386,24 @@ function gbD -d "git batch delete branch"
     git branch --merged | grep -vE '^\*|main|master' | xargs git branch -D
 end
 
-# git wt
-function gw -d "git worktree list with fzf"
-    # oneline
-    # set dir (git-wt | fzf --header-lines=1 | awk '{if ($1 == "*") print $2; else print $1}'); and test -n "$dir"; and cd $dir
-    set -l dir (git-wt | fzf --header-lines=1 | awk '{if ($1 == "*") print $2; else print $1}')
-    test -n "$dir"; and cd $dir
-end
-
-# git worktree functions
-function gwt -d "Create a new git worktree"
-    if test (count $argv) -eq 0
-        echo "Usage: gwt <branch-name>"
-        return 1
-    end
-
-    set -l branch_name $argv[1]
-    set -l base_path (basename (pwd))
-    set -l worktree_path "../$base_path-$branch_name"
-
-    git worktree add -b "$branch_name" "$worktree_path"
-    cd "$worktree_path"
-end
-
-function gwtd -d "Remove git worktree"
-    set -l current_pwd (pwd)
-    set -l worktree_root (git worktree list | grep (pwd) | awk '{print $1}')
-
-    if test -z "$worktree_root"
-        echo "Not in a git worktree"
-        return 1
-    end
-
-    # Extract worktree name and branch
-    set -l worktree_name (basename "$worktree_root")
-    set -l branch_name (string replace -r '.*--' '' "$worktree_name")
-
-    # Protect against removing main worktree
-    if string match -q "*--*" "$worktree_name"
-        echo "Removing worktree: $worktree_root"
-        cd ..
-        git worktree remove "$worktree_root"
-        git branch -D "$branch_name"
-    else
-        echo "Cannot remove main worktree"
-        return 1
+# git worktree: 一覧から fzf で選んで cd (作成・削除は abbr の gwt / gwtd)
+if type git-wt &>/dev/null; and type fzf &>/dev/null; and type jq &>/dev/null
+    function gw -d "Pick a git worktree with fzf and cd into it"
+        # git-wt の表形式は列区切りが空白なので、連続空白を含むパスを復元できない。
+        # --json なら空白で壊れない (改行を含むパスは git-wt 側が切り詰めるため非対応)
+        # @tsv はパス中の \ やタブをエスケープしてしまうので生の連結で組み立て、
+        # 分割回数を 2 に制限してパス側のタブを保つ
+        set -l line (git-wt --json \
+            | jq -r '.[] | (if .current then "*" else " " end) + "\t" + (.branch // "(detached)") + "\t" + .path' \
+            | fzf --delimiter \t)
+        test -n "$line"; or return
+        set -l dir (string split -m2 -f3 \t -- $line)
+        if test -d "$dir"
+            cd $dir
+        else
+            echo "gw: not a directory: $dir" >&2
+            return 1
+        end
     end
 end
 
