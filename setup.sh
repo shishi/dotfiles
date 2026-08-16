@@ -113,7 +113,8 @@ fi
 
 # agent-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
 # 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
-# 移動しない — 旧 claude-memory からの移行は spec 手順で手動)。
+# 移動しない — 旧 claude-memory からの移行は
+# docs/superpowers/specs/2026-07-11-agent-memory-design.md の「移行手順」に従い手動)。
 # symlink は dotfiles の .gitignore により追跡されない。
 AGENT_MEMORY_DIR="$(bash "${DOTDIR}/resolve-memory-dir.sh")"
 resolve_status=$?
@@ -141,7 +142,10 @@ else
   fi
   if [ -d "${AGENT_MEMORY_DIR}" ]; then
     if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
-      ln -sfn "${AGENT_MEMORY_DIR}" "${DOTDIR}/claude/memory"
+      # 失敗を握ると記憶が無い状態が無言で残る。注入 hook は読み先が無ければ
+      # 何も言わないので、ここが唯一の手掛かりになる。
+      ln -sfn "${AGENT_MEMORY_DIR}" "${DOTDIR}/claude/memory" \
+        || echo "setup.sh: could not link ${DOTDIR}/claude/memory (Windows: enable Developer Mode or run elevated)"
     else
       echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
     fi
