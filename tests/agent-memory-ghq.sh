@@ -155,12 +155,22 @@ status=$?
 end
 
 # --- setup.sh: gitconfig symlink が memory 処理より前にあること ---
-gitconfig_line="$(grep -n '\.gitconfig\.mac' "$SETUP" | head -n1 | cut -d: -f1)"
-memory_line="$(grep -n 'resolve-memory-dir\.sh' "$SETUP" | head -n1 | cut -d: -f1)"
+# 拾うのは実行行だけ。コメントを数えると、実行順が変わっていないのにコメントを
+# 動かしただけで NG になる。grep は -E に固定する。BRE で交替を書くと GNU 拡張の
+# \| になり、mac の BSD grep では無マッチ = 常時 NG になるため。
+setup_code_lines() { grep -nE "$1" "$SETUP" | grep -v '^[0-9]*:[[:space:]]*#'; }
+# gitconfig の分岐は OS ごとにある。リンク元のファイル名を列挙すると分岐が増えた
+# ときだけ無防備になるので、.gitconfig を張る ln 行を拾って最も後ろと比べる
+# (リンク先が ~/ でも $HOME/ でも一致する)。1 分岐でも memory 処理より後ろへ
+# 動けばその OS で壊れる。
+# 限界: 見ているのはテキスト上の位置だけ。分岐を関数へ括り出して memory 処理より
+# 後ろで呼ぶ形にすると、実行順が壊れていてもこの検査は通る。
+gitconfig_line="$(setup_code_lines 'ln .*/\.gitconfig' | tail -n1 | cut -d: -f1)"
+memory_line="$(setup_code_lines 'resolve-memory-dir\.sh' | head -n1 | cut -d: -f1)"
 if [ -n "$gitconfig_line" ] && [ -n "$memory_line" ] && [ "$gitconfig_line" -lt "$memory_line" ]; then
   ok "setup.sh links gitconfig before resolving memory dir"
 else
-  ng "setup.sh: gitconfig at line ${gitconfig_line:-none}, memory resolve at line ${memory_line:-none}"
+  ng "setup.sh: last gitconfig link at line ${gitconfig_line:-none}, first memory resolve at line ${memory_line:-none}"
 fi
 
 echo
