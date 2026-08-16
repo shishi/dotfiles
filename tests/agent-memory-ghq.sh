@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude/resolve-memory-dir.sh のスモークテスト。
+# resolve-memory-dir.sh のスモークテスト。
 # 使い方: bash tests/agent-memory-ghq.sh
 # HOME / GIT_CONFIG_GLOBAL / DOTDIR を一時ディレクトリへ向けるので実環境は触らない。
 # ヘルパーは「配置先の解決」だけを行う (自動移行はしない。旧 claude-memory からの
@@ -7,7 +7,7 @@
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HELPER="$REPO/claude/resolve-memory-dir.sh"
+HELPER="$REPO/resolve-memory-dir.sh"
 SETUP="$REPO/setup.sh"
 PASS=0; FAIL=0
 ok() { PASS=$((PASS+1)); echo "ok: $1"; }
