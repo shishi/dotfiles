@@ -26,8 +26,6 @@
 !/codex/hooks/
 !/codex/hooks/**
 !/codex/hooks.json
-/codex-tools/**/__pycache__/
-/codex-tools/**/*.py[co]
 /tests/__pycache__/
 /tests/**/*.py[co]
 /.worktrees/
