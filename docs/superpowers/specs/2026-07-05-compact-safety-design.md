@@ -122,9 +122,10 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
 #### 3a. statusline 変更(`claude/statusline.sh`)
 
 - % 計算を stdin の `context_window.used_percentage` 優先に変更。
-- fallback(フィールドが取れない場合): 現行の transcript 自前計算を使うが、
-  **分母は 819200(1M の 80%)ではなく 200000(200K context の実サイズ)に変更**する。
-  1M 系の分母は実際の使用率を約 1/5 に過小表示し、閾値が別スケールの数字になるため。
+- fallback(フィールドが取れない場合): transcript の**直近 1 ターン**の usage 合計
+  (input + output + cache_creation + cache_read)を context 窓で割る。分母は
+  1000000 (Opus / Fable の窓)で、`CLAUDE_CONTEXT_WINDOW_SIZE` で上書きできる。
+  窓より小さい分母は 100% 超の数字を出し、閾値が読めなくなる。
   fallback 値でも warn marker は同じ閾値で書く。
 - 色分け(70%/90%)は「実使用率」基準としてそのまま維持(分母修正で意味が正しくなる)。
 - `使用率 >= COMPACT_WARN_THRESHOLD`(現在 50)かつ warned marker が無ければ
@@ -215,7 +216,7 @@ SessionStart hook (matcher: compact) ──> state file の再読指示を addit
    - **CR 検査**: 各スクリプト実行後、`find "$COMPACT_STATE_DIR" -name $'*\r*'` が
      空であること(検証済みの事実 6 の回帰テスト)
 2. **statusline スモーク**: `used_percentage` 入り JSON で % 表示と warn marker 作成、
-   フィールド欠落 JSON で fallback 計算(分母 200000)による marker 作成を確認。
+   フィールド欠落 JSON で fallback 計算(分母 1000000)による marker 作成を確認。
    閾値は両側から見る(未満で作らない・ちょうどで作る)。片側だけだと閾値を
    上げる変更が素通りする。
 3. **実セッション通し**: 実セッションで `/compact-prep` → state file 生成

@@ -142,12 +142,24 @@ check "warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-8b"
 check "使用率が記録される" grep -qx 50 "$COMPACT_STATE_DIR/warn/sid-8b"
 end
 
-begin "statusline/fallback は分母 200000"
+# 分母はモデルの context 窓。Opus / Fable は 1M。直近 1 ターンの usage 合計を
+# それで割る。窓より小さい分母を入れると 100% 超の数字が出て閾値判定が壊れる。
+begin "statusline/fallback は分母 1000000"
 TRANSCRIPT="$TMP/transcript.jsonl"
 printf '%s\n' '{"type":"assistant","message":{"usage":{"input_tokens":100000,"output_tokens":0,"cache_creation_input_tokens":30000,"cache_read_input_tokens":30000}}}' > "$TRANSCRIPT"
 OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-9","transcript_path":"'"$TRANSCRIPT"'"}' | bash "$STATUSLINE")
-check "160K/200K = 80% を表示" grep -q "80%" <<<"$OUT"
-check "80% なので warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-9"
+check "160K/1M = 16% を表示" grep -q "16%" <<<"$OUT"
+check "閾値未満なので warn marker を作らない" test ! -f "$COMPACT_STATE_DIR/warn/sid-9"
+end
+
+# 実セッションの規模。765K の cache_read を 200K で割ると 384% になる形が、
+# 分母を窓に合わせると閾値として読める数字になる。
+begin "statusline/fallback は 1 ターン 770K で 77%"
+TRANSCRIPT2="$TMP/transcript-big.jsonl"
+printf '%s\n' '{"type":"assistant","message":{"usage":{"input_tokens":2,"output_tokens":1689,"cache_creation_input_tokens":2692,"cache_read_input_tokens":765110}}}' > "$TRANSCRIPT2"
+OUT=$(printf '{"model":{"display_name":"Test"},"workspace":{"current_dir":"/tmp/x"},"session_id":"sid-9b","transcript_path":"'"$TRANSCRIPT2"'"}' | bash "$STATUSLINE")
+check "76% を表示" grep -q "76%" <<<"$OUT"
+check "閾値超過で warn marker 作成" test -f "$COMPACT_STATE_DIR/warn/sid-9b"
 end
 
 echo "# final-review hardening"
