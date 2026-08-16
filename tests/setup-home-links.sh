@@ -104,53 +104,65 @@ else
   ng "re-running setup.sh broke the Codex links"
 fi
 
-# (3) 既存の実ディレクトリを破壊しない (runtime state が入っている想定)
+# (3) 実ディレクトリは .back へ退避して張り直す。実行後は必ずこの checkout を指す。
 T2="$(mktemp -d)"
 make_fixture "$T2"
 mkdir -p "${T2}/home/.codex"
 echo "live-secret" >"${T2}/home/.codex/auth.json"
 run_setup "$T2"
-if [ ! -L "${T2}/home/.codex" ] \
-  && [ "$(cat "${T2}/home/.codex/auth.json" 2>/dev/null)" = "live-secret" ]; then
-  ok "existing real ~/.codex is preserved, not replaced"
+if resolves_to "${T2}/home/.codex" "${T2}/dotfiles/codex" \
+  && [ "$(cat "${T2}/home/.codex.back/auth.json" 2>/dev/null)" = "live-secret" ]; then
+  ok "a real ~/.codex moves to .back and the link is created"
 else
-  ng "existing real ~/.codex was replaced or its contents were lost"
+  ng "a real ~/.codex was not backed up, or the link was not created"
 fi
-# 黙って飛ばさない。パスと、runtime を戻す必要があることが 1 行に出ていること。
-if grep -q '\.codex is a real path; skip' "${T2}/setup.log" \
-  && grep -q '\.codex is a real path.*runtime' "${T2}/setup.log"; then
-  ok "setup.sh reports the skipped Codex path and that its runtime has to move"
+# 退避先を名指しする。runtime をどこから戻すのか判らないと Codex はサインアウトの
+# まま残る。
+if grep -q '\.codex to .*\.codex\.back' "${T2}/setup.log"; then
+  ok "setup.sh names where it moved the real path"
 else
-  ng "setup.sh skipped the Codex link silently"
+  ng "setup.sh moved the real path without naming the backup"
+fi
+# 2 度目は .back が空いていないので、退避先を衝突させないこと。
+mkdir -p "${T2}/home/.codex.stale" && rm -rf "${T2}/home/.codex" \
+  && mv "${T2}/home/.codex.stale" "${T2}/home/.codex"
+echo second >"${T2}/home/.codex/auth.json"
+run_setup "$T2"
+if resolves_to "${T2}/home/.codex" "${T2}/dotfiles/codex" \
+  && [ "$(cat "${T2}/home/.codex.back/auth.json" 2>/dev/null)" = "live-secret" ] \
+  && [ "$(cat "${T2}/home/.codex.back.1/auth.json" 2>/dev/null)" = "second" ]; then
+  ok "a second backup does not overwrite the first"
+else
+  ng "the second backup collided with the first"
 fi
 
-# (4) 別 checkout / worktree を指す既存リンクは張り替えない。張り替えると Codex は
-# サインアウト状態になり、以後の runtime state はそちら側へ書かれる。
+# (4) 別 checkout を指すリンクも .back へ退避して張り直す。指し先の実体は動かさない。
 T3="$(mktemp -d)"
 make_fixture "$T3"
 mkdir -p "${T3}/other-checkout/codex/skills"
 echo "live-secret" >"${T3}/other-checkout/codex/auth.json"
 ln -sfn "${T3}/other-checkout/codex" "${T3}/home/.codex"
 run_setup "$T3"
-if resolves_to "${T3}/home/.codex" "${T3}/other-checkout/codex"; then
-  ok "an existing link to another checkout is left alone"
+if resolves_to "${T3}/home/.codex" "${T3}/dotfiles/codex" \
+  && [ "$(readlink "${T3}/home/.codex.back")" = "${T3}/other-checkout/codex" ]; then
+  ok "a foreign link moves to .back and the link is repointed here"
 else
-  ng "setup.sh repointed a link that belonged to another checkout"
+  ng "a foreign link was not backed up, or was not repointed"
 fi
-# 報告は指し先を名指しする。どこへ runtime が溜まっているか判らないと動けない。
-if grep -q '\.codex links to .*other-checkout/codex; skip' "${T3}/setup.log"; then
-  ok "setup.sh names the foreign link target"
+# mv はリンク自身を動かすので、指し先の runtime は無傷でなければならない。
+if [ "$(cat "${T3}/other-checkout/codex/auth.json" 2>/dev/null)" = "live-secret" ]; then
+  ok "the other checkout's runtime is untouched"
 else
-  ng "setup.sh reported the foreign Codex link without naming its target"
+  ng "the other checkout's runtime was moved or destroyed"
 fi
-# skills 側も同じ扱い。張り替えると .system/ が参照から外れる。
+# skills 側も同じ扱い。
 ln -sfn "${T3}/other-checkout/codex/skills" "${T3}/home/.agents/skills"
 run_setup "$T3"
-if resolves_to "${T3}/home/.agents/skills" "${T3}/other-checkout/codex/skills" \
-  && grep -q 'skills links to .*; skip' "${T3}/setup.log"; then
-  ok "a foreign skills link is left alone and reported"
+if resolves_to "${T3}/home/.agents/skills" "${T3}/dotfiles/codex/skills" \
+  && [ -L "${T3}/home/.agents/skills.back" ]; then
+  ok "a foreign skills link moves to .back and is repointed here"
 else
-  ng "the skills link was repointed, or the skip was silent"
+  ng "the foreign skills link was not backed up, or was not repointed"
 fi
 # 一方で dangling link は張り直す (checkout を移動した後の復旧経路)。捨てたリンク先を
 # 報告することが、その値が残る唯一の経路なので併せて固定する。
@@ -214,45 +226,36 @@ make_fixture "$T5"
 mkdir -p "${T5}/home/.claude/projects"
 echo "live-history" >"${T5}/home/.claude/history.jsonl"
 run_setup "$T5"
-if [ ! -L "${T5}/home/.claude" ] \
-  && [ "$(cat "${T5}/home/.claude/history.jsonl" 2>/dev/null)" = "live-history" ]; then
-  ok "existing real ~/.claude is preserved, not replaced"
+if resolves_to "${T5}/home/.claude" "${T5}/dotfiles/claude" \
+  && [ "$(cat "${T5}/home/.claude.back/history.jsonl" 2>/dev/null)" = "live-history" ]; then
+  ok "a real ~/.claude moves to .back and the link is created"
 else
-  ng "existing real ~/.claude was replaced or its contents were lost"
+  ng "a real ~/.claude was not backed up, or the link was not created"
 fi
-# 黙って飛ばさない。パスと、runtime を戻す必要があることが 1 行に出ていること。
-if grep -q '\.claude is a real path; skip' "${T5}/setup.log" \
-  && grep -q '\.claude is a real path.*runtime' "${T5}/setup.log"; then
-  ok "setup.sh reports the skipped Claude path and that its runtime has to move"
+# 退避先を名指しする。session 履歴と資格情報をどこから戻すのか判らないと動けない。
+if grep -q '\.claude to .*\.claude\.back' "${T5}/setup.log"; then
+  ok "setup.sh names where it moved the real Claude path"
 else
-  ng "setup.sh skipped the Claude link silently"
+  ng "setup.sh moved the real Claude path without naming the backup"
 fi
 
-# 別 checkout / worktree を指すリンクは張り替えない。実体は消えないが、Claude Code
-# からは session 履歴も plugins も memory も見えなくなる。
-rm -rf "${T5}/home/.claude"
+# 別 checkout を指すリンクも退避して張り直す。指し先の実体は動かさない。
+rm -rf "${T5}/home/.claude" "${T5}/home/.claude.back"
 mkdir -p "${T5}/other-checkout/claude/projects"
 echo "live-history" >"${T5}/other-checkout/claude/history.jsonl"
 ln -sfn "${T5}/other-checkout/claude" "${T5}/home/.claude"
 run_setup "$T5"
-if resolves_to "${T5}/home/.claude" "${T5}/other-checkout/claude"; then
-  ok "an existing ~/.claude link to another checkout is left alone"
+if resolves_to "${T5}/home/.claude" "${T5}/dotfiles/claude" \
+  && [ "$(readlink "${T5}/home/.claude.back")" = "${T5}/other-checkout/claude" ]; then
+  ok "a foreign ~/.claude link moves to .back and is repointed here"
 else
-  ng "setup.sh repointed a ~/.claude link that belonged to another checkout"
+  ng "a foreign ~/.claude link was not backed up, or was not repointed"
 fi
-# これは rm -fr 混入専用の番人で、リンクの張り替えは検出しない (張り替えても
-# unlink されるのはリンクだけで、指し先の実体は残る)。分岐の差は上の resolves_to
-# が見ている。
+# mv はリンク自身を動かす。指し先の実体に触れていないこと (rm -fr 混入の番人)。
 if [ -f "${T5}/other-checkout/claude/history.jsonl" ]; then
   ok "the other checkout's Claude runtime survives (rm -fr regression guard)"
 else
   ng "the other checkout's Claude runtime was destroyed"
-fi
-# 報告は指し先を名指しする。どこに session 履歴が残っているか判らないと動けない。
-if grep -q '\.claude links to .*other-checkout/claude; skip' "${T5}/setup.log"; then
-  ok "setup.sh names the foreign Claude link target"
-else
-  ng "setup.sh reported the foreign Claude link without naming its target"
 fi
 
 # dangling link は張り直す。捨てたリンク先を報告することが、その値が残る唯一の経路。
@@ -287,25 +290,21 @@ else
   ng "the bind mount check for ~/.claude was dropped or moved after link_agent_home"
 fi
 
-# (9) ~/.agents/skills が実ディレクトリのときも、runtime (.system/) を取り残さない
-# 手順を出す。同じ target の foreign remedy が「.system/ を移せ」と言っている以上、
-# 実パス側だけ「退避して張り直せ」で終わると 2 つの指示が矛盾する。
+# (9) ~/.agents/skills が実ディレクトリのときも 3 target で同じ扱い。
 T6="$(mktemp -d)"
 make_fixture "$T6"
 mkdir -p "${T6}/home/.agents/skills/.system"
 printf 'runtime
 ' >"${T6}/home/.agents/skills/.system/state"
 run_setup "$T6"
-if [ ! -L "${T6}/home/.agents/skills" ]   && [ -f "${T6}/home/.agents/skills/.system/state" ]; then
-  ok "an existing real ~/.agents/skills is preserved, not replaced"
+if resolves_to "${T6}/home/.agents/skills" "${T6}/dotfiles/codex/skills" \
+  && [ -f "${T6}/home/.agents/skills.back/.system/state" ]; then
+  ok "a real ~/.agents/skills moves to .back and the link is created"
 else
-  ng "an existing real ~/.agents/skills was replaced or its contents were lost"
+  ng "a real ~/.agents/skills was not backed up, or the link was not created"
 fi
-# 3 target で同じ扱い。ディレクトリごと退避させる形でないと、実ディレクトリが残って
-# リンクは永久に張られない。
-if grep -q 'skills is a real path; skip' "${T6}/setup.log" \
-  && grep -q 'skills is a real path.*move it aside' "${T6}/setup.log"; then
-  ok "setup.sh reports the skipped skills path and says to move it aside"
+if grep -q 'skills to .*skills\.back' "${T6}/setup.log"; then
+  ok "setup.sh names where it moved the real skills path"
 else
   ng "setup.sh skipped the real skills path silently"
 fi

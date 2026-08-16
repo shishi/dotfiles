@@ -46,15 +46,16 @@ link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
 link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
 link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
-# agent のホーム (~/.claude ~/.codex ~/.agents/skills) を張る。エディタ設定と違い、
-# ignore された runtime (auth.json / sessions/ / history.jsonl / plugins/) が中に
-# 同居するので、ウチのものと確認できないパスは触らずに報告して飛ばす。
+# agent のホーム (~/.claude ~/.codex ~/.agents/skills) を張る。実行後は必ずこの
+# checkout を指している状態にする。既に何かが在れば .back へ退避してから張る。
+# 消さないのは、ignore された runtime (auth.json / sessions/ / history.jsonl /
+# plugins/) がそこに同居しているため。退避先から必要な分を戻すのは手作業。
 #
 # 比較は解決した実パスで行う。文字列比較だと cd の失敗 (空文字) を「別の場所を
 # 指している」と取り違える。
 link_agent_home() {
   local source_path="$1" target_path="$2"
-  local source_real target_real
+  local source_real target_real backup n
 
   source_real="$(cd "$source_path" 2>/dev/null && pwd -P)"
   if [ -z "$source_real" ]; then
@@ -65,16 +66,27 @@ link_agent_home() {
     target_real="$(cd "$target_path" 2>/dev/null && pwd -P)"
     # 既に正しい。張り替えないので、symlink を作れない環境で再実行しても失わない。
     [ "$target_real" = "$source_real" ] && return 0
-    # 別 checkout を指している、または解決できない。どちらも「ウチのものと確認
-    # できない」ので同じ扱い。張り替えると runtime は残るが参照から外れる。
-    if [ -e "$target_path" ]; then
-      echo "setup.sh: ${target_path} links to ${target_real:-an unreadable path}; skip (remove the link to relink, moving its runtime here first)"
+    # dangling は退避するものが無い。リンク先を失うので捨てた値だけ残す。
+    if [ ! -e "$target_path" ]; then
+      echo "setup.sh: ${target_path} was a dangling link to $(readlink "$target_path")"
+      rm -f "$target_path"
+    fi
+  fi
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    # 退避先は衝突させない。mv は既存ディレクトリへ向けると中へ入れ子になる。
+    backup="${target_path}.back"
+    n=1
+    while [ -e "$backup" ] || [ -L "$backup" ]; do
+      backup="${target_path}.back.${n}"
+      n=$((n + 1))
+    done
+    if mv "$target_path" "$backup"; then
+      # symlink なら mv はリンク自身を動かすので、指し先の実体には触らない。
+      echo "setup.sh: moved ${target_path} to ${backup} (move its runtime back from there)"
+    else
+      echo "setup.sh: could not move ${target_path} aside; skip"
       return 0
     fi
-    echo "setup.sh: ${target_path} was a dangling link to $(readlink "$target_path")"
-  elif [ -e "$target_path" ]; then
-    echo "setup.sh: ${target_path} is a real path; skip (move it aside to relink, then move its runtime back)"
-    return 0
   fi
   ln -sfn "$source_path" "$target_path" \
     || echo "setup.sh: could not link ${target_path} (Windows: enable Developer Mode or run elevated)"
