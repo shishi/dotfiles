@@ -8,6 +8,11 @@ set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HELPER="$REPO/resolve-memory-dir.sh"
+# ヘルパー不在は最初に fatal で落とす。17/19 の stderr 検査とは守備範囲が違うので
+# 両方要る: こちらは helper を起動するアサーションが軒並み NG になって「パスが違う」
+# という本当の原因が埋もれるのを防ぐ (末尾の setup.sh 行順検査は HELPER を使わず
+# ok のまま残るので、出力はいっそう紛らわしくなる)。
+[ -f "$HELPER" ] || { echo "fatal: helper not found: $HELPER" >&2; exit 1; }
 SETUP="$REPO/setup.sh"
 PASS=0; FAIL=0
 ok() { PASS=$((PASS+1)); echo "ok: $1"; }
@@ -131,11 +136,16 @@ end
 
 # --- 17: AGENT_MEMORY_DIR に改行が含まれる場合は拒否される ---
 begin
-out="$(AGENT_MEMORY_DIR=$'/tmp/a\nb' bash "$HELPER" 2>/dev/null)"
+err="$TMP/stderr"
+out="$(AGENT_MEMORY_DIR=$'/tmp/a\nb' bash "$HELPER" 2>"$err")"
 status=$?
-[ "$status" -ne 0 ] && [ -z "$out" ] \
+# stderr の warn まで確認するのは、冒頭の -f guard が拾えない失敗 (helper 本文の構文
+# エラーなど。bash file 起動なので shebang や実行ビットの不整合はここには来ない) を
+# 「非 0 かつ無出力」だけで ok と誤認しないため。helper 自身が拒否したことを
+# stderr の prefix で確かめる。
+[ "$status" -ne 0 ] && [ -z "$out" ] && grep -q '^resolve-memory-dir:' "$err" \
   && ok "17: newline in AGENT_MEMORY_DIR is rejected" \
-  || ng "17: expected exit!=0 and empty stdout, got status=$status out=$(printf '%s' "$out" | head -c 40)"
+  || ng "17: expected exit!=0, empty stdout and a helper warning, got status=$status out=$(printf '%s' "$out" | head -c 40)"
 end
 
 # --- 18: GHQ_ROOT に末尾スラッシュがある場合は正規化される ---
@@ -148,10 +158,12 @@ end
 
 # --- 19: 展開結果に改行が混入するケースも拒否される (HOME 由来) ---
 begin
-out="$(HOME=$'/tmp/h\n' AGENT_MEMORY_DIR='~' bash "$HELPER" 2>/dev/null)"
+err="$TMP/stderr"
+out="$(HOME=$'/tmp/h\n' AGENT_MEMORY_DIR='~' bash "$HELPER" 2>"$err")"
 status=$?
-[ "$status" -ne 0 ] && [ -z "$out" ] \
-  && ok "19: newline from expansion rejected" || ng "19: status=$status out=$out"
+[ "$status" -ne 0 ] && [ -z "$out" ] && grep -q '^resolve-memory-dir:' "$err" \
+  && ok "19: newline from expansion rejected" \
+  || ng "19: expected exit!=0, empty stdout and a helper warning, got status=$status out=$out"
 end
 
 # --- setup.sh: gitconfig symlink が memory 処理より前にあること ---

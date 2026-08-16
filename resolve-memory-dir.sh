@@ -8,6 +8,9 @@
 #   GHQ_ROOT          ghq root (gitconfig の ghq.root より優先)
 #   HOME / git global config
 # exit contract: パスを決定できたら exit 0 + stdout 1 行。決定不能は非 0。警告は stderr。
+#   改行を含むパスの拒否は warn 関数経由で "resolve-memory-dir: " prefix 付きの行を
+#   stderr に出す。テストはこの prefix を「helper 自身が拒否した」根拠として使うので、
+#   この経路を無言化しない (外部コマンド失敗など他の非 0 経路は無言のことがある)。
 set -u
 
 REPO_PATH="github.com/shishi/agent-memory"
