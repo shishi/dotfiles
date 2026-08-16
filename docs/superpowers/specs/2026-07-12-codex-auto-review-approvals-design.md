@@ -1,5 +1,7 @@
 # Codex Full-Access Permissions Design
 
+Status: the tracked `codex/config.toml` does not match this document. It sets `sandbox_mode = "workspace-write"` with `[windows] sandbox = "elevated"`, not the `danger-full-access` below; `approval_policy` and `approvals_reviewer` do match. **Do not widen the sandbox on the strength of this document alone** — which setting is intended is the maintainer's call. The split between a tracked default and a separate active machine file also no longer holds where `setup.sh` has run: it links `~/.codex` to `dotfiles/codex`, so the tracked file is the active file.
+
 ## Goal
 
 Use the same unrestricted local-command permissions in Codex CLI and the ChatGPT

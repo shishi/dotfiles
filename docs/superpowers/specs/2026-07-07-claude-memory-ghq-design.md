@@ -65,6 +65,8 @@ Windows だけ claude-memory セクションがスキップされてしまう。
 
 ## 既存 clone の移行
 
+> 旧 clone の手動移行手順は `2026-07-11-agent-memory-design.md` の「移行手順」(Phase 2 / 3)が正。`setup.sh` と `tests/agent-memory-ghq.sh` のコメントが言う「spec 手順」もそちらを指す。本節の origin 照合は `shishi/claude-memory` の完全一致なので、`agent-memory` へ rename 済みの clone はすべて対象外と判定される。
+
 移行はヘルパー内で行う。実行時はまず `mkdir -p "$(dirname "$resolved")"` で
 解決先の親ディレクトリ(fresh 環境では `<ghq_root>/github.com/shishi` が
 未作成)を作ってから `mv` する。移行(`mv`)は以下の条件を**すべて**満たす

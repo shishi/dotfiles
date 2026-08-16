@@ -1,5 +1,7 @@
 # Declarative Codex Home Design
 
+Status: superseded by `docs/ADR/20260816-180256-link-codex-home-from-setup-sh.md`. Retained as history. The linked home itself is current — `~/.codex` and `~/.agents/skills` resolve into `dotfiles/codex`, and `setup.sh` creates both links with `ln -sfn`. What no longer exists: the `codex-tools` directory, the plugin reconciler, and the migration, installation, and verification scripts described below. The setup guarantees in "Setup and Migration" are gone with them — `setup.sh` takes no lock, checks no platform capability, verifies nothing after linking, and rolls nothing back. A failed link is reported on one line and the run still exits 0, so the acceptance criterion "setup returns nonzero when plugin restoration or link creation fails" does not hold either: that one line is the only signal. The "Testing" list below describes the deleted suites, not present coverage — what remains is enumerated in the ADR's Confirmation section, including the one claim it leaves uncovered. The tracked `config.toml` still carries whatever plugin and marketplace state Codex writes, but no step converges installations toward it — plugin selection follows the signed-in account. Adopting a machine that already has a real `~/.codex` is a manual job with no tool behind it.
+
 ## Goal
 
 Make `dotfiles/codex` the source of truth for durable Codex configuration. Link the whole directory to `~/.codex`, select plugins declaratively, and rebuild missing plugin installations on a new machine.

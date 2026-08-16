@@ -1,7 +1,7 @@
 # Portable Codex Hooks 設計
 
 日付: 2026-07-12
-状態: adversarial review clean(4 反復)・実装待ち
+状態: adversarial review clean(4 反復)。実装は部分的で、**この doc を「未着手」として通しで実行しない**。`codex/hooks.json` の全 handler に `commandWindows` が入っている一方、「5. compact-state の分離」が要求する `COMPACT_STATE_DIR` の受け渡しは無く、Codex の compact hook は既定の `$HOME/.claude/compact-state`(Claude 側)を読む。Windows launcher は本 doc の `run-hook.ps1` 方式ではなく hooks.json が Git Bash の `bash.exe` を直接呼ぶ形で、`codex/run-hook.ps1` は存在しない。push guard の変形取りこぼし対策の実装状況は未確認。
 ゴールの先: 本設計の実装後、各マシンの `~/.codex` を dotfiles/codex への link(Windows: junction / POSIX: symlink)に変換し、手動コピー配備を廃止する
 
 ## 目的

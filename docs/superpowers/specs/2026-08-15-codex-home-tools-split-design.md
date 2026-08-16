@@ -1,5 +1,7 @@
 # Codexホームとツールの分離設計
 
+状態: `docs/ADR/20260816-180256-link-codex-home-from-setup-sh.md` により置換。履歴として残してある。本 doc が定義する `dotfiles/codex-tools` は存在せず、bootstrap・plugin 同期・移行スクリプトも持たない。`~/.codex` と `~/.agents/skills` の link は setup.sh が `ln -sfn` で直接作る。`dotfiles/codex` を実ホームとする点と、その配下の default-deny な .gitignore 境界は現行。ただし runtime(`auth.json`・`sessions/`・`plugins/`・`sqlite/`・`browser/`)の置き場は下記決定の `codex/runtime/` ではなく `codex/` 直下で、`/codex/*` の既定拒否がそれらを追跡対象から外す。
+
 ## 目的
 
 dotfiles/codex/ を ~/.codex が参照する実ホームに限定する。移行・セットアップ・プラグイン同期・テストは dotfiles/codex-tools/ へ分離する。Codexが将来追加するruntimeファイルを、初回移行時の許可リストで拒否しない。
