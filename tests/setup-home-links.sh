@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# setup.sh が Codex ホーム (~/.codex) と personal skills (~/.agents/skills) の
-# symlink を張ることの検証。
+# setup.sh が agent ホーム (~/.codex、~/.claude) と personal skills
+# (~/.agents/skills) の symlink を張ることの検証。
 # - 旧 codex-tools/setup-home-links.sh の責務を setup.sh へ取り込んだため、
 #   外部ヘルパー (と Python) への依存が残っていないことも見る
 # - 既存の実ディレクトリ (auth.json / sessions が入っている) は壊さないこと
+# - ~/.codex と ~/.claude は同じ構造 (ignore 配下に runtime を持つホームごとの
+#   リンク) なので、同じ判定を通ること
 set -u
 
 # fixture 側で「既存リンク」を作るのはこのテスト自身なので、setup.sh と同じ export が
