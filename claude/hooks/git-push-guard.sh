@@ -6,16 +6,33 @@
 # Tokenizes the command with shell-equivalent rules and inspects only arguments of
 # a git invocation that stands in command position, so quoted text such as commit
 # messages that merely mention "git push --force" does not false-positive.
+#
+# What it does NOT cover -- do not read a passing hook as "master is unreachable":
+#   * Implicit destinations. Only a refspec naming master is matched, so
+#     `git push` and `git push origin HEAD` are allowed even on master; that
+#     needs repository state this hook does not read.
+#   * Anything reached through data rather than argv: `$VAR push`, a command
+#     piped into a shell, `bash script.sh`, `source`, `make`, `ssh host '...'`,
+#     `powershell -EncodedCommand <base64>`.
+#   * A heredoc body is scanned as if it were a command, so writing these forms
+#     into a file is denied. That is the fail-closed side and is deliberate.
 set -o pipefail
 
 cmd=$(jq -r '.tool_input.command // empty')
 [ -z "$cmd" ] && exit 0
 
-# Fast path: nothing resembling git+push anywhere -> allow. Case-insensitive
-# because Windows resolves GIT.EXE the same as git.exe and the executable check
-# below folds case; a case-sensitive gate here would shadow it.
-printf '%s' "$cmd" | grep -qi 'git' || exit 0
-printf '%s' "$cmd" | grep -qi 'push' || exit 0
+# nocasematch covers the case folding that tr would otherwise need a subprocess
+# for. Windows resolves GIT.EXE and git.exe alike, so every name test here is
+# case-insensitive; ref and option tests become case-insensitive too, which only
+# widens what is denied. It applies to `case` and `[[ ]]` -- never to `[ ]`, so
+# comparisons that must fold case have to be written as `case`.
+shopt -s nocasematch
+
+# Fast path: nothing resembling git+push anywhere -> allow. Done with `case`
+# rather than `printf | grep` so that no subprocess runs on the common path and
+# `pipefail` cannot turn a grep that exits early into a silent allow.
+case "$cmd" in *git*) ;; *) exit 0 ;; esac
+case "$cmd" in *push*) ;; *) exit 0 ;; esac
 
 deny() {
   jq -n --arg r "$1" \
@@ -67,12 +84,6 @@ exe_name() { # $1=token -> exe_name_out = bare program name without .exe
   esac
   exe_name_out="$base"
 }
-
-# nocasematch covers the case folding that tr used to do, without a subprocess.
-# Windows resolves GIT.EXE and git.exe alike, so every name test here is
-# case-insensitive; ref and option tests below become case-insensitive too,
-# which only widens what is denied.
-shopt -s nocasematch
 
 is_git_exe() { # $1=token
   exe_name "$1"
@@ -136,12 +147,20 @@ check_segment() {
     fi
     case "$a" in
       foreach|--exec|-x|run) take_next=1 ;;
-      # git's parse-options also accepts the joined form `--exec=<cmd>`.
+      # git's parse-options also accepts the joined forms `--exec=<cmd>` and
+      # `-x<cmd>`.
       --exec=*|-x=*) scan_string "${a#*=}" ;;
+      -x?*) scan_string "${a#-x}" ;;
     esac
   done
+  # case, not [ ], so nocasematch applies. git accepts a differently cased
+  # subcommand and runs it anyway ("You called a Git command named 'Push' ...
+  # Continuing under the assumption that you meant 'push'"), so `git Push
+  # --force` really does force push.
   for a in "$@"; do
-    [ "$a" = "push" ] && has_push=1 && break
+    case "$a" in
+      push) has_push=1; break ;;
+    esac
   done
   [ "$has_push" = 1 ] || return 0
   for a in "$@"; do
@@ -162,8 +181,11 @@ check_segment() {
       -*) ;;
       *)
         dest_ref "$a"
-        # case, not [ ], so nocasematch applies: on Windows refs are files and a
-        # differently cased name can reach the same ref, so MASTER is denied too.
+        # case, not [ ], so nocasematch applies. git resolves refs
+        # case-sensitively even here (measured: `rev-parse MASTER` gives
+        # refs/heads/MASTER), so this is not about reaching the same ref -- it
+        # denies MASTER because someone who typed it meant master, and widening
+        # the deny costs nothing: masterful and master-fix still match exactly.
         case "$dest_ref_out" in
           master) deny "master への push はポリシーで禁止" ;;
         esac
@@ -233,11 +255,17 @@ scan_tokens() {
           *[\<\>]*)
             # A herestring feeds a shell its command line: `bash <<<'git push
             # --force'` runs it. Treating it as a plain redirection would throw
-            # that line away as if it were a filename.
-            if [ "$shell_pending" != 0 ]; then
-              shell_pending=2
-              continue
-            fi
+            # that line away as if it were a filename. Only `<<<` counts: a
+            # plain redirect before -c writes to a file and must not be taken
+            # for the command string.
+            case "$t" in
+              "<<<")
+                if [ "$shell_pending" != 0 ]; then
+                  shell_pending=2
+                  continue
+                fi
+                ;;
+            esac
             redir_pending=1
             continue
             ;;
@@ -274,11 +302,20 @@ scan_tokens() {
     # it were the command. cmd.exe spells it /c and PowerShell -Command.
     if [ "$shell_pending" = 1 ]; then
       case "$t" in
-        -c|-[Cc]ommand|-EncodedCommand|/[Cc]|/[Kk]) shell_pending=2 ;;
+        # Short options bundle and -c must sit last in the cluster because it
+        # takes the next argument, so `bash -lc` and `sh -ec` are the switch
+        # too. MSYS rewrites a lone /c into a Windows path, which is why the
+        # idiomatic Git Bash form is `cmd //c`.
+        -c|-[A-Za-z]*c|-[Cc]ommand|-EncodedCommand|/[CcKk]|//[CcKk]) shell_pending=2 ;;
       esac
       continue
     fi
     if [ "$shell_pending" = 2 ]; then
+      # Options may still follow the -c switch (`bash -c -x '<cmd>'`), so keep
+      # waiting until a non-option arrives rather than scanning the first token.
+      case "$t" in
+        -*) continue ;;
+      esac
       shell_pending=0
       scan_string "$t"
       continue
@@ -338,7 +375,12 @@ scan_tokens() {
 if ! scan_string "$cmd"; then
   # Could not be parsed at all. This path exists to fail closed, so it errs
   # toward denying: it covers every argument the exact check rejects.
-  if printf '%s' "$cmd" | grep -Eqi -- '--force|--delete|--mirror|--all|--prune|(^|[[:space:]])-[A-Za-z]*[fd]|(^|[[:space:]:+])(refs/heads/)?master([[:space:]]|$)|[[:space:]]:[^[:space:]]'; then
+  # Fed by herestring, not a pipe. Through a pipe, grep -q exits at the first
+  # match and the still-writing printf takes EPIPE, which pipefail turns into a
+  # non-zero pipeline -- the deny would be skipped exactly when the input is
+  # long and dangerous. This is the last line of defence, so it must not depend
+  # on how a subprocess exits.
+  if grep -Eqi -- '--force|--delete|--mirror|--all|--prune|(^|[[:space:]])-[A-Za-z]*[fd]|(^|[[:space:]:+])(refs/heads/)?master([[:space:]]|$)|[[:space:]]:[^[:space:]]' <<< "$cmd"; then
     deny "git push コマンドを解析できず、危険な引数らしき文字列を含むためポリシーでブロック"
   fi
   exit 0

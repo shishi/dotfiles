@@ -143,6 +143,38 @@ assert_denied "herestring denied" "bash <<<'git push --force origin master'"
 # `su <user> -c <cmd>`: -c を待たずに最初の非オプションを取ると、ユーザ名を
 # コマンド行と誤認して本体を見落とす。
 assert_denied "su with user denied" "su someuser -c 'git push --force origin master'"
+# オプションは -c の前後どちらにも来る
+assert_denied "option before -c denied" "bash -x -c 'git push --force origin master'"
+assert_denied "option after -c denied" "bash -c -x 'git push --force origin master'"
+assert_denied "long option before -c denied" "bash --norc -c 'git push --force origin master'"
+# 短オプションは束ねられ、-c は次の引数を取るので束ねの末尾にしか来ない。
+# `bash -lc` はエージェント実行系の定番形なので、完全一致だけ見ると穴になる。
+assert_denied "bundled -lc denied" "bash -lc 'git push --force origin master'"
+assert_denied "bundled -ec denied" "sh -ec 'git push --force origin main'"
+assert_denied "bundled -xc denied" "bash -xc 'git push origin master'"
+assert_denied "wrapper then bundled -lc denied" "env bash -lc 'git push origin master'"
+# MSYS は単独の /c を Windows パスへ書き換えるため、Git Bash の定石は //c
+assert_denied "cmd //c denied" "cmd //c 'git push --force origin master'"
+assert_denied "cmd //k denied" "cmd //k 'git push origin master'"
+# -c より前のリダイレクトはファイル出力であって、シェルへ渡すコマンド行ではない
+assert_denied "redirect before -c denied" "bash >/tmp/log -c 'git push --force origin master'"
+
+# git は大小文字違いのサブコマンドを警告付きで受け入れて実行する (実測:
+# "You called a Git command named 'Push' ... Continuing under the assumption
+# that you meant 'push'")。したがって `git Push --force` は実際に force push する。
+assert_denied "mixed case subcommand denied" "git Push --force origin master"
+assert_denied "upper case subcommand denied" "git PUSH --force origin main"
+assert_denied "mixed case subcommand to master denied" "git Push origin master"
+# `-x<cmd>` の値密着形も git の parse-options が受け付ける
+assert_denied "exec joined short form denied" "git rebase -x'git push --force origin master' main"
+
+# --- 既知の許可 (仕様として固定する。塞ごうとすると誤爆防止規則と衝突する) ---
+# refspec に master が現れない形は判定できない。リポジトリ状態を読まないため。
+assert_allowed "implicit destination is out of scope" "git push"
+assert_allowed "HEAD destination is out of scope" "git push origin HEAD"
+# argv ではなくデータ経由でシェルに渡る形。塞ぐと `echo 'git push --force'` の
+# 許可と正面衝突する。
+assert_allowed "piped into shell is out of scope" "echo 'git push --force origin master' | bash"
 
 # Windows/Git Bash の実行ラッパ
 assert_denied "winpty wrapper denied" "winpty git push --force origin main"
@@ -179,6 +211,8 @@ assert_allowed "grep for push allowed" "git log --grep push"
 assert_allowed "redirect at end allowed" "git push origin main > /tmp/log"
 assert_allowed "src side master allowed" "git push origin master:main"
 assert_allowed "shell running a script allowed" "bash /tmp/deploy.sh"
+assert_allowed "shell script with option allowed" "bash -x /tmp/deploy.sh"
+assert_allowed "bundled -lc unrelated allowed" "bash -lc 'git status'"
 assert_allowed "long option not a bundle allowed" "git push --follow-tags origin main"
 assert_allowed "loop with normal push allowed" "for r in origin backup; do git push \$r main; done"
 assert_allowed "if with unrelated command allowed" "if [ -d .git ]; then git status; fi"
@@ -194,6 +228,30 @@ assert_allowed "clean -x -d allowed" "git clean -x -d /tmp"
 assert_denied "heredoc body is treated as a command" "cat > /tmp/notes.md <<EOF
 git push --force origin master
 EOF"
+
+# --- fail-open の回帰 ---
+# grep へパイプで流すと、grep -q が最初の一致で終了した瞬間に書き込み中の printf が
+# EPIPE を受け、pipefail がパイプライン全体を非 0 にする。判定が「危険なので deny」
+# ではなく「一致しなかった」に化ける。発火には複数行かつパイプバッファ超えが要る
+# ので、小さい入力のテストでは永久に検出できない。
+#
+# 入力はファイル経由で渡す。Windows のコマンドライン長上限 (約 32KB) により、
+# jq --arg では 200KB を渡せず jq 自身が落ちて「無出力 = allow」と区別できない。
+assert_denied_file() { # $1=desc $2=file
+  out=$(jq -n --rawfile c "$2" '{tool_input:{command:$c}}' | bash "$HOOK"); rc=$?
+  decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null)
+  if [ "$rc" -eq 0 ] && [ "$decision" = "deny" ]; then
+    PASS=$((PASS+1)); echo "ok: $1"
+  else
+    FAIL=$((FAIL+1)); echo "NG: $1 (rc=$rc out=$(printf '%s' "$out" | head -c 80))"
+  fi
+}
+BIGTMP="$(mktemp -d)"
+{ printf 'git push --force origin master "unclosed\n'; head -c 200000 /dev/zero | tr '\0' 'x'; } > "$BIGTMP/unparsable"
+assert_denied_file "huge multiline input still denied (fallback)" "$BIGTMP/unparsable"
+{ printf 'git push --force origin master\n'; head -c 200000 /dev/zero | tr '\0' 'x'; } > "$BIGTMP/parsable"
+assert_denied_file "huge multiline input still denied (fast path)" "$BIGTMP/parsable"
+rm -rf "$BIGTMP"
 
 echo "---"; echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
