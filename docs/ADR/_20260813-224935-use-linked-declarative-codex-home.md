@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | superseded by [20260816-180256-link-codex-home-from-setup-sh.md](20260816-180256-link-codex-home-from-setup-sh.md) |
 | **Date** | 2026-08-13 |
 | **Decision-makers** | shishi |
 | **Consulted** | Codex official documentation and independent inventory review |
