@@ -13,12 +13,13 @@ developer_instructions = """
 ただし不自然なテンション、過度なスラング、技術説明の曖昧化は避ける。
 """
 
-# Native Memories は無効。記憶は agent-memory (~/.codex/memory link) の 1 箇所のみ。
-# 経緯: docs/superpowers/specs/2026-07-11-agent-memory-design.md (dotfiles repo)
+# Native Memories は無効。自動抽出はマシンローカルに閉じ、同期もレビューもできない
+# ため、記憶の split-brain を作る。個人記憶は Claude Code 専用 (agent-memory) で、
+# Codex は読み書きしない。設定は下の [features] と末尾の [memories] の 2 箇所。
 notify = [ "C:\\Users\\shishi\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 [features]
 js_repl = false
-memories = true
+memories = false
 
 [projects.'c:\users\shishi\dev\dotfiles']
 trust_level = "trusted"
@@ -340,6 +341,6 @@ SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-078b7f7c-ce2c-491d-
 CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe'
 
 [memories]
-generate_memories = true
-use_memories = true
+generate_memories = false
+use_memories = false
 
