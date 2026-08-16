@@ -152,10 +152,16 @@ else
 fi
 # skills 側も remedy の締めは「外して再実行」なので、worktree から再実行させると
 # ~/.agents/skills が消える予定のディレクトリを指す。同じ but を先に言う。
-if grep -q "skills links to .*; skip .*${T3}/dotfiles is a temporary worktree" "${T3}/setup.log"   && grep -q 'skills links to .*; skip .*git-common-dir' "${T3}/setup.log"   && ! grep -q 'skills links to .*; skip .*move skills/\.system/' "${T3}/setup.log"; then
-  ok "the skills remedy warns before telling the operator to re-run from this checkout"
+# 存在/不在の grep では順序を測れない (注意書きを末尾へ動かしても通ってしまう)。
+# 行を取り出し、"temporary worktree" より前に "re-run" が無いことで順序を見る。
+skills_line="$(grep -o 'skills links to .*' "${T3}/setup.log" | head -1)"
+before_caveat="${skills_line%%temporary worktree*}"
+if [ "$skills_line" != "$before_caveat" ] \
+  && [ "$before_caveat" = "${before_caveat%re-run*}" ] \
+  && printf '%s' "$skills_line" | grep -q 'git-common-dir'; then
+  ok "the skills remedy warns about a temporary worktree before telling the operator to re-run"
 else
-  ng "the skills remedy tells the operator to re-run without checking this checkout is permanent"
+  ng "the skills remedy tells the operator to re-run before warning about a temporary worktree"
 fi
 # 一方で dangling link は張り直す (checkout を移動した後の復旧経路)。捨てたリンク先を
 # 報告することが、その値が残る唯一の経路なので併せて固定する。
