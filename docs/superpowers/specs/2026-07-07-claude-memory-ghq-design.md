@@ -1,7 +1,23 @@
 # claude-memory の ghq 形式配置 — 設計
 
 日付: 2026-07-07
-ステータス: 承認済み(2026-07-08、Codex adversarial レビュー 7 ラウンド clean)
+ステータス: **superseded。設計時点の記録であり、手順として実行しない。**
+(当時の承認: 2026-07-08、Codex adversarial レビュー 7 ラウンド clean)
+
+現行実装と異なる点:
+
+- ヘルパーはリポジトリルートの `resolve-memory-dir.sh`。本書「実装配置(案 A)」の
+  `.gitignore`(変更)が求める `!/claude/resolve-memory-dir.sh` 追加は不要。
+- 環境変数は `AGENT_MEMORY_DIR`、リポジトリは `agent-memory`。
+- ghq.root を決定できないときのフォールバックは `~/dev/claude-memory` ではなく
+  `~/dev/src/github.com/shishi/agent-memory`(既定 root `~/dev/src` に ghq 規約を適用した
+  もの)。ghq root の外へ出るのは `AGENT_MEMORY_DIR` を明示指定したときだけで、
+  その場合は ghq 規約パスを組み立てず、指定先を絶対パスへ正規化して返す。
+- ヘルパーは自動移行を行わない。配置先の解決だけを行うため、本書の移行ロジックと
+  その受け入れ基準に対応する実装は無い。
+
+現行の正: `resolve-memory-dir.sh`、`tests/agent-memory-ghq.sh`、
+`docs/superpowers/specs/2026-07-11-agent-memory-design.md`。
 
 ## 目的
 
