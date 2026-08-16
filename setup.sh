@@ -75,9 +75,10 @@ fi
 # 「別の場所を指している」と取り違える。
 link_agent_home() {
   local source_path="$1" target_path="$2" foreign_remedy="$3"
-  # 実パスの remedy も target ごとに変えられる。既定の「退避して張り直せ」は、
-  # 検出をすり抜けた bind mount に対しては mount 元へ作用する誤手順になる。
-  local real_remedy="${4:-move it aside to link ${source_path}}"
+  # 実パスの remedy は target ごとに違う。既定値は置かない: 3 target はどれも
+  # 戻すべき runtime を持ち、汎用の「退避して張り直せ」はそれを取り残すうえ、
+  # 検出をすり抜けた bind mount には mount 元へ作用する誤手順にもなる。
+  local real_remedy="$4"
   local source_real target_real
 
   # 空の source_real で比較を続けると、target も解決できないときに「空 = 空」で
@@ -123,26 +124,34 @@ link_agent_home() {
 # runtime をホームごと抱えており、別 checkout を指すリンクを張り替えると実体は
 # 残ったまま Claude Code から参照できなくなる。
 #
-# remedy が列挙を挙げるのは目印としてで、網羅ではない。移す対象は「ignore が
-# 拒否している全部」で、再包含された tracked ファイル (CLAUDE.md、settings.json、
-# rules/ agents/ hooks/ skills/ など) は repo 側が正本。memory リンクは列挙しない:
+# remedy が挙げる名前は目印で、網羅ではない。列挙手段そのものを渡すことで「残りは
+# 自分で数えろ」を実行可能にしている。-o 単体は ignored でない untracked (まだ
+# commit していない新規ファイル) も出すため、ignored に限る -i --exclude-standard
+# が要る。実パス側は退避先を列挙できない (git repo ではない) ので、逆に repo が持つ
+# 名前 (ls-files) を除外集合として渡す。粒度は top-level 名なので、その配下にある
+# repo に無いファイルは移送側に含める。memory リンクは列挙から除く:
 # この実行の後段が ${DOTDIR}/claude/memory を必ず張り直すので、移す必要がない。
 #
 # 移送先は実行中の checkout なので、worktree から叩いたときは移してはいけない。
 # worktree を消せば runtime ごと消える。remedy はそれを最初に言う。
 #
-# bind mount (devcontainer 等) だけは先に見る。link_agent_home は実パスを
-# 「退避して張り直せ」と報告するが、bind mount 越しには既に同じ実体が見えており、
-# 退避は不要なうえマウント元を壊しかねない。mountpoint で検出できない bind mount
-# (Docker Desktop の virtiofs/9p 等) も /proc/mounts のフォールバックで拾う。
-# それでもすり抜けは残るため、実パス側の remedy にも確認を要求する。
-if mountpoint -q ~/.claude 2>/dev/null \
-  || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; then
-  echo "setup.sh: ~/.claude is a mount point; skip claude symlink (functional equivalent already in place)"
+# bind mount (devcontainer 等) だけは先に見る。link_agent_home は実パスを「退避して
+# 張り直せ」と報告するが、bind mount 越しには既に同じ実体が見えており、退避は不要な
+# うえマウント元を壊しかねない。symlink でないときだけ判定するのは、bind mount が
+# 実パスとして現れるため。リンク済みのホームをこの枝へ落とさない。
+# mountpoint で検出できない bind mount (Docker Desktop の virtiofs/9p 等) も
+# /proc/mounts のフォールバックで拾う。ただし取りこぼしは残る (mount 元が
+# ${DOTDIR}/claude と同じかは照合していない。$HOME に正規表現メタ文字を含む場合や
+# mount point に空白がある場合はフォールバックが外れる) ため、実パス側の remedy に
+# も bind mount の確認を求めている。
+if [ ! -L ~/.claude ] \
+  && { mountpoint -q ~/.claude 2>/dev/null \
+    || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
+  echo "setup.sh: ~/.claude is a mount point; skip claude symlink (mount source not compared -- readlink cannot see through a mount -- check the source with findmnt -no SOURCE ~/.claude where util-linux is present, or in the container definition, and confirm the path it names is the host path this checkout is mounted from; an in-container path such as ${DOTDIR}/claude cannot be compared with it directly)"
 else
   link_agent_home "${DOTDIR}/claude" "$HOME/.claude" \
-    "if this checkout is a temporary worktree, do nothing -- moving state here loses it when the worktree goes; otherwise stop Claude Code, move everything the ignore rule denies under the linked path -- .credentials.json projects/ sessions/ history.jsonl plugins/ and the rest, but not memory, which this script recreates -- into ${DOTDIR}/claude without overwriting what is already there (moving onto an existing directory nests inside it), then remove the link and re-run" \
-    "first confirm it is not a bind mount that the checks above missed -- moving one aside acts on the mount source -- then move it aside to link ${DOTDIR}/claude"
+    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a worktree goes when the worktree does. Otherwise stop Claude Code and list what Git ignores under the path above with git -C <that path> ls-files -o -i --exclude-standard --directory (.credentials.json projects/ sessions/ history.jsonl plugins/ and more). If that path is not inside a checkout, git cannot list it; treat everything there as runtime except the top-level names the repository has. The repository's top-level names are what git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints. Move each entry except memory if ${DOTDIR}/claude/memory is a symlink once this run finishes -- if it is not, this run could not recreate it and memory has to move too -- to the same relative path under ${DOTDIR}/claude without overwriting what is already there (the paths are printed relative to the listed directory; moving onto an existing directory nests inside it), then remove the link and re-run" \
+    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. First confirm it is not a bind mount that the checks above missed -- moving one aside acts on the mount source. Then stop Claude Code, move it aside under a name that does not exist yet, re-run this script, and move back from there everything except memory if ${DOTDIR}/claude/memory is a symlink once the re-run finishes -- if it is not, move memory too; and if the backup's memory is a real directory it holds a clone, so check it for unpushed commits before discarding it -- and except the top-level names git -C ${DOTDIR}/claude ls-files | cut -d/ -f1 | sort -u prints, which the repository owns at those paths -- anything under them that the repository does not have is yours to move too (the rest is runtime: .credentials.json projects/ sessions/ history.jsonl plugins/ and more) without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories); skipping that last step leaves a working but signed-out home"
 fi
 
 # gitconfig は agent-memory 処理より前に張る。ヘルパーが git config の
@@ -212,24 +221,26 @@ fi
 # 同じくホームごと symlink で差し込む。~/.agents/skills は同じ実体の skills/ を指す
 # (personal skills の参照先)。
 #
-# 実ディレクトリだった場合は auth.json / sessions が入っているため壊さない。symlink
-# 化するときは Codex を終了させたうえで自分で退避する。退避先が既にあると mv は
-# その中へ入れ子で移動してしまうので、名前を衝突させない (bash / zsh 用。<dotfiles>
-# はこの setup.sh があるディレクトリに読み替える):
-#   mv ~/.codex ~/.codex.bak.$(date +%s) && bash <dotfiles>/setup.sh
-# 退避先から <dotfiles>/codex/ へ移すのは .gitignore が既定拒否する runtime だけに
-# する (auth.json、sessions/、plugins/、sqlite/、browser/ など)。AGENTS.md、
-# config.toml、agents/、rules/、skills/ (.system/ 以外)、hooks/、hooks.json は
-# 再包含された tracked ファイルで repo 側が正本。上書きすると未 commit の変更として
-# 現れ、マシン固有の内容が commit に混ざる。
+# 実ディレクトリだった場合は auth.json / sessions が入っているため壊さない。手順は
+# この下の remedy 文字列が唯一の正本で、実行時に印字される。ここに二重に書くと
+# 片方だけが更新されて食い違う (退避先の名前を衝突させないこと、移すのは ignore が
+# 拒否している分だけであること、AGENTS.md・config.toml・agents/・rules/・skills/
+# (.system/ 以外)・hooks/・hooks.json は repo 側が正本であることは、すべて remedy
+# 側が持っている)。
 
 # remedy は target ごとに違う。skills 側に runtime の移設を書くと、資格情報を
 # tracked な codex/skills/ へ入れる手順になってしまう。
+#
+# どちらも締めが「外して再実行」で、再実行はこの checkout を指す。この分岐が出る
+# 主因は worktree からの実行なので、移送も再実行も先に条件を付ける。worktree へ
+# 移した runtime は worktree を消せば消え、worktree を指したリンクは残らない。
 link_agent_home "${DOTDIR}/codex" "$HOME/.codex" \
-  "stop Codex, merge its runtime -- auth.json sessions/ plugins/ sqlite/ browser/ -- into ${DOTDIR}/codex without overwriting what is already there (moving onto an existing directory nests inside it), then remove the link and re-run"
+  "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; state moved into a worktree goes when the worktree does. Otherwise stop Codex, list what Git ignores under the path above with git -C <that path> ls-files -o -i --exclude-standard --directory (auth.json sessions/ plugins/ sqlite/ browser/ and more). If that path is not inside a checkout, git cannot list it; treat everything there as runtime except the top-level names the repository has. The repository's top-level names are what git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints. Move each entry to the same relative path under ${DOTDIR}/codex without overwriting what is already there (the paths are printed relative to the listed directory, so skills/.system/ stays under skills/; moving onto an existing directory nests inside it), then remove the link and re-run" \
+  "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. Then stop Codex, move it aside under a name that does not exist yet, re-run this script, and move back from there everything except the top-level names git -C ${DOTDIR}/codex ls-files | cut -d/ -f1 | sort -u prints, which the repository owns at those paths -- anything under them that the repository does not have is yours to move too (the rest is runtime: auth.json sessions/ plugins/ sqlite/ browser/ and more) without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories); skipping that last step leaves a working but signed-out home"
 if mkdir -p ~/.agents; then
   link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills" \
-    "remove the link and re-run; the only runtime here is skills/.system/"
+    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- do nothing; otherwise move the .system/ directory under the path above -- the only runtime here -- into ${DOTDIR}/codex/skills/, then remove the link and re-run" \
+    "if ${DOTDIR} is a temporary worktree -- git -C ${DOTDIR} rev-parse --git-dir differs from --git-common-dir -- run the adoption below from the permanent checkout instead. Then move it aside under a name that does not exist yet, re-run this script, and move .system/ back from there into ~/.agents/skills -- it is the only runtime here, and the rest is tracked without overwriting what is already there (moving onto an existing directory nests inside it, and the re-run itself creates some of these directories)"
 else
   echo "setup.sh: could not create ~/.agents; skip the skills link"
 fi
