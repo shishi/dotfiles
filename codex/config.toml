@@ -148,7 +148,7 @@ skill = "#ad7bf9"
 global = "fileManager"
 
 [marketplaces.openai-bundled]
-last_updated = "2026-08-16T14:41:13Z"
+last_updated = "2026-08-16T16:43:17Z"
 source_type = "local"
 source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\codex\.tmp\bundled-marketplaces\openai-bundled'
 
@@ -216,7 +216,7 @@ NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunct
 BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "public-beta"
 BROWSER_USE_CODEX_APP_VERSION = "26.727.40816"
 SKY_CUA_NATIVE_PIPE = "1"
-SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-0b6716e5-3f4f-4890-a7c7-72801eb9f6c0'
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-fa749105-b4f2-43dc-9e55-19da1da8fdbd'
 CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe'
 
 [memories]
