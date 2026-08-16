@@ -57,7 +57,7 @@ resolves_to() {
 
 # (1) fresh 環境で 2 本のリンクが張られる
 T1="$(mktemp -d)"
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -179,6 +179,110 @@ if grep -q 'codex-tools' "$SETUP"; then
   ng "setup.sh still references the removed codex-tools helpers"
 else
   ok "setup.sh has no codex-tools dependency"
+fi
+
+# (7) ~/.claude は ~/.codex と同じ構造なので、同じ判定を通る。ignore 配下に
+# projects/ sessions/ history.jsonl plugins/ と agent-memory への memory リンクを
+# 抱えたホームそのものなので、張り替えると Claude Code の実行状態が参照から外れる。
+if resolves_to "${T1}/home/.claude" "${T1}/dotfiles/claude"; then
+  ok "~/.claude links to dotfiles/claude"
+else
+  ng "~/.claude does not link to dotfiles/claude"
+fi
+# 正しいリンクを毎回 rm して張り直すと、~/.claude が存在しない窓が開く。resolve 先は
+# 張り替えても同じなので、リンクの literal が保存されているかで見る (Windows でも
+# 相対リンクの literal は verbatim に残る)。
+( cd "${T1}/home" && rm -f .claude && ln -s ../dotfiles/claude .claude )
+run_setup "$T1"
+if [ "$(readlink "${T1}/home/.claude")" = "../dotfiles/claude" ]; then
+  ok "an already-correct ~/.claude link is not removed and recreated"
+else
+  ng "setup.sh recreated a correct ~/.claude link (now '$(readlink "${T1}/home/.claude")')"
+fi
+
+T5="$(mktemp -d)"
+make_fixture "$T5"
+mkdir -p "${T5}/home/.claude/projects"
+echo "live-history" >"${T5}/home/.claude/history.jsonl"
+run_setup "$T5"
+if [ ! -L "${T5}/home/.claude" ] \
+  && [ "$(cat "${T5}/home/.claude/history.jsonl" 2>/dev/null)" = "live-history" ]; then
+  ok "existing real ~/.claude is preserved, not replaced"
+else
+  ng "existing real ~/.claude was replaced or its contents were lost"
+fi
+# 実パスの remedy は「退避しろ」で終われない。bind mount の検出はすり抜けうるので、
+# 確認を挟まないと mount 元に対して mv を撃たせることになる。
+if grep -q '\.claude exists as a real path' "${T5}/setup.log" \
+  && grep -q '\.claude exists as a real path.*bind mount' "${T5}/setup.log"; then
+  ok "setup.sh reports why it skipped the Claude link, and to check for a bind mount first"
+else
+  ng "setup.sh skipped the Claude link silently, or told the operator to move it aside unconditionally"
+fi
+
+# 別 checkout / worktree を指すリンクは張り替えない。実体は消えないが、Claude Code
+# からは session 履歴も plugins も memory も見えなくなる。
+rm -rf "${T5}/home/.claude"
+mkdir -p "${T5}/other-checkout/claude/projects"
+echo "live-history" >"${T5}/other-checkout/claude/history.jsonl"
+ln -sfn "${T5}/other-checkout/claude" "${T5}/home/.claude"
+run_setup "$T5"
+if resolves_to "${T5}/home/.claude" "${T5}/other-checkout/claude"; then
+  ok "an existing ~/.claude link to another checkout is left alone"
+else
+  ng "setup.sh repointed a ~/.claude link that belonged to another checkout"
+fi
+# これは rm -fr 混入専用の番人で、リンクの張り替えは検出しない (張り替えても
+# unlink されるのはリンクだけで、指し先の実体は残る)。分岐の差は上の resolves_to
+# が見ている。
+if [ -f "${T5}/other-checkout/claude/history.jsonl" ]; then
+  ok "the other checkout's Claude runtime survives (rm -fr regression guard)"
+else
+  ng "the other checkout's Claude runtime was destroyed"
+fi
+# 報告は「どこを指しているか」と「runtime を移してから外すこと」を含む。remedy が
+# 無いと、読者はリンクを消して再実行し、session 履歴を参照から外してしまう。
+# 資格情報を落とすとサインアウトするので、それが名指しされていることも固定する。
+# 移送先は実行中の checkout なので、worktree では移してはいけないことも先に言う。
+if grep -q '\.claude links to .*other-checkout/claude; skip' "${T5}/setup.log" \
+  && grep -q '\.claude links to .*; skip .*sessions/' "${T5}/setup.log" \
+  && grep -q '\.claude links to .*; skip .*\.credentials\.json' "${T5}/setup.log" \
+  && grep -q '\.claude links to .*; skip .*temporary worktree' "${T5}/setup.log"; then
+  ok "setup.sh names the foreign Claude link target and how to move its runtime"
+else
+  ng "setup.sh reported the foreign Claude link without a usable remedy"
+fi
+
+# dangling link は張り直す。捨てたリンク先を報告することが、その値が残る唯一の経路。
+ln -sfn "${T5}/gone/claude" "${T5}/home/.claude"
+run_setup "$T5"
+if resolves_to "${T5}/home/.claude" "${T5}/dotfiles/claude"; then
+  ok "a dangling ~/.claude link is repaired"
+else
+  ng "setup.sh left a dangling ~/.claude link in place"
+fi
+if grep -q 'was a dangling link to .*gone/claude' "${T5}/setup.log"; then
+  ok "setup.sh records the dangling Claude target it discarded"
+else
+  ng "setup.sh discarded a dangling ~/.claude target without recording it"
+fi
+
+# (8) bind mount (devcontainer) 検出は残っている。実 mount は fixture で作れないため
+# 静的に見る。存在だけでなく順序も見る: link_agent_home へ渡した後ろへ動かすと、
+# bind mount は「実パス」として扱われ、退避を促す remedy が mount 元へ向く。
+# コメント行は数えない。同じ語はすぐ上の説明コメントにも出るので、素朴な head -1 だと
+# 実コードを消してコメントだけ残した状態を緑にしてしまう。
+code_line() {
+  grep -nE "$1" "$SETUP" | grep -vE '^[0-9]+:[[:space:]]*#' | head -1 | cut -d: -f1
+}
+MOUNT_LINE="$(code_line 'mountpoint -q ~/\.claude')"
+PROC_LINE="$(code_line 'grep -qE .*/proc/mounts')"
+CLAUDE_CALL_LINE="$(code_line 'link_agent_home "\$\{DOTDIR\}/claude"')"
+if [ -n "$MOUNT_LINE" ] && [ -n "$PROC_LINE" ] && [ -n "$CLAUDE_CALL_LINE" ] \
+  && [ "$MOUNT_LINE" -lt "$CLAUDE_CALL_LINE" ] && [ "$PROC_LINE" -lt "$CLAUDE_CALL_LINE" ]; then
+  ok "the bind mount check for ~/.claude runs before the shared link function"
+else
+  ng "the bind mount check for ~/.claude was dropped or moved after link_agent_home"
 fi
 
 echo "---"

@@ -75,6 +75,9 @@ fi
 # 「別の場所を指している」と取り違える。
 link_agent_home() {
   local source_path="$1" target_path="$2" foreign_remedy="$3"
+  # 実パスの remedy も target ごとに変えられる。既定の「退避して張り直せ」は、
+  # 検出をすり抜けた bind mount に対しては mount 元へ作用する誤手順になる。
+  local real_remedy="${4:-move it aside to link ${source_path}}"
   local source_real target_real
 
   # 空の source_real で比較を続けると、target も解決できないときに「空 = 空」で
@@ -85,7 +88,7 @@ link_agent_home() {
     return 0
   fi
   if [ ! -L "$target_path" ] && [ -e "$target_path" ]; then
-    echo "setup.sh: ${target_path} exists as a real path; skip (move it aside to link ${source_path})"
+    echo "setup.sh: ${target_path} exists as a real path; skip (${real_remedy})"
     return 0
   fi
   if [ -L "$target_path" ]; then
@@ -116,24 +119,30 @@ link_agent_home() {
     || echo "setup.sh: could not link ${target_path} (Windows: enable Developer Mode or run elevated)"
 }
 
-if [ -L ~/.claude ]; then
-  rm ~/.claude
-  ln -sf ${DOTDIR}/claude ~/.claude
-elif mountpoint -q ~/.claude 2>/dev/null \
+# ~/.claude も ~/.codex と同じ構造なので同じ関数に通す。ignore が既定拒否する
+# runtime をホームごと抱えており、別 checkout を指すリンクを張り替えると実体は
+# 残ったまま Claude Code から参照できなくなる。
+#
+# remedy が列挙を挙げるのは目印としてで、網羅ではない。移す対象は「ignore が
+# 拒否している全部」で、再包含された tracked ファイル (CLAUDE.md、settings.json、
+# rules/ agents/ hooks/ skills/ など) は repo 側が正本。memory リンクは列挙しない:
+# この実行の後段が ${DOTDIR}/claude/memory を必ず張り直すので、移す必要がない。
+#
+# 移送先は実行中の checkout なので、worktree から叩いたときは移してはいけない。
+# worktree を消せば runtime ごと消える。remedy はそれを最初に言う。
+#
+# bind mount (devcontainer 等) だけは先に見る。link_agent_home は実パスを
+# 「退避して張り直せ」と報告するが、bind mount 越しには既に同じ実体が見えており、
+# 退避は不要なうえマウント元を壊しかねない。mountpoint で検出できない bind mount
+# (Docker Desktop の virtiofs/9p 等) も /proc/mounts のフォールバックで拾う。
+# それでもすり抜けは残るため、実パス側の remedy にも確認を要求する。
+if mountpoint -q ~/.claude 2>/dev/null \
   || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; then
-  # ~/.claude が bind mount (devcontainer等) の場合は破壊しない。
-  # mountpoint コマンドで検出できない bind mount (Docker Desktop の virtiofs/9p 等) も
-  # /proc/mounts のフォールバックで拾う。
-  # bind mount 越しに ${DOTDIR}/claude/ の中身は既に同じ実体を指しているので、symlink化不要。
   echo "setup.sh: ~/.claude is a mount point; skip claude symlink (functional equivalent already in place)"
-elif [ -d ~/.claude ]; then
-  # 実体ディレクトリのつもりだが、検出をすり抜けた bind mount の可能性もある。
-  # 破壊的な rm -fr は permission denied / データ消失を引き起こす恐れがあるため行わない。
-  # 本当に symlink 化したい場合は手動で:
-  #   rm -fr ~/.claude && ln -sf ${DOTDIR}/claude ~/.claude
-  echo "setup.sh: ~/.claude exists as a directory; skip (manual setup required if intended as symlink)"
 else
-  ln -sf ${DOTDIR}/claude ~/.claude
+  link_agent_home "${DOTDIR}/claude" "$HOME/.claude" \
+    "if this checkout is a temporary worktree, do nothing -- moving state here loses it when the worktree goes; otherwise stop Claude Code, move everything the ignore rule denies under the linked path -- .credentials.json projects/ sessions/ history.jsonl plugins/ and the rest, but not memory, which this script recreates -- into ${DOTDIR}/claude without overwriting what is already there (moving onto an existing directory nests inside it), then remove the link and re-run" \
+    "first confirm it is not a bind mount that the checks above missed -- moving one aside acts on the mount source -- then move it aside to link ${DOTDIR}/claude"
 fi
 
 # gitconfig は agent-memory 処理より前に張る。ヘルパーが git config の
@@ -213,7 +222,6 @@ fi
 # config.toml、agents/、rules/、skills/ (.system/ 以外)、hooks/、hooks.json は
 # 再包含された tracked ファイルで repo 側が正本。上書きすると未 commit の変更として
 # 現れ、マシン固有の内容が commit に混ざる。
-#
 
 # remedy は target ごとに違う。skills 側に runtime の移設を書くと、資格情報を
 # tracked な codex/skills/ へ入れる手順になってしまう。
