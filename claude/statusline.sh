@@ -77,9 +77,8 @@ else
 
   # 閾値超過で compact-prep 警告 marker を書く(cooldown 中でなければ)。
   # warn は reminder hook が消費し、warned は recovery hook が消す。
-  # 閾値は実発火の観測で決める調整値。80 では marker が 1 度も書かれなかった。
-  # 原因は未確定 (実 payload の % が届かない / SESSION_ID が空 / 単に到達しない)。
-  # この環境は auto compact 無効なので、上限前に人へ渡すのはこの経路だけ。
+  # 閾値は実発火の観測で決める調整値。この環境は auto compact 無効なので、上限前に
+  # 人へ渡すのはこの経路だけ。
   COMPACT_WARN_THRESHOLD=50
   STATE_DIR="${COMPACT_STATE_DIR:-$HOME/.claude/compact-state}"
   if [ -n "$SESSION_ID" ] && [ "$percentage" -ge "$COMPACT_WARN_THRESHOLD" ] 2>/dev/null; then
@@ -88,6 +87,23 @@ else
       printf '%s\n' "$percentage" > "$STATE_DIR/warn/$SESSION_ID" 2>/dev/null || true
     fi
   fi
+fi
+
+# 実 payload が渡す % は画面にしか出ないため、閾値を決める材料が残らない。毎回の値を
+# ここに残す。% が空 (どちらの取得にも失敗) のケースも記録したいので if の外に置く。
+if [ -n "$USED_PCT_RAW" ]; then
+  pct_source=official        # 公式フィールド。現在の占有量
+elif [ -n "$percentage" ]; then
+  pct_source=calc            # transcript からの自前計算。累積であり占有量ではない
+else
+  pct_source=none            # どちらも取れず、表示は _%
+fi
+# 置き場が無いときは作らない。marker 側が「不正な session_id では STATE_DIR を
+# 作らない」を保っているので、記録のために先に作るとその保証を壊す。
+STATE_DIR="${COMPACT_STATE_DIR:-$HOME/.claude/compact-state}"
+if [ -d "$STATE_DIR" ]; then
+  printf '%s %s %s\n' "${percentage:-_}" "$pct_source" "${SESSION_ID:-no-sid}" \
+    > "$STATE_DIR/last-percentage" 2>/dev/null || true
 fi
 
 echo "󰚩 ${MODEL_DISPLAY} |  ${CURRENT_DIR##*/}${GIT_BRANCH} |  ${TOKEN_COUNT}"
