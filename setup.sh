@@ -150,7 +150,76 @@ else
   fi
 fi
 
-bash "${DOTDIR}/codex-tools/setup-home-links.sh" "${DOTDIR}" || exit $?
+# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読むため、~/.claude と
+# 同じくホームごと symlink で差し込む。~/.agents/skills は同じ実体の skills/ を指す
+# (personal skills の参照先)。
+#
+# 実ディレクトリだった場合は auth.json / sessions が入っているため壊さない。symlink
+# 化するときは Codex を終了させたうえで自分で退避する。退避先が既にあると mv は
+# その中へ入れ子で移動してしまうので、名前を衝突させない (bash / zsh 用。<dotfiles>
+# はこの setup.sh があるディレクトリに読み替える):
+#   mv ~/.codex ~/.codex.bak.$(date +%s) && bash <dotfiles>/setup.sh
+# 退避先から <dotfiles>/codex/ へ移すのは .gitignore が既定拒否する runtime だけに
+# する (auth.json、sessions/、plugins/、sqlite/、browser/ など)。AGENTS.md、
+# config.toml、agents/、rules/、skills/ (.system/ 以外)、hooks/、hooks.json は
+# 再包含された tracked ファイルで repo 側が正本。上書きすると未 commit の変更として
+# 現れ、マシン固有の内容が commit に混ざる。
+#
+# 判定は「解決できた実パス」で行う。文字列比較だけだと cd の失敗 (空文字) を
+# 「別の場所を指している」と取り違える。
+link_codex_path() {
+  local source_path="$1" target_path="$2" foreign_remedy="$3"
+  local source_real target_real
+
+  # 空の source_real で比較を続けると、target も解決できないときに「空 = 空」で
+  # 一致してしまい、両方壊れているのに黙って何もしない。ここで打ち切る。
+  source_real="$(cd "$source_path" 2>/dev/null && pwd -P)"
+  if [ -z "$source_real" ]; then
+    echo "setup.sh: missing link source ${source_path}; skip"
+    return 0
+  fi
+  if [ ! -L "$target_path" ] && [ -e "$target_path" ]; then
+    echo "setup.sh: ${target_path} exists as a real path; skip (move it aside to link ${source_path})"
+    return 0
+  fi
+  if [ -L "$target_path" ]; then
+    target_real="$(cd "$target_path" 2>/dev/null && pwd -P)"
+    # 既に正しいリンク。張り替えないので、symlink を作れない環境で再実行しても
+    # 動いているリンクを失わない。
+    if [ "$target_real" = "$source_real" ]; then
+      return 0
+    fi
+    if [ -n "$target_real" ]; then
+      # 別 checkout / worktree を指している。張り替えると Codex はサインアウト状態に
+      # なり、以後の auth.json や sessions は旧 checkout ではなくこちら側へ書かれる。
+      echo "setup.sh: ${target_path} links to ${target_real}; skip (${foreign_remedy})"
+      return 0
+    fi
+    # 解決できないリンク。dangling と区別せずに張り替えると、中身を確かめられな
+    # かったリンク先を捨てることになる。
+    if [ -e "$target_path" ]; then
+      echo "setup.sh: ${target_path} links to a path that could not be resolved (not a directory, or no traversal permission); skip"
+      return 0
+    fi
+    # ここだけが dangling link。リンク先を失うので、捨てた値を残す。
+    echo "setup.sh: ${target_path} was a dangling link to $(readlink "$target_path"); relinking to ${source_path}"
+  fi
+  # ln -sf は既存の dir symlink を辿って中に張ってしまうので -n が必須。
+  # 失敗しても setup.sh 全体は続くため、原因が分かる 1 行を残す。
+  ln -sfn "$source_path" "$target_path" \
+    || echo "setup.sh: could not link ${target_path} (Windows: enable Developer Mode or run elevated)"
+}
+
+# remedy は target ごとに違う。skills 側に runtime の移設を書くと、資格情報を
+# tracked な codex/skills/ へ入れる手順になってしまう。
+link_codex_path "${DOTDIR}/codex" "$HOME/.codex" \
+  "stop Codex, merge its runtime -- auth.json sessions/ plugins/ sqlite/ browser/ -- into ${DOTDIR}/codex without overwriting what is already there (moving onto an existing directory nests inside it), then remove the link and re-run"
+if mkdir -p ~/.agents; then
+  link_codex_path "${DOTDIR}/codex/skills" "$HOME/.agents/skills" \
+    "remove the link and re-run; the only runtime here is skills/.system/"
+else
+  echo "setup.sh: could not create ~/.agents; skip the skills link"
+fi
 
 if [ -L ${XDG_CONFIG_HOME}/nushell ]; then
   rm ${XDG_CONFIG_HOME}/nushell
@@ -191,8 +260,7 @@ if command -v claude >/dev/null 2>&1; then
     || echo "setup.sh: plugin install step reported issues (continuing)"
 fi
 
-# config.toml の plugin desired state に実インストールを収束させる。
-# Codex CLI 未導入はinstaller側で成功扱い、それ以外の失敗はsetupへ伝播する。
-bash "${DOTDIR}/codex-tools/install-plugins.sh" || exit $?
+# Codex の plugin は Claude Code と違いアカウント側に保存され、サインインすれば
+# マシンをまたいで復元される。ここで収束させる必要はない。
 
 echo "please reload shell"
