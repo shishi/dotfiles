@@ -98,6 +98,21 @@ CLAUDE.md / codex AGENTS.md の記憶セクションは「記憶の場所・注�
 
 ## 移行手順
 
+適用範囲: 既存マシンを移すときは Phase 0 を先に行い、続けて Phase 2(Windows)か Phase 3(他マシン)のどちらか 1 つを行う。Phase 0 を飛ばすと、未 push commit が旧パスに取り残される(Phase 2 step 2 は移設先が既にあれば mv を中止するため、取り残しに気づく機会がない)。Phase 1 の GitHub rename は不要で、旧名 `shishi/claude-memory` は存在しない。Phase 4-5 は dotfiles と agent-memory repo 側の作業。
+
+link は `~/.claude/memory` の 1 本だけ作る。`~/.codex/memory` は作らない — Codex からの記憶利用を行わないため。**Phase 2 step 6 と Phase 3 の本文は link を 2 本作る書き方のままなので、`~/.codex/memory` の側は読み飛ばす。**
+
+注入 hook が読むのは `~/.claude/memory` で、setup.sh が作るのは常に `dotfiles/claude/memory` の 1 本。この 2 つが同じ場所を指すのは、`~/.claude` が `dotfiles/claude` への link であるマシンと、その bind mount であるマシン。どちらでも `.gitignore` の `/claude/*` により追跡されない(§3 の `codex/memory` と同じ扱い)。`~/.claude` が実ディレクトリのマシンでは setup.sh がその link 化だけを飛ばすので、memory link ができていても注入先には届かない。`~/.claude/memory` の側を手で作る。
+
+Phase 6 のうち、Codex への手動コピー(6-1)・hook trust の再承認(6-2)・Codex 新セッションでの注入確認(6-3 の後半)は行わない。**移設したマシンでは、新セッションに `<personal-memory>` が出ることを必ず確認する。** これが配備できたかどうかの唯一の手掛かりになる。`inject-memory.sh` は読み先が無ければ黙って終わる(§2)ので、失敗は他のどこにも現れない。6-3 の `claude/hooks/inject-memory.test.sh` と `tests/compact-safety.sh` は一時ディレクトリの fixture に対して走るため、link が無いマシンでも通る。
+
+新規マシンは setup.sh が配置する(`~/.claude` がまだ無いマシンに限る)。Windows で symlink を作れない場合(Developer Mode 無効など)は `~/.claude` 自体の link も同時に失敗しているので、Phase 2 step 6 の junction を `~/.claude` と memory の両方に作る。そのとき次の 4 点に注意する。
+
+- 正本パスはヘルパーが `/c/...` 形式で返すので、`cygpath -w` で Windows 形式に直してから `mklink` に渡す。
+- link 先は `%USERPROFILE%` ではなく `$HOME` から組む。Git for Windows は `HOMEDRIVE`/`HOMEPATH` があればそちらを `$HOME` にするため 2 つは食い違うことがあり、注入 hook が読むのは `$HOME` の側。
+- `ln -sfn` は使わない。`MSYS=winsymlinks:nativestrict` が効いていないシェルでは link ではなくコピーができ、正本から分岐した記憶が静かに育つ。junction を作ったあと、解決先を確かめる。
+- `mklink` は作成先が既に存在すると失敗する(上書きはしない)。Claude Code が `~/.claude` を実ディレクトリとして作っている場合は、Claude Code を終了してから退避する。退避先が既にあると `mv` はその中へ入れ子で移動するので、名前を衝突させない。junction を作ったあと、退避した `projects/`・`todos/`・`shell-snapshots/` などの runtime だけを戻す(tracked なファイルは repo 側が正本)。
+
 redirect が安全網になるため **GitHub rename を最初に** 行う(逆順だと存在しない repo 名を参照する期間ができる)。
 
 - **Phase 0(各マシン)**: `git status --porcelain` clean・`git log origin/main..main` 空を確認し、未 push があれば push

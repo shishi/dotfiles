@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-11-agent-memory-design.md`(全要件の正。本プランと食い違う場合は spec が正)
 
+**適用範囲:** Codex からの記憶利用は対象外。記憶を使うのは Claude Code だけで、link は `~/.claude/memory` の 1 本しか張らない。本文のうち `~/.codex/memory` link、`codex/hooks/inject-memory.sh` と hooks.json の注入エントリ、Codex 新セッションでの注入検証は行わない。`codex/hooks/` と `codex/hooks.json` の追跡自体は行っている(`.gitignore` のホワイトリスト 3 行はそのために要る)。個々の hook が動くかは `config.toml` の `[hooks.state]` の trust 設定しだいで、追跡していることは稼働を意味しない。
+
 ## Global Constraints
 
 - リポジトリ名: `agent-memory`(GitHub: `shishi/agent-memory`、旧名 `claude-memory`)
