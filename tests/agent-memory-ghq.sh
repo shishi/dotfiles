@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # resolve-memory-dir.sh (repo root) のスモークテスト。
 # 使い方: bash tests/agent-memory-ghq.sh
-# HOME / GIT_CONFIG_GLOBAL / DOTDIR を一時ディレクトリへ向けるので実環境は触らない。
+# HOME / GIT_CONFIG_GLOBAL を一時ディレクトリへ向けるので実環境は触らない。
+# (setup.sh は実行せず grep で検査するだけ。setup.sh は DOTDIR を $0 から再計算するため
+#  env では sandbox 化できない。)
 # ヘルパーは「配置先の解決」だけを行う (自動移行はしない。旧 claude-memory からの
 # 移行は spec 手順で手動)。
 set -u
@@ -28,7 +30,6 @@ begin() {
   export HOME="$TMP/home"; mkdir -p "$HOME"
   export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
   export GIT_CONFIG_SYSTEM=/dev/null
-  export DOTDIR="$TMP/dotfiles"; mkdir -p "$DOTDIR/claude"
   unset GHQ_ROOT AGENT_MEMORY_DIR || true
   export PATH="$ORIG_PATH"
 }
