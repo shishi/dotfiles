@@ -193,6 +193,12 @@
             "command": "bash ~/.claude/hooks/gh-body-file-guard.sh",
             "timeout": 10,
             "statusMessage": "gh の本文受け渡しを確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
+            "timeout": 10,
+            "statusMessage": "gh の呼び出し形を確認中..."
           }
         ]
       },
@@ -378,7 +384,7 @@
   "sandbox": {
     "excludedCommands": [
       "git",
-      "gh"
+      "gh:*"
     ]
   },
   "spinnerVerbs": {
