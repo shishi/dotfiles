@@ -110,27 +110,39 @@ check "stdout/stderr を run.log へ逃がす" grep -q '> "\$WORK/run.log" 2>&1'
 # ログで上限にならない
 check "失敗時のログをバイトで区切る" grep -q 'tail -c 4000' "$SNIP"
 
-# 順序: gitleaks < 目印取得 < trap < codex exec。gitleaks で止まった時点では目印を
-# 取らないので、直して同じディレクトリから再委譲できる
-line_of() { # line_of <パターン> — 見つからなければ 0(比較で必ず負けるため NG になる)
-  local n
-  n="$(grep -n -- "$1" "$SNIP" | head -1 | cut -d: -f1)"
-  printf '%s' "${n:-0}"
+# 順序: gitleaks < 目印取得 < trap < cp。gitleaks で止まった時点では目印を取らないので、
+# 直して同じディレクトリから再委譲できる。cp が trap より後なのは、目印を取ったあとに
+# cp が失敗したディレクトリを後始末の対象に入れるため
+line_of() { # line_of <パターン> — 見つからなければ 0
+  grep -n -- "$1" "$SNIP" | head -1 | cut -d: -f1
 }
-check "gitleaks が codex exec より前" test \
-  "$(line_of 'gitleaks')" -lt "$(line_of 'codex exec')"
-check "目印取得が gitleaks より後" test \
-  "$(line_of 'gitleaks')" -lt "$(line_of 'mkdir "\$WORK/run.claim"')"
-check "trap が目印取得より後" test \
-  "$(line_of 'mkdir "\$WORK/run.claim"')" -lt "$(line_of 'trap ')"
-check "trap が codex exec より前" test \
-  "$(line_of 'trap ')" -lt "$(line_of 'codex exec')"
+check_order() { # check_order <desc> <先に来るパターン> <後に来るパターン>
+  # 両方が実在することを要求する。片方が消えて 0 になったとき「0 < 正数」で
+  # 通ってしまうと、検査そのものが消えたことをテストが見逃す
+  local a b
+  a="$(line_of "$2")"; b="$(line_of "$3")"
+  if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then pass "$1"; else fail "$1"; fi
+}
+check_order "gitleaks が codex exec より前" 'gitleaks' 'codex exec'
+check_order "目印取得が gitleaks より後" 'gitleaks' 'mkdir "\$WORK/run.claim"'
+check_order "trap が目印取得より後" 'mkdir "\$WORK/run.claim"' 'trap '
+check_order "trap が codex exec より前" 'trap ' 'codex exec'
+check_order "cp が trap より後" 'trap ' 'cp "\$HOME/.claude/skills'
+# パスの形を照合してから rm -rf の射程に入れる。prompt.md の有無だけでは、委譲の
+# 作業ディレクトリ以外にも同名のファイルが存在しうるため射程を絞れない
+check "作業ディレクトリの名前の形を照合している" \
+  grep -q 'case "\$WORK" in (\*/codex-delegate-\*)' "$SNIP"
+check_order "形の照合が trap より前" 'case "\$WORK" in' 'trap '
 # 使用済みの目印は mkdir で原子的に取る。「存在を見てから作る」形だと、同じパスを
 # 2 つの呼び出しへ貼ったときに両方が判定を通り抜ける。run.log はリダイレクトで
 # 作られるので判定より後になり、out.json は正常終了した委譲にしか存在せず、その
 # 経路では作業ディレクトリごと消えている
 check "使用済み判定を mkdir で原子的に取る" \
-  grep -q 'mkdir "\$WORK/run.claim" 2>/dev/null || exit 96' "$SNIP"
+  grep -q 'mkdir "\$WORK/run.claim" || exit 96' "$SNIP"
+# mkdir のエラーを握り潰さない。96 は「起動済み」と「目印を作れない」を兼ねるので、
+# エラー文が出ないと障害対応中に区別できない
+check_not "mkdir の stderr を捨てていない" \
+  grep -q 'mkdir "\$WORK/run.claim" 2>/dev/null' "$SNIP"
 check_not "存在を見てから作る形の判定を残していない" \
   grep -q '\[ -e "\$WORK/run.log" \]' "$SNIP"
 # 引数なしの mktemp -d は sandbox 内で Operation not permitted になる
