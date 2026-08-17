@@ -1127,6 +1127,65 @@ later(function()
 
   require('telescope').load_extension('kensaku') -- :Telescope kensaku
 
+  -- 既定は.gitignore / .ignoreを尊重する。ignoreに載っているものを歩かないのが目的で、
+  -- 複数worktreeのあるリポジトリで他のworktreeを避けたい場合もこの経路に乗せる。
+  -- git worktree addは対象を自動でignoreしないので、置き場所は自分で書く必要がある。
+  -- 書く先は.gitignore(または.git/info/exclude)にすること。rg/fdは上位ディレクトリの
+  -- .gitignoreをgit境界より外までは読まないが、.ignoreは境界を越えて親方向まで読むため、
+  -- 親の.ignoreにworktreeの置き場所を書くと、そのworktreeの中にcdして検索したときに
+  -- 自分自身が除外されて0件になる。
+  -- パスを直接除外する形にしないのも同じ理由で、worktreeの中では検索ルートがそこになり
+  -- 上位の.gitignoreは読まれないので、同じ設定のままそのworktree自身を検索できる。
+  -- ignoreされたファイルまで見たいときはinclude_ignoredを渡す。
+  --
+  -- rg / fd / fdfind の3分岐では .direnv / .devenv をignore設定と無関係に常に除外する。
+  -- 中身がnix storeへのsymlinkで、--followと組むとnixpkgsのソース木ごと歩いてしまうため。
+  -- rg / fdはgitリポジトリの外では.gitignoreを読まないので、ignoreファイル任せにすると
+  -- この穴が開く。最後のfind / whereフォールバックは除外もignore尊重もしないが、
+  -- findにsymlink追跡を付けていないのでsymlink農場には降りない。
+  -- 「worktreeの中にいるときはそのworktreeだけ、そうでないときは配下のworktreeを除いた分」を
+  -- ignoreファイルの整備に依存せず成り立たせる。git worktree listはどのworktreeから叩いても
+  -- 全worktreeを絶対パスで返すので、検索ルートの真下にあるものだけを落とせばよい。
+  -- worktreeの中にcdしていればその下に他のworktreeは無いので、何も落ちない = そのworktree全体が
+  -- 検索対象になる。git repo外やgitが無い環境では空を返して素の挙動に戻る。
+  -- 呼び出しごとにgitを1回叩く(実測13〜46ms)。telescopeにcwdを渡す使い方はしていないので
+  -- 検索ルート = vimのcwdとして扱う
+  local function nested_worktrees()
+    local root = vim.uv.cwd()
+    if not root or 1 ~= vim.fn.executable('git') then
+      return {}
+    end
+    local res = vim.system({ 'git', 'worktree', 'list', '--porcelain' }, { cwd = root, text = true }):wait()
+    if res.code ~= 0 then
+      return {}
+    end
+    local base = vim.fs.normalize(root)
+    local nested = {}
+    for line in (res.stdout or ''):gmatch('[^\r\n]+') do
+      local path = line:match('^worktree (.+)$')
+      if path then
+        path = vim.fs.normalize(path)
+        -- 検索ルート自身は落とさない。真下にあるものだけ
+        if path ~= base and vim.startswith(path, base .. '/') then
+          nested[#nested + 1] = path:sub(#base + 2)
+        end
+      end
+    end
+    return nested
+  end
+
+  -- 先頭の / は検索ルートへのアンカーで、rgもfdもgitignore構文として解釈する。
+  -- worktreeのパスにglobメタ文字(* [ など)が入っていると一致せず除外が効かないが、
+  -- その場合は歩く量が増えるだけで結果は正しい
+  local function worktree_excludes(flag, prefix)
+    local args = {}
+    for _, rel in ipairs(nested_worktrees()) do
+      args[#args + 1] = flag
+      args[#args + 1] = prefix .. rel .. '/**'
+    end
+    return args
+  end
+
   local function find_command(opts)
     opts = opts or {}
     local include_ignored = opts.include_ignored or false
@@ -1138,14 +1197,18 @@ later(function()
         '--follow',
         '--color',
         'never',
-        '-uu',
+        '--hidden',
         '-g',
         '!.git',
         '-g',
+        '!.direnv',
+        '-g',
         '!.devenv',
       }
-      if not include_ignored then
-        vim.list_extend(cmd, { '-g', '!node_modules' })
+      vim.list_extend(cmd, worktree_excludes('-g', '!/'))
+      if include_ignored then
+        -- -uuは.gitignoreも.ignoreも無効化する
+        vim.list_extend(cmd, { '-uu' })
       end
       return cmd
     elseif 1 == vim.fn.executable('fd') then
@@ -1156,15 +1219,18 @@ later(function()
         '--follow',
         '--color',
         'never',
-        '-u',
+        '--hidden',
         '--strip-cwd-prefix',
         '-E',
         '.git',
         '-E',
+        '.direnv',
+        '-E',
         '.devenv',
       }
-      if not include_ignored then
-        vim.list_extend(cmd, { '-E', 'node_modules' })
+      vim.list_extend(cmd, worktree_excludes('-E', '/'))
+      if include_ignored then
+        vim.list_extend(cmd, { '--no-ignore' })
       end
       return cmd
     elseif 1 == vim.fn.executable('fdfind') then
@@ -1175,15 +1241,18 @@ later(function()
         '--follow',
         '--color',
         'never',
-        '-u',
+        '--hidden',
         '--strip-cwd-prefix',
         '-E',
         '.git',
         '-E',
+        '.direnv',
+        '-E',
         '.devenv',
       }
-      if not include_ignored then
-        vim.list_extend(cmd, { '-E', 'node_modules' })
+      vim.list_extend(cmd, worktree_excludes('-E', '/'))
+      if include_ignored then
+        vim.list_extend(cmd, { '--no-ignore' })
       end
       return cmd
     elseif 1 == vim.fn.executable('find') and vim.fn.has('win32') == 0 then
@@ -1199,6 +1268,16 @@ later(function()
       path_display = {
         'filename_first',
       },
+      -- find_commandの既定とignoreの方針は同じ(.gitignore / .ignore を尊重 +
+      -- symlink農場を常に除外)。ただしfind_filesと違って--followは付けない。
+      -- symlink越しまでgrepすると重く、探索範囲はfind_filesより狭くなる。
+      -- worktreeの除外はここに書けない(静的テーブルなので呼び出し時に決められない)。
+      -- keymap側からadditional_argsで渡している。
+      -- live_grep_argsでignore済みへ届かせるには、auto_quoting = trueのため素に
+      -- `foo -uu` と打っても全体が1つの検索パターンになる。<C-k>(quote_prompt)で
+      -- パターンを引用してから -uu を足すか、-uu を先頭に打つ。
+      -- grep_stringはこの設定のkeymapが引数を渡していないので既定のまま
+      -- (届かせるならadditional_args = { '-uu' } を渡せる)
       vimgrep_arguments = {
         'rg',
         '--color=never',
@@ -1207,16 +1286,13 @@ later(function()
         '--line-number',
         '--column',
         '--smart-case',
-        '-uu',
+        '--hidden',
         '--glob',
         '!.git/',
         '--glob',
+        '!.direnv/',
+        '--glob',
         '!.devenv/',
-        -- --no-ignore
-        -- '--glob',
-        -- '!*.lock',
-        -- '--glob',
-        -- '!*.lock.json'
       },
       -- layout_strategy = 'vertical',
       -- layout_config = {
@@ -1287,7 +1363,10 @@ later(function()
   })
   vim.keymap.set('n', '<C-k>a', function()
     -- require('telescope.builtin').live_grep()
-    require('telescope').extensions.live_grep_args.live_grep_args()
+    -- vimgrep_argumentsは静的テーブルなので、worktree除外はadditional_argsで渡す
+    require('telescope').extensions.live_grep_args.live_grep_args({
+      additional_args = worktree_excludes('-g', '!/'),
+    })
   end, {
     desc = 'telescope live grep args',
   })
@@ -1297,7 +1376,9 @@ later(function()
     desc = 'telescope git files',
   })
   vim.keymap.set('n', '<C-k>*', function()
-    require('telescope.builtin').grep_string()
+    require('telescope.builtin').grep_string({
+      additional_args = worktree_excludes('-g', '!/'),
+    })
   end, {
     desc = 'telescope grep string under your cursor',
   })
