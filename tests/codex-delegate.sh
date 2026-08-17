@@ -70,6 +70,12 @@ check "存在する" test -f "$SKILL"
 check "frontmatter に name: codex-delegate" \
   grep -q '^name: codex-delegate$' "$SKILL"
 check "frontmatter に description" grep -q '^description:' "$SKILL"
+# NUL バイトはエディタでも diff でも見えないまま入り、ファイルをテキストとして扱う
+# 経路(file(1) の判定、grep のバイナリ扱い、一部の Markdown 処理)を静かに壊す。
+# 制御文字を説明する本文を書くときに実物を書いてしまう事故が起きるため、機械で見る
+no_nul() { [ "$(tr -d '\0' < "$1" | wc -c)" -eq "$(wc -c < "$1")" ]; }
+check "SKILL.md に NUL バイトが無い" no_nul "$SKILL"
+check "schema.json に NUL バイトが無い" no_nul "$SCHEMA"
 
 # 実行スニペットを抽出する。```sh のブロックだけが実行対象で、プロンプトへ入れる
 # 文面は ```text に置くため巻き込まれない。
@@ -130,9 +136,11 @@ check_order "trap が codex exec より前" 'trap ' 'codex exec'
 check_order "cp が trap より後" 'trap ' 'cp "\$HOME/.claude/skills'
 # パスの形を照合してから rm -rf の射程に入れる。prompt.md の有無だけでは、委譲の
 # 作業ディレクトリ以外にも同名のファイルが存在しうるため射程を絞れない
-check "作業ディレクトリの名前の形を照合している" \
-  grep -q 'case "\$WORK" in (\*/codex-delegate-\*)' "$SNIP"
-check_order "形の照合が trap より前" 'case "\$WORK" in' 'trap '
+# 照合は最後の要素に対して行う。パス全体を */codex-delegate-* で見る形だと末尾の * が
+# / も含むため、/tmp/codex-delegate-ABCDEF/../victim のような形が通り抜ける
+check "作業ディレクトリの名前の形を最後の要素で照合している" \
+  grep -q 'case "\${WORK##\*/}" in (codex-delegate-??????)' "$SNIP"
+check_order "形の照合が trap より前" 'case "\${WORK##\*/}" in' 'trap '
 # 使用済みの目印は mkdir で原子的に取る。「存在を見てから作る」形だと、同じパスを
 # 2 つの呼び出しへ貼ったときに両方が判定を通り抜ける。run.log はリダイレクトで
 # 作られるので判定より後になり、out.json は正常終了した委譲にしか存在せず、その
