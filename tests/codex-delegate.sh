@@ -52,9 +52,9 @@ for arr in changed_files findings next_steps blockers; do
   check "$arr の items に maxLength" \
     jq -e --arg a "$arr" '.properties[$a].items.maxLength > 0' "$SCHEMA"
 done
-# 上限の合計 = 1 回の委譲が Claude の context へ加えうる最大の文字数。SKILL.md が
-# 22,600 文字と書いているので、schema 側を緩めたらここで落ちる。バイト数ではない —
-# maxLength は文字を数えるため、日本語ならこの 3 倍近くになる(SKILL.md に明記あり)
+# maxLength / maxItems の単純和。SKILL.md が 22,600 文字と書いているので、schema 側を
+# 緩めたらここで落ちる。これは受信量の上限ではない — 値をデコードしたあとの文字数の和で
+# あって、バイト数・エスケープ・JSON の構造分がこれに乗る(内訳は SKILL.md にある)
 check "上限の合計が 22,600 文字を超えない" jq -e '
   (.properties.summary.maxLength)
   + (.properties.changed_files.maxItems * .properties.changed_files.items.maxLength)
