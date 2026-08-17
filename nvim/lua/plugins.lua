@@ -478,79 +478,232 @@ later(function()
 end)
 
 later(function()
+  local ts_dir = vim.fs.joinpath(vim.fn.stdpath('data'), 'site', 'pack', 'deps', 'opt', 'nvim-treesitter')
+  -- add()はディスク上の存在しか保証せずcheckout状態は合わせない(mini.depsのdocが明記)。
+  -- 既存cloneがmasterのままのマシンでは、add()のpackaddがmasterの
+  -- plugin/nvim-treesitter.luaをsourceし、そこからrootモジュール経由で
+  -- Neovim 0.12で壊れたquery_predicatesが登録されてしまう(移行した理由そのもの)。
+  -- masterならplugin側のロードガードを先に立てて空振りさせる。
+  -- 判別はlua/nvim-treesitter/config.luaの有無(mainにしか無い。masterはconfigs.lua)。
+  -- 未インストールならadd()がcheckoutを適用するのでmainになる
+  local is_stale_master = vim.uv.fs_stat(ts_dir) ~= nil
+    and vim.uv.fs_stat(vim.fs.joinpath(ts_dir, 'lua', 'nvim-treesitter', 'config.lua')) == nil
+  if is_stale_master then
+    vim.g.loaded_nvim_treesitter = true
+  end
+
+  -- masterでもadd()自体は通す。sessionにspecが無いと、notifyが案内する
+  -- :DepsUpdate! nvim-treesitter が引けない
   add({
     source = 'nvim-treesitter/nvim-treesitter',
-    checkout = 'master',
-    -- 時期がきたらmainにきりかえる
-    -- checkout = 'main',
+    checkout = 'main',
     monitor = 'main',
     hooks = {
-      -- post_install = function()
-      --   vim.cmd('TSInstall all')
-      -- end,
       -- Perform action after every checkout
       post_checkout = function()
-        vim.cmd('TSUpdate')
+        -- masterと判定したsessionではplugin/nvim-treesitter.luaを空振りさせているので
+        -- :TSUpdateが定義されていない。notifyで案内する復旧手順(:DepsUpdate!)の途中で
+        -- E492が出て「失敗した」と読めてしまうため、存在を確かめてから呼ぶ。
+        -- そのsessionではcheckout自体は成立し、再起動後にauto installが効く
+        if vim.fn.exists(':TSUpdate') == 2 then
+          vim.cmd('TSUpdate')
+        end
       end,
     },
   })
 
-  require('nvim-treesitter').setup()
+  -- ts_dirはこのファイル冒頭のpath_packageと同じ構成を前提に組み立てている。そこがずれたとき
+  -- masterを見落として落ちないよう、requireの直前で位置に依存しない確認も通す
+  if is_stale_master or #vim.api.nvim_get_runtime_file('lua/nvim-treesitter/config.lua', false) == 0 then
+    vim.notify(
+      table.concat({
+        'nvim-treesitter が main になっていない(または clone が壊れている)ので',
+        'treesitterハイライトを有効にしない。復旧手順:',
+        '1. :DepsUpdate! nvim-treesitter',
+        '   (bangなしの :DepsUpdate は確認バッファを出すだけで、その指示に従わないと適用されない)',
+        '2. nvim を再起動する',
+        '3. まだ色が付かないなら master 時代のパーサが plugin 配下の parser/ に残っている。',
+        '   それはrtpから見つかるのでauto installが走らず、mainのクエリはNeovim同梱言語を除き',
+        '   install時にしか作られないため無言で色が付かない。',
+        '   そのディレクトリを消して nvim を再起動する。ロード済みのパーサはセッション中に',
+        '   差し替えられないので、:TSInstall! だけでは同じsessionでは戻らない',
+      }, '\n'),
+      vim.log.levels.WARN
+    )
+    return
+  end
 
-  -- autoinstall代替
-  -- vim.api.nvim_create_autocmd({ 'Filetype' }, {
-  --   callback = function(event)
-  --     local ok, nvim_treesitter = pcall(require, 'nvim-treesitter')
-  --     if not ok then
-  --       return
-  --     end
-  --     local ft = vim.bo[event.buf].ft
-  --     local lang = vim.treesitter.language.get_lang(ft)
-  --     nvim_treesitter.install({ lang }):await(function(err)
-  --       if err then
-  --         vim.notify('Treesitter install error for ft: ' .. ft .. ' err: ' .. err)
-  --         return
-  --       end
-  --       pcall(vim.treesitter.start, event.buf)
-  --       vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
-  --       vim.wo.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
-  --     end)
-  --   end,
-  -- })
+  local nvim_treesitter = require('nvim-treesitter')
 
-  -- これはたしかkawarimiさんが紹介していたエラーを抑止するための方法
-  vim.treesitter.start = (function(wrapped)
-    return function(bufnr, lang)
-      lang = lang or vim.fn.getbufvar(bufnr or '', '&filetype')
-      pcall(wrapped, bufnr, lang)
+  nvim_treesitter.setup()
+
+  -- mainはtree-sitter CLIでパーサをビルドする。無いと開いたファイルタイプごとに
+  -- ビルド失敗が並ぶので、前提の欠落は起動時に一度だけ伝える
+  if vim.fn.executable('tree-sitter') == 0 then
+    vim.notify(
+      'nvim-treesitter: tree-sitter CLI がPATHに無いためパーサをinstallできない',
+      vim.log.levels.WARN
+    )
+  end
+
+  -- mainはjsoncパーサを提供しない(masterにはあった)。tree-sitter-jsonがコメントを
+  -- 扱えるので、ftのjsoncをjsonへ紐付けて代替する。mainのplugin/filetypes.luaも同じ
+  -- 登録をしているが、そちらに依存せず明示する
+  vim.treesitter.language.register('json', 'jsonc')
+
+  -- mainではハイライトの有効化と、masterのauto_install = true相当が利用者側の責務になる
+  -- (mainのsetupはinstall_dirしか受けず、auto_installに相当するオプションが無い)
+  -- get_available()はUser TSUpdateを毎回発火させるので一度だけ引いて使い回す
+  local available
+  local installing = {}
+  local failed = {}
+  -- 依存の衝突を避けて要求を見送ったバッファ。先行installの完了時に出し直す
+  local pending = {}
+
+  local function attach(buf, lang)
+    -- highlighter.newはactive[buf]をdestroyせず上書きするので、:eやsetfでのFileType
+    -- 再発火でspelloptionsの復元値が壊れる。先に畳んでおく(未attachならstopはno-op)。
+    -- なおLanguageTreeへ登録されたコールバックはstopでも外れない(runtimeに解除手段が
+    -- 無い)ので、同じlangへ再attachするたびその蓄積だけは残る
+    vim.treesitter.stop(buf)
+    vim.treesitter.start(buf, lang)
+    -- masterのhighlight.additional_vim_regex_highlighting = trueと同じ挙動を保つ。
+    -- highlighterがsyntaxを空にするので明示的に戻す
+    vim.bo[buf].syntax = 'ON'
+  end
+
+  -- vim.treesitter.startはlanguage.addが通っても投げうる(パーサとクエリの版ずれで
+  -- highlights.scmのパースに失敗するとhighlighter側がerrorを送出する)。バッファを回す
+  -- ループで素に呼ぶと1件の失敗で残り全部が落ちるので、失敗の粒度を1バッファに切る。
+  -- 原因はnotifyに出すので握り潰しにはしない
+  -- language.addはパーサが見つからないだけならnilを返すが、ファイルはあるのにABI不一致や
+  -- dlopen失敗でロードできない場合は投げる(loadparserがvim._ts_add_language_from_objectを
+  -- 素に呼ぶ。runtime自身もsilent時はpcallで包んでいる)。バッファを回すループの途中で
+  -- 投げると残りが全部落ちるので、判定はここに閉じる
+  local function has_parser(lang)
+    local ok, res = pcall(vim.treesitter.language.add, lang)
+    return ok and res == true
+  end
+
+  local attach_warned = {}
+
+  local function try_attach(buf, lang)
+    local ok, err = pcall(attach, buf, lang)
+    -- スイープも起動時ループも全バッファを回すので、恒久的に失敗する状態だと同じ文面が
+    -- バッファ数ぶん一度に出る。読ませたい通知が自分で流れないようlangごとに1回に絞る
+    if not ok and not attach_warned[lang] then
+      attach_warned[lang] = true
+      vim.notify(('nvim-treesitter: %s の attach に失敗した: %s'):format(lang, err), vim.log.levels.WARN)
     end
-  end)(vim.treesitter.start)
+    return ok
+  end
 
-  -- vim.api.nvim_create_autocmd('FileType', {
-  --   group = vim.api.nvim_create_augroup('vim-treesitter-start', {}),
-  --   callback = function(_ctx)
-  --     -- 必要に応じて`ctx.match`に入っているファイルタイプの値に応じて挙動を制御
-  --     -- `pcall`でエラーを無視することでパーサーやクエリがあるか気にしなくてすむ
-  --     pcall(vim.treesitter.start)
-  --   end,
-  -- })
+  local start_treesitter
 
-  -- nvim-treesitter main以降後はconfigがない
-  require('nvim-treesitter.configs').setup({
-    modules = {},
-    -- A list of parser names, or "all" (the listed parsers MUST always be installed)
-    ensure_installed = {},
-    -- Install parsers synchronously (only applied to `ensure_installed`)
-    sync_install = false,
-    -- List of parsers to ignore installing (or "all")
-    ignore_install = {},
+  function start_treesitter(buf)
+    local lang = vim.treesitter.language.get_lang(vim.bo[buf].filetype)
+    if not lang then
+      return
+    end
+    if has_parser(lang) then
+      try_attach(buf, lang)
+      return
+    end
+    -- 未インストール。mainが配布していない言語は素のsyntaxに任せる。
+    -- failedはビルドできない環境(tree-sitter CLI不在・ネットワーク遮断など)で
+    -- FileTypeごとにtarballを落とし直さないための打ち切り。復帰は nvim 再起動
+    available = available or nvim_treesitter.get_available()
+    if installing[lang] or failed[lang] or not vim.tbl_contains(available, lang) then
+      return
+    end
+    -- install()はrequiresの依存言語も一緒に入れる(tsxならecma / jsx / typescript)。
+    -- install()の中で再度展開されるので引数を絞っても避けられない。展開集合のどれかが
+    -- 既にin-flightなら、こちらの要求は出さずに見送る。出すとinstall.lua内のガードが
+    -- vim.wait(INSTALL_TIMEOUT = 60秒)に落ちてメインループを止める
+    local langs = require('nvim-treesitter.config').norm_languages({ lang }, { unsupported = true })
+    -- 2つの集合は判定基準が違うので分ける。
+    -- inflight: install.luaが実際にbuildするもの。判定はget_installed()(= install_dir実体)。
+    --   language.addが通ってもinstall_dirに無ければbuildが走るので(Neovim同梱のcなど)、
+    --   ここを取り違えるとinstall.lua内のフラグに他バッファがvim.waitでぶつかる
+    -- missing: 完了時のスイープ対象。判定はlanguage.add。既に読み込める言語のバッファは
+    --   自分のFileTypeで attach 済みなので、触るとstop→startを無駄に増やす
+    -- この2集合に包含関係は無い。get_installedはqueriesとparserの和なので、クエリだけ
+    -- リンクされる言語(ecma / jsx など)はinflightに入らずmissingに入る。片方をもう片方から
+    -- 導くとcのような同梱パーサがinflightから漏れてvim.waitの衝突が戻る
+    local installed = nvim_treesitter.get_installed()
+    local inflight, missing = {}, {}
+    for _, l in ipairs(langs) do
+      if installing[l] then
+        pending[buf] = true
+        return
+      end
+      if not vim.list_contains(installed, l) then
+        inflight[l] = true
+      end
+      if not has_parser(l) then
+        missing[l] = true
+      end
+    end
+    for l in pairs(inflight) do
+      installing[l] = true
+    end
+    nvim_treesitter.install(langs):await(function()
+      for l in pairs(inflight) do
+        installing[l] = nil
+      end
+      -- awaitのコールバックはfast event contextで走りうるのでscheduleしてから触る
+      vim.schedule(function()
+        local addable = {}
+        for l in pairs(missing) do
+          if has_parser(l) then
+            addable[l] = true
+          end
+        end
+        if not addable[lang] then
+          failed[lang] = true
+        end
+        -- installを待つ間に開いた同じ言語のバッファは、installing[l]で弾かれていて
+        -- どこにも記録されていない。依存として入った言語のぶんも含めて完了時に拾う。
+        -- 生存判定にnvim_buf_is_validを使わないこと: bdelete済みでもtrueを返し、
+        -- vim.treesitter.startが:editでそのバッファを復活させてしまう
+        local attached = {}
+        for _, b in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_loaded(b) then
+            local l = vim.treesitter.language.get_lang(vim.bo[b].filetype)
+            if l and addable[l] then
+              attached[b] = true
+              try_attach(b, l)
+            end
+          end
+        end
+        -- 見送った要求を出し直す。ここで拾わないとそのバッファは:eまで素のsyntaxのまま。
+        -- 上のスイープで触ったぶんは飛ばす(再attachはstop→startを1回分無駄に増やす)
+        local deferred = pending
+        pending = {}
+        for b in pairs(deferred) do
+          if not attached[b] and vim.api.nvim_buf_is_loaded(b) then
+            start_treesitter(b)
+          end
+        end
+      end)
+    end)
+  end
 
-    auto_install = true,
-    highlight = {
-      enable = true,
-      additional_vim_regex_highlighting = true,
-    },
+  vim.api.nvim_create_autocmd('FileType', {
+    group = vim.api.nvim_create_augroup('nvim-treesitter-start', {}),
+    callback = function(event)
+      start_treesitter(event.buf)
+    end,
   })
+
+  -- このブロックはlater()で走るので、`nvim foo.rb`のように起動引数で開いたバッファの
+  -- FileTypeは上のautocmd登録より前に発火し終えている。取りこぼすとそのバッファだけ
+  -- ハイライトが付かないため、既にロード済みのバッファへも適用する
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype ~= '' then
+      start_treesitter(buf)
+    end
+  end
 end)
 
 later(function()

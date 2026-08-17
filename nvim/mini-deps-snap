@@ -31,7 +31,7 @@ return {
   ["nvim-lint"] = "1f19dacd945a7b1a57f29f32b2d7168384df3d36",
   ["nvim-lspconfig"] = "d696e36d5792daf828f8c8e8d4b9aa90c1a10c2a",
   ["nvim-notify"] = "8701bece920b38ea289b457f902e2ad184131a5d",
-  ["nvim-treesitter"] = "42fc28ba918343ebfd5565147a42a26580579482",
+  ["nvim-treesitter"] = "a1bcffc8095c142ad1f7a9671a4ae180333f9209",
   ["nvim-web-devicons"] = "6788013bb9cb784e606ada44206b0e755e4323d7",
   ["octo.nvim"] = "09ff70efd885fe1cdf62505dce3a9bc6baeb85e1",
   ["oil.nvim"] = "bbfa7cba85967dc9dbfe0ca486fd4b17084bf846",
