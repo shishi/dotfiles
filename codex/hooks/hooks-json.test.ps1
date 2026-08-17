@@ -5,6 +5,45 @@ $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
 $failures = @()
 $registered = @()
 
+$preToolUse = @($config.hooks.PreToolUse)
+if ($preToolUse.Count -ne 1 -or $preToolUse[0].matcher -ne 'Bash') {
+    $failures += 'existing PreToolUse Bash hook is not preserved'
+}
+
+$sessionStart = @($config.hooks.SessionStart)
+if ($sessionStart.Count -ne 1) {
+    $failures += 'SessionStart must have exactly one hook group'
+} else {
+    $sessionStartGroup = $sessionStart[0]
+    $sources = @($sessionStartGroup.matcher -split '\|')
+    $expectedSources = @('startup', 'resume', 'clear', 'compact')
+    if ((Compare-Object $expectedSources $sources).Count -ne 0) {
+        $failures += 'SessionStart matcher must cover startup, resume, clear, and compact exactly'
+    }
+
+    $sessionHandlers = @($sessionStartGroup.hooks)
+    if ($sessionHandlers.Count -ne 1) {
+        $failures += 'SessionStart must have exactly one command handler'
+    } else {
+        $sessionHandler = $sessionHandlers[0]
+        if ($sessionHandler.command -ne 'bash ~/.claude/hooks/inject-memory.sh ~/.codex/memory') {
+            $failures += 'SessionStart must reuse the Claude memory injector with ~/.codex/memory'
+        }
+        if ($sessionHandler.commandWindows -notmatch "bash\.exe'.*-c\s+'~/.claude/hooks/inject-memory\.sh ~/.codex/memory'") {
+            $failures += 'SessionStart Windows command must invoke the shared injector through explicit Git Bash'
+        }
+        $contextLimit = $sessionHandler.additionalContextLimit
+        if ($null -eq $contextLimit -or $contextLimit -le 0 -or $contextLimit % 1 -ne 0) {
+            $failures += 'SessionStart must set a positive integer additionalContextLimit'
+        }
+        # The measured injection is 8,563 characters. 10,000 keeps the current
+        # payload in context with bounded headroom above the 2,500 default.
+        if ($contextLimit -ne 10000) {
+            $failures += 'SessionStart additionalContextLimit must be exactly 10000'
+        }
+    }
+}
+
 foreach ($event in $config.hooks.PSObject.Properties) {
     foreach ($group in $event.Value) {
         foreach ($handler in $group.hooks) {
