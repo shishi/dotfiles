@@ -136,6 +136,22 @@ for code in 96 97 98; do
 done
 
 echo
+echo "# CLAUDE.md (判断基準)"
+
+# 判断基準は常時 context に載る CLAUDE.md にしか置けない。skill は呼ばれてから
+# 読まれるため、基準が skill 本文にあると自律発火しない
+check "codex-delegate skill を参照している" grep -q 'codex-delegate' "$CLAUDE_MD"
+for kind in explore chore implement; do
+  check "委譲種別 $kind がある" grep -q "$kind" "$CLAUDE_MD"
+done
+check "委譲しない条件を書いている" grep -q '委譲しない' "$CLAUDE_MD"
+# OpenAI 枠の消費は「上限・予算を示さない数値を書かない」規律の対象。委譲が
+# 無料ではないことを判断基準の側に書く
+check "OpenAI 枠を消費する旨を書いている" grep -q 'OpenAI' "$CLAUDE_MD"
+# レビューは委譲しない。既存のゲートと責務が重ならないことを基準側で明示する
+check "レビューを委譲しない旨を書いている" grep -q 'review-gate' "$CLAUDE_MD"
+
+echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "codex-delegate: all checks passed"
 else

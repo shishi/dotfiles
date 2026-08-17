@@ -38,6 +38,18 @@ review-gate skill が使えない場合(未配備のマシン等)は、`/code-re
 - **作る前に上限を宣言する。** 補助部品の実装方式を決める時点で、ファイル数・レビュー巡回数・「やらないこと」を同時に宣言する。超えた時点で自動的に相談へ戻る。
 - **降りる条件を欠陥数で書かない。** 「その部品が無かったら、何がどれだけの頻度で壊れるか」で書く。根本原因が既に解決しているなら、補助部品の期待値は低いと見積もる。
 
+# Codex への委譲
+
+Claude Code のトークン消費を抑えるため、次に当たる作業は codex-delegate skill で codex CLI へ委譲する。委譲するかどうかは Claude が判断し、ユーザーの指示を待たない。
+
+- **explore**(read-only): 所在探索、原因調査、コードベースの読解
+- **chore**(workspace-write): リネーム、同パターンの横展開、テスト追加
+- **implement**(workspace-write): plan 確定後の feature / bugfix
+
+委譲しないもの: 設計判断とユーザーとの対話が要る作業、レビューそのもの(review-gate skill と codex-review skill の責務)、記憶 repo への書き込み、ネットワークを要する作業(依存の取得・更新。委譲では network を切っているため完了しない)。`workspace-write` の 2 種別は worktree が clean なときだけ委譲する。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない(規律を持たない委譲先にコードを書かせることになる)。
+
+委譲で入った変更は Claude 自身が書いた変更と同じものとして扱う。委譲専用の検査は持たず、差分の確認と上記のレビューゲートで見る。委譲は Claude 側の消費を減らす代わりに OpenAI 側の利用枠を消費するため、枯渇したら委譲をやめて Claude 側で引き取る。
+
 # 個人永続記憶 (personal memory)
 
 記憶は `~/.claude/memory/`(private repo **agent-memory** への link)に置く。
