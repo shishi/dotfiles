@@ -52,8 +52,9 @@ for arr in changed_files findings next_steps blockers; do
   check "$arr の items に maxLength" \
     jq -e --arg a "$arr" '.properties[$a].items.maxLength > 0' "$SCHEMA"
 done
-# 上限の合計 = 1 回の委譲が Claude の context へ加えうる最大量。SKILL.md と plan が
-# 22,600 文字と書いているので、schema 側を緩めたらここで落ちる
+# 上限の合計 = 1 回の委譲が Claude の context へ加えうる最大の文字数。SKILL.md が
+# 22,600 文字と書いているので、schema 側を緩めたらここで落ちる。バイト数ではない —
+# maxLength は文字を数えるため、日本語ならこの 3 倍近くになる(SKILL.md に明記あり)
 check "上限の合計が 22,600 文字を超えない" jq -e '
   (.properties.summary.maxLength)
   + (.properties.changed_files.maxItems * .properties.changed_files.items.maxLength)
@@ -109,21 +110,29 @@ check "stdout/stderr を run.log へ逃がす" grep -q '> "\$WORK/run.log" 2>&1'
 # ログで上限にならない
 check "失敗時のログをバイトで区切る" grep -q 'tail -c 4000' "$SNIP"
 
-# 順序: gitleaks は codex より前。trap は gitleaks より後(手前の中断では
-# プロンプトを残し、直して再委譲できるようにする)
+# 順序: gitleaks < 目印取得 < trap < codex exec。gitleaks で止まった時点では目印を
+# 取らないので、直して同じディレクトリから再委譲できる
+line_of() { # line_of <パターン> — 見つからなければ 0(比較で必ず負けるため NG になる)
+  local n
+  n="$(grep -n -- "$1" "$SNIP" | head -1 | cut -d: -f1)"
+  printf '%s' "${n:-0}"
+}
 check "gitleaks が codex exec より前" test \
-  "$(grep -n 'gitleaks' "$SNIP" | head -1 | cut -d: -f1)" -lt \
-  "$(grep -n 'codex exec' "$SNIP" | head -1 | cut -d: -f1)"
-check "trap が gitleaks より後" test \
-  "$(grep -n 'gitleaks' "$SNIP" | head -1 | cut -d: -f1)" -lt \
-  "$(grep -n 'trap ' "$SNIP" | head -1 | cut -d: -f1)"
+  "$(line_of 'gitleaks')" -lt "$(line_of 'codex exec')"
+check "目印取得が gitleaks より後" test \
+  "$(line_of 'gitleaks')" -lt "$(line_of 'mkdir "\$WORK/run.claim"')"
+check "trap が目印取得より後" test \
+  "$(line_of 'mkdir "\$WORK/run.claim"')" -lt "$(line_of 'trap ')"
 check "trap が codex exec より前" test \
-  "$(grep -n 'trap ' "$SNIP" | head -1 | cut -d: -f1)" -lt \
-  "$(grep -n 'codex exec' "$SNIP" | head -1 | cut -d: -f1)"
-# 使用済みの目印は run.log。out.json は目印にならない(存在するのは正常終了した
-# 委譲だけで、その経路では作業ディレクトリごと消えている)
-check "使用済み判定が run.log を見る" \
-  grep -q '\[ -e "\$WORK/run.log" \] && exit 96' "$SNIP"
+  "$(line_of 'trap ')" -lt "$(line_of 'codex exec')"
+# 使用済みの目印は mkdir で原子的に取る。「存在を見てから作る」形だと、同じパスを
+# 2 つの呼び出しへ貼ったときに両方が判定を通り抜ける。run.log はリダイレクトで
+# 作られるので判定より後になり、out.json は正常終了した委譲にしか存在せず、その
+# 経路では作業ディレクトリごと消えている
+check "使用済み判定を mkdir で原子的に取る" \
+  grep -q 'mkdir "\$WORK/run.claim" 2>/dev/null || exit 96' "$SNIP"
+check_not "存在を見てから作る形の判定を残していない" \
+  grep -q '\[ -e "\$WORK/run.log" \]' "$SNIP"
 # 引数なしの mktemp -d は sandbox 内で Operation not permitted になる
 check "mktemp -d にテンプレートを渡す" \
   grep -q 'mktemp -d "\${TMPDIR:-/tmp}/codex-delegate-XXXXXX"' "$SNIP"
