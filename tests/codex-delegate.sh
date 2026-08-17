@@ -189,11 +189,12 @@ check "settings.json が valid JSON" jq -e . "$SETTINGS"
 # 無言で効かない
 check "excludedCommands に codex:* がある" \
   jq -e '.sandbox.excludedCommands | index("codex:*")' "$SETTINGS"
-# 無効化は false で表す。キーごと削除すると install-plugins.sh の
-# 「値が true のものだけ install」という判定材料が消える
-check "codex プラグインが false" \
-  jq -e '.enabledPlugins["codex@openai-codex"] == false' "$SETTINGS"
-check "codex プラグインのキー自体は残っている" \
+# プラグインは無効化ではなく撤去する。追跡ファイルのどこからも参照が消えていること —
+# enabledPlugins に残っていると install-plugins.sh が値を見て判断する対象になり、
+# extraKnownMarketplaces に残っていると新しいマシンで marketplace が登録される。
+# `claude plugin uninstall` は enabledPlugins のキー自体を落とすので、キーを false で
+# 残す形は CLI の実際の振る舞いと衝突する
+check_not "enabledPlugins から codex が消えている" \
   jq -e '.enabledPlugins | has("codex@openai-codex")' "$SETTINGS"
 check_not "extraKnownMarketplaces から openai-codex が消えている" \
   jq -e '.extraKnownMarketplaces | has("openai-codex")' "$SETTINGS"
