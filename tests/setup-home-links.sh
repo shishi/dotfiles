@@ -34,16 +34,31 @@ ng() {
 make_fixture() {
   local root="$1"
   mkdir -p "${root}/dotfiles/codex/skills" "${root}/dotfiles/nushell" \
-    "${root}/dotfiles/claude" "${root}/home" "${root}/config"
+    "${root}/dotfiles/claude" "${root}/home" "${root}/config" \
+    "${root}/agent-memory/.git" "${root}/bin"
   cp "$SETUP" "${root}/dotfiles/setup.sh"
+  cp "${REPO}/resolve-memory-dir.sh" "${root}/dotfiles/resolve-memory-dir.sh"
   : >"${root}/dotfiles/nushell/config.nu"
   : >"${root}/dotfiles/nushell/env.nu"
   : >"${root}/dotfiles/claude/install-plugins.sh"
+  cat >"${root}/bin/git" <<'EOF'
+#!/bin/sh
+printf '%s %s\n' "$(basename "$0")" "$*" >>"$SETUP_EXTERNAL_CALL_LOG"
+exit 97
+EOF
+  cp "${root}/bin/git" "${root}/bin/gh"
+  chmod +x "${root}/bin/git" "${root}/bin/gh"
 }
 
 run_setup() {
   local root="$1"
   HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
+    AGENT_MEMORY_DIR="${root}/agent-memory" \
+    SETUP_EXTERNAL_CALL_LOG="${root}/external-calls.log" PATH="${root}/bin:$PATH" \
+    FAIL_MEMORY_LINK_PREFIX="${FAIL_MEMORY_LINK_PREFIX:-}" \
+    SETUP_LN_LOG="${root}/ln.log" \
+    FAIL_MEMORY_MOVE_TARGET="${FAIL_MEMORY_MOVE_TARGET:-}" \
+    SETUP_MV_LOG="${root}/mv.log" SETUP_MV_STATE="${root}/mv.state" \
     bash "${root}/dotfiles/setup.sh" >>"${root}/setup.log" 2>&1
 }
 
@@ -66,9 +81,41 @@ resolves_to_file() {
   [ -n "$actual" ] && [ -n "$target" ] && [ "$actual" = "$target" ]
 }
 
+# memory transaction の temp/backup は target と同じ directory の immediate child。
+# glob が無マッチなら literal 自体を 1 回検査して偽になるため nullglob は不要。
+memory_setup_artifacts_absent() {
+  local directory artifact
+
+  for directory in "$@"; do
+    for artifact in "$directory"/memory.setup-*; do
+      if [ -e "$artifact" ] || [ -L "$artifact" ]; then
+        return 1
+      fi
+    done
+  done
+  return 0
+}
+
+install_failing_mv() {
+  local root="$1"
+
+  cat >"${root}/bin/mv" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$FAIL_MEMORY_MOVE_TARGET" ] && [ ! -e "$SETUP_MV_STATE" ]; then
+  : >"$SETUP_MV_STATE"
+  printf 'injected mv failure: %s\n' "$last" >>"$SETUP_MV_LOG"
+  exit 74
+fi
+exec /usr/bin/mv "$@"
+EOF
+  chmod +x "${root}/bin/mv"
+}
+
 # (1) fresh 環境で 2 本のリンクが張られる
 T1="$(mktemp -d)"
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -94,14 +141,27 @@ if resolves_to "${T1}/home/.agents/skills" "${T1}/dotfiles/codex/skills"; then
 else
   ng "~/.agents/skills does not link to dotfiles/codex/skills"
 fi
+if resolves_to "${T1}/dotfiles/claude/memory" "${T1}/agent-memory" \
+  && resolves_to "${T1}/dotfiles/codex/memory" "${T1}/agent-memory"; then
+  ok "Claude and Codex memory are symlinks to one canonical repository"
+else
+  ng "Claude and Codex memory do not both link to the canonical repository"
+fi
+if [ ! -s "${T1}/external-calls.log" ]; then
+  ok "an existing canonical repository is reused without a second clone"
+else
+  ng "setup.sh attempted an external clone despite the canonical repository: $(cat "${T1}/external-calls.log")"
+fi
 
 # (2) 再実行しても壊れない (setup.sh は何度でも流せる前提)
 run_setup "$T1"
 if resolves_to "${T1}/home/.codex" "${T1}/dotfiles/codex" \
-  && resolves_to "${T1}/home/.agents/skills" "${T1}/dotfiles/codex/skills"; then
-  ok "re-running setup.sh keeps both links intact"
+  && resolves_to "${T1}/home/.agents/skills" "${T1}/dotfiles/codex/skills" \
+  && resolves_to "${T1}/dotfiles/claude/memory" "${T1}/agent-memory" \
+  && resolves_to "${T1}/dotfiles/codex/memory" "${T1}/agent-memory"; then
+  ok "re-running setup.sh keeps home and memory links intact"
 else
-  ng "re-running setup.sh broke the Codex links"
+  ng "re-running setup.sh broke a home or memory link"
 fi
 
 # (3) 実ディレクトリは .back へ退避して張り直す。実行後は必ずこの checkout を指す。
@@ -309,7 +369,142 @@ else
   ng "setup.sh skipped the real skills path silently"
 fi
 
-# (9) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
+# (10) memory target は 2 本を一括で preflight する。
+T8="$(mktemp -d)"
+make_fixture "$T8"
+mkdir -p "${T8}/dotfiles/codex/memory"
+echo keep >"${T8}/dotfiles/codex/memory/marker"
+run_setup "$T8"
+if [ ! -e "${T8}/dotfiles/claude/memory" ] && [ ! -L "${T8}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T8}/dotfiles/codex/memory" ] \
+  && [ "$(cat "${T8}/dotfiles/codex/memory/marker" 2>/dev/null)" = keep ]; then
+  ok "a real Codex memory path blocks changes to both memory targets"
+else
+  ng "a real Codex memory path did not leave both memory targets unchanged"
+fi
+
+T9="$(mktemp -d)"
+make_fixture "$T9"
+mkdir -p "${T9}/foreign-memory"
+echo keep >"${T9}/foreign-memory/marker"
+ln -sfn "${T9}/foreign-memory" "${T9}/dotfiles/claude/memory"
+run_setup "$T9"
+if resolves_to "${T9}/dotfiles/claude/memory" "${T9}/foreign-memory" \
+  && [ ! -e "${T9}/dotfiles/codex/memory" ] && [ ! -L "${T9}/dotfiles/codex/memory" ] \
+  && [ "$(cat "${T9}/foreign-memory/marker" 2>/dev/null)" = keep ]; then
+  ok "a foreign valid memory link blocks changes to both memory targets"
+else
+  ng "a foreign valid memory link did not leave both memory targets unchanged"
+fi
+
+# directory だけでなく regular file を指す valid link も foreign target として扱う。
+# cd で解決すると file link と dangling を区別できず、誤って削除してしまう。
+rm -f "${T9}/dotfiles/claude/memory"
+echo keep >"${T9}/foreign-memory-file"
+ln -sfn "${T9}/foreign-memory-file" "${T9}/dotfiles/claude/memory"
+run_setup "$T9"
+if resolves_to_file "${T9}/dotfiles/claude/memory" "${T9}/foreign-memory-file" \
+  && [ ! -e "${T9}/dotfiles/codex/memory" ] && [ ! -L "${T9}/dotfiles/codex/memory" ] \
+  && [ "$(cat "${T9}/foreign-memory-file" 2>/dev/null)" = keep ]; then
+  ok "a foreign regular-file memory link blocks both memory targets"
+else
+  ng "a foreign regular-file memory link was overwritten or allowed the other target to change"
+fi
+
+T10="$(mktemp -d)"
+make_fixture "$T10"
+ln -sfn "${T10}/gone-memory" "${T10}/dotfiles/claude/memory"
+run_setup "$T10"
+if resolves_to "${T10}/dotfiles/claude/memory" "${T10}/agent-memory" \
+  && resolves_to "${T10}/dotfiles/codex/memory" "${T10}/agent-memory"; then
+  ok "a dangling memory link is repaired without splitting the targets"
+else
+  ng "a dangling memory link did not converge both targets on canonical memory"
+fi
+if grep -q 'claude/memory was a dangling link to .*gone-memory' "${T10}/setup.log"; then
+  ok "setup.sh reports the dangling memory target it discarded"
+else
+  ng "setup.sh repaired a dangling memory link without reporting its old target"
+fi
+
+# (11) 2 本目の symlink preparation が失敗しても、1 本目を先に本番 target へ
+# 反映せず、両 target を元の missing 状態に保つ。memory 以外の ln は委譲する。
+T11="$(mktemp -d)"
+make_fixture "$T11"
+cat >"${T11}/bin/ln" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+case "$last" in
+  "${FAIL_MEMORY_LINK_PREFIX}"*)
+    printf 'injected ln failure: %s\n' "$last" >>"$SETUP_LN_LOG"
+    exit 73
+    ;;
+esac
+exec /usr/bin/ln "$@"
+EOF
+chmod +x "${T11}/bin/ln"
+FAIL_MEMORY_LINK_PREFIX="${T11}/dotfiles/codex/memory" run_setup "$T11"
+if grep -q '^injected ln failure:' "${T11}/ln.log"; then
+  ok "the fixture injected the Codex memory link failure"
+else
+  ng "the fixture did not exercise the intended Codex memory link failure"
+fi
+if [ ! -e "${T11}/dotfiles/claude/memory" ] && [ ! -L "${T11}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T11}/dotfiles/codex/memory" ] && [ ! -L "${T11}/dotfiles/codex/memory" ] \
+  && memory_setup_artifacts_absent "${T11}/dotfiles/claude" "${T11}/dotfiles/codex" \
+  && grep -q 'could not prepare both memory links; targets unchanged' "${T11}/setup.log"; then
+  ok "a second preparation failure leaves both memory targets unchanged and clean"
+else
+  ng "a second preparation failure left a changed target or setup artifact"
+fi
+
+# (12) 2 本目の switch が失敗したら、先に切り替えた 1 本目も missing へ戻す。
+# wrapper は同じ destination の rollback move を妨げないよう 1 回だけ失敗する。
+T12="$(mktemp -d)"
+make_fixture "$T12"
+install_failing_mv "$T12"
+FAIL_MEMORY_MOVE_TARGET="${T12}/dotfiles/codex/memory" run_setup "$T12"
+if grep -q '^injected mv failure:' "${T12}/mv.log"; then
+  ok "the fixture injected the second memory switch failure"
+else
+  ng "the fixture did not exercise the intended second memory switch failure"
+fi
+if [ ! -e "${T12}/dotfiles/claude/memory" ] && [ ! -L "${T12}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T12}/dotfiles/codex/memory" ] && [ ! -L "${T12}/dotfiles/codex/memory" ] \
+  && memory_setup_artifacts_absent "${T12}/dotfiles/claude" "${T12}/dotfiles/codex" \
+  && grep -q 'memory link switch failed; rolled back both targets' "${T12}/setup.log"; then
+  ok "a second switch failure rolls both missing memory targets back cleanly"
+else
+  ng "a second switch failure did not restore both missing memory targets"
+fi
+
+# (13) dangling の prior state は存在有無だけでなく link literal まで同一に戻す。
+T13="$(mktemp -d)"
+make_fixture "$T13"
+claude_literal="${T13}/gone-claude-memory"
+codex_literal="${T13}/gone-codex-memory"
+ln -sfn "$claude_literal" "${T13}/dotfiles/claude/memory"
+ln -sfn "$codex_literal" "${T13}/dotfiles/codex/memory"
+install_failing_mv "$T13"
+FAIL_MEMORY_MOVE_TARGET="${T13}/dotfiles/codex/memory" run_setup "$T13"
+if grep -q '^injected mv failure:' "${T13}/mv.log"; then
+  ok "the fixture injected the dangling-target switch failure"
+else
+  ng "the fixture did not exercise the dangling-target switch failure"
+fi
+if [ -L "${T13}/dotfiles/claude/memory" ] && [ ! -e "${T13}/dotfiles/claude/memory" ] \
+  && [ "$(readlink "${T13}/dotfiles/claude/memory")" = "$claude_literal" ] \
+  && [ -L "${T13}/dotfiles/codex/memory" ] && [ ! -e "${T13}/dotfiles/codex/memory" ] \
+  && [ "$(readlink "${T13}/dotfiles/codex/memory")" = "$codex_literal" ] \
+  && memory_setup_artifacts_absent "${T13}/dotfiles/claude" "${T13}/dotfiles/codex" \
+  && grep -q 'memory link switch failed; rolled back both targets' "${T13}/setup.log"; then
+  ok "a second switch failure restores both dangling link literals cleanly"
+else
+  ng "a second switch failure did not restore both dangling link literals"
+fi
+
+# (14) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
 # 上書きしてよいが、リンクの形は同じ規則で張られること。
 T7="$(mktemp -d)"
 make_fixture "$T7"

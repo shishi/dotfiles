@@ -124,7 +124,16 @@ elif [[ $(uname -s) == MINGW* ]]; then
   ln -sfn ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
-# agent-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
+# realpath/readlink -f は実装によって dangling link にも非空を返すため、存在確認を
+# 先に行う。directory と regular file のどちらを指す valid link も物理解決できる。
+resolve_existing_path() {
+  local path="$1"
+
+  [ -e "$path" ] || return 1
+  realpath "$path" 2>/dev/null
+}
+
+# agent-memory (個人永続記憶, private repo) を Claude/Codex 双方から参照させる。
 # 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
 # 移動しない — 旧 claude-memory からの移行は
 # docs/superpowers/specs/2026-07-11-agent-memory-design.md の「移行手順」に従い手動)。
@@ -154,13 +163,230 @@ else
       || echo "setup.sh: could not clone agent-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/agent-memory.git ${AGENT_MEMORY_DIR}"
   fi
   if [ -d "${AGENT_MEMORY_DIR}" ]; then
-    if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
-      # 失敗を握ると記憶が無い状態が無言で残る。注入 hook は読み先が無ければ
-      # 何も言わないので、ここが唯一の手掛かりになる。
-      ln -sfn "${AGENT_MEMORY_DIR}" "${DOTDIR}/claude/memory" \
-        || echo "setup.sh: could not link ${DOTDIR}/claude/memory (Windows: enable Developer Mode or run elevated)"
+    memory_real="$(resolve_existing_path "${AGENT_MEMORY_DIR}")"
+    memory_blocked=false
+    memory_targets=("${DOTDIR}/claude/memory" "${DOTDIR}/codex/memory")
+    memory_states=(missing missing)
+    memory_literals=("" "")
+    memory_temps=("" "")
+    memory_backups=("" "")
+    memory_prepared=(false false)
+    memory_changed=(false false)
+    memory_detached=(false false)
+
+    # 片方を変更してからもう片方の衝突に気付くと split brain になるため、2 target
+    # とも先に調べる。dangling は実体を持たないので、報告したうえで修復可能とする。
+    for i in 0 1; do
+      memory_target="${memory_targets[$i]}"
+      if [ -L "$memory_target" ]; then
+        if [ ! -e "$memory_target" ]; then
+          memory_states[$i]=dangling
+          memory_literals[$i]="$(readlink "$memory_target")"
+          echo "setup.sh: ${memory_target} was a dangling link to $(readlink "$memory_target")"
+        else
+          target_real="$(resolve_existing_path "$memory_target")"
+          if [ -z "$target_real" ]; then
+            echo "setup.sh: could not resolve ${memory_target}; memory targets unchanged"
+            memory_blocked=true
+          elif [ "$target_real" != "$memory_real" ]; then
+            echo "setup.sh: ${memory_target} resolves elsewhere (${target_real}); memory targets unchanged"
+            memory_blocked=true
+          else
+            memory_states[$i]=canonical
+          fi
+        fi
+      elif [ -e "$memory_target" ]; then
+        echo "setup.sh: ${memory_target} exists as a real path; memory targets unchanged"
+        memory_blocked=true
+      fi
+    done
+
+    if [ "$memory_blocked" = true ]; then
+      echo "setup.sh: skip both memory links (manual setup required)"
     else
-      echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
+      # 両方の symlink を本番 target と別名で先に作る。1 本でも作成・検証に失敗
+      # したら、本番 target には触れず、自分が作成した temp だけを片付ける。
+      memory_prepare_ok=true
+      memory_failure=""
+      for i in 0 1; do
+        [ "${memory_states[$i]}" = canonical ] && continue
+        memory_target="${memory_targets[$i]}"
+        memory_temps[$i]="${memory_target}.setup-$$.new"
+        memory_backups[$i]="${memory_target}.setup-$$.back"
+        memory_temp="${memory_temps[$i]}"
+        memory_backup="${memory_backups[$i]}"
+
+        if [ -e "$memory_temp" ] || [ -L "$memory_temp" ] \
+          || [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; then
+          memory_prepare_ok=false
+          memory_failure="temporary path already exists for ${memory_target}"
+          break
+        fi
+        if ! ln -s "${AGENT_MEMORY_DIR}" "$memory_temp"; then
+          memory_prepare_ok=false
+          memory_failure="could not prepare ${memory_target}"
+          break
+        fi
+        memory_prepared[$i]=true
+        target_real="$(resolve_existing_path "$memory_temp")"
+        if [ ! -L "$memory_temp" ] || [ "$target_real" != "$memory_real" ]; then
+          memory_prepare_ok=false
+          memory_failure="prepared path is not a canonical symlink for ${memory_target}"
+          break
+        fi
+      done
+
+      # preparation 中に別プロセスが target を変更していないことも、switch 前に
+      # 2 本まとめて再確認する。
+      if [ "$memory_prepare_ok" = true ]; then
+        for i in 0 1; do
+          memory_target="${memory_targets[$i]}"
+          case "${memory_states[$i]}" in
+            canonical)
+              target_real="$(resolve_existing_path "$memory_target")"
+              if [ ! -L "$memory_target" ] || [ "$target_real" != "$memory_real" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+            dangling)
+              if [ ! -L "$memory_target" ] || [ -e "$memory_target" ] \
+                || [ "$(readlink "$memory_target")" != "${memory_literals[$i]}" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+            missing)
+              if [ -e "$memory_target" ] || [ -L "$memory_target" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+          esac
+          if [ "$memory_prepare_ok" != true ]; then
+            memory_failure="memory target changed during preparation: ${memory_target}"
+            break
+          fi
+        done
+      fi
+
+      if [ "$memory_prepare_ok" != true ]; then
+        for i in 0 1; do
+          memory_temp="${memory_temps[$i]}"
+          if [ "${memory_prepared[$i]}" = true ] \
+            && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
+            rm -fr "$memory_temp" \
+              || echo "setup.sh: could not clean temporary memory link ${memory_temp}"
+          fi
+        done
+        echo "setup.sh: could not prepare both memory links; targets unchanged (${memory_failure})"
+      else
+        # 全 temp の検証後だけ本番 target を切り替える。dangling link は literal を
+        # 保ったまま backup へ移し、途中失敗時に同じ link 自体を戻せるようにする。
+        memory_switch_ok=true
+        for i in 0 1; do
+          [ "${memory_states[$i]}" = canonical ] && continue
+          memory_target="${memory_targets[$i]}"
+          memory_temp="${memory_temps[$i]}"
+          memory_backup="${memory_backups[$i]}"
+
+          if [ "${memory_states[$i]}" = dangling ]; then
+            if mv "$memory_target" "$memory_backup"; then
+              memory_detached[$i]=true
+            else
+              memory_switch_ok=false
+              memory_failure="could not preserve dangling link ${memory_target}"
+              break
+            fi
+          fi
+          if mv "$memory_temp" "$memory_target"; then
+            memory_prepared[$i]=false
+            memory_changed[$i]=true
+          else
+            memory_switch_ok=false
+            memory_failure="could not switch ${memory_target}"
+            break
+          fi
+        done
+
+        # switch 後も両方が本物の symlink かつ同じ物理解決先でなければ失敗扱い。
+        if [ "$memory_switch_ok" = true ]; then
+          for i in 0 1; do
+            memory_target="${memory_targets[$i]}"
+            target_real="$(resolve_existing_path "$memory_target")"
+            if [ ! -L "$memory_target" ] || [ "$target_real" != "$memory_real" ]; then
+              memory_switch_ok=false
+              memory_failure="memory link postcondition failed for ${memory_target}"
+              break
+            fi
+          done
+        fi
+
+        # 成功時だけ旧 dangling backup を捨てる。失敗した removal も rollback の
+        # 対象にし、既に消した backup は保存した literal から best-effort で戻す。
+        if [ "$memory_switch_ok" = true ]; then
+          for i in 0 1; do
+            memory_backup="${memory_backups[$i]}"
+            [ -n "$memory_backup" ] || continue
+            if [ -L "$memory_backup" ]; then
+              if ! rm -f "$memory_backup"; then
+                memory_switch_ok=false
+                memory_failure="could not clean memory backup ${memory_backup}"
+                break
+              fi
+            elif [ -e "$memory_backup" ]; then
+              memory_switch_ok=false
+              memory_failure="memory backup changed unexpectedly: ${memory_backup}"
+              break
+            fi
+          done
+        fi
+
+        if [ "$memory_switch_ok" != true ]; then
+          memory_rollback_ok=true
+          for i in 1 0; do
+            memory_target="${memory_targets[$i]}"
+            memory_backup="${memory_backups[$i]}"
+
+            if [ "${memory_changed[$i]}" = true ]; then
+              if [ -L "$memory_target" ]; then
+                rm -f "$memory_target" || memory_rollback_ok=false
+              elif [ -e "$memory_target" ]; then
+                # 予期しない実パスは削除しない。
+                memory_rollback_ok=false
+              fi
+            fi
+            if [ "${memory_states[$i]}" = dangling ] \
+              && [ "${memory_detached[$i]}" = true ] \
+              && [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ]; then
+              if [ -L "$memory_backup" ]; then
+                mv "$memory_backup" "$memory_target" || memory_rollback_ok=false
+              else
+                ln -s "${memory_literals[$i]}" "$memory_target" \
+                  || memory_rollback_ok=false
+              fi
+            fi
+          done
+
+          for i in 0 1; do
+            memory_temp="${memory_temps[$i]}"
+            if [ "${memory_prepared[$i]}" = true ] \
+              && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
+              rm -fr "$memory_temp" || memory_rollback_ok=false
+            fi
+          done
+          for i in 0 1; do
+            memory_backup="${memory_backups[$i]}"
+            if [ -n "$memory_backup" ] \
+              && { [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; }; then
+              echo "setup.sh: rollback left memory backup at ${memory_backup}"
+              memory_rollback_ok=false
+            fi
+          done
+          if [ "$memory_rollback_ok" = true ]; then
+            echo "setup.sh: memory link switch failed; rolled back both targets (${memory_failure})"
+          else
+            echo "setup.sh: memory link switch failed; rollback incomplete (${memory_failure})"
+          fi
+        fi
+      fi
     fi
   else
     echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory symlink"
