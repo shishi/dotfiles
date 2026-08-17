@@ -32,7 +32,7 @@ input=$(cat)
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 notify() {
-  printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":sys.stdin.read()}}))'
+  jq -n --arg m "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:$m}}'
   exit 0
 }
 
@@ -61,5 +61,4 @@ ${calls}
 - GH_TOKEN などトークンを環境変数で渡しているなら keychain は要らないので、この形のままでよい
 EOF
 
-printf '%s' "$msg" | python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":sys.stdin.read()}}))'
-exit 0
+notify "$msg"
