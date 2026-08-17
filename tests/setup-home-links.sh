@@ -1058,10 +1058,14 @@ kill -TERM "$signal_pid"
 wait "$signal_pid"
 signal_status=$?
 if [ "$signal_status" -ne 0 ] \
-  && [ ! -e "${T29}/home/.agent-memory-setup.lock" ]; then
+  && [ ! -e "${T29}/home/.agent-memory-setup.lock" ] \
+  && [ ! -e "${T29}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T29}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T29}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T29}/dotfiles/codex/memory" ]; then
   ok "TERM releases a lock still owned by this setup process"
 else
-  ng "TERM leaked this process memory lock or returned success"
+  ng "TERM leaked this process memory lock, continued memory setup, or returned success"
 fi
 
 T34="$(mktemp -d)"
@@ -1074,10 +1078,14 @@ kill -INT "$signal_pid"
 wait "$signal_pid"
 signal_status=$?
 if [ "$signal_status" -eq 130 ] \
-  && [ ! -e "${T34}/home/.agent-memory-setup.lock" ]; then
+  && [ ! -e "${T34}/home/.agent-memory-setup.lock" ] \
+  && [ ! -e "${T34}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T34}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T34}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T34}/dotfiles/codex/memory" ]; then
   ok "INT exits 130 and releases a lock still owned by this setup process"
 else
-  ng "INT did not exit 130 or leaked this process memory lock"
+  ng "INT continued memory setup, did not exit 130, or leaked this process memory lock"
 fi
 
 # memory transactionの最初のswitch直後にTERMを受けても、中間状態で終了せず、

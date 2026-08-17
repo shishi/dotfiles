@@ -301,7 +301,6 @@ if [ "$resolve_status" -eq 0 ]; then
   if mkdir "$memory_lock" 2>/dev/null; then
     if printf '%s\n' "$memory_lock_token" >"$memory_lock_owner_file"; then
       memory_lock_owned=true
-      memory_transaction_critical=true
       trap 'release_memory_lock || :' EXIT
       trap 'handle_memory_signal 129' HUP
       trap 'handle_memory_signal 130' INT
@@ -379,6 +378,9 @@ else
     if [ "$memory_blocked" = true ]; then
       echo "setup.sh: skip both memory links (manual setup required)"
     else
+      # validation/re-resolution/preflightまではsignalで即時中止できる。tempを作り始めた
+      # 後だけはsplit stateを避けるため、transaction終了まで最初のsignalを遅延する。
+      memory_transaction_critical=true
       # 両方の symlink を本番 target と別名で先に作る。1 本でも作成・検証に失敗
       # したら、本番 target には触れず、自分が作成した temp だけを片付ける。
       memory_prepare_ok=true
