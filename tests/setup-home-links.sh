@@ -18,6 +18,11 @@ esac
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SETUP="${REPO}/setup.sh"
+SYSTEM_GIT="$(command -v git)"
+SYSTEM_MV="$(command -v mv)"
+SYSTEM_MKDIR="$(command -v mkdir)"
+SYSTEM_RM="$(command -v rm)"
+SYSTEM_LN="$(command -v ln)"
 PASS=0
 FAIL=0
 ok() {
@@ -35,16 +40,32 @@ make_fixture() {
   local root="$1"
   mkdir -p "${root}/dotfiles/codex/skills" "${root}/dotfiles/nushell" \
     "${root}/dotfiles/claude" "${root}/home" "${root}/config" \
-    "${root}/agent-memory/.git" "${root}/bin"
+    "${root}/agent-memory" "${root}/bin"
   cp "$SETUP" "${root}/dotfiles/setup.sh"
   cp "${REPO}/resolve-memory-dir.sh" "${root}/dotfiles/resolve-memory-dir.sh"
   : >"${root}/dotfiles/nushell/config.nu"
   : >"${root}/dotfiles/nushell/env.nu"
   : >"${root}/dotfiles/claude/install-plugins.sh"
+  : >"${root}/dotfiles/.gitconfig.win"
+  : >"${root}/dotfiles/.gitconfig.linux"
+  : >"${root}/dotfiles/.gitconfig.mac"
+  : >"${root}/agent-memory/MEMORY.md"
+  : >"${root}/agent-memory/CONVENTIONS.md"
+  "$SYSTEM_GIT" -C "${root}/agent-memory" init -q
+  "$SYSTEM_GIT" -C "${root}/agent-memory" branch -M main
+  "$SYSTEM_GIT" -C "${root}/agent-memory" config user.name setup-test
+  "$SYSTEM_GIT" -C "${root}/agent-memory" config user.email setup-test@example.invalid
+  "$SYSTEM_GIT" -C "${root}/agent-memory" remote add origin \
+    git@github.com:shishi/agent-memory.git
+  "$SYSTEM_GIT" -C "${root}/agent-memory" add MEMORY.md CONVENTIONS.md
+  "$SYSTEM_GIT" -C "${root}/agent-memory" commit -qm 'initial memory'
   cat >"${root}/bin/git" <<'EOF'
 #!/bin/sh
-printf '%s %s\n' "$(basename "$0")" "$*" >>"$SETUP_EXTERNAL_CALL_LOG"
-exit 97
+if [ "${1:-}" = clone ]; then
+  printf '%s %s\n' "$(basename "$0")" "$*" >>"$SETUP_EXTERNAL_CALL_LOG"
+  exit 97
+fi
+exec "$SETUP_SYSTEM_GIT" "$@"
 EOF
   cp "${root}/bin/git" "${root}/bin/gh"
   chmod +x "${root}/bin/git" "${root}/bin/gh"
@@ -54,11 +75,24 @@ run_setup() {
   local root="$1"
   HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
     AGENT_MEMORY_DIR="${root}/agent-memory" \
+    SETUP_SYSTEM_GIT="$SYSTEM_GIT" \
+    SETUP_SYSTEM_MV="$SYSTEM_MV" SETUP_SYSTEM_MKDIR="$SYSTEM_MKDIR" \
+    SETUP_SYSTEM_RM="$SYSTEM_RM" SETUP_SYSTEM_LN="$SYSTEM_LN" \
     SETUP_EXTERNAL_CALL_LOG="${root}/external-calls.log" PATH="${root}/bin:$PATH" \
     FAIL_MEMORY_LINK_PREFIX="${FAIL_MEMORY_LINK_PREFIX:-}" \
     SETUP_LN_LOG="${root}/ln.log" \
     FAIL_MEMORY_MOVE_TARGET="${FAIL_MEMORY_MOVE_TARGET:-}" \
     SETUP_MV_LOG="${root}/mv.log" SETUP_MV_STATE="${root}/mv.state" \
+    MUTATE_MEMORY_TARGET="${MUTATE_MEMORY_TARGET:-}" \
+    MUTATE_MEMORY_LITERAL="${MUTATE_MEMORY_LITERAL:-}" \
+    MUTATE_MEMORY_BACKUP_PREFIX="${MUTATE_MEMORY_BACKUP_PREFIX:-}" \
+    MUTATE_MEMORY_BACKUP_LITERAL="${MUTATE_MEMORY_BACKUP_LITERAL:-}" \
+    INTERLEAVE_MOVE_TARGET="${INTERLEAVE_MOVE_TARGET:-}" \
+    INTERLEAVE_MOVE_LITERAL="${INTERLEAVE_MOVE_LITERAL:-}" \
+    INTERLEAVE_MOVE_KIND="${INTERLEAVE_MOVE_KIND:-symlink}" \
+    SETUP_MOVE_OPTION_LOG="${root}/move-options.log" \
+    FAIL_BACKUP_RM_PREFIX="${FAIL_BACKUP_RM_PREFIX:-}" \
+    SETUP_RM_LOG="${root}/rm.log" \
     bash "${root}/dotfiles/setup.sh" >>"${root}/setup.log" 2>&1
 }
 
@@ -76,8 +110,8 @@ resolves_to() {
 resolves_to_file() {
   local link="$1" expected="$2" actual target
   [ -L "$link" ] || return 1
-  actual="$(readlink -f "$link" 2>/dev/null)" || return 1
-  target="$(readlink -f "$expected" 2>/dev/null)" || return 1
+  actual="$(realpath "$link" 2>/dev/null)" || return 1
+  target="$(realpath "$expected" 2>/dev/null)" || return 1
   [ -n "$actual" ] && [ -n "$target" ] && [ "$actual" = "$target" ]
 }
 
@@ -96,6 +130,121 @@ memory_setup_artifacts_absent() {
   return 0
 }
 
+directory_is_empty() {
+  local directory="$1" entry
+  for entry in "$directory"/* "$directory"/.[!.]* "$directory"/..?*; do
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+count_barrier_tokens() {
+  local directory="$1" token count=0
+  for token in "$directory"/arrived.*; do
+    [ -e "$token" ] || continue
+    count=$((count + 1))
+  done
+  printf '%s\n' "$count"
+}
+
+install_concurrency_barriers() {
+  local root="$1"
+
+  mkdir -p "${root}/barrier-lock" "${root}/barrier-mv"
+  cat >"${root}/bin/mkdir" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$SETUP_MEMORY_LOCK" ]; then
+  : >"$SETUP_LOCK_BARRIER/arrived.$$"
+  attempts=0
+  while [ "$(count=0; for token in "$SETUP_LOCK_BARRIER"/arrived.*; do [ -e "$token" ] && count=$((count + 1)); done; echo "$count")" -lt 2 ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 10 ] || exit 75
+    sleep 1
+  done
+  if "$SETUP_SYSTEM_MKDIR" "$@"; then
+    : >"$SETUP_LOCK_BARRIER/winner"
+    attempts=0
+    while [ ! -e "$SETUP_LOCK_BARRIER/loser" ]; do
+      attempts=$((attempts + 1))
+      [ "$attempts" -lt 10 ] || exit 77
+      sleep 1
+    done
+    exit 0
+  else
+    status=$?
+    : >"$SETUP_LOCK_BARRIER/loser"
+    exit "$status"
+  fi
+fi
+exec "$SETUP_SYSTEM_MKDIR" "$@"
+EOF
+  cat >"${root}/bin/mv" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$SETUP_CONCURRENT_MOVE_TARGET" ] && [ ! -d "$SETUP_MEMORY_LOCK" ]; then
+  : >"$SETUP_MV_BARRIER/arrived.$$"
+  attempts=0
+  while [ "$(count=0; for token in "$SETUP_MV_BARRIER"/arrived.*; do [ -e "$token" ] && count=$((count + 1)); done; echo "$count")" -lt 2 ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 10 ] || exit 76
+    sleep 1
+  done
+fi
+exec "$SETUP_SYSTEM_MV" "$@"
+EOF
+  chmod +x "${root}/bin/mkdir" "${root}/bin/mv"
+}
+
+install_recording_mv() {
+  local root="$1"
+
+  cat >"${root}/bin/mv" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"$SETUP_MOVE_OPTION_LOG"
+if [ "$1" = -h ]; then
+  shift
+  exec "$SETUP_SYSTEM_MV" -T "$@"
+fi
+exec "$SETUP_SYSTEM_MV" "$@"
+EOF
+  chmod +x "${root}/bin/mv"
+}
+
+install_fake_uname() {
+  local root="$1" platform="$2"
+
+  cat >"${root}/bin/uname" <<EOF
+#!/bin/sh
+printf '%s\\n' '$platform'
+EOF
+  chmod +x "${root}/bin/uname"
+}
+
+install_interleaving_mv() {
+  local root="$1"
+
+  cat >"${root}/bin/mv" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+if [ "$last" = "$INTERLEAVE_MOVE_TARGET" ] && [ ! -e "$SETUP_MV_STATE" ]; then
+  : >"$SETUP_MV_STATE"
+  if [ "$INTERLEAVE_MOVE_KIND" = file ]; then
+    printf 'keep\n' >"$INTERLEAVE_MOVE_TARGET"
+  else
+    "$SETUP_SYSTEM_LN" -s "$INTERLEAVE_MOVE_LITERAL" "$INTERLEAVE_MOVE_TARGET"
+  fi
+fi
+exec "$SETUP_SYSTEM_MV" "$@"
+EOF
+  chmod +x "${root}/bin/mv"
+}
+
 install_failing_mv() {
   local root="$1"
 
@@ -106,16 +255,100 @@ for arg in "$@"; do last="$arg"; done
 if [ "$last" = "$FAIL_MEMORY_MOVE_TARGET" ] && [ ! -e "$SETUP_MV_STATE" ]; then
   : >"$SETUP_MV_STATE"
   printf 'injected mv failure: %s\n' "$last" >>"$SETUP_MV_LOG"
+  if [ -n "$MUTATE_MEMORY_TARGET" ]; then
+    "$SETUP_SYSTEM_RM" -f "$MUTATE_MEMORY_TARGET"
+    "$SETUP_SYSTEM_LN" -s "$MUTATE_MEMORY_LITERAL" "$MUTATE_MEMORY_TARGET"
+  fi
+  if [ -n "$MUTATE_MEMORY_BACKUP_PREFIX" ]; then
+    for backup in "$MUTATE_MEMORY_BACKUP_PREFIX"*.back; do
+      [ -L "$backup" ] || continue
+      "$SETUP_SYSTEM_RM" -f "$backup"
+      "$SETUP_SYSTEM_LN" -s "$MUTATE_MEMORY_BACKUP_LITERAL" "$backup"
+    done
+  fi
   exit 74
 fi
-exec /usr/bin/mv "$@"
+exec "$SETUP_SYSTEM_MV" "$@"
 EOF
   chmod +x "${root}/bin/mv"
 }
 
+install_failing_backup_rm() {
+  local root="$1"
+
+  cat >"${root}/bin/rm" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+case "$last" in
+  "$FAIL_BACKUP_RM_PREFIX"*.back)
+    printf 'injected backup rm failure: %s\n' "$last" >>"$SETUP_RM_LOG"
+    exit 78
+    ;;
+esac
+exec "$SETUP_SYSTEM_RM" "$@"
+EOF
+  chmod +x "${root}/bin/rm"
+}
+
+install_signal_blocking_git() {
+  local root="$1"
+
+  cat >"${root}/bin/git" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *'rev-parse --show-toplevel'*)
+    if [ -n "${SIGNAL_FOREIGN_OWNER:-}" ]; then
+      printf '%s\n' "$SIGNAL_FOREIGN_OWNER" >"$HOME/.agent-memory-setup.lock/owner"
+    fi
+    : >"$SIGNAL_READY"
+    sleep 3
+    ;;
+esac
+exec "$SETUP_SYSTEM_GIT" "$@"
+EOF
+  chmod +x "${root}/bin/git"
+}
+
+start_setup_for_signal() {
+  local root="$1"
+  HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
+    AGENT_MEMORY_DIR="${root}/agent-memory" SETUP_SYSTEM_GIT="$SYSTEM_GIT" \
+    SETUP_SYSTEM_MV="$SYSTEM_MV" SETUP_SYSTEM_MKDIR="$SYSTEM_MKDIR" \
+    SETUP_SYSTEM_RM="$SYSTEM_RM" SETUP_SYSTEM_LN="$SYSTEM_LN" \
+    SETUP_EXTERNAL_CALL_LOG="${root}/external-calls.log" PATH="${root}/bin:$PATH" \
+    SIGNAL_READY="${root}/signal.ready" \
+    SIGNAL_FOREIGN_OWNER="${SIGNAL_FOREIGN_OWNER:-}" \
+    bash "${root}/dotfiles/setup.sh" >>"${root}/setup.log" 2>&1 &
+  SIGNAL_SETUP_PID=$!
+}
+
+start_setup_for_int() {
+  local root="$1"
+  set -m
+  HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
+    AGENT_MEMORY_DIR="${root}/agent-memory" SETUP_SYSTEM_GIT="$SYSTEM_GIT" \
+    SETUP_SYSTEM_MV="$SYSTEM_MV" SETUP_SYSTEM_MKDIR="$SYSTEM_MKDIR" \
+    SETUP_SYSTEM_RM="$SYSTEM_RM" SETUP_SYSTEM_LN="$SYSTEM_LN" \
+    SETUP_EXTERNAL_CALL_LOG="${root}/external-calls.log" PATH="${root}/bin:$PATH" \
+    SIGNAL_READY="${root}/signal.ready" SIGNAL_FOREIGN_OWNER="" \
+    bash "${root}/dotfiles/setup.sh" >>"${root}/setup.log" 2>&1 &
+  SIGNAL_SETUP_PID=$!
+  set +m
+}
+
+wait_for_file() {
+  local path="$1" attempts=0
+  while [ ! -e "$path" ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 10 ] || return 1
+    sleep 1
+  done
+}
+
 # (1) fresh 環境で 2 本のリンクが張られる
 T1="$(mktemp -d)"
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -441,7 +674,7 @@ case "$last" in
     exit 73
     ;;
 esac
-exec /usr/bin/ln "$@"
+exec "$SETUP_SYSTEM_LN" "$@"
 EOF
 chmod +x "${T11}/bin/ln"
 FAIL_MEMORY_LINK_PREFIX="${T11}/dotfiles/codex/memory" run_setup "$T11"
@@ -504,7 +737,355 @@ else
   ng "a second switch failure did not restore both dangling link literals"
 fi
 
-# (14) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
+# (14) resolver の既存 directory は正しい agent-memory repository のみ許可する。
+# canonical 判定に失敗しても、既存の dangling literal と missing target は変えない。
+assert_invalid_memory_repository_is_non_destructive() {
+  local root="$1" description="$2" literal
+  literal="${root}/gone-memory"
+
+  ln -sfn "$literal" "${root}/dotfiles/claude/memory"
+  run_setup "$root"
+  if [ -L "${root}/dotfiles/claude/memory" ] \
+    && [ ! -e "${root}/dotfiles/claude/memory" ] \
+    && [ "$(readlink "${root}/dotfiles/claude/memory")" = "$literal" ] \
+    && [ ! -e "${root}/dotfiles/codex/memory" ] \
+    && [ ! -L "${root}/dotfiles/codex/memory" ]; then
+    ok "$description leaves both memory targets unchanged"
+  else
+    ng "$description changed a memory target"
+  fi
+}
+
+T14="$(mktemp -d)"
+make_fixture "$T14"
+rm -rf "${T14}/agent-memory/.git"
+assert_invalid_memory_repository_is_non_destructive "$T14" "a plain directory"
+
+T15="$(mktemp -d)"
+make_fixture "$T15"
+rm -rf "${T15}/agent-memory/.git"
+mkdir "${T15}/agent-memory/.git"
+assert_invalid_memory_repository_is_non_destructive "$T15" "an empty .git directory"
+
+T16="$(mktemp -d)"
+make_fixture "$T16"
+"$SYSTEM_GIT" -C "${T16}/agent-memory" remote set-url origin \
+  git@github.com:shishi/agent-memory-lookalike.git
+assert_invalid_memory_repository_is_non_destructive "$T16" "a repository with a lookalike origin"
+
+T31="$(mktemp -d)"
+make_fixture "$T31"
+"$SYSTEM_GIT" -C "${T31}/agent-memory" remote set-url origin \
+  https://github.com/shishi/agent-memory.git
+run_setup "$T31"
+if resolves_to "${T31}/dotfiles/claude/memory" "${T31}/agent-memory" \
+  && resolves_to "${T31}/dotfiles/codex/memory" "${T31}/agent-memory"; then
+  ok "the canonical HTTPS origin is accepted"
+else
+  ng "the canonical HTTPS origin was rejected"
+fi
+
+T32="$(mktemp -d)"
+make_fixture "$T32"
+"$SYSTEM_GIT" -C "${T32}/agent-memory" remote set-url origin \
+  ssh://git@github.com/shishi/agent-memory.git
+run_setup "$T32"
+if resolves_to "${T32}/dotfiles/claude/memory" "${T32}/agent-memory" \
+  && resolves_to "${T32}/dotfiles/codex/memory" "${T32}/agent-memory"; then
+  ok "the canonical SSH URL origin is accepted"
+else
+  ng "the canonical SSH URL origin was rejected"
+fi
+
+# (15) concurrent setup は同じHOME lockをatomicに競争し、一方だけがmemory
+# transactionへ入る。旧実装では2processをfirst switch直前で同期させ、plain mvが
+# directory symlinkを追ってcanonical repo内へtempを移す実raceを再現する。
+T17="$(mktemp -d)"
+make_fixture "$T17"
+install_concurrency_barriers "$T17"
+export SETUP_MEMORY_LOCK="${T17}/home/.agent-memory-setup.lock"
+export SETUP_LOCK_BARRIER="${T17}/barrier-lock"
+export SETUP_MV_BARRIER="${T17}/barrier-mv"
+export SETUP_CONCURRENT_MOVE_TARGET="${T17}/dotfiles/claude/memory"
+run_setup "$T17" &
+setup_pid_1=$!
+run_setup "$T17" &
+setup_pid_2=$!
+wait "$setup_pid_1"
+setup_status_1=$?
+wait "$setup_pid_2"
+setup_status_2=$?
+unset SETUP_MEMORY_LOCK SETUP_LOCK_BARRIER SETUP_MV_BARRIER SETUP_CONCURRENT_MOVE_TARGET
+if [ "$(count_barrier_tokens "${T17}/barrier-lock")" = 2 ] \
+  && grep -q 'memory setup lock is busy' "${T17}/setup.log"; then
+  ok "concurrent setup atomically admits one memory transaction and stops the other"
+else
+  ng "concurrent setup did not exercise an atomic memory lock conflict"
+fi
+if [ "$setup_status_1" -eq 0 ] && [ "$setup_status_2" -eq 0 ] \
+  && resolves_to "${T17}/dotfiles/claude/memory" "${T17}/agent-memory" \
+  && resolves_to "${T17}/dotfiles/codex/memory" "${T17}/agent-memory" \
+  && memory_setup_artifacts_absent "${T17}/dotfiles/claude" "${T17}/dotfiles/codex" \
+  && memory_setup_artifacts_absent "${T17}/agent-memory"; then
+  ok "concurrent setup leaves both canonical links and no setup artifact"
+else
+  ng "concurrent setup changed a link or moved a setup artifact into canonical memory"
+fi
+
+# (16) rollback前に外部actorがこのprocessの設置linkを別linkへ置換した場合、
+# changed flagだけを根拠に消してはいけない。literal/realpath ownership不一致を検出し、
+# foreign linkを残してrollback incompleteを報告する。
+T18="$(mktemp -d)"
+make_fixture "$T18"
+mkdir -p "${T18}/foreign-memory"
+install_failing_mv "$T18"
+MUTATE_MEMORY_TARGET="${T18}/dotfiles/claude/memory" \
+  MUTATE_MEMORY_LITERAL="${T18}/foreign-memory" \
+  FAIL_MEMORY_MOVE_TARGET="${T18}/dotfiles/codex/memory" run_setup "$T18"
+if resolves_to "${T18}/dotfiles/claude/memory" "${T18}/foreign-memory" \
+  && [ ! -e "${T18}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T18}/dotfiles/codex/memory" ] \
+  && grep -q 'rollback incomplete' "${T18}/setup.log"; then
+  ok "rollback preserves a foreign link that replaced this process owned target"
+else
+  ng "rollback removed or overwrote a foreign replacement link"
+fi
+
+# (17) GNU/MSYS系は -T、macOS/BSD系は -h を選ぶ。テスト環境のGNU mvでBSD option
+# をそのまま実行できないため、recorderが -h を記録後 -Tへ翻訳してrename自体も行う。
+T19="$(mktemp -d)"
+make_fixture "$T19"
+install_recording_mv "$T19"
+run_setup "$T19"
+if grep -q '^-T -n ' "${T19}/move-options.log"; then
+  ok "GNU or MSYS memory rename selects mv -T -n"
+else
+  ng "GNU or MSYS memory rename did not select mv -T -n"
+fi
+
+T20="$(mktemp -d)"
+make_fixture "$T20"
+install_recording_mv "$T20"
+install_fake_uname "$T20" Darwin
+run_setup "$T20"
+if grep -q '^-h -n ' "${T20}/move-options.log"; then
+  ok "macOS or BSD memory rename selects mv -h -n"
+else
+  ng "macOS or BSD memory rename did not select mv -h -n"
+fi
+
+# revalidation後・rename直前にdestinationがdirectory symlinkへ変わっても、renameが
+# symlinkをfollowしてcanonical repo内へsourceを入れ子にしないことを実動作で見る。
+T21="$(mktemp -d)"
+make_fixture "$T21"
+mkdir -p "${T21}/foreign-destination"
+install_interleaving_mv "$T21"
+INTERLEAVE_MOVE_TARGET="${T21}/dotfiles/claude/memory" \
+  INTERLEAVE_MOVE_LITERAL="${T21}/foreign-destination" run_setup "$T21"
+if resolves_to "${T21}/dotfiles/claude/memory" "${T21}/foreign-destination" \
+  && [ ! -e "${T21}/dotfiles/codex/memory" ] \
+  && memory_setup_artifacts_absent "${T21}/dotfiles/claude" "${T21}/dotfiles/codex" \
+  && directory_is_empty "${T21}/foreign-destination" \
+  && grep -q 'rollback incomplete' "${T21}/setup.log"; then
+  ok "memory rename preserves an interposed foreign symlink"
+else
+  ng "memory rename overwrote or followed an interposed foreign symlink"
+fi
+
+T24="$(mktemp -d)"
+make_fixture "$T24"
+install_interleaving_mv "$T24"
+INTERLEAVE_MOVE_TARGET="${T24}/dotfiles/claude/memory" \
+  INTERLEAVE_MOVE_KIND=file run_setup "$T24"
+if [ ! -L "${T24}/dotfiles/claude/memory" ] \
+  && [ "$(cat "${T24}/dotfiles/claude/memory" 2>/dev/null)" = keep ] \
+  && [ ! -e "${T24}/dotfiles/codex/memory" ] \
+  && memory_setup_artifacts_absent "${T24}/dotfiles/claude" "${T24}/dotfiles/codex" \
+  && grep -q 'rollback incomplete' "${T24}/setup.log"; then
+  ok "memory rename preserves an interposed regular file"
+else
+  ng "memory rename overwrote an interposed regular file"
+fi
+
+# detached dangling backupのliteralが変わった場合はtargetへ戻さず、その場に保存する。
+T25="$(mktemp -d)"
+make_fixture "$T25"
+original_backup_literal="${T25}/gone-original"
+foreign_backup_literal="${T25}/gone-foreign"
+ln -sfn "$original_backup_literal" "${T25}/dotfiles/claude/memory"
+install_failing_mv "$T25"
+MUTATE_MEMORY_BACKUP_PREFIX="${T25}/dotfiles/claude/memory.setup-" \
+  MUTATE_MEMORY_BACKUP_LITERAL="$foreign_backup_literal" \
+  FAIL_MEMORY_MOVE_TARGET="${T25}/dotfiles/codex/memory" run_setup "$T25"
+backup_path="$(for path in "${T25}/dotfiles/claude"/memory.setup-*.back; do [ -L "$path" ] && { echo "$path"; break; }; done)"
+if [ -n "$backup_path" ] && [ "$(readlink "$backup_path")" = "$foreign_backup_literal" ] \
+  && [ ! -e "${T25}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T25}/dotfiles/claude/memory" ] \
+  && grep -q 'rollback incomplete' "${T25}/setup.log"; then
+  ok "rollback preserves a foreign replacement of the detached backup"
+else
+  ng "rollback moved or destroyed a foreign replacement backup"
+fi
+
+# backup cleanupが部分成功しても、削除済みと確認したown backupだけは保存literalから
+# targetへ再生成し、2本ともtransaction前のdangling状態へ戻す。
+T35="$(mktemp -d)"
+make_fixture "$T35"
+claude_cleanup_literal="${T35}/gone-claude-cleanup"
+codex_cleanup_literal="${T35}/gone-codex-cleanup"
+ln -sfn "$claude_cleanup_literal" "${T35}/dotfiles/claude/memory"
+ln -sfn "$codex_cleanup_literal" "${T35}/dotfiles/codex/memory"
+install_failing_backup_rm "$T35"
+FAIL_BACKUP_RM_PREFIX="${T35}/dotfiles/codex/memory.setup-" run_setup "$T35"
+if grep -q '^injected backup rm failure:' "${T35}/rm.log" \
+  && [ -L "${T35}/dotfiles/claude/memory" ] \
+  && [ "$(readlink "${T35}/dotfiles/claude/memory")" = "$claude_cleanup_literal" ] \
+  && [ -L "${T35}/dotfiles/codex/memory" ] \
+  && [ "$(readlink "${T35}/dotfiles/codex/memory")" = "$codex_cleanup_literal" ] \
+  && memory_setup_artifacts_absent "${T35}/dotfiles/claude" "${T35}/dotfiles/codex" \
+  && memory_setup_artifacts_absent "${T35}/agent-memory" \
+  && grep -q 'rolled back both targets' "${T35}/setup.log"; then
+  ok "partial backup cleanup restores both prior dangling links without artifacts"
+else
+  ng "partial backup cleanup lost prior state or reported a false rollback"
+fi
+
+# canonical repositoryはcommitとHEAD内のrequired blobsを必須とする。
+T26="$(mktemp -d)"
+make_fixture "$T26"
+rm -rf "${T26}/agent-memory/.git"
+"$SYSTEM_GIT" -C "${T26}/agent-memory" init -q
+"$SYSTEM_GIT" -C "${T26}/agent-memory" branch -M main
+"$SYSTEM_GIT" -C "${T26}/agent-memory" remote add origin git@github.com:shishi/agent-memory.git
+assert_invalid_memory_repository_is_non_destructive "$T26" "a commitless repository"
+
+T27="$(mktemp -d)"
+make_fixture "$T27"
+"$SYSTEM_GIT" -C "${T27}/agent-memory" rm -q CONVENTIONS.md
+"$SYSTEM_GIT" -C "${T27}/agent-memory" commit -qm 'remove conventions'
+: >"${T27}/agent-memory/CONVENTIONS.md"
+assert_invalid_memory_repository_is_non_destructive "$T27" "HEAD without a required memory blob"
+
+T33="$(mktemp -d)"
+make_fixture "$T33"
+"$SYSTEM_GIT" -C "${T33}/agent-memory" rm -q CONVENTIONS.md
+mkdir "${T33}/agent-memory/CONVENTIONS.md"
+: >"${T33}/agent-memory/CONVENTIONS.md/nested"
+"$SYSTEM_GIT" -C "${T33}/agent-memory" add CONVENTIONS.md
+"$SYSTEM_GIT" -C "${T33}/agent-memory" commit -qm 'replace conventions blob with tree'
+assert_invalid_memory_repository_is_non_destructive "$T33" "HEAD with a required path that is not a blob"
+
+# working treeのdirty/non-main/deleted状態はinjectorのdegraded判定へ委譲する。
+T28="$(mktemp -d)"
+make_fixture "$T28"
+"$SYSTEM_GIT" -C "${T28}/agent-memory" checkout -qb work-in-progress
+rm "${T28}/agent-memory/MEMORY.md" "${T28}/agent-memory/CONVENTIONS.md"
+echo dirty >"${T28}/agent-memory/uncommitted"
+run_setup "$T28"
+if resolves_to "${T28}/dotfiles/claude/memory" "${T28}/agent-memory" \
+  && resolves_to "${T28}/dotfiles/codex/memory" "${T28}/agent-memory"; then
+  ok "committed canonical memory links despite dirty non-main deleted working files"
+else
+  ng "validator incorrectly gated on working tree state"
+fi
+
+# owner token一致時はTERMでlockを解放し、foreign tokenへ変わったlockは残す。
+T29="$(mktemp -d)"
+make_fixture "$T29"
+install_signal_blocking_git "$T29"
+start_setup_for_signal "$T29"
+signal_pid="$SIGNAL_SETUP_PID"
+wait_for_file "${T29}/signal.ready"
+kill -TERM "$signal_pid"
+wait "$signal_pid"
+signal_status=$?
+if [ "$signal_status" -ne 0 ] \
+  && [ ! -e "${T29}/home/.agent-memory-setup.lock" ]; then
+  ok "TERM releases a lock still owned by this setup process"
+else
+  ng "TERM leaked this process memory lock or returned success"
+fi
+
+T34="$(mktemp -d)"
+make_fixture "$T34"
+install_signal_blocking_git "$T34"
+start_setup_for_int "$T34"
+signal_pid="$SIGNAL_SETUP_PID"
+wait_for_file "${T34}/signal.ready"
+kill -INT "$signal_pid"
+wait "$signal_pid"
+signal_status=$?
+if [ "$signal_status" -eq 130 ] \
+  && [ ! -e "${T34}/home/.agent-memory-setup.lock" ]; then
+  ok "INT exits 130 and releases a lock still owned by this setup process"
+else
+  ng "INT did not exit 130 or leaked this process memory lock"
+fi
+
+T30="$(mktemp -d)"
+make_fixture "$T30"
+install_signal_blocking_git "$T30"
+SIGNAL_FOREIGN_OWNER=foreign-owner start_setup_for_signal "$T30"
+signal_pid="$SIGNAL_SETUP_PID"
+wait_for_file "${T30}/signal.ready"
+kill -TERM "$signal_pid"
+wait "$signal_pid"
+signal_status=$?
+if [ "$signal_status" -ne 0 ] \
+  && [ "$(cat "${T30}/home/.agent-memory-setup.lock/owner" 2>/dev/null)" = foreign-owner ]; then
+  ok "TERM does not delete a lock whose owner token changed"
+else
+  ng "TERM deleted a foreign owner lock or returned success"
+fi
+
+# (18) stale lockは所有権を証明できないので削除せず、明示停止する。
+T22="$(mktemp -d)"
+make_fixture "$T22"
+mkdir "${T22}/home/.agent-memory-setup.lock"
+echo keep >"${T22}/home/.agent-memory-setup.lock/owner"
+run_setup "$T22"
+if [ "$(cat "${T22}/home/.agent-memory-setup.lock/owner" 2>/dev/null)" = keep ] \
+  && [ ! -e "${T22}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T22}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T22}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T22}/dotfiles/codex/memory" ] \
+  && grep -q 'memory setup lock is busy' "${T22}/setup.log"; then
+  ok "a stale memory lock is preserved and stops the transaction"
+else
+  ng "setup removed a stale lock or changed a memory target"
+fi
+
+# clone commandがsuccessでも結果を信用せず、既存repoと同じvalidatorへ通す。
+T23="$(mktemp -d)"
+make_fixture "$T23"
+rm -rf "${T23}/agent-memory"
+cat >"${T23}/bin/git" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = clone ]; then
+  last=""
+  for arg in "$@"; do last="$arg"; done
+  "$SETUP_SYSTEM_MKDIR" -p "$last"
+  : >"$last/MEMORY.md"
+  : >"$last/CONVENTIONS.md"
+  printf 'simulated invalid clone\n' >>"$SETUP_EXTERNAL_CALL_LOG"
+  exit 0
+fi
+exec "$SETUP_SYSTEM_GIT" "$@"
+EOF
+chmod +x "${T23}/bin/git"
+run_setup "$T23"
+if grep -q 'simulated invalid clone' "${T23}/external-calls.log" \
+  && [ ! -e "${T23}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T23}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T23}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T23}/dotfiles/codex/memory" ] \
+  && grep -q 'not the canonical agent-memory repository' "${T23}/setup.log"; then
+  ok "an invalid successful clone is rejected before linking"
+else
+  ng "setup trusted an invalid successful clone"
+fi
+
+# (19) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
 # 上書きしてよいが、リンクの形は同じ規則で張られること。
 T7="$(mktemp -d)"
 make_fixture "$T7"

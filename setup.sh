@@ -133,6 +133,117 @@ resolve_existing_path() {
   realpath "$path" 2>/dev/null
 }
 
+normalize_agent_memory_remote() {
+  local remote="$1"
+
+  remote="${remote%/}"
+  remote="${remote%.git}"
+  case "$remote" in
+    git@github.com:*) printf 'github.com/%s\n' "${remote#git@github.com:}" ;;
+    https://github.com/*) printf 'github.com/%s\n' "${remote#https://github.com/}" ;;
+    ssh://git@github.com/*) printf 'github.com/%s\n' "${remote#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_agent_memory_repository() {
+  local candidate="$1" candidate_real repository_root repository_real origin normalized_origin commit
+
+  candidate_real="$(resolve_existing_path "$candidate")" || {
+    echo "setup.sh: could not resolve agent-memory repository: $candidate"
+    return 1
+  }
+  repository_root="$(git -C "$candidate" rev-parse --show-toplevel 2>/dev/null)" || {
+    echo "setup.sh: agent-memory path is not a Git worktree: $candidate"
+    return 1
+  }
+  repository_real="$(resolve_existing_path "$repository_root")" || {
+    echo "setup.sh: could not resolve agent-memory worktree root: $repository_root"
+    return 1
+  }
+  # Git for Windows は C:/...、MSYS realpath は /tmp/... のように同じ inode を
+  # 別表記で返す。文字列でなく filesystem identity で root 一致を検証する。
+  [ "$candidate_real" -ef "$repository_real" ] || {
+    echo "setup.sh: agent-memory path is not the worktree root: $candidate"
+    return 1
+  }
+
+  origin="$(git -C "$candidate" remote get-url origin 2>/dev/null)" || {
+    echo "setup.sh: agent-memory repository has no origin: $candidate"
+    return 1
+  }
+  normalized_origin="$(normalize_agent_memory_remote "$origin")" || {
+    echo "setup.sh: unsupported agent-memory origin: $origin"
+    return 1
+  }
+  [ "$normalized_origin" = github.com/shishi/agent-memory ] || {
+    echo "setup.sh: unexpected agent-memory origin: $origin"
+    return 1
+  }
+  commit="$(git -C "$candidate" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    echo "setup.sh: agent-memory repository has no committed HEAD: $candidate"
+    return 1
+  }
+  if [ "$(git -C "$candidate" cat-file -t "$commit:MEMORY.md" 2>/dev/null)" != blob ] ||
+    [ "$(git -C "$candidate" cat-file -t "$commit:CONVENTIONS.md" 2>/dev/null)" != blob ]; then
+    echo "setup.sh: agent-memory HEAD lacks MEMORY.md or CONVENTIONS.md: $candidate"
+    return 1
+  fi
+}
+
+move_memory_path_no_follow() {
+  local source_path="$1" target_path="$2"
+
+  case "$(uname -s)" in
+    Darwin | FreeBSD | OpenBSD | NetBSD) mv -h -n "$source_path" "$target_path" ;;
+    *) mv -T -n "$source_path" "$target_path" ;;
+  esac
+}
+
+memory_symlink_matches() {
+  local link_path="$1" expected_literal="$2" expected_real="$3" actual_real
+
+  [ -L "$link_path" ] || return 1
+  [ "$(readlink "$link_path")" = "$expected_literal" ] || return 1
+  if [ -n "$expected_real" ]; then
+    actual_real="$(resolve_existing_path "$link_path")" || return 1
+    [ "$actual_real" = "$expected_real" ] || return 1
+  else
+    [ ! -e "$link_path" ] || return 1
+  fi
+}
+
+remove_owned_memory_symlink() {
+  local link_path="$1" expected_literal="$2" expected_real="$3"
+
+  memory_symlink_matches "$link_path" "$expected_literal" "$expected_real" ||
+    return 1
+  rm -f "$link_path"
+}
+
+release_memory_lock() {
+  [ "$memory_lock_owned" = true ] || return 0
+  [ -f "$memory_lock_owner_file" ] ||
+    return 1
+  [ "$(cat "$memory_lock_owner_file" 2>/dev/null)" = "$memory_lock_token" ] ||
+    return 1
+  rm -f "$memory_lock_owner_file" ||
+    return 1
+  memory_lock_owned=false
+  if ! rmdir "$memory_lock"; then
+    echo "setup.sh: could not release memory setup lock: $memory_lock"
+    return 1
+  fi
+}
+
+handle_memory_signal() {
+  local status="$1"
+
+  release_memory_lock || :
+  trap - EXIT HUP INT TERM
+  exit "$status"
+}
+
 # agent-memory (個人永続記憶, private repo) を Claude/Codex 双方から参照させる。
 # 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
 # 移動しない — 旧 claude-memory からの移行は
@@ -149,7 +260,31 @@ case "$AGENT_MEMORY_DIR" in
   /*) ;;
   *) resolve_status=1 ;;
 esac
-if [ "$resolve_status" -ne 0 ]; then
+memory_lock="$HOME/.agent-memory-setup.lock"
+memory_lock_owner_file="$memory_lock/owner"
+memory_lock_token="setup-$$"
+memory_lock_owned=false
+if [ "$resolve_status" -eq 0 ]; then
+  if mkdir "$memory_lock" 2>/dev/null; then
+    if printf '%s\n' "$memory_lock_token" >"$memory_lock_owner_file"; then
+      memory_lock_owned=true
+      trap 'release_memory_lock || :' EXIT
+      trap 'handle_memory_signal 129' HUP
+      trap 'handle_memory_signal 130' INT
+      trap 'handle_memory_signal 143' TERM
+    else
+      rmdir "$memory_lock" 2>/dev/null || :
+      echo "setup.sh: could not record memory setup lock owner; skip memory setup"
+      resolve_status=2
+    fi
+  else
+    echo "setup.sh: memory setup lock is busy ($memory_lock); skip memory setup"
+    resolve_status=2
+  fi
+fi
+if [ "$resolve_status" -eq 2 ]; then
+  :
+elif [ "$resolve_status" -ne 0 ]; then
   echo "setup.sh: could not resolve agent-memory location; skip memory setup"
 else
   if [ ! -d "${AGENT_MEMORY_DIR}" ]; then
@@ -162,7 +297,8 @@ else
       || gh repo clone shishi/agent-memory "${AGENT_MEMORY_DIR}" 2>/dev/null \
       || echo "setup.sh: could not clone agent-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/agent-memory.git ${AGENT_MEMORY_DIR}"
   fi
-  if [ -d "${AGENT_MEMORY_DIR}" ]; then
+  if [ -d "${AGENT_MEMORY_DIR}" ] &&
+    validate_agent_memory_repository "${AGENT_MEMORY_DIR}"; then
     memory_real="$(resolve_existing_path "${AGENT_MEMORY_DIR}")"
     memory_blocked=false
     memory_targets=("${DOTDIR}/claude/memory" "${DOTDIR}/codex/memory")
@@ -173,6 +309,7 @@ else
     memory_prepared=(false false)
     memory_changed=(false false)
     memory_detached=(false false)
+    memory_backup_removed=(false false)
 
     # 片方を変更してからもう片方の衝突に気付くと split brain になるため、2 target
     # とも先に調べる。dangling は実体を持たないので、報告したうえで修復可能とする。
@@ -272,8 +409,8 @@ else
           memory_temp="${memory_temps[$i]}"
           if [ "${memory_prepared[$i]}" = true ] \
             && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
-            rm -fr "$memory_temp" \
-              || echo "setup.sh: could not clean temporary memory link ${memory_temp}"
+            remove_owned_memory_symlink "$memory_temp" "${AGENT_MEMORY_DIR}" "$memory_real" ||
+              echo "setup.sh: could not clean owned temporary memory link ${memory_temp}"
           fi
         done
         echo "setup.sh: could not prepare both memory links; targets unchanged (${memory_failure})"
@@ -288,7 +425,9 @@ else
           memory_backup="${memory_backups[$i]}"
 
           if [ "${memory_states[$i]}" = dangling ]; then
-            if mv "$memory_target" "$memory_backup"; then
+            if move_memory_path_no_follow "$memory_target" "$memory_backup" &&
+              [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ] &&
+              memory_symlink_matches "$memory_backup" "${memory_literals[$i]}" ""; then
               memory_detached[$i]=true
             else
               memory_switch_ok=false
@@ -296,7 +435,9 @@ else
               break
             fi
           fi
-          if mv "$memory_temp" "$memory_target"; then
+          if move_memory_path_no_follow "$memory_temp" "$memory_target" &&
+            [ ! -e "$memory_temp" ] && [ ! -L "$memory_temp" ] &&
+            memory_symlink_matches "$memory_target" "${AGENT_MEMORY_DIR}" "$memory_real"; then
             memory_prepared[$i]=false
             memory_changed[$i]=true
           else
@@ -310,8 +451,8 @@ else
         if [ "$memory_switch_ok" = true ]; then
           for i in 0 1; do
             memory_target="${memory_targets[$i]}"
-            target_real="$(resolve_existing_path "$memory_target")"
-            if [ ! -L "$memory_target" ] || [ "$target_real" != "$memory_real" ]; then
+            if ! memory_symlink_matches "$memory_target" \
+              "${AGENT_MEMORY_DIR}" "$memory_real"; then
               memory_switch_ok=false
               memory_failure="memory link postcondition failed for ${memory_target}"
               break
@@ -326,11 +467,13 @@ else
             memory_backup="${memory_backups[$i]}"
             [ -n "$memory_backup" ] || continue
             if [ -L "$memory_backup" ]; then
-              if ! rm -f "$memory_backup"; then
+              if ! remove_owned_memory_symlink "$memory_backup" \
+                "${memory_literals[$i]}" ""; then
                 memory_switch_ok=false
                 memory_failure="could not clean memory backup ${memory_backup}"
                 break
               fi
+              memory_backup_removed[$i]=true
             elif [ -e "$memory_backup" ]; then
               memory_switch_ok=false
               memory_failure="memory backup changed unexpectedly: ${memory_backup}"
@@ -347,7 +490,9 @@ else
 
             if [ "${memory_changed[$i]}" = true ]; then
               if [ -L "$memory_target" ]; then
-                rm -f "$memory_target" || memory_rollback_ok=false
+                remove_owned_memory_symlink "$memory_target" \
+                  "${AGENT_MEMORY_DIR}" "$memory_real" ||
+                  memory_rollback_ok=false
               elif [ -e "$memory_target" ]; then
                 # 予期しない実パスは削除しない。
                 memory_rollback_ok=false
@@ -356,20 +501,56 @@ else
             if [ "${memory_states[$i]}" = dangling ] \
               && [ "${memory_detached[$i]}" = true ] \
               && [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ]; then
-              if [ -L "$memory_backup" ]; then
-                mv "$memory_backup" "$memory_target" || memory_rollback_ok=false
+              if memory_symlink_matches "$memory_backup" \
+                "${memory_literals[$i]}" ""; then
+                if ! move_memory_path_no_follow "$memory_backup" "$memory_target" \
+                  || { [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; } \
+                  || ! memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}" ""; then
+                  memory_rollback_ok=false
+                fi
+              elif [ "${memory_backup_removed[$i]}" = true ]; then
+                if ! ln -s "${memory_literals[$i]}" "$memory_target" \
+                  || ! memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}" ""; then
+                  memory_rollback_ok=false
+                fi
               else
-                ln -s "${memory_literals[$i]}" "$memory_target" \
-                  || memory_rollback_ok=false
+                memory_rollback_ok=false
               fi
             fi
+          done
+
+          # rollback成功を宣言する前に、2 targetともtransaction前の状態へ戻ったことを
+          # literal/realpath込みで確認する。mv -nのno-op成功もここで誤魔化せない。
+          for i in 0 1; do
+            memory_target="${memory_targets[$i]}"
+            case "${memory_states[$i]}" in
+              canonical)
+                target_real="$(resolve_existing_path "$memory_target")"
+                [ -L "$memory_target" ] && [ "$target_real" = "$memory_real" ] ||
+                  memory_rollback_ok=false
+                ;;
+              dangling)
+                memory_symlink_matches "$memory_target" \
+                  "${memory_literals[$i]}" "" ||
+                  memory_rollback_ok=false
+                ;;
+              missing)
+                if [ -e "$memory_target" ] || [ -L "$memory_target" ]; then
+                  memory_rollback_ok=false
+                fi
+                ;;
+            esac
           done
 
           for i in 0 1; do
             memory_temp="${memory_temps[$i]}"
             if [ "${memory_prepared[$i]}" = true ] \
               && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
-              rm -fr "$memory_temp" || memory_rollback_ok=false
+              remove_owned_memory_symlink "$memory_temp" \
+                "${AGENT_MEMORY_DIR}" "$memory_real" ||
+                memory_rollback_ok=false
             fi
           done
           for i in 0 1; do
@@ -389,9 +570,10 @@ else
       fi
     fi
   else
-    echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory symlink"
+    echo "setup.sh: ${AGENT_MEMORY_DIR} is not the canonical agent-memory repository; skip memory symlink"
   fi
 fi
+release_memory_lock || :
 
 # Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents/skills
 # は同じ実体の skills/ を指す (personal skills の参照先)。
