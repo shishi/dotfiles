@@ -319,7 +319,7 @@
     "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
-    "codex@openai-codex": true,
+    "codex@openai-codex": false,
     "double-shot-latte@superpowers-marketplace": true,
     "elements-of-style@superpowers-marketplace": false,
     "episodic-memory@superpowers-marketplace": false,
@@ -360,12 +360,6 @@
         "repo": "forrestchang/andrej-karpathy-skills"
       }
     },
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    },
     "superpowers-marketplace": {
       "source": {
         "source": "github",
@@ -384,7 +378,8 @@
   "sandbox": {
     "excludedCommands": [
       "git:*",
-      "gh:*"
+      "gh:*",
+      "codex:*"
     ]
   },
   "spinnerVerbs": {

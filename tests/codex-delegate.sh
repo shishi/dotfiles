@@ -152,6 +152,34 @@ check "OpenAI 枠を消費する旨を書いている" grep -q 'OpenAI' "$CLAUDE
 check "レビューを委譲しない旨を書いている" grep -q 'review-gate' "$CLAUDE_MD"
 
 echo
+echo "# settings.json / install-plugins.sh (配線)"
+
+check "settings.json が valid JSON" jq -e . "$SETTINGS"
+# これが無いと codex の app-server 初期化が Operation not permitted で落ちる。
+# 記法は <cmd>:* — コマンド名だけだと exact マッチになり、引数付きの呼び出しには
+# 無言で効かない
+check "excludedCommands に codex:* がある" \
+  jq -e '.sandbox.excludedCommands | index("codex:*")' "$SETTINGS"
+# 無効化は false で表す。キーごと削除すると install-plugins.sh の
+# 「値が true のものだけ install」という判定材料が消える
+check "codex プラグインが false" \
+  jq -e '.enabledPlugins["codex@openai-codex"] == false' "$SETTINGS"
+check "codex プラグインのキー自体は残っている" \
+  jq -e '.enabledPlugins | has("codex@openai-codex")' "$SETTINGS"
+check_not "extraKnownMarketplaces から openai-codex が消えている" \
+  jq -e '.extraKnownMarketplaces | has("openai-codex")' "$SETTINGS"
+# codex-review skill が使うので残す。撤去のついでに落とさない
+check "bypass grant は残っている" jq -e '
+  .permissions.allow
+  | index("Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)")' "$SETTINGS"
+# install-plugins.sh 側にマッピングが残っていると、新しいマシンで再導入される
+check_not "install-plugins.sh に openai-codex が無い" \
+  grep -q 'openai-codex' "$INSTALLER"
+# このファイルは #!/usr/bin/env bash で bash として実行される。SKILL.md の
+# スニペット(実行系は zsh)とは検査すべき言語が違う
+check "install-plugins.sh が bash -n を通る" bash -n "$INSTALLER"
+
+echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "codex-delegate: all checks passed"
 else
