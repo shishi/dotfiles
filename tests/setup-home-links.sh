@@ -93,6 +93,9 @@ run_setup() {
     SETUP_MOVE_OPTION_LOG="${root}/move-options.log" \
     FAIL_BACKUP_RM_PREFIX="${FAIL_BACKUP_RM_PREFIX:-}" \
     SETUP_RM_LOG="${root}/rm.log" \
+    SIGNAL_AFTER_MOVE_TARGET="${SIGNAL_AFTER_MOVE_TARGET:-}" \
+    MOVE_REPO_SOURCE="${MOVE_REPO_SOURCE:-}" MOVE_REPO_DEST="${MOVE_REPO_DEST:-}" \
+    MOVE_REPO_STATE="${root}/move-repo.state" \
     bash "${root}/dotfiles/setup.sh" >>"${root}/setup.log" 2>&1
 }
 
@@ -291,6 +294,61 @@ EOF
   chmod +x "${root}/bin/rm"
 }
 
+install_signaling_mv() {
+  local root="$1"
+
+  cat >"${root}/bin/mv" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+"$SETUP_SYSTEM_MV" "$@"
+status=$?
+if [ "$status" -eq 0 ] && [ "$last" = "$SIGNAL_AFTER_MOVE_TARGET" ] \
+  && [ ! -e "$SETUP_MV_STATE" ]; then
+  : >"$SETUP_MV_STATE"
+  kill -TERM "$PPID"
+fi
+exit "$status"
+EOF
+  chmod +x "${root}/bin/mv"
+}
+
+install_repo_moving_git() {
+  local root="$1"
+
+  cat >"${root}/bin/git" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *'cat-file -t '*'CONVENTIONS.md'*)
+    "$SETUP_SYSTEM_GIT" "$@"
+    status=$?
+    if [ "$status" -eq 0 ] && [ ! -e "$MOVE_REPO_STATE" ]; then
+      : >"$MOVE_REPO_STATE"
+      "$SETUP_SYSTEM_MV" "$MOVE_REPO_SOURCE" "$MOVE_REPO_DEST"
+    fi
+    exit "$status"
+    ;;
+esac
+exec "$SETUP_SYSTEM_GIT" "$@"
+EOF
+  chmod +x "${root}/bin/git"
+}
+
+install_recording_memory_ln() {
+  local root="$1"
+
+  cat >"${root}/bin/ln" <<'EOF'
+#!/bin/sh
+last=""
+for arg in "$@"; do last="$arg"; done
+case "$last" in
+  */memory.setup-*.new) printf '%s\n' "$last" >>"$SETUP_LN_LOG" ;;
+esac
+exec "$SETUP_SYSTEM_LN" "$@"
+EOF
+  chmod +x "${root}/bin/ln"
+}
+
 install_signal_blocking_git() {
   local root="$1"
 
@@ -348,7 +406,7 @@ wait_for_file() {
 
 # (1) fresh 環境で 2 本のリンクが張られる
 T1="$(mktemp -d)"
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}" "${T36:-}" "${T37:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -1020,6 +1078,52 @@ if [ "$signal_status" -eq 130 ] \
   ok "INT exits 130 and releases a lock still owned by this setup process"
 else
   ng "INT did not exit 130 or leaked this process memory lock"
+fi
+
+# memory transactionの最初のswitch直後にTERMを受けても、中間状態で終了せず、
+# transactionを完了してからlockを解放しsignal statusを返す。
+T36="$(mktemp -d)"
+make_fixture "$T36"
+install_signaling_mv "$T36"
+SIGNAL_AFTER_MOVE_TARGET="${T36}/dotfiles/claude/memory" run_setup "$T36"
+signal_status=$?
+if [ "$signal_status" -eq 143 ] \
+  && { { resolves_to "${T36}/dotfiles/claude/memory" "${T36}/agent-memory" \
+      && resolves_to "${T36}/dotfiles/codex/memory" "${T36}/agent-memory"; } \
+    || { [ ! -e "${T36}/dotfiles/claude/memory" ] \
+      && [ ! -L "${T36}/dotfiles/claude/memory" ] \
+      && [ ! -e "${T36}/dotfiles/codex/memory" ] \
+      && [ ! -L "${T36}/dotfiles/codex/memory" ]; }; } \
+  && memory_setup_artifacts_absent "${T36}/dotfiles/claude" "${T36}/dotfiles/codex" \
+  && memory_setup_artifacts_absent "${T36}/agent-memory" \
+  && [ ! -e "${T36}/home/.agent-memory-setup.lock" ]; then
+  ok "TERM during memory switch exits 143 after reaching a consistent state"
+else
+  ng "TERM during memory switch left a split or dirty transaction state"
+fi
+
+# validatorの最終git検査後にrepoが消えた場合、空のcanonical realpathをdanglingの
+# 期待値として扱わず、temp/targetに触れる前にfail closedする。
+T37="$(mktemp -d)"
+make_fixture "$T37"
+install_repo_moving_git "$T37"
+install_recording_memory_ln "$T37"
+MOVE_REPO_SOURCE="${T37}/agent-memory" MOVE_REPO_DEST="${T37}/moved-agent-memory" \
+  run_setup "$T37"
+if [ -d "${T37}/moved-agent-memory/.git" ] \
+  && [ ! -e "${T37}/agent-memory" ] \
+  && [ ! -e "${T37}/dotfiles/claude/memory" ] \
+  && [ ! -L "${T37}/dotfiles/claude/memory" ] \
+  && [ ! -e "${T37}/dotfiles/codex/memory" ] \
+  && [ ! -L "${T37}/dotfiles/codex/memory" ] \
+  && memory_setup_artifacts_absent "${T37}/dotfiles/claude" "${T37}/dotfiles/codex" \
+  && memory_setup_artifacts_absent "${T37}/moved-agent-memory" \
+  && [ ! -s "${T37}/ln.log" ] \
+  && [ ! -e "${T37}/home/.agent-memory-setup.lock" ] \
+  && grep -q 'could not resolve canonical agent-memory repository' "${T37}/setup.log"; then
+  ok "repository disappearance after validation is non-destructive"
+else
+  ng "repository disappearance was accepted as an empty canonical target"
 fi
 
 T30="$(mktemp -d)"

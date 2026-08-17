@@ -203,20 +203,33 @@ move_memory_path_no_follow() {
 memory_symlink_matches() {
   local link_path="$1" expected_literal="$2" expected_real="$3" actual_real
 
+  [ -n "$expected_real" ] || return 1
   [ -L "$link_path" ] || return 1
   [ "$(readlink "$link_path")" = "$expected_literal" ] || return 1
-  if [ -n "$expected_real" ]; then
-    actual_real="$(resolve_existing_path "$link_path")" || return 1
-    [ "$actual_real" = "$expected_real" ] || return 1
-  else
-    [ ! -e "$link_path" ] || return 1
-  fi
+  actual_real="$(resolve_existing_path "$link_path")" || return 1
+  [ "$actual_real" = "$expected_real" ] || return 1
+}
+
+dangling_memory_symlink_matches() {
+  local link_path="$1" expected_literal="$2"
+
+  [ -L "$link_path" ] || return 1
+  [ "$(readlink "$link_path")" = "$expected_literal" ] || return 1
+  [ ! -e "$link_path" ] || return 1
 }
 
 remove_owned_memory_symlink() {
   local link_path="$1" expected_literal="$2" expected_real="$3"
 
   memory_symlink_matches "$link_path" "$expected_literal" "$expected_real" ||
+    return 1
+  rm -f "$link_path"
+}
+
+remove_owned_dangling_memory_symlink() {
+  local link_path="$1" expected_literal="$2"
+
+  dangling_memory_symlink_matches "$link_path" "$expected_literal" ||
     return 1
   rm -f "$link_path"
 }
@@ -239,9 +252,27 @@ release_memory_lock() {
 handle_memory_signal() {
   local status="$1"
 
+  if [ -z "$memory_pending_signal_status" ]; then
+    memory_pending_signal_status="$status"
+  fi
+  if [ "$memory_transaction_critical" = true ]; then
+    return 0
+  fi
   release_memory_lock || :
   trap - EXIT HUP INT TERM
-  exit "$status"
+  exit "$memory_pending_signal_status"
+}
+
+finish_memory_transaction() {
+  local status
+
+  release_memory_lock || :
+  memory_transaction_critical=false
+  if [ -n "$memory_pending_signal_status" ]; then
+    status="$memory_pending_signal_status"
+    trap - EXIT HUP INT TERM
+    exit "$status"
+  fi
 }
 
 # agent-memory (個人永続記憶, private repo) を Claude/Codex 双方から参照させる。
@@ -264,10 +295,13 @@ memory_lock="$HOME/.agent-memory-setup.lock"
 memory_lock_owner_file="$memory_lock/owner"
 memory_lock_token="setup-$$"
 memory_lock_owned=false
+memory_transaction_critical=false
+memory_pending_signal_status=""
 if [ "$resolve_status" -eq 0 ]; then
   if mkdir "$memory_lock" 2>/dev/null; then
     if printf '%s\n' "$memory_lock_token" >"$memory_lock_owner_file"; then
       memory_lock_owned=true
+      memory_transaction_critical=true
       trap 'release_memory_lock || :' EXIT
       trap 'handle_memory_signal 129' HUP
       trap 'handle_memory_signal 130' INT
@@ -299,8 +333,12 @@ else
   fi
   if [ -d "${AGENT_MEMORY_DIR}" ] &&
     validate_agent_memory_repository "${AGENT_MEMORY_DIR}"; then
-    memory_real="$(resolve_existing_path "${AGENT_MEMORY_DIR}")"
     memory_blocked=false
+    memory_real="$(resolve_existing_path "${AGENT_MEMORY_DIR}")"
+    if [ -z "$memory_real" ]; then
+      echo "setup.sh: could not resolve canonical agent-memory repository; memory targets unchanged"
+      memory_blocked=true
+    fi
     memory_targets=("${DOTDIR}/claude/memory" "${DOTDIR}/codex/memory")
     memory_states=(missing missing)
     memory_literals=("" "")
@@ -427,7 +465,7 @@ else
           if [ "${memory_states[$i]}" = dangling ]; then
             if move_memory_path_no_follow "$memory_target" "$memory_backup" &&
               [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ] &&
-              memory_symlink_matches "$memory_backup" "${memory_literals[$i]}" ""; then
+              dangling_memory_symlink_matches "$memory_backup" "${memory_literals[$i]}"; then
               memory_detached[$i]=true
             else
               memory_switch_ok=false
@@ -467,8 +505,8 @@ else
             memory_backup="${memory_backups[$i]}"
             [ -n "$memory_backup" ] || continue
             if [ -L "$memory_backup" ]; then
-              if ! remove_owned_memory_symlink "$memory_backup" \
-                "${memory_literals[$i]}" ""; then
+              if ! remove_owned_dangling_memory_symlink "$memory_backup" \
+                "${memory_literals[$i]}"; then
                 memory_switch_ok=false
                 memory_failure="could not clean memory backup ${memory_backup}"
                 break
@@ -501,18 +539,18 @@ else
             if [ "${memory_states[$i]}" = dangling ] \
               && [ "${memory_detached[$i]}" = true ] \
               && [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ]; then
-              if memory_symlink_matches "$memory_backup" \
-                "${memory_literals[$i]}" ""; then
+              if dangling_memory_symlink_matches "$memory_backup" \
+                "${memory_literals[$i]}"; then
                 if ! move_memory_path_no_follow "$memory_backup" "$memory_target" \
                   || { [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; } \
-                  || ! memory_symlink_matches "$memory_target" \
-                    "${memory_literals[$i]}" ""; then
+                  || ! dangling_memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}"; then
                   memory_rollback_ok=false
                 fi
               elif [ "${memory_backup_removed[$i]}" = true ]; then
                 if ! ln -s "${memory_literals[$i]}" "$memory_target" \
-                  || ! memory_symlink_matches "$memory_target" \
-                    "${memory_literals[$i]}" ""; then
+                  || ! dangling_memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}"; then
                   memory_rollback_ok=false
                 fi
               else
@@ -532,8 +570,8 @@ else
                   memory_rollback_ok=false
                 ;;
               dangling)
-                memory_symlink_matches "$memory_target" \
-                  "${memory_literals[$i]}" "" ||
+                dangling_memory_symlink_matches "$memory_target" \
+                  "${memory_literals[$i]}" ||
                   memory_rollback_ok=false
                 ;;
               missing)
@@ -573,7 +611,7 @@ else
     echo "setup.sh: ${AGENT_MEMORY_DIR} is not the canonical agent-memory repository; skip memory symlink"
   fi
 fi
-release_memory_lock || :
+finish_memory_transaction
 
 # Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents/skills
 # は同じ実体の skills/ を指す (personal skills の参照先)。
