@@ -63,6 +63,79 @@ check "上限の合計が 22,600 文字を超えない" jq -e '
   <= 22600' "$SCHEMA"
 
 echo
+echo "# SKILL.md (手順)"
+
+check "存在する" test -f "$SKILL"
+check "frontmatter に name: codex-delegate" \
+  grep -q '^name: codex-delegate$' "$SKILL"
+check "frontmatter に description" grep -q '^description:' "$SKILL"
+
+# 実行スニペットを抽出する。```sh のブロックだけが実行対象で、プロンプトへ入れる
+# 文面は ```text に置くため巻き込まれない。
+# 引数なしの mktemp は Claude Code の Bash sandbox 内で Operation not permitted に
+# なるため、テンプレートを ${TMPDIR:-/tmp} 配下で明示する
+SNIP="$(mktemp "${TMPDIR:-/tmp}/codex-delegate-snippet-XXXXXX")"
+awk '/^```sh$/{f=1;next} /^```$/{f=0} f' "$SKILL" > "$SNIP"
+check "sh ブロックが存在する" test -s "$SNIP"
+# 実行系は zsh 5.9.2。bash -n は別言語を検査するので使わない。POSIX sh の範囲に
+# 収まっていることも見る
+check "zsh -n を通る" zsh -n "$SNIP"
+check "sh -n を通る"  sh  -n "$SNIP"
+# heredoc をスニペットに持たせない。引用符なしのデリミタは本文中の $(...) と
+# バッククォートを実行し、引用符ありでも本文にデリミタと同一の行があればそこで
+# 終わって残りがコマンドになる。どちらも構文としては正しいので -n では捕まらない
+check_not "スニペットに heredoc が無い" grep -q '<<' "$SNIP"
+check_not "bypass フラグを使っていない" grep -q 'dangerously-bypass' "$SNIP"
+
+# -s は必ず指定する。config.toml の sandbox_mode は workspace-write なので、
+# 指定を落とすと explore でも書き込みできる状態で走る
+check "codex exec に -s がある" grep -q 'codex exec -s' "$SNIP"
+# 6 つの --config を毎回渡す。-s が上書きするのは sandbox_mode だけで、書き込み
+# ルート・ネットワーク到達性・承認方針・記憶機能は config 側に残る
+for key in approval_policy=never features.memories=false \
+           memories.generate_memories=false memories.use_memories=false \
+           sandbox_workspace_write.network_access=false \
+           'sandbox_workspace_write.writable_roots=\[\]'; do
+  check "--config $key がある" grep -q -- "--config .*$key" "$SNIP"
+done
+check "--config がちょうど 6 個" \
+  test "$(grep -c -- '--config' "$SNIP")" -eq 6
+
+# 出力経路: 最終メッセージは -o のファイルへ、進捗出力は run.log へ。
+# リダイレクトを落とすと codex の進捗出力全文が context に入り、削減の目的が失われる
+check "最終メッセージを out.json へ落とす" grep -q -- '-o "$WORK/out.json"' "$SNIP"
+check "stdout/stderr を run.log へ逃がす" grep -q '> "\$WORK/run.log" 2>&1' "$SNIP"
+# 失敗時のログはバイトで区切る。行数では 1 行が JSON や stack trace になる codex の
+# ログで上限にならない
+check "失敗時のログをバイトで区切る" grep -q 'tail -c 4000' "$SNIP"
+
+# 順序: gitleaks は codex より前。trap は gitleaks より後(手前の中断では
+# プロンプトを残し、直して再委譲できるようにする)
+check "gitleaks が codex exec より前" test \
+  "$(grep -n 'gitleaks' "$SNIP" | head -1 | cut -d: -f1)" -lt \
+  "$(grep -n 'codex exec' "$SNIP" | head -1 | cut -d: -f1)"
+check "trap が gitleaks より後" test \
+  "$(grep -n 'gitleaks' "$SNIP" | head -1 | cut -d: -f1)" -lt \
+  "$(grep -n 'trap ' "$SNIP" | head -1 | cut -d: -f1)"
+check "trap が codex exec より前" test \
+  "$(grep -n 'trap ' "$SNIP" | head -1 | cut -d: -f1)" -lt \
+  "$(grep -n 'codex exec' "$SNIP" | head -1 | cut -d: -f1)"
+# 使用済みの目印は run.log。out.json は目印にならない(存在するのは正常終了した
+# 委譲だけで、その経路では作業ディレクトリごと消えている)
+check "使用済み判定が run.log を見る" \
+  grep -q '\[ -e "\$WORK/run.log" \] && exit 96' "$SNIP"
+# 引数なしの mktemp -d は sandbox 内で Operation not permitted になる
+check "mktemp -d にテンプレートを渡す" \
+  grep -q 'mktemp -d "\${TMPDIR:-/tmp}/codex-delegate-XXXXXX"' "$SNIP"
+
+rm -f "$SNIP"
+
+# 終了コードは障害対応中に読まれる。3 つすべてに意味と対処が書かれていること
+for code in 96 97 98; do
+  check "終了コード $code を説明している" grep -q "| $code |" "$SKILL"
+done
+
+echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "codex-delegate: all checks passed"
 else
