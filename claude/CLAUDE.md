@@ -8,11 +8,35 @@ Kent Beck 流(TDD / Tidy First)を好む。
 
 # Review gate
 
-At key milestones — right after creating or updating specs/PRDs/plans, after major implementation steps (≥5 files / new module / public API / infra-config changes), and before commit/PR/merge/release — run the review-gate skill and iterate review→fix→re-review until clean.
+## 起動条件
 
-If the review-gate skill is unavailable (undeployed machine etc.): substitute a subagent-based run of the `/code-review` skill (or superpowers:requesting-code-review if that is unavailable). Skip the gate only when no review mechanism exists at all, and report that it was skipped.
+次のマイルストーンで review-gate skill を実行し、review → fix → re-review を clean になるまで反復する。
 
-Required on every review path (explicitly in scope — do not filter these out as documentation nitpicks): comments and docs that state an operational or recovery procedure are reviewed for content correctness, the same standard as code. Flag (a) a documented recipe that fails when followed literally, (b) a quantity stated without the limit or budget it consumes, (c) a non-general term used without definition. These mislead at the moment they are read, which is during an incident.
+- spec / PRD / plan の作成・更新の直後
+- major な実装ステップの後(5 ファイル以上 / 新規モジュール / 公開 API / インフラ・設定の変更)
+- commit / PR / merge / release の前
+
+review-gate skill が使えない場合(未配備のマシン等)は、`/code-review` skill を subagent で実行して代替する(それも無ければ superpowers:requesting-code-review)。レビュー機構が一つも無いときに限りゲートを省略し、省略した旨を報告する。
+
+## すべてのレビュー経路で必須
+
+運用手順・復旧手順を述べたコメントと doc は、コードと同じ基準で**内容の正しさ**をレビューする。これは明示的にスコープ内であり、「ドキュメントの些末な指摘」として除外しない。次を指摘する。
+
+- 記述どおりに実行すると失敗する手順
+- 消費する上限・予算が示されないまま書かれた数値
+- 定義なしで使われる非一般語
+
+いずれも読まれた瞬間に読み手を誤らせる。読まれるのは障害対応中である。
+
+## 過剰化の停止条件
+
+レビューゲートは欠陥を見つける仕組みであって、降りる条件を持たない。**補助部品**(保険・ガード・検出器など、依頼の中核ではない実装)を作るときは以下も適用する。
+
+- **blocker の解消手段に「削除」を含める。** 指摘箇所が補助部品なら、「直す」と同じ資格で「その部品を削る」を選択肢に置く。ゲートの条件は「clean になるまで直す」ではなく「clean になるまで直すか削る」。
+- **spec-scope レーンには累積で判定させる。** 渡すのは前回からの差分ではなく「当初の依頼の逐語 + 現在の総差分」。問いは「この総量が最初から 1 つの提案として出てきたら、依頼に対して承認したか」。増分ごとの妥当性判定では、各ステップが個別に正しいまま総量が壊れるのを止められない。
+- **収束しない兆候が出たら修正をやめる。** 同一部品で 2 巡連続して新規 blocker が出たら、それは直し方の問題ではなくアプローチが収束していない証拠。3 巡目の修正に入らず、単純化・削除・現状維持のいずれかをユーザーの判断に出す。
+- **作る前に上限を宣言する。** 補助部品の実装方式を決める時点で、ファイル数・レビュー巡回数・「やらないこと」を同時に宣言する。超えた時点で自動的に相談へ戻る。
+- **降りる条件を欠陥数で書かない。** 「その部品が無かったら、何がどれだけの頻度で壊れるか」で書く。根本原因が既に解決しているなら、補助部品の期待値は低いと見積もる。
 
 # 個人永続記憶 (personal memory)
 
