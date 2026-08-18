@@ -158,6 +158,7 @@ exit "$rc"
 | 96 | 作業ディレクトリの取り違え(名前の形が違う、`prompt.md` が無い、既に委譲を起動済み、目印を作れない) | 1 回目が返したパスを貼り直す。起動済みなら 1 からやり直す。`mkdir` のエラー文が出ていればそれが原因 |
 | 97 | codex は正常終了したが JSON を返さなかった | この呼び出しの stdout に出ているログ末尾で切り分け、再委譲する |
 | 98 | gitleaks で停止(検出あり、または gitleaks が動かない) | 検出をゼロにして 3 を再実行する(作業ディレクトリは残っている) |
+| 143 | Bash の timeout に達して SIGTERM で終了した | 結果は残っていない。新しい作業ディレクトリで 1 からやり直す。長い委譲は background で流す |
 
 その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、ログ末尾(最大 4,000
 バイト)が stdout に出る。
@@ -190,32 +191,36 @@ exit "$rc"
 
 ## 長時間の委譲
 
-**timeout は委譲を終了させない。** Bash の timeout に達した呼び出しはプロセスを殺されず
-background task へ移され、codex はそのまま走り続けて、完了時に通知が届く。timeout が決めるのは
-「foreground で待つ時間」であって、委譲が終わる期限ではない。
+**Bash の timeout は委譲を殺す。** timeout に達した委譲は SIGTERM で終了し(終了コード 143)、codex が
+起動した子プロセスまで終わる。`out.json` は書かれていないので**結果は残らない**。timeout は
+「foreground で待つ時間」ではなく、その委譲の期限である。
 
-**受け取れるのは foreground と同じ範囲だけである。** background task の出力に載るのは、成功なら
-JSON 全文、失敗ならログ末尾の 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
-(正常終了で作業ディレクトリごと消える)。timeout にしたことで得られる情報が増えるわけではない。
+これは sandbox 外を走るコマンドの挙動で、sandbox 内のコマンドとは逆である(sandbox 内では timeout で
+background task へ移され、走り続けて完了通知が届く)。委譲は `codex:*` が `sandbox.excludedCommands` に
+あるため必ず sandbox 外を通り、殺される側になる。
 
-- timeout に達したら **完了通知を待ってから差分を見る。** 待たずに見ると、読んでいる最中に codex が
-  worktree を書き換える
-- したがって `workspace-write` を foreground で実行しても、多重 writer を機構としては防げない。
-  timeout 後は Claude が次の作業へ進めるようになるため、**書き込みが走っている間に次の委譲を
-  始めないことは Claude が守る規律になる。** 開始前に、未完了の委譲 background task が無いことを
-  確認する
+**したがって長い委譲は timeout に任せず、最初から background で始める。** background で起動した委譲は
+完走し、JSON は task の出力ファイルに載り、完了時に通知が届く。
+
+- **timeout で死んだ委譲はやり直しになる。** 作業ディレクトリは残る(SIGTERM では `trap` が発火しない)
+  が、`run.claim` があるので同じパスでは 96 になる。1 からやり直す。プロンプトを流用したいときは、
+  新しい作業ディレクトリへ Write し直す
+- **background で流した委譲は生き続ける。** そのため `workspace-write` を background で流すと、
+  多重 writer を機構としては防げない。**書き込みが走っている間に次の委譲を始めないことは Claude が
+  守る規律になる。** 開始前に、未完了の委譲 background task が無いことを確認する
 - **プロセスの残存をコマンドで確かめない。** Claude Code の Bash sandbox 内では `pgrep` も `ps` も
   `operation not permitted` で失敗しながら終了コード 0 を返すため、外部のプロセス一覧に問い合わせる
   形の確認はすべて「該当なし」と答える。走っている委譲の有無は、未完了の background task が
   あるかどうかで見る
-- 止める必要があるときは、その background task を停止する。停止は codex まで届く
-- **timeout の指定は、結果をインラインで受け取るか通知で受け取るかの選択である。** 既定は
-  `BASH_DEFAULT_TIMEOUT_MS` の 5 分、指定できる上限は `BASH_MAX_TIMEOUT_MS` の 20 分(いずれも
-  `claude/settings.json` で定める)。結果を待つ必要がない委譲は、短い timeout で background へ
-  流してよい。委譲を分ける基準は timeout ではなく差分の大きさで、1 回でレビューできる範囲に収める
-- `read-only` の explore は background で実行してよい。書き込まないため、同時に複数走っても
-  worktree は壊れない。JSON は background task の stdout に載る — `out.json` はシェルの終了とともに
-  消えるため、ファイルとしては残らない
+- 止める必要があるときは、その background task を停止する。停止は codex とその子プロセスまで届く
+- **受け取れるのは foreground と同じ範囲だけである。** background task の出力に載るのは、成功なら
+  JSON 全文、失敗ならログ末尾の 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
+  (正常終了で作業ディレクトリごと消える)。background にしたことで得られる情報が増えるわけではない
+- 既定の timeout は `BASH_DEFAULT_TIMEOUT_MS` の 5 分、指定できる上限は `BASH_MAX_TIMEOUT_MS` の
+  20 分(いずれも `claude/settings.json` で定める)。foreground で流すなら、この時間内に終わる大きさに
+  分ける。委譲を分ける基準は差分の大きさでもあり、1 回でレビューできる範囲に収める
+- `read-only` の explore は background で流してよい。書き込まないため、同時に複数走っても worktree は
+  壊れない
 
 ## 外部へ送られる範囲
 
