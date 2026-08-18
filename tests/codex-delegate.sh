@@ -107,9 +107,16 @@ for key in approval_policy=never features.memories=false \
 done
 check "--config がちょうど 6 個" \
   test "$(grep -c -- '--config' "$SNIP")" -eq 6
-# ネットワークはタスクごとの選択だが、既定は遮断でなければならない。変数の宣言が
-# true で始まっていると、開けるつもりのないタスクにも開いた状態で渡る
-check "NET の既定が false" grep -q '^NET=false' "$SNIP"
+# ネットワークはタスクごとの選択だが、既定は遮断でなければならない。`^NET=false` の
+# 存在だけでは足りない — あとから `NET=true` が続けば最終値は true になり、開けるつもりの
+# ないタスクにも開いた状態で渡る。代入がちょうど 1 件で、それが false であることを見る
+check "NET への代入がちょうど 1 件" \
+  test "$(grep -c '^NET=' "$SNIP")" -eq 1
+check "その 1 件が NET=false" grep -q '^NET=false' "$SNIP"
+# read-only では network_access が読まれないため、NET=true にしても遮断されたまま走る。
+# エラーにならず素通りする組み合わせなので、手順が明示していること
+check "read-only で NET が効かない旨を書いている" \
+  grep -q 'read-only` では `NET=true` が黙って効かない' "$SKILL"
 
 # 出力経路: 最終メッセージは -o のファイルへ、進捗出力は run.log へ。
 # リダイレクトを落とすと codex の進捗出力全文が context に入り、削減の目的が失われる

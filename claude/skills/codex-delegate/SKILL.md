@@ -54,11 +54,17 @@ codex CLI に作業をさせ、Claude が受け取るのは JSON 1 通だけに�
 - レビューゲートそのもの。review-gate skill と codex-review skill の責務
 - gitleaks がプロンプトから secrets を検出した作業。検出をゼロにできるまで委譲しない
 
-**ネットワークはタスクごとに決める。** 既定は遮断(`NET=false`)で、依存の取得・更新・lockfile の
-更新のようにネットワークが要るタスクだけ `NET=true` にする。遮断したまま渡すと、その作業は
-`Could not resolve host` で完了しない。依存が未インストールのリポジトリでは、AGENTS.md が求める
-テストや build の実行自体がこれに当たる。開けるとその委譲の送信先が OpenAI だけではなくなるので、
-必要なタスクに限る。
+**ネットワークはタスクごとに決める。ただし `workspace-write` でしか開けられない。** 既定は遮断
+(`NET=false`)で、依存の取得・更新・lockfile の更新のようにネットワークが要るタスクだけ
+`NET=true` にする。遮断したまま渡すと、その作業は `Could not resolve host` で完了しない。依存が
+未インストールのリポジトリでは、AGENTS.md が求めるテストや build の実行自体がこれに当たる。
+開けるとその委譲の送信先が OpenAI だけではなくなるので、必要なタスクに限る。
+
+**`read-only` では `NET=true` が黙って効かない。** `sandbox_workspace_write.network_access` は
+`workspace-write` のときだけ読まれるキーで、`read-only` の委譲は `NET` の値に関わらず
+`Could not resolve host` になる。エラーにならず素通りするので、設定したつもりで遮断されたまま走る。
+ネットワークが要る調査は explore では行えない — `workspace-write` の委譲にする(書き込まないタスク
+でも `-s workspace-write` を選ぶ必要がある)。
 
 ## 手順
 
@@ -111,7 +117,7 @@ mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、ま�
 trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対象
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
 MODE=read-only          # 委譲種別に応じて read-only か workspace-write
-NET=false               # ネットワークが要るタスクだけ true
+NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
 codex exec -s "$MODE" \
   --config approval_policy=never \
   --config features.memories=false \
