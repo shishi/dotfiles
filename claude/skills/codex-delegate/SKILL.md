@@ -2,7 +2,7 @@
 name: codex-delegate
 description: |
   作業を codex CLI へ委譲して Claude Code のトークン消費を抑えるアダプタ。
-  探索(read-only)・定型作業・plan 確定後の実装を codex exec で実行し、
+  探索(read-only)・定型作業・実装を codex exec で実行し、
   結果は schema で上限を切った JSON 1 通だけ受け取る。CLAUDE.md の判断基準で
   自律発火する、または /codex-delegate で明示発動。レビューは委譲しない
   (review-gate / codex-review の責務)。
@@ -32,10 +32,12 @@ codex CLI に作業をさせ、Claude が受け取るのは JSON 1 通だけに�
 5. OpenAI 側の利用枠が残っていること。枯渇すると起動直後に失敗する(メッセージは認証方式に
    よって異なる)。**Claude 側の消費を減らす代わりにこの枠を消費する。** 委譲が正味の節約に
    なっているかは、context 増分ではなく両方の消費で判断する
-6. **`workspace-write` の委譲は worktree が clean な状態から始める。** clean でなければ委譲
-   しない。codex による上書きは差分に現れない — 既存の未コミット変更を書き直されると、その
-   内容は worktree からも差分からも消え、元々そこに何があったかを復元する材料が残らない。
-   事後の検査では捕まえられないので、上書きされる対象が存在しない状態から始める
+6. `workspace-write` の委譲では、**未コミット変更と委譲先が触る範囲が重なるかを見て決める。**
+   codex による上書きは差分に現れない — 既存の未コミット変更を書き直されると、その内容は
+   worktree からも差分からも消え、元々そこに何があったかを復元する材料が残らない。事後の検査
+   では捕まえられないので、重なりうるなら委譲する前に commit するか、委譲の範囲を変える。
+   Claude 自身の編集は置換前の文字列の一致を要求するため他の編集を踏み潰さないが、codex に
+   その保証はない — ここは「委譲した変更を自分の変更と同じに扱う」原則が実際に破れる箇所である
 
 ## 委譲種別
 
@@ -43,7 +45,7 @@ codex CLI に作業をさせ、Claude が受け取るのは JSON 1 通だけに�
 |---|---|---|
 | explore | `read-only` | 所在探索、原因調査、コードベースの読解 |
 | chore | `workspace-write` | リネーム、同パターンの横展開、テスト追加 |
-| implement | `workspace-write` | plan 確定後の feature / bugfix |
+| implement | `workspace-write` | feature / bugfix |
 
 委譲しないもの:
 
@@ -51,9 +53,12 @@ codex CLI に作業をさせ、Claude が受け取るのは JSON 1 通だけに�
 - 個人記憶リポジトリへの書き込み。記憶は Claude Code 専用で、権限境界の管理主体を移さない
 - レビューゲートそのもの。review-gate skill と codex-review skill の責務
 - gitleaks がプロンプトから secrets を検出した作業。検出をゼロにできるまで委譲しない
-- ネットワークを要する作業(依存の取得・更新、lockfile の更新)。`network_access=false` を
-  毎回固定しているため完了しない。依存が未インストールのリポジトリでは、AGENTS.md が求める
-  テストや build の実行自体がこれに当たる
+
+**ネットワークはタスクごとに決める。** 既定は遮断(`NET=false`)で、依存の取得・更新・lockfile の
+更新のようにネットワークが要るタスクだけ `NET=true` にする。遮断したまま渡すと、その作業は
+`Could not resolve host` で完了しない。依存が未インストールのリポジトリでは、AGENTS.md が求める
+テストや build の実行自体がこれに当たる。開けるとその委譲の送信先が OpenAI だけではなくなるので、
+必要なタスクに限る。
 
 ## 手順
 
@@ -106,12 +111,13 @@ mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、ま�
 trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対象
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
 MODE=read-only          # 委譲種別に応じて read-only か workspace-write
+NET=false               # ネットワークが要るタスクだけ true
 codex exec -s "$MODE" \
   --config approval_policy=never \
   --config features.memories=false \
   --config memories.generate_memories=false \
   --config memories.use_memories=false \
-  --config sandbox_workspace_write.network_access=false \
+  --config "sandbox_workspace_write.network_access=$NET" \
   --config 'sandbox_workspace_write.writable_roots=[]' \
   --output-schema "$WORK/schema.json" \
   -o "$WORK/out.json" \
@@ -126,89 +132,22 @@ tail -c 4000 "$WORK/run.log"
 exit "$rc"
 ```
 
-この形を変えない理由:
+スニペットの各要素がなぜその形・その位置なのかは
+[ADR 20260818-155956](../../../docs/ADR/20260818-155956-run-codex-delegation-as-two-bash-calls.md)
+にある。**変える前にそれを読む。** 順序・リダイレクト・目印の取り方・`--config` はいずれも、
+実測した失敗を避けるために選ばれている。読まずに単純化すると、その失敗が戻る。
 
-- **実行・結果の取り出し・後始末は同じ呼び出しに置く。** `trap ... EXIT` はそのシェルの終了で
-  発火するため、後始末を別の呼び出しに分けると、次の呼び出しが読む前に `out.json` が消える。
-  プロンプトの書き出しはこの制約の対象外で、先に分けてよい
-- **codex の stdout と stderr はログファイルへ逃がす。** `-o` は最終メッセージを別に保存する
-  だけで、リダイレクトしなければ codex の進捗出力全文が Claude の context に入り、削減の目的が
-  失われる。同一の実行で比べると、stdout は進捗ログとトークン計を含む全文を返し、`-o` の
-  ファイルは最終メッセージだけを持つ
-- **失敗時にログを出す量はバイトで区切る。** 行数で区切ると、1 行が JSON や stack trace になる
-  codex のログでは上限にならない。失敗経路は認証切れや利用枠切れで日常的に通るため、ここが
-  唯一の無制限経路にならないようにする
-- **`trap` は目印を取ったあとに張る。** それより手前の中断(パスの形の不一致・取り違え・gitleaks の
-  検出)はどれも作業ディレクトリを残す。とくに secrets の検出は「直して再委譲する」ことが前提の
-  経路であり、ここでプロンプトを消すと、直すたびに数 KB のプロンプトを書き直すことになる。
-  残しておけば、同じディレクトリへ修正版を Write して 3 を再実行するだけで済む
-- **`trap ... EXIT` は、張ったあとにシェルが終了すればどの経路でも発火する。** `cp` の失敗も
-  含む。発火しないのは 2 つだけ — timeout ではプロセスが生き続けるため発火せず、停止では trap を
-  走らせずに終了するため発火しない。この 2 経路では作業ディレクトリが残るが、作成先はシステムの
-  一時領域であり、その掃除に委ねる
-- **「使用済み」の目印は `mkdir` で取る。** `mkdir` は既存のディレクトリに対して失敗するので、
-  存在を見てから作る形と違って確認と作成のあいだに隙が無い。同じパスを 2 つの呼び出しへ貼って
-  しまっても、`mkdir` に成功した側だけが codex を起動する。目印は codex の起動前に作られ、
-  正常終了では作業ディレクトリごと消え、timeout と停止では残る。`out.json` や `run.log` は
-  目印に使えない — `out.json` が存在するのは正常終了した委譲だけで、その経路ではディレクトリごと
-  消えており、`run.log` はリダイレクトで作られるので判定より後になる
-- **`mkdir` の失敗を握り潰さない。** 96 は「既に起動している」と「目印を作れない」の両方を含む。
-  容量不足や権限の異常も 96 になるが、`mkdir` のエラー文がそのまま出るので区別できる。
-  これは 98 が「検出あり」と「gitleaks が動かない」を兼ねるのと同じ形で、どちらも委譲しない条件
-  であることが共通している
-- **目印を取るのは gitleaks より後である。** secrets の検出は「直して再委譲する」経路なので、
-  検出で止まった時点ではまだ目印を取らない。同じディレクトリへ修正版を Write して 3 を再実行できる
-- **パスの形を照合してから `rm -rf` の射程に入れる。** `trap` が消すのは変数の指す先なので、
-  貼り間違いがそのまま任意のディレクトリの再帰削除になる。手順自身がパスの貼り間違いを想定して
-  いる以上、これは到達する経路である。1 回目が作る名前(`codex-delegate-` + `mktemp` の 6 文字)に
-  合わないパスでは、`prompt.md` の有無を見る前に止まる。`prompt.md` という名前のファイルは委譲の
-  作業ディレクトリに限らず存在しうるため、その存在だけでは射程を絞れない。
-  **照合は最後の要素(`${WORK##*/}`)に対して行う。** パス全体を `*/codex-delegate-*` で見る形だと
-  末尾の `*` が `/` も含むため、`/tmp/codex-delegate-ABCDEF/../victim` のような形が通り抜ける
-- **`cp` は目印の取得と `trap` より後に置く。** 目印より前だと、同じパスを貼った 2 つ目の呼び出しが
-  実行中の委譲の `schema.json` を書き換えうる。`trap` より後だと、`cp` が失敗したとき(skill 未配備)
-  に作業ディレクトリが後始末の対象に入る — 目印を取った後なので、そのディレクトリはもう再利用
-  できない
-- **`-s` は必ず指定する。** `~/.codex/config.toml` の `sandbox_mode` は `workspace-write` で、
-  `-s` を書かない `codex exec` は explore でも書き込みできる状態で走る。この既定値は codex 自身が
-  config を書き換えることもあるため、呼び出し側で毎回固定し、指定のない呼び出し形を持たない
-- **6 つの `--config` を毎回渡す。** `-s` が上書きするのは `sandbox_mode` だけで、`workspace-write`
-  のときの書き込みルートとネットワーク到達性は config の `[sandbox_workspace_write]` 側に残る。
-  承認方針も sandbox の外へ出る操作を認めるかを決めるキーなので同格に扱う。CLI で渡せば、
-  config が書き換わっても次の実行には効かない
-- **`writable_roots=[]` でも一時領域は書き込み可能なままである。** `workspace-write` は
-  workspace の外を拒否するが、`$TMPDIR` と `/tmp` は codex 側の既定で許可される。塞がるのは
-  ホームディレクトリなど「workspace でも一時領域でもない場所」であり、書き込みが workspace 内に
+実行時に効く事実だけここに置く。
+
+- **`writable_roots=[]` でも `$TMPDIR` と `/tmp` は書き込み可能なままである。** 塞がるのは
+  ホームディレクトリなど「workspace でも一時領域でもない場所」で、書き込みが workspace 内に
   限られるとは読まない。委譲の作業ディレクトリも一時領域にあるため、委譲先からは他の委譲の
   作業ディレクトリにも手が届く
-- **codex の記憶機能は委譲のあいだ切る。** `~/.codex/config.toml` は native memories を有効に
-  しているため、既定では委譲ごとに codex が記憶を書き、過去の実行から抽出した内容を次の委譲へ
-  持ち込む。これは差分に現れない入力であり、リポジトリを跨いで運ばれる。対話的な codex 利用では
-  有効のままにするため、config 側は変えない
-- **キーの綴りが正しいことと効いていることは別である。** 綴りは、空の `CODEX_HOME` を向けた
-  `--strict-config` で検証する(通常の config には Windows 用の `computer_use` セクションがあり、
-  strict を付けると起動前に落ちる)。strict を外した実行では存在しないキーが素通りするので、
-  受理されたことは何の証拠にもならない。**`codex --version` が変わったら綴りと実挙動を再検証
-  する** — キーが改名された場合の失敗は、エラーではなく沈黙として現れる
-- **`--dangerously-bypass-approvals-and-sandbox` は使わない。** その形は codex-review skill が
-  「他の用途で使わない」と限定しており、本 skill はその限定を変更しない。**`-s` が効かない環境
-  では委譲しない** — `read-only` も `workspace-write` も担保にならず、explore が読むだけである
-  保証も失われる。codex の Linux sandbox は unprivileged user namespace を要する bubblewrap に
-  依存するため、多くのコンテナでは機能しない
-- 作業ディレクトリは実行ごとに `mktemp -d` で作り、リポジトリ外に置く。固定名は前回の残骸を
-  次の実行が読む取り違えを招き、リポジトリ内だと untracked としてレビュー対象に混入する
-- **`${TMPDIR:-/tmp}` 配下に明示的に作り、以降は絶対パスで扱う。** 引数なしの `mktemp -d` は
-  sandbox 内で `Operation not permitted` になる(`TMPDIR` 環境変数を見ず、許可されていない
-  場所を使うため)。`/tmp` 直下を指定する形も同じ理由で通らない。フォールバックは `TMPDIR` が
-  未設定の環境でファイルシステム直下に作らせないためのもので、sandbox 内では発動しない。
-  `TMPDIR` の値は sandbox の有効・無効で変わるが、1 回目が返した絶対パスは 2 回目(sandbox 外)
-  からも Write ツールからも同じ実体を指す
-- **`schema.json` は skill 配下の実ファイルを `cp` する。** 出力契約の単一ソースを skill 側に
-  置き、二重管理を避ける
-- **gitleaks の走査は codex の起動より前に置き、非ゼロで中断する。** 非ゼロは「検出あり」と
-  「gitleaks が動かない」の両方を含み、どちらも委譲しない条件になる
-- **スニペットは `zsh -n` と `sh -n` の両方で検査する。** Bash tool が実行するのは zsh(5.9.2)
-  であり bash ではない。`bash -n` は実行系と異なる言語を検査するため、通っても保証にならない
+- **`codex --version` が変わったら `--config` のキー名と実挙動を再検証する。** キーが改名された
+  場合の失敗は、エラーではなく沈黙として現れる
+- **プロセスの残存をコマンドで確かめない。** Bash sandbox 内では `pgrep` も `ps` も
+  `operation not permitted` で失敗しながら終了コード 0 を返すため、外部のプロセス一覧に
+  問い合わせる形の確認はすべて「該当なし」と答える
 
 ## 終了コード
 
@@ -313,6 +252,17 @@ codex の記憶機能を切っているからである — 有効なままだと
 止めることになる。
 
 ## Troubleshooting
+
+### `invalid peer certificate: UnknownIssuer` で api.openai.com に繋がらない
+
+`codex exec` をシェル関数・エイリアス・`sh -c` の中に入れて呼んでいる。`sandbox.excludedCommands` は
+行のテキストではなく実行されるコマンドを見るため、包むと `codex` が照合から隠れ、その呼び出しは
+Claude Code の Bash sandbox 内で走る。sandbox は TLS を傍受するので、codex 自身の API 接続が証明書の
+発行者不明で切れる。**権限エラーではなく証明書エラーとして出る**ので、原因がメッセージに現れない。
+
+`codex exec` は Bash 呼び出しの中で素のコマンドとして書く。包む形にしない。走っている呼び出しが
+sandbox の内側かどうかは `echo "$TMPDIR"` で分かる — sandbox 内では `/tmp/claude-*`、外では
+システムの一時領域を指す。
 
 ### `Operation not permitted` で codex が起動しない
 

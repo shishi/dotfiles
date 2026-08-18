@@ -44,9 +44,11 @@ Claude Code のトークン消費を抑えるため、次に当たる作業は c
 
 - **explore**(read-only): 所在探索、原因調査、コードベースの読解
 - **chore**(workspace-write): リネーム、同パターンの横展開、テスト追加
-- **implement**(workspace-write): plan 確定後の feature / bugfix
+- **implement**(workspace-write): feature / bugfix
 
-委譲しないもの: 設計判断とユーザーとの対話が要る作業、レビューそのもの(review-gate skill と codex-review skill の責務)、記憶 repo への書き込み、ネットワークを要する作業(依存の取得・更新。委譲では network を切っているため完了しない)。`workspace-write` の 2 種別は worktree が clean なときだけ委譲する。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない(規律を持たない委譲先にコードを書かせることになる)。
+委譲しないもの: 設計判断とユーザーとの対話が要る作業、レビューそのもの(review-gate skill と codex-review skill の責務)、記憶 repo への書き込み。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない(規律を持たない委譲先にコードを書かせることになる)。
+
+タスクごとに決めるもの: ネットワークを開けるか(既定は遮断。依存の取得・更新には要る)、`workspace-write` を今の worktree に対して流してよいか(codex による上書きは差分に現れないため、未コミット変更と触る範囲が重なるなら先に commit する)。
 
 委譲で入った変更は Claude 自身が書いた変更と同じものとして扱う。委譲専用の検査は持たず、差分の確認と上記のレビューゲートで見る。委譲は Claude 側の消費を減らす代わりに OpenAI 側の利用枠を消費するため、枯渇したら委譲をやめて Claude 側で引き取る。
 

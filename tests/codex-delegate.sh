@@ -101,12 +101,15 @@ check "codex exec に -s がある" grep -q 'codex exec -s' "$SNIP"
 # ルート・ネットワーク到達性・承認方針・記憶機能は config 側に残る
 for key in approval_policy=never features.memories=false \
            memories.generate_memories=false memories.use_memories=false \
-           sandbox_workspace_write.network_access=false \
+           'sandbox_workspace_write.network_access=\$NET' \
            'sandbox_workspace_write.writable_roots=\[\]'; do
   check "--config $key がある" grep -q -- "--config .*$key" "$SNIP"
 done
 check "--config がちょうど 6 個" \
   test "$(grep -c -- '--config' "$SNIP")" -eq 6
+# ネットワークはタスクごとの選択だが、既定は遮断でなければならない。変数の宣言が
+# true で始まっていると、開けるつもりのないタスクにも開いた状態で渡る
+check "NET の既定が false" grep -q '^NET=false' "$SNIP"
 
 # 出力経路: 最終メッセージは -o のファイルへ、進捗出力は run.log へ。
 # リダイレクトを落とすと codex の進捗出力全文が context に入り、削減の目的が失われる
