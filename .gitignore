@@ -25,8 +25,8 @@
 !/codex/hooks/
 !/codex/hooks/**
 !/codex/hooks.json
-/tests/__pycache__/
-/tests/**/*.py[co]
+__pycache__/
+*.py[co]
 /.worktrees/
 
 /docs/superpowers/*
