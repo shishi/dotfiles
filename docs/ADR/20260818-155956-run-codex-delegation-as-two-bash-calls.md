@@ -53,7 +53,18 @@ Claude Code のトークン消費を抑えるため、探索・定型作業・�
 
 ### Confirmation
 
-`bash tests/codex-delegate.sh` が、スニペットの構文(`zsh -n` と `sh -n`)、要素の順序、`--config` の内容、出力経路のリダイレクトを検査する。実挙動(sandbox の実効性・記憶の抑止・ネットワーク遮断・上限の実効)は設計 doc の「検証」節が担う。
+`bash tests/codex-delegate.sh` が、スニペットの構文(`zsh -n` と `sh -n`)、要素の順序、`--config` の内容、出力経路のリダイレクトを検査する。これは静的検査で、codex を起動しない。
+
+実挙動のうち確認済みのもの — `-s` の実効性(`read-only` は書き込みを拒否し、`workspace-write` + `writable_roots=[]` は workspace 内を許してホームを拒否する)、`network_access` の実効性と `read-only` では効かないこと、記憶ストアの論理内容が委譲を跨いで変わらないこと、プロンプトがシェルを経由しないこと、schema の上限が実際に切ること、使用済み判定の原子性、パスの形の照合。
+
+**未確認で、実挙動として残っているもの:**
+
+1. 認証失敗で終わった委譲が作業ディレクトリを残さないこと
+2. Bash の timeout に達した委譲が background task として続き、完了通知とともに JSON が届くこと
+3. background task の停止が、codex が起動した孫プロセスにも届くこと。判定は「1 秒ごとにファイルへ追記し続ける処理を走らせ、停止から数秒以内に追記が止まること」で行う — worktree の変化では判定できない(テストやビルドは実行時間の大半でファイルを書かない)し、プロセス一覧でも判定できない(sandbox 内では失敗しながら終了コード 0 を返す)
+4. `/codex:rescue` と `/codex:status` が発動しないこと(プラグイン撤去の反映にセッション再起動が要る)
+
+**`codex --version` が変わったら、`--config` のキー名の検証(空の `CODEX_HOME` を向けた `--strict-config`)と上記の実挙動を再実行する。** キーが改名された場合の失敗は、エラーではなく沈黙として現れる。
 
 ## Pros and Cons of the Options
 
