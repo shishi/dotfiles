@@ -40,11 +40,12 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
   **Claude subagent**(土日 or codex 不能)
 - 曜日判定: `TZ=Asia/Tokyo date +%u` で 6 or 7 → 土日(ホストのローカル TZ に依存させない)
 - spec-scope の既定は Claude subagent、secrets は常時 gitleaks(曜日無関係)
-- **codex へ差し替えられるのは codex-review skill が持つ観点(correctness / adversarial)だけである。**
-  spec-scope の codex モードは無いため、spec-scope の subagent が結果を返さないときは差し替え先が
-  無く、エスカレーションは差し替えを飛ばして未レビュー通過へ進む
+- **3 観点いずれも codex へ差し替えられる**(codex-review skill が correctness / adversarial /
+  spec-scope の各モードを持つ)。spec-scope を codex で走らせる場合、前置きに足す入力は
+  codex-review skill の「spec-scope モードで前置きに足す入力」に従う — タスク記述の逐語コピーが
+  無ければ差し替えは成立しない
 - Claude subagent エンジンでの実行 = 対応する観点 agent
-  (correctness-reviewer / adversarial-reviewer)を Task tool で dispatch し、
+  (spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)を Task tool で dispatch し、
   組成済みレビュー対象と focus をプロンプトで渡す(1 パス)
 - codex エンジンでの実行 = codex-review skill に観点名・focus を渡して 1 パス実行
   (secrets-scan 先行は下記手順に含まれる)
@@ -104,7 +105,8 @@ defect gate の 1–3 と同様(対象は文書 diff + untracked 文書)。そ�
 2. **同じエンジンへ同じ入力で新しく dispatch し**(既存 agent の再開ではない)、受理から最大 5 分待つ
 3. もう一方のエンジンへ差し替えて新しく dispatch し、受理から最大 5 分待つ。観点は
    `~/.claude/agents/*-reviewer.md` が単一ソースなので、エンジンを替えても観点は変わらない。
-   **差し替え先を持たないレーン(spec-scope)はこの段階を飛ばす**
+   **差し替えに必要な入力を組めないレーンはこの段階を飛ばす**(spec-scope をタスク記述の
+   逐語コピー無しで走らせることはできない)
 4. それでも結果が無ければ、**そのレーンを未レビューのまま通過させる。** レポートの
    ステータスを「⚠️ 未レビュー通過」にし、どのレーンをどの段階まで試したかを書く
 
