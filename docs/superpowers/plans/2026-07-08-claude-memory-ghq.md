@@ -4,7 +4,7 @@
 > 下の「For agentic workers」以下の実装指示は適用しない。
 >
 > 多くは現行ツリーで失敗する(検証手順の `DOTDIR="$PWD" bash claude/resolve-memory-dir.sh`
-> はヘルパーがリポジトリルートにあるため exit 127)。ただし **Task 4 Step 3 の
+> はヘルパーが `agents/bin/resolve-memory-dir.sh` に移動済みのため exit 127)。ただし **Task 4 Step 3 の
 > `ln -sfn ~/dev/src/github.com/shishi/claude-memory claude/memory` は成功する**。
 > 現用の `claude/memory` は `agent-memory` を指す symlink で、`-f -n` がこれを
 > 存在しない `claude-memory` 向けの壊れたリンクに置き換えるため、`~/.claude/memory`
@@ -14,8 +14,9 @@
 > 変数名 `CLAUDE_MEMORY_DIR` とリポジトリ名 `claude-memory` は現行では
 > `AGENT_MEMORY_DIR` / `agent-memory`。ghq.root が無いときのフォールバックも
 > `~/dev/claude-memory` ではなく `~/dev/src/github.com/shishi/agent-memory`。
+> 現行設計は `docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md`。
 > 記述されている自動移行は現ヘルパーには実装されていない(配置先の解決だけを行う)。
-> 現行の正: `resolve-memory-dir.sh`、`tests/agent-memory-ghq.sh`。
+> 現行の正: `agents/bin/resolve-memory-dir.sh`、`tests/agent-memory-ghq.sh`。
 
 > ~~**For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.~~ (superseded — 実行しない)
 

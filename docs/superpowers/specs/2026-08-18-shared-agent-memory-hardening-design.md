@@ -1,7 +1,7 @@
 # 共有エージェント記憶の再確立と堅牢化
 
 日付: 2026-08-18
-状態: 承認済み・未実装
+状態: 承認済み・実装完了
 
 ## 目的
 
@@ -96,14 +96,54 @@ injector は注入対象の commit 内容を出力前に検査します。最低
 
 ## Write lock の所有権
 
-memory write lock は `mkdir <repo>/.git/memory-write.lock` の排他性を維持しつつ、
-取得者固有の token を lock 内へ記録します。解放時は token が自分の値と一致する場合だけ
-lock を除去します。
+memory write lock は共有 helper `~/.agents/bin/memory-write-lock.sh` の
+`acquire <canonical-repo>` と `release <opaque-handle>` で操作します。`acquire` は
+`mkdir <repo>/.git/memory-write.lock` の排他性を維持し、予測困難な 64 hex token を
+token 固有の owner marker と private state に記録します。stdout には token を含まない
+opaque handle path だけを返します。
 
-これにより、自分の lock が手動復旧などで除去され、別プロセスが同じパスを再取得した後に
-古い finally 処理が新しい lock を消す ABA race を防ぎます。token file を作れない場合は
-lock を取得済みと扱わず、自分が作った空ディレクトリだけを片付けて停止します。stale lock
-は従来どおり、10 分経過だけを根拠に自動削除せず、ユーザー確認を必要とします。
+handle path の stdout 書き込み成功を確認し、committed state と終了までの signal ignore を
+確立した時点を ownership transfer の commit point とします。
+commit point より前の HUP、INT、TERM または stdout 失敗では handle と自分の lock を
+片付け、対応する非 0 status で終了します。commit point 後は ownership が caller へ
+移転済みとして、短い終了処理中の signal で status 0 を変更しません。caller は
+stdout だけでなく終了 status 0 を確認し、
+nonzero の出力を handle として使用しません。
+
+handle は当該 repo の `.git/memory-write-state/handle.*` にある実ディレクトリで、
+directory mode は 0700、固定形式の repo file と token file は 0600 とします。`release`
+は handle を source または eval せず、path、file type、permission、canonical repo、64 hex
+token を厳格に検証します。別 process で保持した handle が指す token と owner marker が
+一致する場合だけ lock を解放し、成功後にだけ handle を削除します。
+handle は最初から最終 path を atomic `mkdir` して作り、repo と token をその中に記録します。
+別名の pending directory から handle への rename は行いません。owner marker は atomic
+`mkdir` した token 固有の 0700 directory と、その中の 0600 value file で構成します。
+value は同じ lock directory で作成した temporary file を private owner marker 内の固定名へ
+移し、marker の型、mode、固定内容を再検証してから所有権を確立します。
+
+解放開始時は予測困難名の 0700 private retirement directory を atomic `mkdir` し、型、mode、
+物理 parent を検証します。その private directory 内の固定かつ不存在の path へ handle を
+rename し、rename 後の実ディレクトリ、固定形式、repo、token を再検証します。rename 前に
+同名の foreign handle へ差し替えられていた場合も自動復元せず、private retirement 内で
+内容非変更のまま保持し、以後の取得を停止します。rename 後に元の handle path へ作成された
+内容には触れません。
+取得失敗時の partial cleanup も同じ retirement 手順を使用し、検証済みでも canonical な
+handle path を直接削除しません。lock cleanup に失敗した場合は retirement state を fence と
+して保持します。
+
+解放時の canonical lock も `.git` 直下に atomic `mkdir` した予測困難な 0700 private
+retirement directory 内の固定・不存在 path へ同一 filesystem 内で rename します。
+外部に既存し得る path を directory destination operand として使用しません。rename の前後に
+lock が実ディレクトリであり symlink でないことを確認し、foreign、dangling symlink、owner
+不一致の内容には一切触れません。
+retirement path または既存 state が一つでも残っている間は、新しい取得を
+lock `mkdir` の前後で拒否します。並行 acquire の未確立 handle state も同じ fence に含めます。
+
+取得、lock 解放、state 削除の失敗は fail-closed とし、token や token を含む path を
+stdout/stderr に出しません。取得中の HUP、INT、TERM は partial state と自分の lock を
+安全に片付けて元の signal status で終了します。解放失敗時は retirement と handle を
+保持し、次回取得を停止します。stale lock、state、retirement は 10 分経過だけを
+根拠に自動削除せず、ユーザー確認を必要とします。
 
 この手順を `AGENTS.md`、`CLAUDE.md`、共有設計書、private repo の
 `CONVENTIONS.md` で一致させます。private repo の更新は通常の memory commit と分離し、

@@ -26,10 +26,10 @@ if ($sessionStart.Count -ne 1) {
         $failures += 'SessionStart must have exactly one command handler'
     } else {
         $sessionHandler = $sessionHandlers[0]
-        if ($sessionHandler.command -ne 'bash ~/.claude/hooks/inject-memory.sh ~/.codex/memory') {
-            $failures += 'SessionStart must reuse the Claude memory injector with ~/.codex/memory'
+        if ($sessionHandler.command -ne 'bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory') {
+            $failures += 'SessionStart must use the shared memory injector with ~/.codex/memory'
         }
-        if ($sessionHandler.commandWindows -notmatch "bash\.exe'.*-c\s+'~/.claude/hooks/inject-memory\.sh ~/.codex/memory'") {
+        if ($sessionHandler.commandWindows -notmatch "bash\.exe'.*-c\s+'~/.agents/hooks/inject-memory\.sh ~/.codex/memory'") {
             $failures += 'SessionStart Windows command must invoke the shared injector through explicit Git Bash'
         }
         $contextLimit = $sessionHandler.additionalContextLimit

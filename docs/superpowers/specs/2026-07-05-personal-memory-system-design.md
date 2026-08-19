@@ -1,13 +1,19 @@
 # パーソナル永続記憶システム設計
 
 日付: 2026-07-05
-状態: 実装済み。**本 doc に書かれた運用手順は実行しない。** 記憶の書き込み・整理のプロトコルは `2026-07-11-agent-memory-design.md` と記憶 repo の `CONVENTIONS.md` が正で、本 doc とは逆の内容になっている:
+状態: 実装済み。**本 doc に書かれた運用手順は実行しない。** 記憶の現行設計は
+`2026-08-18-shared-agent-memory-hardening-design.md` である。書き込み・整理の詳細は記憶 repo の
+`CONVENTIONS.md` を正とする。本 doc とは逆の内容になっている:
 
 - 書き込みは「即 commit し push まで自動実行」ではなく、write lock 取得 → `main`・clean・ahead なし確認 → `git pull --rebase` → pull 後の HEAD で `CONVENTIONS.md` を読む → その版に従い、push 後に自分の commit がリモートに含まれることを検証する。
 - 整理は「auto-push せずレビュー後に push」ではなく、`consolidation/<date>` ブランチを push してレビュー待ちにする(未 push commit は他マシン・他セッションから見えず、レビュー待ちの印にならない)。
 - permissions allowlist は `claude/settings.json` の現行値が正。本 doc の例示に合わせて追加しない。
 
-repo 名と配置も置換済みで、`claude-memory` / 既定 `~/dev/claude-memory` / 環境変数 `CLAUDE_MEMORY_DIR` は現行では `agent-memory` / `~/dev/src/github.com/shishi/agent-memory` / `AGENT_MEMORY_DIR`。現行に残っているのは slug 算出ロジックと、`claude/memory` symlink を追跡しない扱い。
+repo 名と配置も置換済みで、`claude-memory` / 既定 `~/dev/claude-memory` / 環境変数
+`CLAUDE_MEMORY_DIR` は現行では `agent-memory` / `~/dev/src/github.com/shishi/agent-memory` /
+`AGENT_MEMORY_DIR`。Claude Code と Codex は同じ正本を使い、注入は
+`agents/hooks/inject-memory.sh`、配置解決は `agents/bin/resolve-memory-dir.sh` を共有する。
+Codex native Memories と Claude Code auto memory は無効である。
 
 ## 目的
 

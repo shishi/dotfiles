@@ -20,6 +20,10 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SETUP="${REPO}/setup.sh"
 SYSTEM_GIT="$(command -v git)"
 SYSTEM_MV="$(command -v mv)"
+case "$(uname -s)" in
+  Darwin | *BSD) SYSTEM_MV_NOFOLLOW_OPTION=-h ;;
+  *) SYSTEM_MV_NOFOLLOW_OPTION=-T ;;
+esac
 SYSTEM_MKDIR="$(command -v mkdir)"
 SYSTEM_RM="$(command -v rm)"
 SYSTEM_LN="$(command -v ln)"
@@ -34,15 +38,30 @@ ng() {
   echo "NG: $1"
 }
 
+make_temp_root() {
+  local variable="$1" path physical_path
+  if ! path="$(mktemp -d)"; then
+    echo "fatal: mktemp failed for $variable" >&2
+    exit 1
+  fi
+  if ! physical_path="$(cd "$path" && pwd -P)"; then
+    echo "fatal: could not resolve temporary root for $variable: $path" >&2
+    exit 1
+  fi
+  printf -v "$variable" '%s' "$physical_path"
+}
+
 # setup.sh は自分の位置から DOTDIR を導くので、fixture へコピーすれば実 HOME に
 # 触らずに検証できる。REMOTE_CONTAINERS=true は emacs の clone 分岐を飛ばす。
 make_fixture() {
   local root="$1"
   mkdir -p "${root}/dotfiles/codex/skills" "${root}/dotfiles/nushell" \
-    "${root}/dotfiles/claude" "${root}/home" "${root}/config" \
+    "${root}/dotfiles/claude" "${root}/dotfiles/agents/bin" \
+    "${root}/dotfiles/agents/hooks" "${root}/home" "${root}/config" \
     "${root}/agent-memory" "${root}/bin"
   cp "$SETUP" "${root}/dotfiles/setup.sh"
-  cp "${REPO}/resolve-memory-dir.sh" "${root}/dotfiles/resolve-memory-dir.sh"
+  cp "${REPO}/agents/bin/resolve-memory-dir.sh" "${root}/dotfiles/agents/bin/resolve-memory-dir.sh"
+  cp "${REPO}/agents/hooks/inject-memory.sh" "${root}/dotfiles/agents/hooks/inject-memory.sh"
   : >"${root}/dotfiles/nushell/config.nu"
   : >"${root}/dotfiles/nushell/env.nu"
   : >"${root}/dotfiles/claude/install-plugins.sh"
@@ -55,6 +74,7 @@ make_fixture() {
   "$SYSTEM_GIT" -C "${root}/agent-memory" branch -M main
   "$SYSTEM_GIT" -C "${root}/agent-memory" config user.name setup-test
   "$SYSTEM_GIT" -C "${root}/agent-memory" config user.email setup-test@example.invalid
+  "$SYSTEM_GIT" -C "${root}/agent-memory" config commit.gpgSign false
   "$SYSTEM_GIT" -C "${root}/agent-memory" remote add origin \
     git@github.com:shishi/agent-memory.git
   "$SYSTEM_GIT" -C "${root}/agent-memory" add MEMORY.md CONVENTIONS.md
@@ -76,7 +96,9 @@ run_setup() {
   HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
     AGENT_MEMORY_DIR="${root}/agent-memory" \
     SETUP_SYSTEM_GIT="$SYSTEM_GIT" \
-    SETUP_SYSTEM_MV="$SYSTEM_MV" SETUP_SYSTEM_MKDIR="$SYSTEM_MKDIR" \
+    SETUP_SYSTEM_MV="$SYSTEM_MV" \
+    SYSTEM_MV_NOFOLLOW_OPTION="$SYSTEM_MV_NOFOLLOW_OPTION" \
+    SETUP_SYSTEM_MKDIR="$SYSTEM_MKDIR" \
     SETUP_SYSTEM_RM="$SYSTEM_RM" SETUP_SYSTEM_LN="$SYSTEM_LN" \
     SETUP_EXTERNAL_CALL_LOG="${root}/external-calls.log" PATH="${root}/bin:$PATH" \
     FAIL_MEMORY_LINK_PREFIX="${FAIL_MEMORY_LINK_PREFIX:-}" \
@@ -209,11 +231,13 @@ install_recording_mv() {
   cat >"${root}/bin/mv" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"$SETUP_MOVE_OPTION_LOG"
-if [ "$1" = -h ]; then
-  shift
-  exec "$SETUP_SYSTEM_MV" -T "$@"
-fi
-exec "$SETUP_SYSTEM_MV" "$@"
+case "${1:-}" in
+  -h | -T)
+    shift
+    exec "$SETUP_SYSTEM_MV" "$SYSTEM_MV_NOFOLLOW_OPTION" "$@"
+    ;;
+  *) exec "$SETUP_SYSTEM_MV" "$@" ;;
+esac
 EOF
   chmod +x "${root}/bin/mv"
 }
@@ -405,7 +429,7 @@ wait_for_file() {
 }
 
 # (1) fresh 環境で 2 本のリンクが張られる
-T1="$(mktemp -d)"
+make_temp_root T1
 trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}" "${T36:-}" "${T37:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
@@ -432,6 +456,12 @@ if resolves_to "${T1}/home/.agents/skills" "${T1}/dotfiles/codex/skills"; then
 else
   ng "~/.agents/skills does not link to dotfiles/codex/skills"
 fi
+if resolves_to "${T1}/home/.agents/bin" "${T1}/dotfiles/agents/bin" \
+  && resolves_to "${T1}/home/.agents/hooks" "${T1}/dotfiles/agents/hooks"; then
+  ok "~/.agents shared runtime links to dotfiles/agents"
+else
+  ng "~/.agents shared runtime does not link to dotfiles/agents"
+fi
 if resolves_to "${T1}/dotfiles/claude/memory" "${T1}/agent-memory" \
   && resolves_to "${T1}/dotfiles/codex/memory" "${T1}/agent-memory"; then
   ok "Claude and Codex memory are symlinks to one canonical repository"
@@ -448,6 +478,8 @@ fi
 run_setup "$T1"
 if resolves_to "${T1}/home/.codex" "${T1}/dotfiles/codex" \
   && resolves_to "${T1}/home/.agents/skills" "${T1}/dotfiles/codex/skills" \
+  && resolves_to "${T1}/home/.agents/bin" "${T1}/dotfiles/agents/bin" \
+  && resolves_to "${T1}/home/.agents/hooks" "${T1}/dotfiles/agents/hooks" \
   && resolves_to "${T1}/dotfiles/claude/memory" "${T1}/agent-memory" \
   && resolves_to "${T1}/dotfiles/codex/memory" "${T1}/agent-memory"; then
   ok "re-running setup.sh keeps home and memory links intact"
@@ -456,7 +488,7 @@ else
 fi
 
 # (3) 実ディレクトリは .back へ退避して張り直す。実行後は必ずこの checkout を指す。
-T2="$(mktemp -d)"
+make_temp_root T2
 make_fixture "$T2"
 mkdir -p "${T2}/home/.codex"
 echo "live-secret" >"${T2}/home/.codex/auth.json"
@@ -488,7 +520,7 @@ else
 fi
 
 # (4) 別 checkout を指すリンクも .back へ退避して張り直す。指し先の実体は動かさない。
-T3="$(mktemp -d)"
+make_temp_root T3
 make_fixture "$T3"
 mkdir -p "${T3}/other-checkout/codex/skills"
 echo "live-secret" >"${T3}/other-checkout/codex/auth.json"
@@ -531,7 +563,7 @@ else
 fi
 
 # (5) リンク元が無い checkout では dangling link を作らず報告する
-T4="$(mktemp -d)"
+make_temp_root T4
 make_fixture "$T4"
 rm -rf "${T4}/dotfiles/codex"
 run_setup "$T4"
@@ -572,7 +604,7 @@ else
   ng "setup.sh recreated a correct ~/.claude link (now '$(readlink "${T1}/home/.claude")')"
 fi
 
-T5="$(mktemp -d)"
+make_temp_root T5
 make_fixture "$T5"
 mkdir -p "${T5}/home/.claude/projects"
 echo "live-history" >"${T5}/home/.claude/history.jsonl"
@@ -642,7 +674,7 @@ else
 fi
 
 # (9) ~/.agents/skills が実ディレクトリのときも 3 target で同じ扱い。
-T6="$(mktemp -d)"
+make_temp_root T6
 make_fixture "$T6"
 mkdir -p "${T6}/home/.agents/skills/.system"
 printf 'runtime
@@ -661,7 +693,7 @@ else
 fi
 
 # (10) memory target は 2 本を一括で preflight する。
-T8="$(mktemp -d)"
+make_temp_root T8
 make_fixture "$T8"
 mkdir -p "${T8}/dotfiles/codex/memory"
 echo keep >"${T8}/dotfiles/codex/memory/marker"
@@ -674,7 +706,7 @@ else
   ng "a real Codex memory path did not leave both memory targets unchanged"
 fi
 
-T9="$(mktemp -d)"
+make_temp_root T9
 make_fixture "$T9"
 mkdir -p "${T9}/foreign-memory"
 echo keep >"${T9}/foreign-memory/marker"
@@ -702,7 +734,7 @@ else
   ng "a foreign regular-file memory link was overwritten or allowed the other target to change"
 fi
 
-T10="$(mktemp -d)"
+make_temp_root T10
 make_fixture "$T10"
 ln -sfn "${T10}/gone-memory" "${T10}/dotfiles/claude/memory"
 run_setup "$T10"
@@ -720,7 +752,7 @@ fi
 
 # (11) 2 本目の symlink preparation が失敗しても、1 本目を先に本番 target へ
 # 反映せず、両 target を元の missing 状態に保つ。memory 以外の ln は委譲する。
-T11="$(mktemp -d)"
+make_temp_root T11
 make_fixture "$T11"
 cat >"${T11}/bin/ln" <<'EOF'
 #!/bin/sh
@@ -752,7 +784,7 @@ fi
 
 # (12) 2 本目の switch が失敗したら、先に切り替えた 1 本目も missing へ戻す。
 # wrapper は同じ destination の rollback move を妨げないよう 1 回だけ失敗する。
-T12="$(mktemp -d)"
+make_temp_root T12
 make_fixture "$T12"
 install_failing_mv "$T12"
 FAIL_MEMORY_MOVE_TARGET="${T12}/dotfiles/codex/memory" run_setup "$T12"
@@ -771,7 +803,7 @@ else
 fi
 
 # (13) dangling の prior state は存在有無だけでなく link literal まで同一に戻す。
-T13="$(mktemp -d)"
+make_temp_root T13
 make_fixture "$T13"
 claude_literal="${T13}/gone-claude-memory"
 codex_literal="${T13}/gone-codex-memory"
@@ -814,24 +846,24 @@ assert_invalid_memory_repository_is_non_destructive() {
   fi
 }
 
-T14="$(mktemp -d)"
+make_temp_root T14
 make_fixture "$T14"
 rm -rf "${T14}/agent-memory/.git"
 assert_invalid_memory_repository_is_non_destructive "$T14" "a plain directory"
 
-T15="$(mktemp -d)"
+make_temp_root T15
 make_fixture "$T15"
 rm -rf "${T15}/agent-memory/.git"
 mkdir "${T15}/agent-memory/.git"
 assert_invalid_memory_repository_is_non_destructive "$T15" "an empty .git directory"
 
-T16="$(mktemp -d)"
+make_temp_root T16
 make_fixture "$T16"
 "$SYSTEM_GIT" -C "${T16}/agent-memory" remote set-url origin \
   git@github.com:shishi/agent-memory-lookalike.git
 assert_invalid_memory_repository_is_non_destructive "$T16" "a repository with a lookalike origin"
 
-T31="$(mktemp -d)"
+make_temp_root T31
 make_fixture "$T31"
 "$SYSTEM_GIT" -C "${T31}/agent-memory" remote set-url origin \
   https://github.com/shishi/agent-memory.git
@@ -843,7 +875,7 @@ else
   ng "the canonical HTTPS origin was rejected"
 fi
 
-T32="$(mktemp -d)"
+make_temp_root T32
 make_fixture "$T32"
 "$SYSTEM_GIT" -C "${T32}/agent-memory" remote set-url origin \
   ssh://git@github.com/shishi/agent-memory.git
@@ -858,7 +890,7 @@ fi
 # (15) concurrent setup は同じHOME lockをatomicに競争し、一方だけがmemory
 # transactionへ入る。旧実装では2processをfirst switch直前で同期させ、plain mvが
 # directory symlinkを追ってcanonical repo内へtempを移す実raceを再現する。
-T17="$(mktemp -d)"
+make_temp_root T17
 make_fixture "$T17"
 install_concurrency_barriers "$T17"
 export SETUP_MEMORY_LOCK="${T17}/home/.agent-memory-setup.lock"
@@ -893,7 +925,7 @@ fi
 # (16) rollback前に外部actorがこのprocessの設置linkを別linkへ置換した場合、
 # changed flagだけを根拠に消してはいけない。literal/realpath ownership不一致を検出し、
 # foreign linkを残してrollback incompleteを報告する。
-T18="$(mktemp -d)"
+make_temp_root T18
 make_fixture "$T18"
 mkdir -p "${T18}/foreign-memory"
 install_failing_mv "$T18"
@@ -909,24 +941,29 @@ else
   ng "rollback removed or overwrote a foreign replacement link"
 fi
 
-# (17) GNU/MSYS系は -T、macOS/BSD系は -h を選ぶ。テスト環境のGNU mvでBSD option
-# をそのまま実行できないため、recorderが -h を記録後 -Tへ翻訳してrename自体も行う。
-T19="$(mktemp -d)"
+# (17) GNU/MSYS系は -T、macOS/BSD系は -h を選ぶ。fake uname が要求した option は
+# 記録しつつ、recorder は実行hostの no-follow option へ翻訳してrename自体も行う。
+make_temp_root T19
 make_fixture "$T19"
 install_recording_mv "$T19"
+install_fake_uname "$T19" Linux
 run_setup "$T19"
-if grep -q '^-T -n ' "${T19}/move-options.log"; then
+if grep -q '^-T -n ' "${T19}/move-options.log" \
+  && resolves_to "${T19}/dotfiles/claude/memory" "${T19}/agent-memory" \
+  && resolves_to "${T19}/dotfiles/codex/memory" "${T19}/agent-memory"; then
   ok "GNU or MSYS memory rename selects mv -T -n"
 else
   ng "GNU or MSYS memory rename did not select mv -T -n"
 fi
 
-T20="$(mktemp -d)"
+make_temp_root T20
 make_fixture "$T20"
 install_recording_mv "$T20"
 install_fake_uname "$T20" Darwin
 run_setup "$T20"
-if grep -q '^-h -n ' "${T20}/move-options.log"; then
+if grep -q '^-h -n ' "${T20}/move-options.log" \
+  && resolves_to "${T20}/dotfiles/claude/memory" "${T20}/agent-memory" \
+  && resolves_to "${T20}/dotfiles/codex/memory" "${T20}/agent-memory"; then
   ok "macOS or BSD memory rename selects mv -h -n"
 else
   ng "macOS or BSD memory rename did not select mv -h -n"
@@ -934,7 +971,7 @@ fi
 
 # revalidation後・rename直前にdestinationがdirectory symlinkへ変わっても、renameが
 # symlinkをfollowしてcanonical repo内へsourceを入れ子にしないことを実動作で見る。
-T21="$(mktemp -d)"
+make_temp_root T21
 make_fixture "$T21"
 mkdir -p "${T21}/foreign-destination"
 install_interleaving_mv "$T21"
@@ -950,7 +987,7 @@ else
   ng "memory rename overwrote or followed an interposed foreign symlink"
 fi
 
-T24="$(mktemp -d)"
+make_temp_root T24
 make_fixture "$T24"
 install_interleaving_mv "$T24"
 INTERLEAVE_MOVE_TARGET="${T24}/dotfiles/claude/memory" \
@@ -966,7 +1003,7 @@ else
 fi
 
 # detached dangling backupのliteralが変わった場合はtargetへ戻さず、その場に保存する。
-T25="$(mktemp -d)"
+make_temp_root T25
 make_fixture "$T25"
 original_backup_literal="${T25}/gone-original"
 foreign_backup_literal="${T25}/gone-foreign"
@@ -987,7 +1024,7 @@ fi
 
 # backup cleanupが部分成功しても、削除済みと確認したown backupだけは保存literalから
 # targetへ再生成し、2本ともtransaction前のdangling状態へ戻す。
-T35="$(mktemp -d)"
+make_temp_root T35
 make_fixture "$T35"
 claude_cleanup_literal="${T35}/gone-claude-cleanup"
 codex_cleanup_literal="${T35}/gone-codex-cleanup"
@@ -1009,7 +1046,7 @@ else
 fi
 
 # canonical repositoryはcommitとHEAD内のrequired blobsを必須とする。
-T26="$(mktemp -d)"
+make_temp_root T26
 make_fixture "$T26"
 rm -rf "${T26}/agent-memory/.git"
 "$SYSTEM_GIT" -C "${T26}/agent-memory" init -q
@@ -1017,14 +1054,14 @@ rm -rf "${T26}/agent-memory/.git"
 "$SYSTEM_GIT" -C "${T26}/agent-memory" remote add origin git@github.com:shishi/agent-memory.git
 assert_invalid_memory_repository_is_non_destructive "$T26" "a commitless repository"
 
-T27="$(mktemp -d)"
+make_temp_root T27
 make_fixture "$T27"
 "$SYSTEM_GIT" -C "${T27}/agent-memory" rm -q CONVENTIONS.md
 "$SYSTEM_GIT" -C "${T27}/agent-memory" commit -qm 'remove conventions'
 : >"${T27}/agent-memory/CONVENTIONS.md"
 assert_invalid_memory_repository_is_non_destructive "$T27" "HEAD without a required memory blob"
 
-T33="$(mktemp -d)"
+make_temp_root T33
 make_fixture "$T33"
 "$SYSTEM_GIT" -C "${T33}/agent-memory" rm -q CONVENTIONS.md
 mkdir "${T33}/agent-memory/CONVENTIONS.md"
@@ -1034,7 +1071,7 @@ mkdir "${T33}/agent-memory/CONVENTIONS.md"
 assert_invalid_memory_repository_is_non_destructive "$T33" "HEAD with a required path that is not a blob"
 
 # working treeのdirty/non-main/deleted状態はinjectorのdegraded判定へ委譲する。
-T28="$(mktemp -d)"
+make_temp_root T28
 make_fixture "$T28"
 "$SYSTEM_GIT" -C "${T28}/agent-memory" checkout -qb work-in-progress
 rm "${T28}/agent-memory/MEMORY.md" "${T28}/agent-memory/CONVENTIONS.md"
@@ -1048,7 +1085,7 @@ else
 fi
 
 # owner token一致時はTERMでlockを解放し、foreign tokenへ変わったlockは残す。
-T29="$(mktemp -d)"
+make_temp_root T29
 make_fixture "$T29"
 install_signal_blocking_git "$T29"
 start_setup_for_signal "$T29"
@@ -1068,7 +1105,7 @@ else
   ng "TERM leaked this process memory lock, continued memory setup, or returned success"
 fi
 
-T34="$(mktemp -d)"
+make_temp_root T34
 make_fixture "$T34"
 install_signal_blocking_git "$T34"
 start_setup_for_int "$T34"
@@ -1090,7 +1127,7 @@ fi
 
 # memory transactionの最初のswitch直後にTERMを受けても、中間状態で終了せず、
 # transactionを完了してからlockを解放しsignal statusを返す。
-T36="$(mktemp -d)"
+make_temp_root T36
 make_fixture "$T36"
 install_signaling_mv "$T36"
 SIGNAL_AFTER_MOVE_TARGET="${T36}/dotfiles/claude/memory" run_setup "$T36"
@@ -1112,7 +1149,7 @@ fi
 
 # validatorの最終git検査後にrepoが消えた場合、空のcanonical realpathをdanglingの
 # 期待値として扱わず、temp/targetに触れる前にfail closedする。
-T37="$(mktemp -d)"
+make_temp_root T37
 make_fixture "$T37"
 install_repo_moving_git "$T37"
 install_recording_memory_ln "$T37"
@@ -1134,7 +1171,7 @@ else
   ng "repository disappearance was accepted as an empty canonical target"
 fi
 
-T30="$(mktemp -d)"
+make_temp_root T30
 make_fixture "$T30"
 install_signal_blocking_git "$T30"
 SIGNAL_FOREIGN_OWNER=foreign-owner start_setup_for_signal "$T30"
@@ -1151,7 +1188,7 @@ else
 fi
 
 # (18) stale lockは所有権を証明できないので削除せず、明示停止する。
-T22="$(mktemp -d)"
+make_temp_root T22
 make_fixture "$T22"
 mkdir "${T22}/home/.agent-memory-setup.lock"
 echo keep >"${T22}/home/.agent-memory-setup.lock/owner"
@@ -1168,7 +1205,7 @@ else
 fi
 
 # clone commandがsuccessでも結果を信用せず、既存repoと同じvalidatorへ通す。
-T23="$(mktemp -d)"
+make_temp_root T23
 make_fixture "$T23"
 rm -rf "${T23}/agent-memory"
 cat >"${T23}/bin/git" <<'EOF'
@@ -1199,7 +1236,7 @@ fi
 
 # (19) XDG 配下の設定リンク。agent home と違い runtime を持たないので repo 版で
 # 上書きしてよいが、リンクの形は同じ規則で張られること。
-T7="$(mktemp -d)"
+make_temp_root T7
 make_fixture "$T7"
 mkdir -p "${T7}/dotfiles/wezterm" "${T7}/dotfiles/fish" "${T7}/dotfiles/nvim" \
   "${T7}/dotfiles/helix"

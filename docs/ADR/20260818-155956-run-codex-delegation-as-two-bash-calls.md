@@ -111,7 +111,7 @@ Claude Code のトークン消費を抑えるため、探索・定型作業・�
 * **`-s` は必ず指定する。** `~/.codex/config.toml` の `sandbox_mode` は `workspace-write` で、`-s` を書かない `codex exec` は explore でも書き込みできる状態で走る。この既定値は codex 自身が config を書き換えることもあるため、呼び出し側で毎回固定し、指定のない呼び出し形を持たない
 * **`-s` が上書きするのは `sandbox_mode` だけである。** 書き込みルート・ネットワーク到達性・承認方針・記憶機能は config の側に残るため、CLI で毎回渡す。CLI で渡せば、config が書き換わっても次の実行には効かない
 * **`writable_roots=[]` でも一時領域は書き込み可能なままである。** `workspace-write` は workspace の外を拒否するが、`$TMPDIR` と `/tmp` は codex 側の既定で許可される。塞がるのはホームディレクトリなど「workspace でも一時領域でもない場所」であり、書き込みが workspace 内に限られるとは読まない。委譲の作業ディレクトリも一時領域にあるため、委譲先からは他の委譲の作業ディレクトリにも手が届く
-* **記憶機能は委譲のあいだ切る。** config は native memories を有効にしているため、既定では委譲ごとに codex が記憶を書き、過去の実行から抽出した内容を次の委譲へ持ち込む。これは差分に現れない入力であり、リポジトリを跨いで運ばれる。対話的な codex 利用では有効のままにするため、config 側は変えない
+* **Codex native Memories を二重に無効化する。** global config では、Claude Code / Codex 共有の `agent-memory` を唯一の正本にするため無効化済みである。委譲呼び出しは `features.memories=false`、`memories.generate_memories=false`、`memories.use_memories=false` を毎回渡す。この三重指定は、config の変更や既定値のドリフトが委譲に影響するのを防ぐ防御層である
 * **キーの綴りが正しいことと効いていることは別である。** 綴りは、空の `CODEX_HOME` を向けた `--strict-config` で検証する(通常の config には Windows 用の `computer_use` セクションがあり、strict を付けると起動前に落ちる)。strict を外した実行では存在しないキーが素通りするので、受理されたことは何の証拠にもならない。`codex --version` が変わったら綴りと実挙動を再検証する — キーが改名された場合の失敗は、エラーではなく沈黙として現れる
 * **`--dangerously-bypass-approvals-and-sandbox` は使わない。** その形は codex-review skill が「他の用途で使わない」と限定しており、本設計はその限定を変更しない。`-s` が効かない環境では委譲しない — `read-only` も `workspace-write` も担保にならず、explore が読むだけである保証も失われる。codex の Linux sandbox は unprivileged user namespace を要する bubblewrap に依存するため、多くのコンテナでは機能しない
 

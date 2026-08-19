@@ -2,6 +2,7 @@
 # Claude / Codex の memory-consolidate Skill が agent-specific memory path と
 # instruction file 以外で drift していないことを検査する。
 set -u
+export LC_ALL=C
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_SKILL="$REPO/claude/skills/memory-consolidate/SKILL.md"

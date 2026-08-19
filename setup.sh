@@ -46,7 +46,7 @@ link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
 link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
 link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
-# agent のホーム (~/.claude ~/.codex ~/.agents/skills) を張る。実行後は必ずこの
+# agent のホーム (~/.claude ~/.codex ~/.agents/{skills,bin,hooks}) を張る。実行後は必ずこの
 # checkout を指している状態にする。既に何かが在れば .back へ退避してから張る。
 # 消さないのは、ignore された runtime (auth.json / sessions/ / history.jsonl /
 # plugins/) がそこに同居しているため。退避先から必要な分を戻すのは手作業。
@@ -276,11 +276,13 @@ finish_memory_transaction() {
 }
 
 # agent-memory (個人永続記憶, private repo) を Claude/Codex 双方から参照させる。
-# 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
-# 移動しない — 旧 claude-memory からの移行は
-# docs/superpowers/specs/2026-07-11-agent-memory-design.md の「移行手順」に従い手動)。
+# 配置先は agents/bin/resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
+# 移動しない)。共有配置は
+# docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md を参照。
+# resolver の挙動契約は agents/bin/resolve-memory-dir.sh と
+# tests/agent-memory-ghq.sh が正。
 # symlink は dotfiles の .gitignore により追跡されない。
-AGENT_MEMORY_DIR="$(bash "${DOTDIR}/resolve-memory-dir.sh")"
+AGENT_MEMORY_DIR="$(bash "${DOTDIR}/agents/bin/resolve-memory-dir.sh")"
 resolve_status=$?
 # setup.sh には set -e がないため、ヘルパーの失敗や壊れた出力 (空・複数行・
 # 相対パス) をここで検証しないと後続の clone/symlink が変な場所に走る。
@@ -615,13 +617,15 @@ else
 fi
 finish_memory_transaction
 
-# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents/skills
-# は同じ実体の skills/ を指す (personal skills の参照先)。
+# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents は
+# personal skills と、Claude/Codex が共有する runtime を指す。
 link_agent_home "${DOTDIR}/codex" "$HOME/.codex"
 if mkdir -p ~/.agents; then
   link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills"
+  link_agent_home "${DOTDIR}/agents/bin" "$HOME/.agents/bin"
+  link_agent_home "${DOTDIR}/agents/hooks" "$HOME/.agents/hooks"
 else
-  echo "setup.sh: could not create ~/.agents; skip the skills link"
+  echo "setup.sh: could not create ~/.agents; skip shared agent links"
 fi
 
 # nushell はディレクトリ単位で差し替えない。Nushell 自身が同じ場所へ history や

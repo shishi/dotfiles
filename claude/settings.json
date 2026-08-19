@@ -258,7 +258,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/inject-memory.sh",
+            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.claude/memory",
             "timeout": 10,
             "statusMessage": "個人記憶を注入中..."
           }

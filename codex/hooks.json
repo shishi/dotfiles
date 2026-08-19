@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/inject-memory.sh ~/.codex/memory",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.claude/hooks/inject-memory.sh ~/.codex/memory'",
+            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
             "timeout": 10,
             "additionalContextLimit": 10000
           }

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# resolve-memory-dir.sh (repo root) のスモークテスト。
+# agents/bin/resolve-memory-dir.sh のスモークテスト。
 # 使い方: bash tests/agent-memory-ghq.sh
 # HOME / GIT_CONFIG_GLOBAL を一時ディレクトリへ向けるので実環境は触らない。
 # (setup.sh は実行せず grep で検査するだけ。setup.sh は DOTDIR を $0 から再計算するため
 #  env では sandbox 化できない。)
-# ヘルパーは「配置先の解決」だけを行う (自動移行はしない。旧 claude-memory からの
-# 移行は spec 手順で手動)。
+# ヘルパーは「配置先の解決」だけを行い、旧 clone を自動移行しない。
+# 旧 clone の移行手順は helper 契約の対象外。
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HELPER="$REPO/resolve-memory-dir.sh"
+HELPER="$REPO/agents/bin/resolve-memory-dir.sh"
 # ヘルパー不在は最初に fatal で落とす。17/19 の stderr 検査とは守備範囲が違うので
 # 両方要る。guard が無いと helper を起動するアサーションが軒並み NG になり、
 # 「パスが違う」という本当の原因が埋もれる (しかも末尾の setup.sh 行順検査だけは
@@ -20,6 +20,16 @@ SETUP="$REPO/setup.sh"
 PASS=0; FAIL=0
 ok() { PASS=$((PASS+1)); echo "ok: $1"; }
 ng() { FAIL=$((FAIL+1)); echo "NG: $1"; }
+
+# agent 固有の home から推測せず、共有 runtime の resolver を案内する。
+for guide in "$REPO/claude/CLAUDE.md" "$REPO/codex/AGENTS.md"; do
+  if grep -qxF 'bash ~/.agents/bin/resolve-memory-dir.sh' "$guide" \
+    && ! grep -q 'dirname.*resolve-memory-dir\.sh' "$guide"; then
+    ok "$(basename "$guide") points to the shared resolver"
+  else
+    ng "$(basename "$guide") does not point only to the shared resolver"
+  fi
+done
 
 ORIG_PATH="$PATH"
 TMP=""
@@ -180,7 +190,7 @@ setup_code_lines() { grep -nE "$1" "$SETUP" | grep -v '^[0-9]*:[[:space:]]*#'; }
 # 限界: 見ているのはテキスト上の位置だけ。分岐を関数へ括り出して memory 処理より
 # 後ろで呼ぶ形にすると、実行順が壊れていてもこの検査は通る。
 gitconfig_line="$(setup_code_lines 'ln .*/\.gitconfig' | tail -n1 | cut -d: -f1)"
-memory_line="$(setup_code_lines 'resolve-memory-dir\.sh' | head -n1 | cut -d: -f1)"
+memory_line="$(setup_code_lines 'agents/bin/resolve-memory-dir\.sh' | head -n1 | cut -d: -f1)"
 if [ -n "$gitconfig_line" ] && [ -n "$memory_line" ] && [ "$gitconfig_line" -lt "$memory_line" ]; then
   ok "setup.sh links gitconfig before resolving memory dir"
 else

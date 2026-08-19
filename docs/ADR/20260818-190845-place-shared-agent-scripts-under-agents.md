@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | proposed |
+| **Status** | accepted |
 | **Date** | 2026-08-18 |
 | **Decision-makers** | shishi |
 | **Consulted** | Codex |
@@ -39,6 +39,14 @@ Claude Code と Codex は `~/.agents/hooks/inject-memory.sh` を共有し、そ�
 link を引数で渡します。配置解決は `~/.agents/bin/resolve-memory-dir.sh` を使います。
 既存の旧パスは同一変更で全 consumer を移行し、互換 wrapper は残しません。
 
+`~/.agents/bin/memory-write-lock.sh` も共有します。`acquire` が返す opaque handle
+（内部の owner token を含まない handle path）を同じ workflow の tool call 間で保持します。
+`release` は handle と owner marker を再検証し、取得者の lock だけを解放します。
+
+injector は `main^{commit}` を固定し、その snapshot からだけ記憶を読みます。
+snapshot の解決、object の読み取り、秘密情報検査のいずれかが失敗した場合は、
+worktree へ fallback せず記憶本文を出力しません。
+
 この配置判断と同時に、共有記憶を現在の運用として再確認します。Codex 利用の撤回記録は
 取り消し、Codex native Memories と Claude Code auto memory は無効のまま維持します。
 
@@ -49,23 +57,40 @@ link を引数で渡します。配置解決は `~/.agents/bin/resolve-memory-di
 * source と runtime の両方で共有責務が明確になる
 * Codex が `~/.claude` の存在に依存しなくなる
 * 共有実装の修正とテスト対象が 1 箇所になる
+* branch 切り替えや worktree 編集中でも `main` snapshot 以外を注入しない
+* process と tool call をまたいでも lock の取得者を検証できる
 
 **Negative:**
 
 * setup 前の環境では新しい `~/.agents` link が無いため hook を起動できない
 * 移行時に設定、指示、テストの全参照を同時に更新する必要がある
+* snapshot または検査の異常時は記憶本文を省略し、復旧警告だけを出力する
+* lock の解放失敗時は state を自動削除せず、確認後の復旧が必要になる
 
 **Neutral:**
 
 * `claude/hooks` と `codex/hooks` にはエージェント固有 hook が引き続き残る
-* private `agent-memory` repo の配置と commit protocol は変わらない
+* private `agent-memory` repo の配置と `main` への commit / push protocol は変わらない
 
 ### Confirmation
 
-setup fixture で `~/.agents/bin` と `~/.agents/hooks` の link target を確認します。全 tracked
-consumer に旧 resolver/injector path が残っていないことを検索し、Claude Code と Codex の
-双方から同じ injector contract test を実行します。実装完了後に status を accepted へ
-変更します。
+実装は次の確認を通過しています。
+
+```bash
+for test_file in tests/*.sh; do bash "$test_file" || exit 1; done
+bash agents/hooks/inject-memory.test.sh
+bash codex/hooks/inject-memory.test.sh
+bash -n agents/bin/*.sh agents/hooks/*.sh setup.sh tests/*.sh codex/hooks/*.sh claude/hooks/*.sh
+jq -e . claude/settings.json codex/hooks.json >/dev/null
+codex features list | rg '^memories[[:space:]]+stable[[:space:]]+false$'
+```
+
+path gate は旧 resolver / injector 参照が無いことを確認します。setup fixture は
+`~/.agents/bin` と `~/.agents/hooks` の link target を確認します。injector と
+write-lock suite は snapshot の fail-closed と persistent handle の所有者検証を確認します。
+
+macOS 環境に `pwsh` が無かったため、PowerShell 固有テストは未実行です。
+共有 hooks JSON contract は Bash と `jq` で確認しています。
 
 ## Pros and Cons of the Options
 
