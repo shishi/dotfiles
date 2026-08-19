@@ -13,11 +13,10 @@ contains_newline() {
   esac
 }
 
+# Dispatch on the stat implementation, not on the OS: a Darwin host whose PATH
+# leads with GNU coreutils has no BSD stat, and there `-f` means --file-system.
 stat_mode() {
-  case "$(uname -s)" in
-    Darwin | FreeBSD | OpenBSD | NetBSD) stat -f '%Lp' "$1" 2>/dev/null ;;
-    *) stat -c '%a' "$1" 2>/dev/null ;;
-  esac
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
 }
 
 canonical_repo() {

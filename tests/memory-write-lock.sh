@@ -15,11 +15,10 @@ TMP_ROOT="$(cd "$TMP_ROOT" && pwd -P)" || exit 1
 cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
+# Dispatch on the stat implementation, not on the OS: a Darwin host whose PATH
+# leads with GNU coreutils has no BSD stat, and there `-f` means --file-system.
 mode_of() {
-  case "$(uname -s)" in
-    Darwin | FreeBSD | OpenBSD | NetBSD) stat -f '%Lp' "$1" ;;
-    *) stat -c '%a' "$1" ;;
-  esac
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
 }
 
 token_output_is_absent() {
