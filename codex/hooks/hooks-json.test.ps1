@@ -8,6 +8,17 @@ $registered = @()
 $preToolUse = @($config.hooks.PreToolUse)
 if ($preToolUse.Count -ne 1 -or $preToolUse[0].matcher -ne 'Bash') {
     $failures += 'existing PreToolUse Bash hook is not preserved'
+} elseif ($preToolUse[0].hooks[0].command -ne 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh') {
+    $failures += 'PreToolUse must invoke the shared git push guard'
+} elseif ($preToolUse[0].hooks[0].commandWindows -notmatch "-c\s+'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard\.sh'$" ) {
+    $failures += 'PreToolUse Windows command must invoke the shared git push guard'
+}
+
+$userPromptSubmit = @($config.hooks.UserPromptSubmit)
+if ($userPromptSubmit.Count -ne 1 -or $userPromptSubmit[0].hooks[0].command -ne 'bash ~/.agents/hooks/git-push-guard.sh --record-approval') {
+    $failures += 'UserPromptSubmit must record explicit push authorization with the shared guard'
+} elseif ($userPromptSubmit[0].hooks[0].commandWindows -notmatch "-c\s+'~/.agents/hooks/git-push-guard\.sh --record-approval'$" ) {
+    $failures += 'UserPromptSubmit Windows command must record authorization with the shared guard'
 }
 
 $sessionStart = @($config.hooks.SessionStart)

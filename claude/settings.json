@@ -162,13 +162,7 @@
       "Bash(rm -rf ~:*)",
       "Bash(rm -rf $HOME:*)",
       "Bash(rm -rf ~/.ssh*)",
-      "Bash(rm -rf ~/.config*)",
-      "Bash(git push origin master)",
-      "Bash(git push origin master:*)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git push --delete:*)",
-      "Bash(git push origin --delete:*)"
+      "Bash(rm -rf ~/.config*)"
     ],
     "defaultMode": "auto"
   },
@@ -184,7 +178,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/git-push-guard.sh",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
           },
@@ -290,6 +284,11 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
             "timeout": 10
           }
         ]
