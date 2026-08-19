@@ -198,8 +198,12 @@ exit "$rc"
 5. CLAUDE.md のレビューゲート条件(5 ファイル以上・新規モジュール・公開 API・infra/config 変更、
    および commit 前)で判定して review-gate skill を通す。判定は変更の中身に対して行い、委譲の
    種別では行わない — 広範囲のリネームや横展開は、種別が chore でもゲート条件に該当する。委譲先が
-   commit していた場合もゲートは通し、指摘があれば追加 commit ではなく `git reset --soft` で戻して
-   から修正する
+   commit していた場合もゲートは通し、指摘があれば追加 commit を積まず、**委譲を始める前の commit
+   まで `git reset --soft <その SHA>` で戻して**から修正する(分からなければ `git reflog` で確認する)。
+   引数を省いた `git reset --soft` は HEAD を対象にするため何も戻らず、委譲先が作った commit の数は
+   分からないので `HEAD^` も当てにならない。**戻した内容は staged のまま残る**ため、以降の確認は
+   `git status` と `git diff --cached` で行う(`git diff` だけでは staged 分が見えず、変更が消えたと
+   読める)
 
 ## 長時間の委譲
 
