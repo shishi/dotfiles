@@ -118,6 +118,11 @@ check "その 1 件が NET=false" grep -q '^NET=false' "$SNIP"
 check "read-only で NET が効かない旨を書いている" \
   grep -q 'read-only` では `NET=true` が黙って効かない' "$SKILL"
 
+# 「委譲専用の検査機構は持たない」だけを読むと委譲先が無防備に走ると取れる。実際には codex 側の
+# PreToolUse hook が委譲先のコマンドにも効くので、ガードの有無を前提にした判断を誤らせないこと
+check "委譲先にも hook が効く旨を書いている" \
+  grep -q 'codex 側の hook は委譲の中でも効く' "$SKILL"
+
 # 出力経路: 最終メッセージは -o のファイルへ、進捗出力は run.log へ。
 # リダイレクトを落とすと codex の進捗出力全文が context に入り、削減の目的が失われる
 check "最終メッセージを out.json へ落とす" grep -q -- '-o "$WORK/out.json"' "$SNIP"

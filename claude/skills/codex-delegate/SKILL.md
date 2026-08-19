@@ -18,6 +18,17 @@ codex CLI に作業をさせ、Claude が受け取るのは JSON 1 通だけに�
 である Claude が差分を見て行う。したがって**委譲専用の検査機構は持たない** — 妥当性は差分の
 確認と review-gate skill で見る。
 
+**ただし codex 側の hook は委譲の中でも効く。** `~/.codex/hooks.json` の PreToolUse hook は委譲先の
+Bash 呼び出しに対しても実行前に走り、拒否されたコマンドは実行されないまま
+`Command blocked by PreToolUse hook: <理由>` が委譲先へ返る。`hooks.state` のエントリは `enabled` が
+省略されていても走ることがあるため、省略を「無効」の印として読まない(既定値を定める codex 側の
+記述が無く、省略からは状態を判定できない)。これは委譲専用の検査ではなく、codex を使う限り効く経路
+である。
+
+**hook が見るのは Bash に渡されたコマンド文字列であって、委譲先が書き込む内容ではない。** heredoc の
+本文はその文字列に含まれるので検査されるが、`bash script.sh` のようにデータ経由で読み込まれる内容は
+検査されない。ガードを通ったことは、その変更が妥当であることを意味しない。
+
 ## 前提条件
 
 1. **`~/.codex` が dotfiles の `codex/` を指していること**(`readlink ~/.codex`)。この link で
