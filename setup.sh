@@ -32,14 +32,32 @@ link_config_dir() {
   ln -sfn "$source_path" "$target_path"
 }
 
+# 新規マシンの known_hosts は空なので、素の git clone は host key 確認の対話で
+# 止まる。そこで止まらないよう新しいホスト鍵を受理する。環境側で設定済みなら
+# そちらを尊重する。尊重するのは環境変数の値で、git config の core.sshCommand は
+# 環境変数の方が優先されるため上書きする。export なので後続の gh と
+# install-plugins.sh の git にも効く。
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o StrictHostKeyChecking=accept-new}"
+
 if [ "$REMOTE_CONTAINERS" != true ]; then
   link_config_dir "${DOTDIR}/wezterm" "${XDG_CONFIG_HOME}/wezterm"
 
-  # symlink でないときだけ clone する。既にリンク済みなら repo は取得済み。
-  if [ ! -L ~/.emacs.d ]; then
-    git -C $(dirname ${DOTDIR}) clone git@github.com:shishi/emacs.git
+  emacs_dir="$(dirname "${DOTDIR}")/emacs"
+  # 取得済みかどうかは HEAD が解決できるかで見る。~/.emacs.d が symlink かどうかで
+  # 見ると、旧版が clone 失敗時に残した dangling link を「取得済み」と誤認する。
+  # .git の有無で見ると、SIGKILL や電源断で .git だけ残った状態を誤認する
+  # (通常の認証失敗やネットワーク断では git 自身が後始末するので残らない)。
+  # HEAD の解決なら linked worktree (.git がファイル) も正しく拾える。
+  emacs_ready() { git -C "${emacs_dir}" rev-parse --verify HEAD >/dev/null 2>&1; }
+  if ! emacs_ready; then
+    git -C "$(dirname "${DOTDIR}")" clone git@github.com:shishi/emacs.git \
+      || echo "setup.sh: could not clone emacs into ${emacs_dir} (ssh key missing? interrupted?); rerun setup.sh, or remove a leftover first: rm -rf ${emacs_dir}"
   fi
-  link_config_dir "$(dirname ${DOTDIR})/emacs" ~/.emacs.d
+  # 取得できたときだけ張る。失敗したまま張ると壊れたリンクが残り、既存の実
+  # ディレクトリは link_config_dir の rm -fr で消える。
+  if emacs_ready; then
+    link_config_dir "${emacs_dir}" ~/.emacs.d
+  fi
 fi
 
 link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
