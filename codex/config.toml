@@ -69,6 +69,15 @@ trust_level = "trusted"
 [projects."/Users/shigenobu.407/dev/src/github.com/shishi/dotfiles"]
 trust_level = "trusted"
 
+[projects."/home/shishi/dev/src/github.com/shishi/dotfiles"]
+trust_level = "trusted"
+
+[projects."/home/shishi/dev/src/github.com/shishi/rss_generator"]
+trust_level = "trusted"
+
+[projects."/mnt/c/Users/shishi/dev"]
+trust_level = "trusted"
+
 [windows]
 sandbox = "elevated"
 
@@ -194,6 +203,9 @@ enabled = true
 trusted_hash = "sha256:3ecc634403e19a76b88da98b84f34a55ef2fc1a20a029b88314c3e7369f6b822"
 enabled = true
 
+[hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:53732c0aa3af6f877a9c0417b4c241896d8e3c6ccca7b2161f026cc4ecbf03dd"
+
 
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
@@ -222,4 +234,7 @@ CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a26
 [memories]
 generate_memories = true
 use_memories = true
+
+[tui.model_availability_nux]
+"gpt-5.6-sol" = 1
 
