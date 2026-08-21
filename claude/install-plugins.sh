@@ -32,7 +32,6 @@ INSTALLED="$CLAUDE_DIR/plugins/installed_plugins.json"
 declare -A MARKETPLACE_REPO=(
   [superpowers-marketplace]="obra/superpowers-marketplace"
   [claude-plugins-official]="anthropics/claude-plugins-official"
-  [openai-codex]="openai/codex-plugin-cc"
   [karpathy-skills]="forrestchang/andrej-karpathy-skills"
   [claude-code-herdr-plugin]="yigitkonur/claude-code-herdr-plugin"
 )

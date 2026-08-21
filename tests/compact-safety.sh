@@ -34,6 +34,13 @@ check_not() { # 成功したら NG
   if "$@" >/dev/null 2>&1; then fail "$desc"; else pass "$desc"; fi
 }
 
+set_mtime_epoch() {
+  local epoch="$1" path="$2" timestamp
+  timestamp="$(date -r "$epoch" '+%Y%m%d%H%M.%S' 2>/dev/null \
+    || date -d "@$epoch" '+%Y%m%d%H%M.%S')" || return 1
+  touch -m -t "$timestamp" "$path"
+}
+
 # ファイル名への CR 混入検査(spec 検証済みの事実 6 の回帰テスト)
 no_cr_filenames() {
   [ -z "$(find "$COMPACT_STATE_DIR" -name "$(printf '*\r*')" 2>/dev/null)" ]
@@ -99,7 +106,8 @@ end
 begin "recovery/TTL 30日"
 mkdir -p "$COMPACT_STATE_DIR"
 printf 'old\n' > "$COMPACT_STATE_DIR/old-sid.md"
-touch -m -d "35 days ago" "$COMPACT_STATE_DIR/old-sid.md"
+set_mtime_epoch "$(( $(date +%s) - 35 * 24 * 60 * 60 ))" \
+  "$COMPACT_STATE_DIR/old-sid.md"
 printf 'new\n' > "$COMPACT_STATE_DIR/new-sid.md"
 printf '{"session_id":"sid-5"}' | bash "$HOOKS/session-start-compaction-recovery.sh" cleanup >/dev/null
 check "35日前のファイルは消える" test ! -f "$COMPACT_STATE_DIR/old-sid.md"

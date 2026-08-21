@@ -64,7 +64,7 @@ link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
 link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
 link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
-# agent のホーム (~/.claude ~/.codex ~/.agents/skills) を張る。実行後は必ずこの
+# agent のホーム (~/.claude ~/.codex ~/.agents/{skills,bin,hooks}) を張る。実行後は必ずこの
 # checkout を指している状態にする。既に何かが在れば .back へ退避してから張る。
 # 消さないのは、ignore された runtime (auth.json / sessions/ / history.jsonl /
 # plugins/) がそこに同居しているため。退避先から必要な分を戻すのは手作業。
@@ -142,12 +142,165 @@ elif [[ $(uname -s) == MINGW* ]]; then
   ln -sfn ${DOTDIR}/.gitconfig.win ~/.gitconfig
 fi
 
-# agent-memory (個人永続記憶, private repo) を ~/.claude/memory として参照させる。
-# 配置先は resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
-# 移動しない — 旧 claude-memory からの移行は
-# docs/superpowers/specs/2026-07-11-agent-memory-design.md の「移行手順」に従い手動)。
+# realpath/readlink -f は実装によって dangling link にも非空を返すため、存在確認を
+# 先に行う。directory と regular file のどちらを指す valid link も物理解決できる。
+resolve_existing_path() {
+  local path="$1"
+
+  [ -e "$path" ] || return 1
+  realpath "$path" 2>/dev/null
+}
+
+normalize_agent_memory_remote() {
+  local remote="$1"
+
+  remote="${remote%/}"
+  remote="${remote%.git}"
+  case "$remote" in
+    git@github.com:*) printf 'github.com/%s\n' "${remote#git@github.com:}" ;;
+    https://github.com/*) printf 'github.com/%s\n' "${remote#https://github.com/}" ;;
+    ssh://git@github.com/*) printf 'github.com/%s\n' "${remote#ssh://git@github.com/}" ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_agent_memory_repository() {
+  local candidate="$1" candidate_real repository_root repository_real origin normalized_origin commit
+
+  candidate_real="$(resolve_existing_path "$candidate")" || {
+    echo "setup.sh: could not resolve agent-memory repository: $candidate"
+    return 1
+  }
+  repository_root="$(git -C "$candidate" rev-parse --show-toplevel 2>/dev/null)" || {
+    echo "setup.sh: agent-memory path is not a Git worktree: $candidate"
+    return 1
+  }
+  repository_real="$(resolve_existing_path "$repository_root")" || {
+    echo "setup.sh: could not resolve agent-memory worktree root: $repository_root"
+    return 1
+  }
+  # Git for Windows は C:/...、MSYS realpath は /tmp/... のように同じ inode を
+  # 別表記で返す。文字列でなく filesystem identity で root 一致を検証する。
+  [ "$candidate_real" -ef "$repository_real" ] || {
+    echo "setup.sh: agent-memory path is not the worktree root: $candidate"
+    return 1
+  }
+
+  origin="$(git -C "$candidate" remote get-url origin 2>/dev/null)" || {
+    echo "setup.sh: agent-memory repository has no origin: $candidate"
+    return 1
+  }
+  normalized_origin="$(normalize_agent_memory_remote "$origin")" || {
+    echo "setup.sh: unsupported agent-memory origin: $origin"
+    return 1
+  }
+  [ "$normalized_origin" = github.com/shishi/agent-memory ] || {
+    echo "setup.sh: unexpected agent-memory origin: $origin"
+    return 1
+  }
+  commit="$(git -C "$candidate" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    echo "setup.sh: agent-memory repository has no committed HEAD: $candidate"
+    return 1
+  }
+  if [ "$(git -C "$candidate" cat-file -t "$commit:MEMORY.md" 2>/dev/null)" != blob ] ||
+    [ "$(git -C "$candidate" cat-file -t "$commit:CONVENTIONS.md" 2>/dev/null)" != blob ]; then
+    echo "setup.sh: agent-memory HEAD lacks MEMORY.md or CONVENTIONS.md: $candidate"
+    return 1
+  fi
+}
+
+move_memory_path_no_follow() {
+  local source_path="$1" target_path="$2"
+
+  case "$(uname -s)" in
+    Darwin | FreeBSD | OpenBSD | NetBSD) mv -h -n "$source_path" "$target_path" ;;
+    *) mv -T -n "$source_path" "$target_path" ;;
+  esac
+}
+
+memory_symlink_matches() {
+  local link_path="$1" expected_literal="$2" expected_real="$3" actual_real
+
+  [ -n "$expected_real" ] || return 1
+  [ -L "$link_path" ] || return 1
+  [ "$(readlink "$link_path")" = "$expected_literal" ] || return 1
+  actual_real="$(resolve_existing_path "$link_path")" || return 1
+  [ "$actual_real" = "$expected_real" ] || return 1
+}
+
+dangling_memory_symlink_matches() {
+  local link_path="$1" expected_literal="$2"
+
+  [ -L "$link_path" ] || return 1
+  [ "$(readlink "$link_path")" = "$expected_literal" ] || return 1
+  [ ! -e "$link_path" ] || return 1
+}
+
+remove_owned_memory_symlink() {
+  local link_path="$1" expected_literal="$2" expected_real="$3"
+
+  memory_symlink_matches "$link_path" "$expected_literal" "$expected_real" ||
+    return 1
+  rm -f "$link_path"
+}
+
+remove_owned_dangling_memory_symlink() {
+  local link_path="$1" expected_literal="$2"
+
+  dangling_memory_symlink_matches "$link_path" "$expected_literal" ||
+    return 1
+  rm -f "$link_path"
+}
+
+release_memory_lock() {
+  [ "$memory_lock_owned" = true ] || return 0
+  [ -f "$memory_lock_owner_file" ] ||
+    return 1
+  [ "$(cat "$memory_lock_owner_file" 2>/dev/null)" = "$memory_lock_token" ] ||
+    return 1
+  rm -f "$memory_lock_owner_file" ||
+    return 1
+  memory_lock_owned=false
+  if ! rmdir "$memory_lock"; then
+    echo "setup.sh: could not release memory setup lock: $memory_lock"
+    return 1
+  fi
+}
+
+handle_memory_signal() {
+  local status="$1"
+
+  if [ -z "$memory_pending_signal_status" ]; then
+    memory_pending_signal_status="$status"
+  fi
+  if [ "$memory_transaction_critical" = true ]; then
+    return 0
+  fi
+  release_memory_lock || :
+  trap - EXIT HUP INT TERM
+  exit "$memory_pending_signal_status"
+}
+
+finish_memory_transaction() {
+  local status
+
+  release_memory_lock || :
+  memory_transaction_critical=false
+  if [ -n "$memory_pending_signal_status" ]; then
+    status="$memory_pending_signal_status"
+    trap - EXIT HUP INT TERM
+    exit "$status"
+  fi
+}
+
+# agent-memory (個人永続記憶, private repo) を Claude/Codex 双方から参照させる。
+# 配置先は agents/bin/resolve-memory-dir.sh が解決する (ghq.root 対応。解決のみで実体は
+# 移動しない)。共有配置は
+# docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md を参照。
+# resolver の挙動契約は agents/bin/resolve-memory-dir.sh と
+# tests/agent-memory-ghq.sh が正。
 # symlink は dotfiles の .gitignore により追跡されない。
-AGENT_MEMORY_DIR="$(bash "${DOTDIR}/resolve-memory-dir.sh")"
+AGENT_MEMORY_DIR="$(bash "${DOTDIR}/agents/bin/resolve-memory-dir.sh")"
 resolve_status=$?
 # setup.sh には set -e がないため、ヘルパーの失敗や壊れた出力 (空・複数行・
 # 相対パス) をここで検証しないと後続の clone/symlink が変な場所に走る。
@@ -158,7 +311,33 @@ case "$AGENT_MEMORY_DIR" in
   /*) ;;
   *) resolve_status=1 ;;
 esac
-if [ "$resolve_status" -ne 0 ]; then
+memory_lock="$HOME/.agent-memory-setup.lock"
+memory_lock_owner_file="$memory_lock/owner"
+memory_lock_token="setup-$$"
+memory_lock_owned=false
+memory_transaction_critical=false
+memory_pending_signal_status=""
+if [ "$resolve_status" -eq 0 ]; then
+  if mkdir "$memory_lock" 2>/dev/null; then
+    if printf '%s\n' "$memory_lock_token" >"$memory_lock_owner_file"; then
+      memory_lock_owned=true
+      trap 'release_memory_lock || :' EXIT
+      trap 'handle_memory_signal 129' HUP
+      trap 'handle_memory_signal 130' INT
+      trap 'handle_memory_signal 143' TERM
+    else
+      rmdir "$memory_lock" 2>/dev/null || :
+      echo "setup.sh: could not record memory setup lock owner; skip memory setup"
+      resolve_status=2
+    fi
+  else
+    echo "setup.sh: memory setup lock is busy ($memory_lock); skip memory setup"
+    resolve_status=2
+  fi
+fi
+if [ "$resolve_status" -eq 2 ]; then
+  :
+elif [ "$resolve_status" -ne 0 ]; then
   echo "setup.sh: could not resolve agent-memory location; skip memory setup"
 else
   if [ ! -d "${AGENT_MEMORY_DIR}" ]; then
@@ -171,27 +350,300 @@ else
       || gh repo clone shishi/agent-memory "${AGENT_MEMORY_DIR}" 2>/dev/null \
       || echo "setup.sh: could not clone agent-memory (ssh key / gh auth missing?); clone manually: git clone git@github.com:shishi/agent-memory.git ${AGENT_MEMORY_DIR}"
   fi
-  if [ -d "${AGENT_MEMORY_DIR}" ]; then
-    if [ ! -e "${DOTDIR}/claude/memory" ] || [ -L "${DOTDIR}/claude/memory" ]; then
-      # 失敗を握ると記憶が無い状態が無言で残る。注入 hook は読み先が無ければ
-      # 何も言わないので、ここが唯一の手掛かりになる。
-      ln -sfn "${AGENT_MEMORY_DIR}" "${DOTDIR}/claude/memory" \
-        || echo "setup.sh: could not link ${DOTDIR}/claude/memory (Windows: enable Developer Mode or run elevated)"
+  if [ -d "${AGENT_MEMORY_DIR}" ] &&
+    validate_agent_memory_repository "${AGENT_MEMORY_DIR}"; then
+    memory_blocked=false
+    memory_real="$(resolve_existing_path "${AGENT_MEMORY_DIR}")"
+    if [ -z "$memory_real" ]; then
+      echo "setup.sh: could not resolve canonical agent-memory repository; memory targets unchanged"
+      memory_blocked=true
+    fi
+    memory_targets=("${DOTDIR}/claude/memory" "${DOTDIR}/codex/memory")
+    memory_states=(missing missing)
+    memory_literals=("" "")
+    memory_temps=("" "")
+    memory_backups=("" "")
+    memory_prepared=(false false)
+    memory_changed=(false false)
+    memory_detached=(false false)
+    memory_backup_removed=(false false)
+
+    # 片方を変更してからもう片方の衝突に気付くと split brain になるため、2 target
+    # とも先に調べる。dangling は実体を持たないので、報告したうえで修復可能とする。
+    for i in 0 1; do
+      memory_target="${memory_targets[$i]}"
+      if [ -L "$memory_target" ]; then
+        if [ ! -e "$memory_target" ]; then
+          memory_states[$i]=dangling
+          memory_literals[$i]="$(readlink "$memory_target")"
+          echo "setup.sh: ${memory_target} was a dangling link to $(readlink "$memory_target")"
+        else
+          target_real="$(resolve_existing_path "$memory_target")"
+          if [ -z "$target_real" ]; then
+            echo "setup.sh: could not resolve ${memory_target}; memory targets unchanged"
+            memory_blocked=true
+          elif [ "$target_real" != "$memory_real" ]; then
+            echo "setup.sh: ${memory_target} resolves elsewhere (${target_real}); memory targets unchanged"
+            memory_blocked=true
+          else
+            memory_states[$i]=canonical
+          fi
+        fi
+      elif [ -e "$memory_target" ]; then
+        echo "setup.sh: ${memory_target} exists as a real path; memory targets unchanged"
+        memory_blocked=true
+      fi
+    done
+
+    if [ "$memory_blocked" = true ]; then
+      echo "setup.sh: skip both memory links (manual setup required)"
     else
-      echo "setup.sh: ${DOTDIR}/claude/memory exists as a directory; skip (manual setup required)"
+      # validation/re-resolution/preflightまではsignalで即時中止できる。tempを作り始めた
+      # 後だけはsplit stateを避けるため、transaction終了まで最初のsignalを遅延する。
+      memory_transaction_critical=true
+      # 両方の symlink を本番 target と別名で先に作る。1 本でも作成・検証に失敗
+      # したら、本番 target には触れず、自分が作成した temp だけを片付ける。
+      memory_prepare_ok=true
+      memory_failure=""
+      for i in 0 1; do
+        [ "${memory_states[$i]}" = canonical ] && continue
+        memory_target="${memory_targets[$i]}"
+        memory_temps[$i]="${memory_target}.setup-$$.new"
+        memory_backups[$i]="${memory_target}.setup-$$.back"
+        memory_temp="${memory_temps[$i]}"
+        memory_backup="${memory_backups[$i]}"
+
+        if [ -e "$memory_temp" ] || [ -L "$memory_temp" ] \
+          || [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; then
+          memory_prepare_ok=false
+          memory_failure="temporary path already exists for ${memory_target}"
+          break
+        fi
+        if ! ln -s "${AGENT_MEMORY_DIR}" "$memory_temp"; then
+          memory_prepare_ok=false
+          memory_failure="could not prepare ${memory_target}"
+          break
+        fi
+        memory_prepared[$i]=true
+        target_real="$(resolve_existing_path "$memory_temp")"
+        if [ ! -L "$memory_temp" ] || [ "$target_real" != "$memory_real" ]; then
+          memory_prepare_ok=false
+          memory_failure="prepared path is not a canonical symlink for ${memory_target}"
+          break
+        fi
+      done
+
+      # preparation 中に別プロセスが target を変更していないことも、switch 前に
+      # 2 本まとめて再確認する。
+      if [ "$memory_prepare_ok" = true ]; then
+        for i in 0 1; do
+          memory_target="${memory_targets[$i]}"
+          case "${memory_states[$i]}" in
+            canonical)
+              target_real="$(resolve_existing_path "$memory_target")"
+              if [ ! -L "$memory_target" ] || [ "$target_real" != "$memory_real" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+            dangling)
+              if [ ! -L "$memory_target" ] || [ -e "$memory_target" ] \
+                || [ "$(readlink "$memory_target")" != "${memory_literals[$i]}" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+            missing)
+              if [ -e "$memory_target" ] || [ -L "$memory_target" ]; then
+                memory_prepare_ok=false
+              fi
+              ;;
+          esac
+          if [ "$memory_prepare_ok" != true ]; then
+            memory_failure="memory target changed during preparation: ${memory_target}"
+            break
+          fi
+        done
+      fi
+
+      if [ "$memory_prepare_ok" != true ]; then
+        for i in 0 1; do
+          memory_temp="${memory_temps[$i]}"
+          if [ "${memory_prepared[$i]}" = true ] \
+            && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
+            remove_owned_memory_symlink "$memory_temp" "${AGENT_MEMORY_DIR}" "$memory_real" ||
+              echo "setup.sh: could not clean owned temporary memory link ${memory_temp}"
+          fi
+        done
+        echo "setup.sh: could not prepare both memory links; targets unchanged (${memory_failure})"
+      else
+        # 全 temp の検証後だけ本番 target を切り替える。dangling link は literal を
+        # 保ったまま backup へ移し、途中失敗時に同じ link 自体を戻せるようにする。
+        memory_switch_ok=true
+        for i in 0 1; do
+          [ "${memory_states[$i]}" = canonical ] && continue
+          memory_target="${memory_targets[$i]}"
+          memory_temp="${memory_temps[$i]}"
+          memory_backup="${memory_backups[$i]}"
+
+          if [ "${memory_states[$i]}" = dangling ]; then
+            if move_memory_path_no_follow "$memory_target" "$memory_backup" &&
+              [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ] &&
+              dangling_memory_symlink_matches "$memory_backup" "${memory_literals[$i]}"; then
+              memory_detached[$i]=true
+            else
+              memory_switch_ok=false
+              memory_failure="could not preserve dangling link ${memory_target}"
+              break
+            fi
+          fi
+          if move_memory_path_no_follow "$memory_temp" "$memory_target" &&
+            [ ! -e "$memory_temp" ] && [ ! -L "$memory_temp" ] &&
+            memory_symlink_matches "$memory_target" "${AGENT_MEMORY_DIR}" "$memory_real"; then
+            memory_prepared[$i]=false
+            memory_changed[$i]=true
+          else
+            memory_switch_ok=false
+            memory_failure="could not switch ${memory_target}"
+            break
+          fi
+        done
+
+        # switch 後も両方が本物の symlink かつ同じ物理解決先でなければ失敗扱い。
+        if [ "$memory_switch_ok" = true ]; then
+          for i in 0 1; do
+            memory_target="${memory_targets[$i]}"
+            if ! memory_symlink_matches "$memory_target" \
+              "${AGENT_MEMORY_DIR}" "$memory_real"; then
+              memory_switch_ok=false
+              memory_failure="memory link postcondition failed for ${memory_target}"
+              break
+            fi
+          done
+        fi
+
+        # 成功時だけ旧 dangling backup を捨てる。失敗した removal も rollback の
+        # 対象にし、既に消した backup は保存した literal から best-effort で戻す。
+        if [ "$memory_switch_ok" = true ]; then
+          for i in 0 1; do
+            memory_backup="${memory_backups[$i]}"
+            [ -n "$memory_backup" ] || continue
+            if [ -L "$memory_backup" ]; then
+              if ! remove_owned_dangling_memory_symlink "$memory_backup" \
+                "${memory_literals[$i]}"; then
+                memory_switch_ok=false
+                memory_failure="could not clean memory backup ${memory_backup}"
+                break
+              fi
+              memory_backup_removed[$i]=true
+            elif [ -e "$memory_backup" ]; then
+              memory_switch_ok=false
+              memory_failure="memory backup changed unexpectedly: ${memory_backup}"
+              break
+            fi
+          done
+        fi
+
+        if [ "$memory_switch_ok" != true ]; then
+          memory_rollback_ok=true
+          for i in 1 0; do
+            memory_target="${memory_targets[$i]}"
+            memory_backup="${memory_backups[$i]}"
+
+            if [ "${memory_changed[$i]}" = true ]; then
+              if [ -L "$memory_target" ]; then
+                remove_owned_memory_symlink "$memory_target" \
+                  "${AGENT_MEMORY_DIR}" "$memory_real" ||
+                  memory_rollback_ok=false
+              elif [ -e "$memory_target" ]; then
+                # 予期しない実パスは削除しない。
+                memory_rollback_ok=false
+              fi
+            fi
+            if [ "${memory_states[$i]}" = dangling ] \
+              && [ "${memory_detached[$i]}" = true ] \
+              && [ ! -e "$memory_target" ] && [ ! -L "$memory_target" ]; then
+              if dangling_memory_symlink_matches "$memory_backup" \
+                "${memory_literals[$i]}"; then
+                if ! move_memory_path_no_follow "$memory_backup" "$memory_target" \
+                  || { [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; } \
+                  || ! dangling_memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}"; then
+                  memory_rollback_ok=false
+                fi
+              elif [ "${memory_backup_removed[$i]}" = true ]; then
+                if ! ln -s "${memory_literals[$i]}" "$memory_target" \
+                  || ! dangling_memory_symlink_matches "$memory_target" \
+                    "${memory_literals[$i]}"; then
+                  memory_rollback_ok=false
+                fi
+              else
+                memory_rollback_ok=false
+              fi
+            fi
+          done
+
+          # rollback成功を宣言する前に、2 targetともtransaction前の状態へ戻ったことを
+          # literal/realpath込みで確認する。mv -nのno-op成功もここで誤魔化せない。
+          for i in 0 1; do
+            memory_target="${memory_targets[$i]}"
+            case "${memory_states[$i]}" in
+              canonical)
+                target_real="$(resolve_existing_path "$memory_target")"
+                [ -L "$memory_target" ] && [ "$target_real" = "$memory_real" ] ||
+                  memory_rollback_ok=false
+                ;;
+              dangling)
+                dangling_memory_symlink_matches "$memory_target" \
+                  "${memory_literals[$i]}" ||
+                  memory_rollback_ok=false
+                ;;
+              missing)
+                if [ -e "$memory_target" ] || [ -L "$memory_target" ]; then
+                  memory_rollback_ok=false
+                fi
+                ;;
+            esac
+          done
+
+          for i in 0 1; do
+            memory_temp="${memory_temps[$i]}"
+            if [ "${memory_prepared[$i]}" = true ] \
+              && { [ -e "$memory_temp" ] || [ -L "$memory_temp" ]; }; then
+              remove_owned_memory_symlink "$memory_temp" \
+                "${AGENT_MEMORY_DIR}" "$memory_real" ||
+                memory_rollback_ok=false
+            fi
+          done
+          for i in 0 1; do
+            memory_backup="${memory_backups[$i]}"
+            if [ -n "$memory_backup" ] \
+              && { [ -e "$memory_backup" ] || [ -L "$memory_backup" ]; }; then
+              echo "setup.sh: rollback left memory backup at ${memory_backup}"
+              memory_rollback_ok=false
+            fi
+          done
+          if [ "$memory_rollback_ok" = true ]; then
+            echo "setup.sh: memory link switch failed; rolled back both targets (${memory_failure})"
+          else
+            echo "setup.sh: memory link switch failed; rollback incomplete (${memory_failure})"
+          fi
+        fi
+      fi
     fi
   else
-    echo "setup.sh: ${AGENT_MEMORY_DIR} not available; skip memory symlink"
+    echo "setup.sh: ${AGENT_MEMORY_DIR} is not the canonical agent-memory repository; skip memory symlink"
   fi
 fi
+finish_memory_transaction
 
-# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents/skills
-# は同じ実体の skills/ を指す (personal skills の参照先)。
+# Codex CLI は CODEX_HOME (既定 ~/.codex) をディレクトリ単位で読む。~/.agents は
+# personal skills と、Claude/Codex が共有する runtime を指す。
 link_agent_home "${DOTDIR}/codex" "$HOME/.codex"
 if mkdir -p ~/.agents; then
   link_agent_home "${DOTDIR}/codex/skills" "$HOME/.agents/skills"
+  link_agent_home "${DOTDIR}/agents/bin" "$HOME/.agents/bin"
+  link_agent_home "${DOTDIR}/agents/hooks" "$HOME/.agents/hooks"
 else
-  echo "setup.sh: could not create ~/.agents; skip the skills link"
+  echo "setup.sh: could not create ~/.agents; skip shared agent links"
 fi
 
 # nushell はディレクトリ単位で差し替えない。Nushell 自身が同じ場所へ history や

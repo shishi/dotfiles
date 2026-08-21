@@ -6,8 +6,8 @@
 
 現行実装と異なる点:
 
-- ヘルパーはリポジトリルートの `resolve-memory-dir.sh`。本書「実装配置(案 A)」の
-  `.gitignore`(変更)が求める `!/claude/resolve-memory-dir.sh` 追加は不要。
+- ヘルパーは `agents/bin/resolve-memory-dir.sh`。本書「実装配置(案 A)」の
+  `claude/` 配下と `.gitignore` 変更は現行実装に適用しない。
 - 環境変数は `AGENT_MEMORY_DIR`、リポジトリは `agent-memory`。
 - ghq.root を決定できないときのフォールバックは `~/dev/claude-memory` ではなく
   `~/dev/src/github.com/shishi/agent-memory`(既定 root `~/dev/src` に ghq 規約を適用した
@@ -16,8 +16,9 @@
 - ヘルパーは自動移行を行わない。配置先の解決だけを行うため、本書の移行ロジックと
   その受け入れ基準に対応する実装は無い。
 
-現行の正: `resolve-memory-dir.sh`、`tests/agent-memory-ghq.sh`、
-`docs/superpowers/specs/2026-07-11-agent-memory-design.md`。
+現行の正: `agents/bin/resolve-memory-dir.sh`、`tests/agent-memory-ghq.sh`、
+`docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md`、
+`docs/ADR/20260818-190845-place-shared-agent-scripts-under-agents.md`。
 
 ## 目的
 
@@ -63,9 +64,13 @@ Windows だけ claude-memory セクションがスキップされてしまう。
      採用するのは ghq の primary root の仕様に合わせた挙動。
 3. どちらもなければ従来どおり `~/dev/claude-memory`。
 
-## 既存 clone の移行
+## 既存 clone の移行(歴史的記録・実行不可)
 
-> 旧 clone の手動移行手順は `2026-07-11-agent-memory-design.md` の「移行手順」(Phase 2 / 3)が正。`setup.sh` と `tests/agent-memory-ghq.sh` のコメントが言う「spec 手順」もそちらを指す。本節の origin 照合は `shishi/claude-memory` の完全一致なので、`agent-memory` へ rename 済みの clone はすべて対象外と判定される。
+> 本節は当時の自動移行案であり、現行手順として使わない。現行の
+> `agents/bin/resolve-memory-dir.sh` は配置先だけを解決し、旧 clone を移動しない。
+> 現行の共有配置は `2026-08-18-shared-agent-memory-hardening-design.md` を正とする。
+> resolver の挙動契約は `agents/bin/resolve-memory-dir.sh` と
+> `tests/agent-memory-ghq.sh` を正とする。
 
 移行はヘルパー内で行う。実行時はまず `mkdir -p "$(dirname "$resolved")"` で
 解決先の親ディレクトリ(fresh 環境では `<ghq_root>/github.com/shishi` が

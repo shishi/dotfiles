@@ -1,5 +1,9 @@
 # パーソナル永続記憶システム 実装プラン
 
+> **Superseded。実行済みの計画の記録であり、コマンドを実行しない。**
+> 現行設計は `docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md`。
+> 以下の「For agentic workers」と実装指示は適用しない。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** プライベートリポジトリに置いた個人記憶を SessionStart hook で全セッションに注入し、書き込み・同期・整理の運用ルールまで揃える。

@@ -18,15 +18,23 @@ if [ ! -e "$MEMORY_DIR" ]; then
   exit 0
 fi
 
+# MEMORY.md が無い directory は未導入として無言で扱う。一方、MEMORY.md があるのに
+# Git worktree でない実体は editable file を注入しない。commit snapshot だけを信頼する。
+if [ ! -e "${MEMORY_DIR}/.git" ]; then
+  if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
+    echo "<personal-memory-warning>記憶ディレクトリが Git repo ではないため注入をスキップ: ${MEMORY_DIR}。MEMORY.md の内容は読み取っていません</personal-memory-warning>"
+  fi
+  exit 0
+fi
+
 is_num() { # $1 が空でない十進数か(外部コマンドの出力を算術展開へ渡す前の検査)
   case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
 }
 
 # --- git-state aware 読み取りの準備 ---
-# 記憶ディレクトリが git repo(root)のときは、MEMORY.md の存在確認より先に
-# 健全性を検査する(編集途中で MEMORY.md が消えている dirty repo を無言スキップに
-# 落とさない)。健全なら commit を固定し、以降は snapshot から読む。
-# repo でない場合(テスト環境など)は従来どおりファイルを直接読む。
+# MEMORY.md の存在確認より先に Git の健全性を検査する(編集途中で MEMORY.md が
+# 消えている dirty repo を無言スキップに落とさない)。健全なら main commit を一度だけ
+# 固定し、以降はその snapshot だけを読む。
 snapshot=""
 ahead_warn=""
 degraded=""
@@ -34,7 +42,6 @@ repo_state=""
 if [ -e "${MEMORY_DIR}/.git" ]; then
   branch=$(git -C "$MEMORY_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\r')
   gitdir=$(git -C "$MEMORY_DIR" rev-parse --absolute-git-dir 2>/dev/null | tr -d '\r')
-  porcelain=$(git -C "$MEMORY_DIR" status --porcelain 2>/dev/null)
   # 中止(fatal)と劣化注入(degraded)を分ける。
   # 中止: HEAD の内容自体が「注入してよい記憶」でない状態。
   # 劣化注入: HEAD は健全で書き込みが進行中なだけの状態。注入は下の snapshot 経由で
@@ -75,6 +82,10 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
     echo "<personal-memory-warning>記憶 repo が不健全なため注入をスキップ: ${fatal}(${MEMORY_DIR})。${recovery}</personal-memory-warning>"
     exit 0
   fi
+  if ! porcelain=$(git -C "$MEMORY_DIR" status --porcelain 2>/dev/null); then
+    echo "<personal-memory-warning>記憶 repo の Git 状態を確認できないため注入をスキップしました</personal-memory-warning>"
+    exit 0
+  fi
   if [ -n "$gitdir" ] && [ -d "$gitdir/memory-write.lock" ]; then
     # mtime は GNU 形式 (-c %Y) と BSD 形式 (-f %m) を順に試し、**試行ごとに数値検査して
     # 数値だけを採用する**。GNU の `stat -f` は filesystem 情報の表示で %m はマウント
@@ -106,44 +117,57 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
   # 注入する経路の文言。repo_state は注入しない経路(下の索引なし警告)でも使うため、
   # 「以下は…」のような注入前提の文はここでだけ付ける。
   [ -n "$repo_state" ] && degraded="⚠ ${repo_state}。以下は最後の commit 時点の内容"
-  # チェック後に commit を固定(直後に書き込みが始まっても編集途中の worktree を
-  # 読まない。注入は常に committed 内容のみ)
-  snapshot=$(git -C "$MEMORY_DIR" rev-parse HEAD 2>/dev/null | tr -d '\r')
+  # チェック直後に別 process が branch を切り替えても consolidation 内容を掴まないよう、
+  # HEAD ではなく main ref を固定する。失敗時に worktree へフォールバックしない。
+  if ! snapshot=$(git -C "$MEMORY_DIR" rev-parse --verify 'main^{commit}' 2>/dev/null); then
+    echo "<personal-memory-warning>記憶 repo の main commit を固定できないため注入をスキップ: ${MEMORY_DIR}。worktree と HEAD は読み取っていません</personal-memory-warning>"
+    exit 0
+  fi
+  snapshot=$(printf '%s' "$snapshot" | tr -d '\r')
+  if [ -z "$snapshot" ]; then
+    echo "<personal-memory-warning>記憶 repo の main commit を固定できないため注入をスキップ: ${MEMORY_DIR}。worktree と HEAD は読み取っていません</personal-memory-warning>"
+    exit 0
+  fi
   # 未 push commit はローカルに実在する確定済み記憶なので注入するが、警告を添える
-  ahead=$(git -C "$MEMORY_DIR" rev-list --count '@{u}..HEAD' 2>/dev/null | tr -d '\r')
+  ahead=$(git -C "$MEMORY_DIR" rev-list --count 'main@{upstream}..main' 2>/dev/null | tr -d '\r')
   if is_num "$ahead" && [ "$ahead" -gt 0 ]; then
     ahead_warn="⚠ 未 push の記憶 commit が ${ahead} 件あります(前回 push 失敗の可能性。次の書き込み前に解消すること)"
   fi
 fi
 
 emit_file() { # $1=repo 相対パス
-  if [ -n "$snapshot" ]; then
-    git -C "$MEMORY_DIR" show "${snapshot}:$1" 2>/dev/null
-  else
-    cat "${MEMORY_DIR}/$1" 2>/dev/null
-  fi
+  git -C "$MEMORY_DIR" show "${snapshot}:$1" 2>/dev/null
 }
-has_file() { # $1=repo 相対パス
-  if [ -n "$snapshot" ]; then
-    git -C "$MEMORY_DIR" cat-file -e "${snapshot}:$1" 2>/dev/null
-  else
-    [ -f "${MEMORY_DIR}/$1" ]
+probe_file() { # $1=repo 相対パス; 0=存在、1=正常な不存在、2=Git異常
+  if tree_entry=$(git -C "$MEMORY_DIR" ls-tree --name-only "$snapshot" -- "$1" 2>/dev/null); then
+    [ -n "$tree_entry" ]
+    return
   fi
+  return 2
 }
 
 # 記憶未導入(索引なし)は正常系として無言スキップ。ただし worktree に索引が在るのに
 # snapshot に無い場合は「注入したつもりで記憶ゼロ」になるため黙らない(注入は snapshot
 # 経由なので未 commit の索引は出せない = 出せないことを伝えるしかない)。
-if ! has_file "MEMORY.md"; then
-  if [ -n "$snapshot" ] && [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
-    # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
-    # 前にその事実を渡す(repo_state はここまでに算出済み)。
-    state_note=""
-    [ -n "$repo_state" ] && state_note="${repo_state}。"
-    echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
-  fi
-  exit 0
-fi
+probe_file "MEMORY.md"
+index_probe_status=$?
+case "$index_probe_status" in
+  0) ;;
+  1)
+    if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
+      # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
+      # 前にその事実を渡す(repo_state はここまでに算出済み)。
+      state_note=""
+      [ -n "$repo_state" ] && state_note="${repo_state}。"
+      echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
+    fi
+    exit 0
+    ;;
+  *)
+    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: MEMORY.md。本文は出力していません</personal-memory-warning>"
+    exit 0
+    ;;
+esac
 
 input=$(cat 2>/dev/null || true)
 cwd=""
@@ -191,17 +215,72 @@ fi
 
 [ -n "$slug" ] || slug=$(slugify "$cwd")
 
+# required index と存在する selected project file は、wrapper を出す前に固定 snapshot から
+# 各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
+if ! memory_content=$(emit_file "MEMORY.md"); then
+  echo "<personal-memory-warning>記憶 snapshot の読み取りに失敗したため注入をスキップ: MEMORY.md(${MEMORY_DIR})。worktree は読み取っていません</personal-memory-warning>"
+  exit 0
+fi
+
+project_path="projects/${slug}.md"
+project_content=""
+project_present=""
+probe_file "$project_path"
+project_probe_status=$?
+case "$project_probe_status" in
+  0)
+    if ! project_content=$(emit_file "$project_path"); then
+      echo "<personal-memory-warning>記憶 snapshot の読み取りに失敗したため注入をスキップ: ${project_path}(${MEMORY_DIR})。worktree は読み取っていません</personal-memory-warning>"
+      exit 0
+    fi
+    project_present=1
+    ;;
+  1) ;;
+  *)
+    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: ${project_path}。本文は出力していません</personal-memory-warning>"
+    exit 0
+    ;;
+esac
+
+scan_content() { # $1=content; 0=secret candidate, 1=clean, other=scan error
+  printf '%s\n' "$1" | LC_ALL=C grep -Eiq -- \
+    "(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
+}
+
+scan_path() { # $1=repo relative path $2=content; warning を出したら 0、clean なら 1
+  scan_content "$2"
+  scan_status=$?
+  case "$scan_status" in
+    0)
+      echo "<personal-memory-warning>秘密情報の可能性があるため記憶注入をスキップ: $1。値と本文は出力していません。該当内容を除去してから再実行してください</personal-memory-warning>"
+      return 0
+      ;;
+    1)
+      return 1
+      ;;
+    *)
+      echo "<personal-memory-warning>記憶 snapshot の秘密情報検査に失敗したため注入をスキップ: $1。本文は出力していません</personal-memory-warning>"
+      return 0
+      ;;
+  esac
+}
+
+scan_path "MEMORY.md" "$memory_content" && exit 0
+if [ -n "$project_present" ]; then
+  scan_path "$project_path" "$project_content" && exit 0
+fi
+
 echo "<personal-memory>"
 echo "個人永続記憶。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
 echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: projects/${slug}.md)"
 [ -n "$degraded" ] && echo "$degraded"
 [ -n "$ahead_warn" ] && echo "$ahead_warn"
 echo ""
-emit_file "MEMORY.md"
-if has_file "projects/${slug}.md"; then
+printf '%s\n' "$memory_content"
+if [ -n "$project_present" ]; then
   echo ""
   echo "## プロジェクト記憶 (${slug})"
-  emit_file "projects/${slug}.md"
+  printf '%s\n' "$project_content"
 fi
 echo "</personal-memory>"
 exit 0

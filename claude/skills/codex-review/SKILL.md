@@ -2,10 +2,10 @@
 name: codex-review
 description: |
   Codex CLI をレビューエンジンとして実行するアダプタ。観点(correctness /
-  adversarial)は ~/.claude/agents/ の観点ファイルから読み、codex 用前置きと
-  合成して素の codex exec (stdin 渡し) で実行する。review-gate から呼ばれる、
-  または /codex-review [correctness|adversarial] で明示発動(デフォルト
-  correctness)。マイルストーン判断は持たない。
+  adversarial / spec-scope)は ~/.claude/agents/ の観点ファイルから読み、codex 用
+  前置きと合成して素の codex exec (stdin 渡し) で実行する。review-gate から
+  呼ばれる、または /codex-review [correctness|adversarial|spec-scope] で明示発動
+  (デフォルト correctness)。マイルストーン判断は持たない。
 ---
 
 # Codex Review (engine adapter)
@@ -19,8 +19,13 @@ Codex CLI を独立レビューエンジンとして使う。観点はこの ski
 |---|---|---|
 | correctness(デフォルト) | `~/.claude/agents/correctness-reviewer.md` | 実装欠陥の検出 |
 | adversarial | `~/.claude/agents/adversarial-reviewer.md` | 設計・前提への挑戦 |
+| spec-scope | `~/.claude/agents/spec-scope-reviewer.md` | 依頼との照合・スコープ逸脱の検出 |
 
 対象が spec/plan 等の文書なら adversarial を提案してから実行する。
+
+spec-scope の既定エンジンは Claude subagent である(review-gate の規定)。このモードは、その
+subagent が結果を返さないときの差し替え先として使う。前置きに足す入力が他の 2 モードと違う
+ため、下記の専用節に従う。
 
 ## Prerequisites
 
@@ -44,7 +49,12 @@ Codex CLI を独立レビューエンジンとして使う。観点はこの ski
    (例: `${TMPDIR:-/tmp}/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
-   失敗しうるため使わない):
+   失敗しうるため使わない)。**既定はこの形** — レビューは読むだけなので `read-only` で足りる:
+   ```bash
+   codex exec -s read-only --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   ```
+   **sandbox が機能しないホストに限り**、下記の bypass 形を使う(判定と理由は Prerequisites 4 と
+   「bypass フラグを使う理由」節):
    ```bash
    codex exec --dangerously-bypass-approvals-and-sandbox - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
@@ -62,12 +72,36 @@ The perspective definition follows. Follow its 出力形式 and 制約 exactly.
 ---
 ```
 
+### spec-scope モードで前置きに足す入力
+
+spec-scope は照合相手が差分の外にあるため、上の前置きだけでは成立しない。次を足す。足せない
+場合はこのモードを実行しない — 照合相手を欠いた spec-scope は、差分を差分自身と比べることになる。
+
+1. **タスク記述 — 既存テキストの逐語コピーに限る。** 元のユーザー依頼・plan doc の該当
+   セクション・spec のいずれか。要約や言い換えの禁止、および該当テキストが無ければ停止する
+   規則は spec-scope-review skill の「入力組成」が単一ソースである
+2. **累積判定の指示。** 渡すのは前回からの差分ではなく「当初の依頼の逐語 + 現在の総差分」。
+   問いは「この総量が最初から 1 つの提案として出てきたら、依頼に対して承認したか」
+3. **設計 doc の存在確認。** `docs/` 等を確認し、あれば該当部を含める
+4. **CLAUDE.md(global + project)の該当規約。** 観点は規約からの逸脱も見るため、規約が
+   CLAUDE.md にしか書かれていない場合、これが無いと逸脱を判定できない
+5. **commit に含めない未コミット変更があるなら、判定対象外であることを明示する。** 前置きの
+   `Inspect the changes yourself` は worktree 全体を見せるため、並行セッションの作業中の変更や
+   codex が実行時に書き込むファイルが混ざる
+
+**実装中の会話内容は書かない。** この観点の存在意義は情報の隔離である。
+
 ## 反復と clean 判定
 
 - **review-gate 経由では 1 パスのみ**(反復ループ・修正適用・引用検証は gate の責務)
 - **単独発動時のみ**この skill が反復を回す: 指摘の引用を検証(引用不一致は棄却・記録)→
   blocker/should を修正 → secrets-scan → 同モード再実行。clean 判定:
-  correctness = blocker/should ゼロ(note は任意対応)/ adversarial = safe 相当の結論
+  correctness = blocker/should ゼロ(note は任意対応)/ adversarial = safe 相当の結論 /
+  spec-scope = blocker/should ゼロ、**かつ「判断できない」と判定された要件が無いこと**
+- **spec-scope の「判断できない」は clean に数えない。** blocker / should / note のいずれでもない
+  ため、放っておくと「照合できなかった要件」が「問題の無い要件」として通る。1 件でも残るなら
+  その要件を列挙して報告し、別の既存逐語ソースを探すかユーザーに確認する。会話でのみ渡す成果物の
+  ように差分に現れない性質の要件は、この経路では原理的に判定できないため、ユーザーの判断へ返す
 - 膠着判定: 同一指摘 2 回連続未解消、またはテスト/リンタ失敗 2 回連続 → 停止して
   ユーザーへ報告
 
@@ -117,7 +151,7 @@ OpenAI auth token が期限切れ。interactive command は実行できないた
 
 ```
 ## Codex レビュー結果
-- モード: correctness | adversarial / 反復: <X> 回
+- モード: correctness | adversarial | spec-scope / 反復: <X> 回
 - ステータス: ✅ clean | ⚠️ 膠着で停止(未解決あり)
 - 修正した指摘: [ID] と要約
 - 棄却した指摘: [ID] + 理由(引用不一致 等)

@@ -39,9 +39,13 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
 - codex エンジンのレーン(correctness / adversarial)= **codex**(平日・CLI 健在)/
   **Claude subagent**(土日 or codex 不能)
 - 曜日判定: `TZ=Asia/Tokyo date +%u` で 6 or 7 → 土日(ホストのローカル TZ に依存させない)
-- spec-scope は常時 Claude subagent、secrets は常時 gitleaks(曜日無関係)
+- spec-scope の既定は Claude subagent、secrets は常時 gitleaks(曜日無関係)
+- **3 観点いずれも codex へ差し替えられる**(codex-review skill が correctness / adversarial /
+  spec-scope の各モードを持つ)。spec-scope を codex で走らせる場合、前置きに足す入力は
+  codex-review skill の「spec-scope モードで前置きに足す入力」に従う — タスク記述の逐語コピーが
+  無ければ差し替えは成立しない
 - Claude subagent エンジンでの実行 = 対応する観点 agent
-  (correctness-reviewer / adversarial-reviewer)を Task tool で dispatch し、
+  (spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)を Task tool で dispatch し、
   組成済みレビュー対象と focus をプロンプトで渡す(1 パス)
 - codex エンジンでの実行 = codex-review skill に観点名・focus を渡して 1 パス実行
   (secrets-scan 先行は下記手順に含まれる)
@@ -62,8 +66,10 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
 6. blocker/should があれば gate が修正を適用 → 対象を再組成して **3 に戻る**
    (secrets-scan も毎反復再実行。反復中の修正で混入した secrets を素通りさせない)。
    同一箇所への指摘が衝突したら correctness を優先し、spec 側は再レビューで確認
-7. 両レーンとも blocker/should ゼロ → 通過。note は任意対応(未対応 note はレポートに
-   記録)。**未レビューのレーンがある状態では通過しない**。通過後に note を修正した
+7. **通過条件**: レビューできたレーンがすべて blocker/should ゼロで、かつ未レビューのレーンが
+   無いこと。ただしエラー処理のエスカレーションを段階 4 まで尽くしたレーンは、未レビューの
+   ままでも通過を妨げない(その場合はレポートに明記する)。note は任意対応(未対応 note は
+   レポートに記録)。通過後に note を修正した
    場合は通過確定前に 3(secrets-scan)から再実行(note 修正のみなら lane 1/2 の
    再 dispatch は省略可。secrets-scan は必須)
 8. 膠着判定: 同一指摘 2 回連続未解消、テスト/リンタ失敗 2 回連続、または
@@ -75,24 +81,44 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
 defect gate の 1–3 と同様(対象は文書 diff + untracked 文書)。その後 adversarial 観点
 1 レーン(エンジンは決定に従う)。findings は修正に入る前に引用検証する(棄却は [V-n]
 付きで記録)。material findings が残る限り fix→re-review — **各反復で secrets-scan も
-再実行**。「safe」相当の結論で通過。
+再実行**。「safe」相当の結論で通過。**adversarial レーンが結果を返さない場合はエラー処理の
+エスカレーションに従い、段階 4 まで尽くしたら結論が無いまま通過してよい**(defect gate と同じく
+「⚠️ 未レビュー通過」として記録する)。
 
 ## エラー処理
 
 | 障害 | 対処 |
 |---|---|
-| codex 401 / hang / timeout | codex-review skill の手順で 1 リトライ → 再失敗でエンジンを Claude subagent に差し替えて続行。レポートに代替と理由を明記 |
-| gitleaks 不在・導入不能 | 停止してユーザーへ報告(素通り禁止) |
-| reviewer subagent 死亡 | 1 リトライ → 再失敗で**フェイルクローズ**: 未レビューのまま通過せず、停止してユーザーへ報告(pass-with-warning はユーザーの明示判断のみ) |
+| 観点レーン(spec-scope / correctness / adversarial)が結果を返さない — subagent の死亡・無応答・完了しても結果が届かない、codex の 401 / hang / timeout | 下記のエスカレーションを順に進める。**フェイルクローズしない** |
+| gitleaks 不在・導入不能 | 停止してユーザーへ報告(素通り禁止)。**下記のエスカレーションは観点レーン限定で、secrets レーンには適用しない** — 検査なしで通すと public repo へ secrets が入る経路が無検査になる |
 | タスク記述が無い/曖昧 | 別の既存逐語ソースを探す or ユーザーに確認。新規書き起こしで代用しない |
 | diff 巨大(>10 ファイルかつ互いに独立) | focus で範囲を分けて複数回。同一パターンの繰り返しなら分割不要 |
+
+### 観点レーンのエスカレーション
+
+結果が届かないレーンごとに、次を順に進める。**明示的な失敗(エラー応答・非ゼロ終了)は待たずに
+次の段階へ移る。** 待つのは無応答のときだけで、待ちは**その試行の dispatch が受理された時点から
+5 分**を上限とする。上限を置くのは、待ち時間を都度の判断に任せるとゲートの厳しさが実行のたびに
+変わるからである。
+
+1. 初回の試行を dispatch し、受理から最大 5 分待つ
+2. **同じエンジンへ同じ入力で新しく dispatch し**(既存 agent の再開ではない)、受理から最大 5 分待つ
+3. もう一方のエンジンへ差し替えて新しく dispatch し、受理から最大 5 分待つ。観点は
+   `~/.claude/agents/*-reviewer.md` が単一ソースなので、エンジンを替えても観点は変わらない。
+   **差し替えに必要な入力を組めないレーンはこの段階を飛ばす**(spec-scope をタスク記述の
+   逐語コピー無しで走らせることはできない)
+4. それでも結果が無ければ、**そのレーンを未レビューのまま通過させる。** レポートの
+   ステータスを「⚠️ 未レビュー通過」にし、どのレーンをどの段階まで試したかを書く
+
+codex エンジンの試行では codex-review skill が内部で 1 リトライを持つ。**その内部リトライは
+段階 2 に数えない** — 内部リトライまで含めて 1 つの試行として扱う。
 
 ## 最終レポート
 
 ```
 ## Review gate 結果
 - ゲート: defect | spec / エンジン: codex | claude(理由: 週末 / codex 不能)
-- 反復: レーン別 X 回 / ステータス: ✅ 通過 | ⚠️ 膠着停止
+- 反復: レーン別 X 回 / ステータス: ✅ 通過 | ⚠️ 未レビュー通過 | ⚠️ 膠着停止
 - 修正した指摘: [ID] と要約
 - 棄却した指摘: [ID] + 理由(引用不一致 等)
 - 未対応 note: [ID]

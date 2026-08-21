@@ -1,8 +1,17 @@
 # agent-memory 共有記憶システム設計(claude-memory の 2 エージェント化)
 
 日付: 2026-07-11
-状態: 実装済み → **一部撤回(2026-07-12)**: Codex の成熟度不足の判断により、Codex からの記憶利用(注入 hook・書き込み・consolidation)を全廃した。リポジトリ名 agent-memory・ghq 配置・書き込み/整理プロトコル(write lock・consolidation ブランチ)は、複数マシン・複数 Claude セッションの並行対策として維持。
+状態: 実装済み。2026-07-12 に Codex からの利用を一度取りやめたが、
+2026-08-18 にその判断を取り消した。現在は Claude Code / Codex 共有の
+`agent-memory` だけを長期記憶の正本とする。Codex native Memories と
+Claude Code auto memory は無効にする。
 前提 spec: 2026-07-05-personal-memory-system-design.md
+現行 spec: 2026-08-18-shared-agent-memory-hardening-design.md
+
+本書の移行コマンド、旧 runtime path、write lock の実装詳細は設計時点の
+記録であり、現行手順として実行しない。現行実装と安全要件は上記の現行 spec、
+`claude/CLAUDE.md`、`codex/AGENTS.md`、および private repo の `CONVENTIONS.md` を
+正とする。
 
 ## 目的
 
@@ -33,7 +42,8 @@
     ~/.codex/memory   → link(同上)
 
 [public repo: dotfiles]                ← 仕組みだけ。秘密情報ゼロ
-    claude/hooks/inject-memory.sh      ← 引数で記憶ディレクトリを受ける形へ拡張
+    agents/bin/resolve-memory-dir.sh   ← 共有の正本配置解決
+    agents/hooks/inject-memory.sh      ← 両エージェント共有の注入 hook
     claude/settings.json               ← autoMemoryEnabled: false 追加
     claude/CLAUDE.md                   ← 記憶セクションを CONVENTIONS.md 参照方式へ縮小
     codex/hooks/ + codex/hooks.json    ← 新規追跡(現在 ~/.codex に手置きされ untracked)
@@ -68,12 +78,12 @@ CLAUDE.md / codex AGENTS.md の記憶セクションは「記憶の場所・注�
 
 ### 2. ロード: inject-memory.sh の引数化
 
-- `bash inject-memory.sh [MEMORY_DIR]`。省略時は従来どおり `~/.claude/memory`(Claude 側の settings.json は無変更)
-- Codex 側 hooks.json は `bash ~/.codex/hooks/inject-memory.sh ~/.codex/memory` を session_start で呼ぶ(hook 自体は導入済み。引数追加のみ)
+- Claude Code は `bash ~/.agents/hooks/inject-memory.sh ~/.claude/memory` を呼ぶ。
+- Codex は `bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory` を呼ぶ。
 - 劣化パスの可視化: MEMORY.md が無い場合の無言スキップは維持(記憶未導入マシンの正常系)。ただし **link は存在するのに先が解決できない(壊れた symlink/junction)場合は 1 行の警告を注入**する — 「記憶が静かに消えたまま動き続ける」事故を検知可能にする
-- **git-state aware 注入**: 記憶ディレクトリが git repo の場合、現在ブランチが `main`・rebase/merge 進行中でない・unmerged path なし・worktree clean・write lock(`.git/memory-write.lock`)なし、を確認してから注入する。満たさない場合(整理ブランチに切り替わったまま・conflict 解決途中・他エージェントが編集中など)は本文を注入せず 1 行の警告だけ注入する — 下書き・破損状態の記憶をセッションに読み込ませない。**読み取りは commit スナップショットから行う**: チェック後に `rev=$(git rev-parse HEAD)` を固定し、MEMORY.md・プロジェクト記憶を `git show "$rev:<path>"` で読む(チェック直後に書き込みが始まっても編集途中の worktree を読まない。注入されるのは常に committed 済み内容のみ)。例外: 未 push の ahead commit は「ローカルに実在する確定済み記憶」なので通常どおり注入し、「未 push の記憶 commit あり(前回 push 失敗の可能性)」の警告 1 行を添える
+- **git-state aware 注入**: 記憶ディレクトリが git repo の場合、現在ブランチが `main`・rebase/merge 進行中でない・unmerged path なし・worktree clean・write lock(`.git/memory-write.lock`)なし、を確認してから注入する。満たさない場合(整理ブランチに切り替わったまま・conflict 解決途中・他エージェントが編集中など)は本文を注入せず 1 行の警告だけ注入する — 下書き・破損状態の記憶をセッションに読み込ませない。**読み取りは commit スナップショットから行う**: チェック後に `rev=$(git rev-parse --verify 'main^{commit}')` を固定し、MEMORY.md・プロジェクト記憶を `git show "$rev:<path>"` で読む(チェック直後に書き込みが始まっても編集途中の worktree を読まない。注入されるのは常に `main` の committed 済み内容のみ)。例外: 未 push の ahead commit は「ローカルに実在する確定済み記憶」なので通常どおり注入し、「未 push の記憶 commit あり(前回 push 失敗の可能性)」の警告 1 行を添える
 - **hook はネットワークに出ない(設計判断)**: 注入前の fetch/pull は行わない。SessionStart hook は「どんな失敗でも exit 0・起動を阻害しない」が不変条件であり、ネットワーク依存は offline・タイムアウトで壊れる。他マシンの追記に対する stale は受容する(自動で追いつく仕組みはない。次に書き込みが走った時の `pull --rebase` が同期点になる、という意味での受容)
-- スクリプトは両側で同一内容を保つ(既存のスキル・hook 同期パターンに従う)。inject-memory.test.sh に引数ケース・壊れ link ケース・非 main ブランチ/conflict 途中ケースを追加
+- `agents/hooks/inject-memory.sh` を単一の実装とし、両側の複製は持たない。
 
 ### 3. Codex 側変更
 
@@ -96,15 +106,15 @@ CLAUDE.md / codex AGENTS.md の記憶セクションは「記憶の場所・注�
 - clone URL を `git@github.com:shishi/agent-memory.git` へ
 - link 作成を `~/.claude/memory`・`~/.codex/memory` の両側に(POSIX: `ln -sfn`。Windows は setup.sh の対象外につき手動 junction、手順は移行手順に記載)
 
-## 移行手順
+## 移行手順(歴史的記録・実行不可)
+
+2026-08-18 にこの移行手順を廃止した。現行の `setup.sh` は
+`~/.claude/memory` と `~/.codex/memory` を同じ正本へリンクする。両方の新規
+セッションで `<personal-memory>` の注入を確認し、
+`bash agents/hooks/inject-memory.test.sh` と `bash tests/compact-safety.sh` を実行する。
+以下の Phase 0–6 は初期導入時の記録としてのみ残す。
 
 適用範囲: 既存マシンを移すときは Phase 0 を先に行い、続けて Phase 2(Windows)か Phase 3(他マシン)のどちらか 1 つを行う。Phase 0 を飛ばすと、未 push commit が旧パスに取り残される(Phase 2 step 2 は移設先が既にあれば mv を中止するため、取り残しに気づく機会がない)。Phase 1 の GitHub rename は不要で、旧名 `shishi/claude-memory` は存在しない。Phase 4-5 は dotfiles と agent-memory repo 側の作業。
-
-link は `~/.claude/memory` の 1 本だけ作る。`~/.codex/memory` は作らない — Codex からの記憶利用を行わないため。**Phase 2 step 6 と Phase 3 の本文は link を 2 本作る書き方のままなので、`~/.codex/memory` の側は読み飛ばす。**
-
-注入 hook が読むのは `~/.claude/memory` で、setup.sh が作るのは常に `dotfiles/claude/memory` の 1 本。この 2 つが同じ場所を指すのは、`~/.claude` が `dotfiles/claude` への link であるマシンと、その bind mount であるマシン。どちらでも `.gitignore` の `/claude/*` により追跡されない(§3 の `codex/memory` と同じ扱い)。`~/.claude` が実ディレクトリのマシンでは setup.sh がその link 化だけを飛ばすので、memory link ができていても注入先には届かない。`~/.claude/memory` の側を手で作る。
-
-Phase 6 のうち、Codex への手動コピー(6-1)・hook trust の再承認(6-2)・Codex 新セッションでの注入確認(6-3 の後半)は行わない。**移設したマシンでは、新セッションに `<personal-memory>` が出ることを必ず確認する。** これが配備できたかどうかの唯一の手掛かりになる。`inject-memory.sh` は読み先が無ければ黙って終わる(§2)ので、失敗は他のどこにも現れない。6-3 の `claude/hooks/inject-memory.test.sh` と `tests/compact-safety.sh` は一時ディレクトリの fixture に対して走るため、link が無いマシンでも通る。
 
 新規マシンは setup.sh が配置する(`~/.claude` がまだ無いマシンに限る)。Windows で symlink を作れない場合(Developer Mode 無効など)は `~/.claude` 自体の link も同時に失敗しているので、Phase 2 step 6 の junction を `~/.claude` と memory の両方に作る。そのとき次の 4 点に注意する。
 
@@ -131,7 +141,7 @@ redirect が安全網になるため **GitHub rename を最初に** 行う(逆�
 - **Phase 6(デプロイ+検証)**:
   1. Windows の `~/.codex` は実ディレクトリのため、`AGENTS.md`・`hooks.json`・`hooks/`・`config.toml` の変更分を手動コピー
   2. hooks.json 変更により Codex が hook trust の再承認を求める(`[hooks.state]`)。次回起動時に承認
-  3. 検証: inject-memory.test.sh・`bash tests/compact-safety.sh` パス / Claude 新セッションで `<personal-memory>` 注入 / Codex 新セッションで注入 + テスト書き込み 1 件(追記 → push → Claude 側から見える)
+  3. 検証: `bash agents/hooks/inject-memory.test.sh`・`bash tests/compact-safety.sh` パス / Claude 新セッションで `<personal-memory>` 注入 / Codex 新セッションで注入 + テスト書き込み 1 件(追記 → push → Claude 側から見える)
 
 ## ロールバック
 
@@ -150,6 +160,6 @@ redirect が安全網になるため **GitHub rename を最初に** 行う(逆�
 1. Claude / Codex 両方の新セッションで同一の `<personal-memory>` ブロックが注入される
 2. Codex が記憶を 1 件追記 → push でき、Claude 側セッションから同内容が見える(逆方向も同様)
 3. `codex features` 相当の確認で native memories が無効、Claude 側で auto memory 注入が消えている
-4. inject-memory.test.sh(引数ケース・壊れ link ケース含む)と tests/compact-safety.sh がパス
+4. `bash agents/hooks/inject-memory.test.sh`(引数ケース・壊れ link ケース含む)と `bash tests/compact-safety.sh` がパス
 5. git-push-guard(master push 拒否)が agent-memory の main push・consolidation ブランチ push を妨げない
 6. Codex の hook trust が未承認の状態では注入が行われないことを確認し、承認後に注入されることを確認(trust 未承認のまま「記憶なしで静かに動く」状態を運用中に見逃さないため、承認は Phase 6 のチェックリストに含める)

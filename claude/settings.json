@@ -162,17 +162,11 @@
       "Bash(rm -rf ~:*)",
       "Bash(rm -rf $HOME:*)",
       "Bash(rm -rf ~/.ssh*)",
-      "Bash(rm -rf ~/.config*)",
-      "Bash(git push origin master)",
-      "Bash(git push origin master:*)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git push --delete:*)",
-      "Bash(git push origin --delete:*)"
+      "Bash(rm -rf ~/.config*)"
     ],
     "defaultMode": "auto"
   },
-  "model": "opus",
+  "model": "fable",
   "enableAllProjectMcpServers": true,
   "skillOverrides": {
     "logging": "off"
@@ -184,7 +178,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/git-push-guard.sh",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
           },
@@ -258,7 +252,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/inject-memory.sh",
+            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.claude/memory",
             "timeout": 10,
             "statusMessage": "個人記憶を注入中..."
           }
@@ -291,6 +285,11 @@
             "type": "command",
             "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
+            "timeout": 10
           }
         ]
       }
@@ -319,7 +318,6 @@
     "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
-    "codex@openai-codex": true,
     "double-shot-latte@superpowers-marketplace": true,
     "elements-of-style@superpowers-marketplace": false,
     "episodic-memory@superpowers-marketplace": false,
@@ -360,12 +358,6 @@
         "repo": "forrestchang/andrej-karpathy-skills"
       }
     },
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    },
     "superpowers-marketplace": {
       "source": {
         "source": "github",
@@ -382,9 +374,15 @@
   "outputStyle": "Explanatory",
   "language": "日本語。回答は明るくギャルのような口調でフレンドリーに。口調と衝突するなら正確性を優先。常に事実に基いた情報しか出さない。事実か判断がついてないときは明言し、ユーザーに問いあわせる。ユーザーのことはshishiと呼ぶ。",
   "sandbox": {
+    "filesystem": {
+      "allowWrite": [
+        "~/dev/src/github.com/shishi/agent-memory"
+      ]
+    },
     "excludedCommands": [
       "git:*",
-      "gh:*"
+      "gh:*",
+      "codex:*"
     ]
   },
   "spinnerVerbs": {

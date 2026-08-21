@@ -1,15 +1,41 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
+            "timeout": 10,
+            "additionalContextLimit": 10000
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.codex/hooks/git-push-guard.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/hooks/git-push-guard.sh'",
+            "command": "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh'",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/git-push-guard.sh --record-approval'",
+            "timeout": 10
           }
         ]
       }

@@ -5,6 +5,56 @@ $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
 $failures = @()
 $registered = @()
 
+$preToolUse = @($config.hooks.PreToolUse)
+if ($preToolUse.Count -ne 1 -or $preToolUse[0].matcher -ne 'Bash') {
+    $failures += 'existing PreToolUse Bash hook is not preserved'
+} elseif ($preToolUse[0].hooks[0].command -ne 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh') {
+    $failures += 'PreToolUse must invoke the shared git push guard'
+} elseif ($preToolUse[0].hooks[0].commandWindows -notmatch "-c\s+'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard\.sh'$" ) {
+    $failures += 'PreToolUse Windows command must invoke the shared git push guard'
+}
+
+$userPromptSubmit = @($config.hooks.UserPromptSubmit)
+if ($userPromptSubmit.Count -ne 1 -or $userPromptSubmit[0].hooks[0].command -ne 'bash ~/.agents/hooks/git-push-guard.sh --record-approval') {
+    $failures += 'UserPromptSubmit must record explicit push authorization with the shared guard'
+} elseif ($userPromptSubmit[0].hooks[0].commandWindows -notmatch "-c\s+'~/.agents/hooks/git-push-guard\.sh --record-approval'$" ) {
+    $failures += 'UserPromptSubmit Windows command must record authorization with the shared guard'
+}
+
+$sessionStart = @($config.hooks.SessionStart)
+if ($sessionStart.Count -ne 1) {
+    $failures += 'SessionStart must have exactly one hook group'
+} else {
+    $sessionStartGroup = $sessionStart[0]
+    $sources = @($sessionStartGroup.matcher -split '\|')
+    $expectedSources = @('startup', 'resume', 'clear', 'compact')
+    if ((Compare-Object $expectedSources $sources).Count -ne 0) {
+        $failures += 'SessionStart matcher must cover startup, resume, clear, and compact exactly'
+    }
+
+    $sessionHandlers = @($sessionStartGroup.hooks)
+    if ($sessionHandlers.Count -ne 1) {
+        $failures += 'SessionStart must have exactly one command handler'
+    } else {
+        $sessionHandler = $sessionHandlers[0]
+        if ($sessionHandler.command -ne 'bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory') {
+            $failures += 'SessionStart must use the shared memory injector with ~/.codex/memory'
+        }
+        if ($sessionHandler.commandWindows -notmatch "bash\.exe'.*-c\s+'~/.agents/hooks/inject-memory\.sh ~/.codex/memory'") {
+            $failures += 'SessionStart Windows command must invoke the shared injector through explicit Git Bash'
+        }
+        $contextLimit = $sessionHandler.additionalContextLimit
+        if ($null -eq $contextLimit -or $contextLimit -le 0 -or $contextLimit % 1 -ne 0) {
+            $failures += 'SessionStart must set a positive integer additionalContextLimit'
+        }
+        # The measured injection is 8,563 characters. 10,000 keeps the current
+        # payload in context with bounded headroom above the 2,500 default.
+        if ($contextLimit -ne 10000) {
+            $failures += 'SessionStart additionalContextLimit must be exactly 10000'
+        }
+    }
+}
+
 foreach ($event in $config.hooks.PSObject.Properties) {
     foreach ($group in $event.Value) {
         foreach ($handler in $group.hooks) {

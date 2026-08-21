@@ -1,5 +1,10 @@
 # agent-memory 共有記憶システム Implementation Plan
 
+> **Superseded。実行済みの計画の記録であり、コマンドを実行しない。**
+> 2026-07-12 の Codex 利用停止は 2026-08-18 に取り消した。現行設計は
+> `docs/superpowers/specs/2026-08-18-shared-agent-memory-hardening-design.md`。
+> 以下の「For agentic workers」と実装指示は適用しない。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** claude-memory を 2 エージェント(Claude Code / Codex CLI)対等の共有記憶 agent-memory へ拡張する。
@@ -8,9 +13,10 @@
 
 **Tech Stack:** bash(hooks)、git、Claude Code settings.json hooks、Codex hooks.json、Windows junction / POSIX symlink
 
-**Spec:** `docs/superpowers/specs/2026-07-11-agent-memory-design.md`(全要件の正。本プランと食い違う場合は spec が正)
+**設計時点の Spec:** `docs/superpowers/specs/2026-07-11-agent-memory-design.md`(本プランの
+当時の要件を記録する。現行の正は冒頭の 2026-08-18 設計)
 
-**適用範囲:** Codex からの記憶利用は対象外。記憶を使うのは Claude Code だけで、link は `~/.claude/memory` の 1 本しか張らない。本文のうち `~/.codex/memory` link、`codex/hooks/inject-memory.sh` と hooks.json の注入エントリ、Codex 新セッションでの注入検証は行わない。`codex/hooks/` と `codex/hooks.json` の追跡自体は行っている(`.gitignore` のホワイトリスト 3 行はそのために要る)。個々の hook が動くかは `config.toml` の `[hooks.state]` の trust 設定しだいで、追跡していることは稼働を意味しない。
+**歴史的な適用範囲(2026-07-12):** Codex からの記憶利用は対象外。記憶を使うのは Claude Code だけで、link は `~/.claude/memory` の 1 本しか張らない。本文のうち `~/.codex/memory` link、`codex/hooks/inject-memory.sh` と hooks.json の注入エントリ、Codex 新セッションでの注入検証は行わない。`codex/hooks/` と `codex/hooks.json` の追跡自体は行っている(`.gitignore` のホワイトリスト 3 行はそのために要る)。個々の hook が動くかは `config.toml` の `[hooks.state]` の trust 設定しだいで、追跡していることは稼働を意味しない。
 
 ## Global Constraints
 

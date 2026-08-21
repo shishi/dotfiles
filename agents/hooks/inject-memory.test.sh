@@ -14,6 +14,10 @@ trap 'rm -rf "$TMP"' EXIT
 TMP=$(cd "$TMP" && pwd -P)
 PASS=0; FAIL=0
 
+# gpgsign は実ユーザーの設定を継承すると gpg-agent 依存で commit が落ちるので切る。
+# fixture の commit はすべてこの設定を通す。
+GITC="git -c user.name=t -c user.email=t@t -c commit.gpgsign=false"
+
 # GHQ_ROOT は実環境の値が fake HOME の ghq.root を上書きしてしまうため落とす
 # (Claude Code のセッション env には GHQ_ROOT が入っている)
 run_hook() { # $1=cwd [$2=memory_dir]
@@ -44,9 +48,30 @@ assert_empty "(c) no memory dir -> empty output" "$out"
 if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (c) exit 0"
 else FAIL=$((FAIL+1)); echo "NG: (c) exit code $rc"; fi
 
-# 記憶を用意
-mkdir -p "$TMP/home/.claude/memory/projects"
+# MEMORY.md が無い non-Git directory は未導入として無言、MEMORY.md がある non-Git
+# directory は正本でないため本文を読まず警告する。
+mkdir -p "$TMP/non-git-empty" "$TMP/non-git-memory"
+out=$(run_hook "$TMP" "$TMP/non-git-empty"); rc=$?
+assert_empty "(q1) non-Git dir without MEMORY.md is silent" "$out"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q1) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q1) exit code $rc"; fi
+printf '# Memory Index\n- NON-GIT-SENTINEL\n' > "$TMP/non-git-memory/MEMORY.md"
+out=$(run_hook "$TMP" "$TMP/non-git-memory"); rc=$?
+assert_contains "(q2) non-Git memory warns" "$out" "personal-memory-warning"
+assert_not_contains "(q2) non-Git memory has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q2) non-Git memory body is not injected" "$out" "NON-GIT-SENTINEL"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q2) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q2) exit code $rc"; fi
+
+# 通常 fixture は editable directory ではなく commit snapshot として用意する。
+mkdir -p "$TMP/home/.claude/memory/projects" "$TMP/plain"
+pslug=$(printf '%s' "$TMP/plain" | tr ':/\\' '-')
 printf '# Memory Index\n- [t](t.md) — INDEX-HOOK-LINE\n' > "$TMP/home/.claude/memory/MEMORY.md"
+printf 'REMOTE-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/github.com-shishi-dotfiles.md"
+printf 'PATH-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/${pslug}.md"
+git -C "$TMP/home/.claude/memory" init -q -b main
+git -C "$TMP/home/.claude/memory" add MEMORY.md projects
+$GITC -C "$TMP/home/.claude/memory" commit -qm init
 
 # (b) プロジェクト記憶なし -> 索引と slug 行のみ
 out=$(run_hook "$TMP")
@@ -56,7 +81,6 @@ assert_contains "(b) slug line present" "$out" "現在のプロジェクト slug
 # (a)(d-1) origin あり -> remote slug
 mkdir -p "$TMP/repo-ssh" && git -C "$TMP/repo-ssh" init -q -b main
 git -C "$TMP/repo-ssh" remote add origin git@github.com:shishi/dotfiles.git
-printf 'REMOTE-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/github.com-shishi-dotfiles.md"
 out=$(run_hook "$TMP/repo-ssh")
 assert_contains "(a)(d) remote slug from ssh origin" "$out" "REMOTE-SLUG-MEMORY"
 
@@ -74,15 +98,15 @@ out=$(run_hook "$TMP/ghq/github.com/shishi/dotfiles")
 assert_contains "(d)(f) ghq-relative slug matches remote slug" "$out" "REMOTE-SLUG-MEMORY"
 
 # (d-3) remote も ghq も無し -> path-slug
-mkdir -p "$TMP/plain"
-pslug=$(printf '%s' "$TMP/plain" | tr ':/\\' '-')
-printf 'PATH-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/${pslug}.md"
 out=$(run_hook "$TMP/plain")
 assert_contains "(d) path-slug fallback" "$out" "PATH-SLUG-MEMORY"
 
 # (g) 引数で記憶ディレクトリを指定できる
 mkdir -p "$TMP/altmem"
 printf '# Memory Index\n- ALT-DIR-MEMORY\n' > "$TMP/altmem/MEMORY.md"
+git -C "$TMP/altmem" init -q -b main
+git -C "$TMP/altmem" add MEMORY.md
+$GITC -C "$TMP/altmem" commit -qm init
 out=$(run_hook "$TMP" "$TMP/altmem")
 assert_contains "(g) explicit MEMORY_DIR arg" "$out" "ALT-DIR-MEMORY"
 
@@ -100,8 +124,6 @@ else
 fi
 
 # git repo な記憶ディレクトリの準備ヘルパ
-# gpgsign は実ユーザーの設定を継承すると gpg-agent 依存で commit が落ちるので切る
-GITC="git -c user.name=t -c user.email=t@t -c commit.gpgsign=false"
 make_repo_mem() { # $1=path
   mkdir -p "$1"
   git -C "$1" init -q -b main
@@ -374,6 +396,303 @@ assert_contains "(m) ahead warning line" "$out" "未 push"
 # 未 push 警告は degraded ではない。CLAUDE.md は degraded を「⚠ 記憶 repo」で始まる行と
 # 定義しているため、ahead 警告がその目印を踏まないことが両者を区別できる条件になる。
 assert_not_contains "(m) ahead warning is not a degraded marker" "$out" "⚠ 記憶 repo"
+
+# (q3) branch 検査直後に別プロセスが consolidation branch へ切り替えても、固定するのは
+# HEAD ではなく main^{commit}。env assignment が shell function の run_hook を経由して
+# PATH と実 git の場所を hook process へ渡せることも、この実行形で確認する。
+make_repo_mem "$TMP/toctoumem"
+printf '# Memory Index\n- MAIN-SNAPSHOT-SENTINEL\n' > "$TMP/toctoumem/MEMORY.md"
+git -C "$TMP/toctoumem" add MEMORY.md
+$GITC -C "$TMP/toctoumem" commit -qm main-snapshot
+git -C "$TMP/toctoumem" switch -qc consolidation/test
+printf '# Memory Index\n- CONSOLIDATION-SENTINEL\n' > "$TMP/toctoumem/MEMORY.md"
+git -C "$TMP/toctoumem" add MEMORY.md
+$GITC -C "$TMP/toctoumem" commit -qm consolidation-snapshot
+git -C "$TMP/toctoumem" switch -q main
+mkdir -p "$TMP/toctou-stub"
+system_git=$(command -v git)
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ] && [ "$3" = "rev-parse" ] && [ "$4" = "--abbrev-ref" ] && [ "$5" = "HEAD" ]; then' \
+  '  branch=$("$INJECT_TEST_SYSTEM_GIT" "$@") || exit $?' \
+  '  "$INJECT_TEST_SYSTEM_GIT" -C "$INJECT_TEST_MEMORY_DIR" switch -q consolidation/test || exit $?' \
+  '  printf "%s\n" "$branch"' \
+  'else' \
+  '  exec "$INJECT_TEST_SYSTEM_GIT" "$@"' \
+  'fi' > "$TMP/toctou-stub/git"
+chmod +x "$TMP/toctou-stub/git"
+out=$(PATH="$TMP/toctou-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/toctoumem" run_hook "$TMP" "$TMP/toctoumem")
+assert_contains "(q3) TOCTOU reads the fixed main snapshot" "$out" "MAIN-SNAPSHOT-SENTINEL"
+assert_not_contains "(q3) TOCTOU never injects consolidation content" "$out" "CONSOLIDATION-SENTINEL"
+
+# (q4) main commit を固定できない場合は HEAD/worktree へフォールバックしない。
+make_repo_mem "$TMP/nomainresolve"
+printf '# Memory Index\n- COMMITTED-MAIN-SENTINEL\n' > "$TMP/nomainresolve/MEMORY.md"
+git -C "$TMP/nomainresolve" add MEMORY.md
+$GITC -C "$TMP/nomainresolve" commit -qm committed-main
+printf '\n- WORKTREE-SENTINEL\n' >> "$TMP/nomainresolve/MEMORY.md"
+mkdir -p "$TMP/nomainresolve-stub"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ] && [ "$3" = "rev-parse" ] && [ "$4" = "--verify" ] && [ "$5" = "main^{commit}" ]; then' \
+  '  exit 1' \
+  'fi' \
+  'exec "$INJECT_TEST_SYSTEM_GIT" "$@"' > "$TMP/nomainresolve-stub/git"
+chmod +x "$TMP/nomainresolve-stub/git"
+out=$(PATH="$TMP/nomainresolve-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/nomainresolve" run_hook "$TMP" "$TMP/nomainresolve"); rc=$?
+assert_contains "(q4) main resolution failure warns" "$out" "personal-memory-warning"
+assert_not_contains "(q4) main resolution failure has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q4) committed body is withheld" "$out" "COMMITTED-MAIN-SENTINEL"
+assert_not_contains "(q4) worktree body is withheld" "$out" "WORKTREE-SENTINEL"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q4) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q4) exit code $rc"; fi
+
+# (q5) 固定 snapshot の required object 読み取り失敗は、wrapper を出す前に fail closed。
+make_repo_mem "$TMP/readfailmem"
+printf '# Memory Index\n- OBJECT-READ-SENTINEL\n' > "$TMP/readfailmem/MEMORY.md"
+git -C "$TMP/readfailmem" add MEMORY.md
+$GITC -C "$TMP/readfailmem" commit -qm object-read
+readfail_sha=$(git -C "$TMP/readfailmem" rev-parse main)
+mkdir -p "$TMP/readfail-stub"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ] && [ "$3" = "show" ] && [ "$4" = "$INJECT_TEST_FAIL_OBJECT" ]; then' \
+  '  printf "PARTIAL-OBJECT-BODY\n"' \
+  '  exit 1' \
+  'fi' \
+  'exec "$INJECT_TEST_SYSTEM_GIT" "$@"' > "$TMP/readfail-stub/git"
+chmod +x "$TMP/readfail-stub/git"
+out=$(PATH="$TMP/readfail-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/readfailmem" INJECT_TEST_FAIL_OBJECT="${readfail_sha}:MEMORY.md" \
+  run_hook "$TMP" "$TMP/readfailmem"); rc=$?
+assert_contains "(q5) object read failure warns" "$out" "personal-memory-warning"
+assert_contains "(q5) object read warning names only the path" "$out" "MEMORY.md"
+assert_not_contains "(q5) object read failure has no partial wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q5) object body is withheld" "$out" "OBJECT-READ-SENTINEL"
+assert_not_contains "(q5) partial failed-read stdout is withheld" "$out" "PARTIAL-OBJECT-BODY"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q5) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q5) exit code $rc"; fi
+
+# (q6) 秘密らしい内容は MEMORY.md / selected project file のどちらにあっても、値や
+# 他の正常行を含む本文全体を抑止する。警告へ出してよいのは対象相対 path だけ。
+mkdir -p "$TMP/secret-project"
+git -C "$TMP/secret-project" init -q -b main
+git -C "$TMP/secret-project" remote add origin git@github.com:shishi/dotfiles.git
+make_secret_repo() { # $1=path $2=MEMORY body $3=optional project body
+  mkdir -p "$1/projects"
+  git -C "$1" init -q -b main
+  printf '%s\n' "$2" > "$1/MEMORY.md"
+  git -C "$1" add MEMORY.md
+  if [ -n "$3" ]; then
+    printf '%s\n' "$3" > "$1/projects/github.com-shishi-dotfiles.md"
+    git -C "$1" add projects/github.com-shishi-dotfiles.md
+  fi
+  $GITC -C "$1" commit -qm secret-fixture
+}
+
+make_secret_repo "$TMP/secret-password" \
+  $'# Memory Index\nSAFE-MEMORY-BODY\npassword = this-is-a-dummy-secret' ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-password")
+assert_contains "(q6a) password assignment warns with MEMORY path" "$out" "MEMORY.md"
+assert_contains "(q6a) password assignment uses warning wrapper" "$out" "personal-memory-warning"
+assert_not_contains "(q6a) password assignment has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6a) password value is not leaked" "$out" "this-is-a-dummy-secret"
+assert_not_contains "(q6a) safe sibling body is also withheld" "$out" "SAFE-MEMORY-BODY"
+assert_not_contains "(q6a) secret warning omits absolute memory dir" "$out" "$TMP/secret-password"
+
+make_secret_repo "$TMP/secret-pat" '# Memory Index' \
+  $'SAFE-PROJECT-BODY\ngithub_pat_abcdefghijklmnopqrstuvwxyz123456'
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-pat")
+assert_contains "(q6b) PAT warns with selected project path" "$out" "projects/github.com-shishi-dotfiles.md"
+assert_not_contains "(q6b) PAT has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6b) PAT value is not leaked" "$out" "github_pat_abcdefghijklmnopqrstuvwxyz123456"
+assert_not_contains "(q6b) safe project sibling is also withheld" "$out" "SAFE-PROJECT-BODY"
+
+aws_key='AKIA'
+aws_key="${aws_key}ABCDEFGHIJKLMNOP"
+make_secret_repo "$TMP/secret-aws" \
+  $'# Memory Index\n'"$aws_key" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-aws")
+assert_contains "(q6c) AWS access key warns" "$out" "personal-memory-warning"
+assert_not_contains "(q6c) AWS access key has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6c) AWS access key value is not leaked" "$out" "$aws_key"
+
+private_key_header='-----BEGIN OPENSSH'
+private_key_header="${private_key_header} PRIVATE KEY-----"
+make_secret_repo "$TMP/secret-key" '# Memory Index' \
+  $'SAFE-PROJECT-BODY\n'"$private_key_header"
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-key")
+assert_contains "(q6d) private key header warns with selected project path" "$out" "projects/github.com-shishi-dotfiles.md"
+assert_not_contains "(q6d) private key has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6d) private key header is not leaked" "$out" "$private_key_header"
+assert_not_contains "(q6d) safe project body is withheld" "$out" "SAFE-PROJECT-BODY"
+
+# 引用付き key の JSON/YAML 形式も sensitive assignment として扱う。
+quoted_assignment='"to'
+quoted_assignment="${quoted_assignment}ken\": \"abcdefgh\""
+make_secret_repo "$TMP/secret-quoted-assignment" \
+  $'# Memory Index\nSAFE-QUOTED-SIBLING\n'"$quoted_assignment" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-quoted-assignment")
+assert_contains "(q6g) quoted sensitive assignment warns" "$out" "personal-memory-warning"
+assert_contains "(q6g) quoted sensitive assignment names MEMORY path" "$out" "MEMORY.md"
+assert_not_contains "(q6g) quoted sensitive assignment has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6g) quoted sensitive value is not leaked" "$out" "abcdefgh"
+assert_not_contains "(q6g) quoted assignment withholds sibling body" "$out" "SAFE-QUOTED-SIBLING"
+
+# quote 内の値長には空白も含める。実用的な passphrase を、最初の単語が短いという理由で
+# 見逃さない。一方、8 文字未満の明白な placeholder は過検出しない。
+spaced_password='"pass'
+spaced_password="${spaced_password}word\": \"correct horse battery staple\""
+make_secret_repo "$TMP/secret-spaced-password" \
+  $'# Memory Index\nSAFE-SPACED-SIBLING\n'"$spaced_password" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-spaced-password")
+assert_contains "(q6h) spaced quoted password warns" "$out" "personal-memory-warning"
+assert_contains "(q6h) spaced quoted password names MEMORY path" "$out" "MEMORY.md"
+assert_not_contains "(q6h) spaced quoted password has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6h) spaced quoted password value is not leaked" "$out" "correct horse battery staple"
+assert_not_contains "(q6h) spaced quoted password withholds sibling body" "$out" "SAFE-SPACED-SIBLING"
+
+# 開始quoteと同じ文字だけを終了quoteとして扱う。内側の反対quoteは値の一部として許容する。
+double_quoted_value="don't reuse this password"
+double_quoted_password='"pass'
+double_quoted_password="${double_quoted_password}word\": \"${double_quoted_value}\""
+make_secret_repo "$TMP/secret-double-quote-apostrophe" \
+  $'# Memory Index\nSAFE-DOUBLE-QUOTE-SIBLING\n'"$double_quoted_password" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-double-quote-apostrophe")
+assert_contains "(q6j) apostrophe inside double-quoted password warns" "$out" "personal-memory-warning"
+assert_not_contains "(q6j) apostrophe password has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6j) apostrophe password value is not leaked" "$out" "$double_quoted_value"
+assert_not_contains "(q6j) apostrophe password withholds sibling body" "$out" "SAFE-DOUBLE-QUOTE-SIBLING"
+
+single_quoted_value='say "never" again'
+single_quoted_password='"pass'
+single_quoted_password="${single_quoted_password}word\": '${single_quoted_value}'"
+make_secret_repo "$TMP/secret-single-quote-double" \
+  $'# Memory Index\nSAFE-SINGLE-QUOTE-SIBLING\n'"$single_quoted_password" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-single-quote-double")
+assert_contains "(q6k) double quote inside single-quoted password warns" "$out" "personal-memory-warning"
+assert_not_contains "(q6k) single-quoted password has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6k) single-quoted password value is not leaked" "$out" "$single_quoted_value"
+assert_not_contains "(q6k) single-quoted password withholds sibling body" "$out" "SAFE-SINGLE-QUOTE-SIBLING"
+
+short_placeholder='"pass'
+short_placeholder="${short_placeholder}word\": \"not set\""
+make_secret_repo "$TMP/short-placeholder" \
+  $'# Memory Index\n'"$short_placeholder" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/short-placeholder")
+assert_contains "(q6i) short placeholder remains injectable" "$out" "not set"
+assert_not_contains "(q6i) short placeholder does not warn" "$out" "personal-memory-warning"
+
+short_single_placeholder='"pass'
+short_single_placeholder="${short_single_placeholder}word\": 'not set'"
+make_secret_repo "$TMP/short-single-placeholder" \
+  $'# Memory Index\n'"$short_single_placeholder" ''
+out=$(run_hook "$TMP/secret-project" "$TMP/short-single-placeholder")
+assert_contains "(q6l) short single-quoted placeholder remains injectable" "$out" "not set"
+assert_not_contains "(q6l) short single-quoted placeholder does not warn" "$out" "personal-memory-warning"
+
+# 通常文中の token / private key は assignment でなければ誤検出しない。
+make_secret_repo "$TMP/clean-prose" \
+  $'# Memory Index\nA token budget is not a credential.' \
+  'Document the private key rotation procedure without storing key material.'
+out=$(run_hook "$TMP/secret-project" "$TMP/clean-prose")
+assert_contains "(q6e) clean token prose is injected" "$out" "A token budget is not a credential."
+assert_contains "(q6e) clean private-key prose is injected" "$out" "private key rotation procedure"
+assert_not_contains "(q6e) clean prose does not warn" "$out" "personal-memory-warning"
+
+# 検査 command 自体の失敗も本文を出さない。
+make_repo_mem "$TMP/scanfailmem"
+printf '# Memory Index\n- SCAN-FAIL-SENTINEL\n' > "$TMP/scanfailmem/MEMORY.md"
+git -C "$TMP/scanfailmem" add MEMORY.md
+$GITC -C "$TMP/scanfailmem" commit -qm scan-failure
+mkdir -p "$TMP/scanfail-stub"
+printf '#!/bin/sh\nexit 2\n' > "$TMP/scanfail-stub/grep"
+chmod +x "$TMP/scanfail-stub/grep"
+out=$(PATH="$TMP/scanfail-stub:$PATH" run_hook "$TMP" "$TMP/scanfailmem"); rc=$?
+assert_contains "(q6f) scan failure warns" "$out" "personal-memory-warning"
+assert_contains "(q6f) scan failure names the path" "$out" "MEMORY.md"
+assert_not_contains "(q6f) scan failure has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6f) scan failure withholds body" "$out" "SCAN-FAIL-SENTINEL"
+assert_not_contains "(q6f) scan warning omits absolute memory dir" "$out" "$TMP/scanfailmem"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q6f) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q6f) exit code $rc"; fi
+
+# (q7) selected project の存在確認自体が壊れた場合、正常な不存在へ畳まず fail closed。
+make_secret_repo "$TMP/project-probe-fail" \
+  $'# Memory Index\nPROBE-MEMORY-SENTINEL' 'PROBE-PROJECT-SENTINEL'
+probe_sha=$(git -C "$TMP/project-probe-fail" rev-parse main)
+probe_path='projects/github.com-shishi-dotfiles.md'
+mkdir -p "$TMP/project-probe-stub"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ]; then' \
+  '  if [ "$3" = "cat-file" ] && [ "$4" = "-e" ] && [ "$5" = "$INJECT_TEST_PROJECT_OBJECT" ]; then exit 2; fi' \
+  '  if [ "$3" = "ls-tree" ] && [ "$4" = "--name-only" ] && [ "$5" = "$INJECT_TEST_SNAPSHOT" ] && [ "$6" = "--" ] && [ "$7" = "$INJECT_TEST_PROJECT_PATH" ]; then exit 2; fi' \
+  'fi' \
+  'exec "$INJECT_TEST_SYSTEM_GIT" "$@"' > "$TMP/project-probe-stub/git"
+chmod +x "$TMP/project-probe-stub/git"
+out=$(PATH="$TMP/project-probe-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/project-probe-fail" \
+  INJECT_TEST_PROJECT_OBJECT="${probe_sha}:${probe_path}" INJECT_TEST_SNAPSHOT="$probe_sha" \
+  INJECT_TEST_PROJECT_PATH="$probe_path" run_hook "$TMP/secret-project" "$TMP/project-probe-fail"); rc=$?
+assert_contains "(q7) project probe failure warns" "$out" "personal-memory-warning"
+assert_contains "(q7) project probe warning names selected path" "$out" "$probe_path"
+assert_not_contains "(q7) project probe failure has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q7) project probe failure withholds MEMORY body" "$out" "PROBE-MEMORY-SENTINEL"
+assert_not_contains "(q7) project probe failure withholds project body" "$out" "PROBE-PROJECT-SENTINEL"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q7) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q7) exit code $rc"; fi
+
+# (q8) required index の存在確認も tri-state とし、Git異常を通常の不存在と区別する。
+make_repo_mem "$TMP/index-probe-fail"
+index_probe_sha=$(git -C "$TMP/index-probe-fail" rev-parse main)
+mkdir -p "$TMP/index-probe-stub"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ]; then' \
+  '  if [ "$3" = "cat-file" ] && [ "$4" = "-e" ] && [ "$5" = "$INJECT_TEST_INDEX_OBJECT" ]; then exit 2; fi' \
+  '  if [ "$3" = "ls-tree" ] && [ "$4" = "--name-only" ] && [ "$5" = "$INJECT_TEST_SNAPSHOT" ] && [ "$6" = "--" ] && [ "$7" = "MEMORY.md" ]; then exit 2; fi' \
+  'fi' \
+  'exec "$INJECT_TEST_SYSTEM_GIT" "$@"' > "$TMP/index-probe-stub/git"
+chmod +x "$TMP/index-probe-stub/git"
+out=$(PATH="$TMP/index-probe-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/index-probe-fail" \
+  INJECT_TEST_INDEX_OBJECT="${index_probe_sha}:MEMORY.md" INJECT_TEST_SNAPSHOT="$index_probe_sha" \
+  run_hook "$TMP" "$TMP/index-probe-fail"); rc=$?
+assert_contains "(q8) index probe error is distinguished from absence" "$out" "存在確認に失敗"
+assert_contains "(q8) index probe warning names MEMORY path" "$out" "MEMORY.md"
+assert_not_contains "(q8) index probe error has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q8) index probe error withholds body" "$out" "REPO-MEMORY"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q8) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q8) exit code $rc"; fi
+
+# (q9) status が失敗したら partial stdout を dirty state と誤認せず、本文出力前に fail closed。
+make_secret_repo "$TMP/status-fail" \
+  $'# Memory Index\nSTATUS-MEMORY-SENTINEL' 'STATUS-PROJECT-SENTINEL'
+printf '\nWORKTREE-STATUS-SENTINEL\n' >> "$TMP/status-fail/MEMORY.md"
+mkdir -p "$TMP/status-fail-stub"
+printf '%s\n' \
+  '#!/bin/sh' \
+  'if [ "$1" = "-C" ] && [ "$2" = "$INJECT_TEST_MEMORY_DIR" ] && [ "$3" = "status" ] && [ "$4" = "--porcelain" ]; then' \
+  '  printf "PARTIAL-STATUS-BODY\n"' \
+  '  exit 2' \
+  'fi' \
+  'exec "$INJECT_TEST_SYSTEM_GIT" "$@"' > "$TMP/status-fail-stub/git"
+chmod +x "$TMP/status-fail-stub/git"
+out=$(PATH="$TMP/status-fail-stub:$PATH" INJECT_TEST_SYSTEM_GIT="$system_git" \
+  INJECT_TEST_MEMORY_DIR="$TMP/status-fail" run_hook "$TMP/secret-project" "$TMP/status-fail"); rc=$?
+expected_status_warning='<personal-memory-warning>記憶 repo の Git 状態を確認できないため注入をスキップしました</personal-memory-warning>'
+if [ "$out" = "$expected_status_warning" ]; then PASS=$((PASS+1)); echo "ok: (q9) status failure emits only the fixed warning"
+else FAIL=$((FAIL+1)); echo "NG: (q9) status failure output differs from the fixed warning"; fi
+assert_not_contains "(q9) status failure has no wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q9) status partial stdout is withheld" "$out" "PARTIAL-STATUS-BODY"
+assert_not_contains "(q9) status failure withholds committed MEMORY" "$out" "STATUS-MEMORY-SENTINEL"
+assert_not_contains "(q9) status failure withholds selected project" "$out" "STATUS-PROJECT-SENTINEL"
+assert_not_contains "(q9) status failure withholds worktree body" "$out" "WORKTREE-STATUS-SENTINEL"
+if [ "$rc" -eq 0 ]; then PASS=$((PASS+1)); echo "ok: (q9) exit 0"
+else FAIL=$((FAIL+1)); echo "NG: (q9) exit code $rc"; fi
 
 echo "---"; echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
