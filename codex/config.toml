@@ -1,6 +1,6 @@
 personality = "friendly"
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
@@ -78,6 +78,12 @@ trust_level = "trusted"
 [projects."/mnt/c/Users/shishi/dev"]
 trust_level = "trusted"
 
+[projects.'c:\users\shishi\documents\obsidian']
+trust_level = "trusted"
+
+[projects.'c:\users\shishi\dev\src\github.com\tddbc\javascript-mocha']
+trust_level = "trusted"
+
 [windows]
 sandbox = "elevated"
 
@@ -108,7 +114,7 @@ NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3
 NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
 
 [desktop]
-conversationDetailMode = "STEPS_COMMANDS"
+conversationDetailMode = "STEPS_PROSE"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
@@ -157,9 +163,14 @@ skill = "#ad7bf9"
 global = "fileManager"
 
 [marketplaces.openai-bundled]
-last_updated = "2026-08-16T16:43:17Z"
+last_updated = "2026-08-21T09:37:57Z"
 source_type = "local"
 source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\codex\.tmp\bundled-marketplaces\openai-bundled'
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-08-20T03:21:05Z"
+source_type = "local"
+source = '\\?\C:\Users\shishi\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
 
 [plugins."documents@openai-primary-runtime"]
 enabled = true
@@ -240,7 +251,7 @@ NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunct
 BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "public-beta"
 BROWSER_USE_CODEX_APP_VERSION = "26.727.40816"
 SKY_CUA_NATIVE_PIPE = "1"
-SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-fa749105-b4f2-43dc-9e55-19da1da8fdbd'
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-ac7d97fe-3cd9-4a91-a5dc-628804d850e9'
 CODEX_CLI_PATH = 'C:\Users\shishi\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe'
 
 [memories]
