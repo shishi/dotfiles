@@ -28,7 +28,9 @@ KNOWN_MKTS="$CLAUDE_DIR/plugins/known_marketplaces.json"
 INSTALLED="$CLAUDE_DIR/plugins/installed_plugins.json"
 
 # marketplace 名 -> GitHub repo。新しい marketplace を使い始めたら 1 行足す。
-# (この対応情報だけは settings.json / 追跡対象ファイルに無いのでここで保持する)
+# 同じ対応は settings.json の extraKnownMarketplaces[*].source.repo にもあり、この表は
+# それと二重に保持している。ここに無い marketplace で WARN が出たら、まず
+# settings.json のその項を見ること (追跡対象なので手元にある)。
 declare -A MARKETPLACE_REPO=(
   [superpowers-marketplace]="obra/superpowers-marketplace"
   [claude-plugins-official]="anthropics/claude-plugins-official"
@@ -48,7 +50,20 @@ plugin_installed() {
   [ -f "$INSTALLED" ] && jq -e --arg p "$1" '.plugins | has($p)' "$INSTALLED" >/dev/null 2>&1
 }
 
-added=0 installed=0 present=0 unresolved=0 failed=0
+# settings.json の extraKnownMarketplaces から marketplace の出所を読む。未定義なら
+# どちらも空文字。1 行に詰めて read で分けると、空フィールドが区切り文字ごと消えて
+# 隣のフィールドがずれ込むので、値ごとに引く。tr -d '\r' の理由は下の done 行を参照。
+marketplace_source_kind() {
+  jq -r --arg m "$1" '.extraKnownMarketplaces[$m].source.source // ""' \
+    "$SETTINGS" 2>/dev/null | tr -d '\r'
+}
+
+marketplace_source_path() {
+  jq -r --arg m "$1" '.extraKnownMarketplaces[$m].source.path // ""' \
+    "$SETTINGS" 2>/dev/null | tr -d '\r'
+}
+
+added=0 installed=0 present=0 unresolved=0 skipped=0 failed=0
 
 # enabledPlugins のうち値がちょうど true のものだけ ("plugin@marketplace")
 while IFS= read -r plugin; do
@@ -60,7 +75,29 @@ while IFS= read -r plugin; do
   fi
 
   marketplace="${plugin##*@}"
-  repo="${MARKETPLACE_REPO[$marketplace]:-}"
+
+  # source が "directory" の marketplace は特定マシンのローカル path を指すので、
+  # MARKETPLACE_REPO (owner/repo 形式) には載せられない。path が無いマシンでは
+  # このプラグイン自体が対象外なので、WARN ではなく通常ログ 1 行にして飛ばす。
+  # unresolved に数えると「対応表に足せば直る」と読めてしまうが、足しても直らない。
+  src_kind="$(marketplace_source_kind "$marketplace")"
+  if [ "$src_kind" = "directory" ]; then
+    src_path="$(marketplace_source_path "$marketplace")"
+    if [ -z "$src_path" ]; then
+      echo "install-plugins: skip $plugin — marketplace '$marketplace' is a directory source with no path in settings.json"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    if [ ! -d "$src_path" ]; then
+      echo "install-plugins: skip $plugin — marketplace '$marketplace' lives at $src_path, which does not exist on this machine"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    repo="$src_path"
+  else
+    repo="${MARKETPLACE_REPO[$marketplace]:-}"
+  fi
+
   if [ -z "$repo" ]; then
     echo "install-plugins: WARN no repo mapping for marketplace '$marketplace' (plugin $plugin) — add it to MARKETPLACE_REPO"
     unresolved=$((unresolved + 1))
@@ -90,6 +127,6 @@ while IFS= read -r plugin; do
 # \r が残り MARKETPLACE_REPO のキーと一致せず全 plugin が unresolved になる。
 done < <(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$SETTINGS" | tr -d '\r')
 
-echo "install-plugins: done (marketplaces added: $added, plugins installed: $installed, already present: $present, unresolved: $unresolved, failed: $failed)"
+echo "install-plugins: done (marketplaces added: $added, plugins installed: $installed, already present: $present, unresolved: $unresolved, skipped: $skipped, failed: $failed)"
 
 [ "$failed" -eq 0 ]
