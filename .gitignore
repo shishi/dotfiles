@@ -1,4 +1,6 @@
 /fish/fish_variables
+# マシンローカルの Claude Code 設定。追跡すると片方のマシンの許可が全マシンへ配られる。
+/.claude/settings.local.json
 /claude/*
 !/claude/CLAUDE.md
 !/claude/settings.json
