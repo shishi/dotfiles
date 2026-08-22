@@ -24,6 +24,7 @@
   "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
+      "Bash(wsl.exe -e bash -lc *busctl*)",
       "Bash(serena)",
       "Bash(cat:*)",
       "Bash(head:*)",
