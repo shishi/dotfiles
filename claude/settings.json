@@ -136,9 +136,7 @@
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
       "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
-      "Bash(git push origin develop/*)",
-      "Bash(git push -u origin develop/*)",
-      "Bash(git push --set-upstream origin develop/*)",
+      "Bash(git push:*)",
       "Bash(git -C ~/.claude/memory:*)"
     ],
     "deny": [
