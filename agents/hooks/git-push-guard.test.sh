@@ -410,6 +410,25 @@ assert_denied "pushd before an implicit force push makes the destination fail cl
   "pushd '$FIXTURE_ROOT/main' >/dev/null && git push --force" "$FIXTURE_ROOT/feature"
 assert_denied "pushd before an implicit normal push fails closed" \
   "pushd '$FIXTURE_ROOT/main' >/dev/null && git push" "$FIXTURE_ROOT/feature"
+# 引用符の中の "cd " でも push 先の解決を諦める。これは承知の上の誤検知で、
+# commit message が cd に触れているだけで feature への push が落ちる。
+# 代わりに払っているものが下の eval のケースで、そちらを閉じる手段が
+# 現状これしかない。誤検知を消す変更を入れるなら、まず eval を閉じること。
+assert_denied "a quoted cd is treated as a real one (accepted false positive)" \
+  'git commit -m "fix cd handling" && git push' "$FIXTURE_ROOT/feature"
+# eval は引数をコマンドとして実行するので、引用符の中の cd は実際に cwd を動かす。
+# トークナイザには eval への 1 引数として見えるため segment_cwd_unknown は 0 のまま。
+# 上の部分文字列判定だけがこれを捕まえる。実測: 判定を外すと deny から allow に変わる。
+assert_denied "eval can hide a cd, so the substring test must keep failing closed" \
+  "eval 'cd $FIXTURE_ROOT/main' && git push" "$FIXTURE_ROOT/feature"
+# 捕まるのは `cd ` の綴りだけ。`eval 'pushd <repo>'` と `eval 'chdir <repo>'` は
+# 実測で今も allow(既知の未修正の穴)。ここを deny にするには、eval の分岐から
+# 入れ子で起きた cwd 変化を外へ伝播させる必要があり、部分文字列リストを
+# 増やす方向では誤検知だけが増える。テストにしていないのは、赤いままの
+# アサーションを常設するとスイートが警報として機能しなくなるため。
+# 本物の cd はコマンド位置に立つので、セグメント単位の追跡でも捕まる(二重の防御)。
+assert_denied "a real cd before an implicit normal push still fails closed" \
+  "cd '$FIXTURE_ROOT/main' && git push" "$FIXTURE_ROOT/feature"
 assert_denied "env -C before an implicit force push makes cwd unknown" \
   "env -C '$FIXTURE_ROOT/main' git push --force" "$FIXTURE_ROOT/feature"
 assert_denied "cwd uncertainty is preserved through eval" \
@@ -443,6 +462,22 @@ git -C "$FIXTURE_ROOT/feature" config --unset-all remote.origin.push
 git -C "$FIXTURE_ROOT/feature" config remote.origin.mirror true
 assert_denied "configured mirror push is always denied" "git push origin" "$FIXTURE_ROOT/feature"
 assert_denied "sole configured mirror remote is always denied" "git push" "$FIXTURE_ROOT/feature"
+# remote が 1 個のときだけ解決していると、fork 構成 (origin + upstream) で
+# remote が空のまま mirror 判定と remote.*.push 判定を丸ごと飛ばす。git 自身は
+# 他に手掛かりが無ければ origin へ push するので、そこを見ないと素通りする。
+git init -q "$FIXTURE_ROOT/fork" || exit 1
+git -C "$FIXTURE_ROOT/fork" symbolic-ref HEAD refs/heads/feature/x || exit 1
+git -C "$FIXTURE_ROOT/fork" remote add origin "$FIXTURE_ROOT/main" || exit 1
+git -C "$FIXTURE_ROOT/fork" remote add upstream "$FIXTURE_ROOT/main" || exit 1
+git -C "$FIXTURE_ROOT/fork" config remote.origin.mirror true || exit 1
+assert_denied "a mirror origin is denied even when a second remote exists" \
+  "git push" "$FIXTURE_ROOT/fork"
+git -C "$FIXTURE_ROOT/fork" config --unset-all remote.origin.mirror || exit 1
+git -C "$FIXTURE_ROOT/fork" config remote.origin.push '+refs/heads/main:refs/heads/main' || exit 1
+assert_denied "a protected force refspec on origin is denied when a second remote exists" \
+  "git push" "$FIXTURE_ROOT/fork"
+git -C "$FIXTURE_ROOT/fork" config --unset-all remote.origin.push || exit 1
+assert_allowed "a plain fork layout push is still allowed" "git push" "$FIXTURE_ROOT/fork"
 git -C "$FIXTURE_ROOT/feature" config --unset-all remote.origin.mirror
 assert_denied "command-local matching force fails closed" \
   "git -c push.default=matching push --force" "$FIXTURE_ROOT/feature"
@@ -454,6 +489,25 @@ assert_denied "unknown config cannot turn a normal command into mirror push afte
   "PUSH_MIRROR=true git --config-env=remote.origin.mirror=PUSH_MIRROR push origin" "$FIXTURE_ROOT/feature"
 assert_denied "unknown config cannot inject a destructive protected refspec" \
   "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=+refs/heads/master:refs/heads/master git push origin" \
+  "$FIXTURE_ROOT/feature"
+# alias を挟むと push は再帰で再分類される。--config-env はその再帰へ渡らないと
+# 「設定が読めない」という事実が失われ、mirror を仕込んだ push が素通りする。
+assert_denied "an alias cannot hide an unresolvable command-local config" \
+  "FOO=true git -c alias.p=push --config-env=remote.origin.mirror=FOO p origin" \
+  "$FIXTURE_ROOT/feature"
+assert_denied "autocorrect cannot hide an unresolvable command-local config" \
+  "FOO=true git -c help.autocorrect=immediate --config-env=remote.origin.mirror=FOO puush origin" \
+  "$FIXTURE_ROOT/feature"
+# --config-env の空白形は等号形と別経路(次引数を待つ)を通る。等号形のテストでは
+# こちらの伝播を殺せない。
+assert_denied "an alias cannot hide an unresolvable command-local config (separated form)" \
+  "FOO=true git -c alias.p=push --config-env remote.origin.mirror=FOO p origin" \
+  "$FIXTURE_ROOT/feature"
+# --exec の値は入れ子のコマンド行として別途走査される。その走査が segment_* の
+# グローバルを初期状態で上書きするため、外側で確定していた「設定が読めない」
+# 「cwd が動いた」が消える。push 引数に入れ子コマンドを 1 つ足すだけで保護が外れる。
+assert_denied "a nested --exec scan cannot clear an unresolvable command-local config" \
+  "FOO=true git -c alias.p=push --config-env=remote.origin.mirror=FOO p --exec='git version' origin" \
   "$FIXTURE_ROOT/feature"
 assert_denied "command-local Git alias cannot hide a protected force push" \
   "git -c alias.p=push p --force origin main" "$FIXTURE_ROOT/feature"

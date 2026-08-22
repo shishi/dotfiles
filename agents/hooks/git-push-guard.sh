@@ -275,6 +275,21 @@ current_branch() {
   # A command that changes directory or overrides Git's repository context may
   # run the push in a different repository from hook_cwd. Do not use a branch
   # inferred from the wrong repository to allow a destructive implicit push.
+  #
+  # The `cd ` test below reads the whole command string, quotes included, and
+  # that is deliberate even though it costs false positives (a commit message
+  # mentioning cd denies a feature push). `eval 'cd elsewhere' && git push`
+  # changes cwd for real -- eval runs in this shell -- but the tokenizer sees
+  # one argument to eval, so segment_cwd_unknown stays 0 and this substring test
+  # is what catches it. Measured: dropping `cd ` turns that command from deny
+  # into allow against a mirror remote.
+  #
+  # It only catches that one spelling. segment_cwd_unknown tracks
+  # cd|pushd|popd|chdir|set-location and `env -C`, so `eval 'pushd elsewhere'`
+  # and `eval 'chdir elsewhere'` are NOT covered here and are allowed today
+  # (measured). Do not read a passing hook as "cwd cannot have moved". The fix
+  # is to propagate a nested cwd change back out of the eval branch rather than
+  # to widen this substring list; until then, narrowing it makes things worse.
   [ "$segment_cwd_unknown" = 0 ] || return 1
   case "$cmd" in
     *"cd "*|*"GIT_DIR="*|*"GIT_WORK_TREE="*) return 1 ;;
@@ -363,7 +378,7 @@ classify_refspec() { # $1=refspec $2=global destructive flag
 }
 
 classify_implicit_push() { # $1=remote(optional) $2=global destructive flag
-  local remote="$1" destructive="$2" push_default merge push_specs spec remotes
+  local remote="$1" destructive="$2" push_default merge push_specs spec remotes candidate_remote
 
   if [ "$segment_config_unknown" = 1 ]; then
     if [ "$destructive" = 1 ]; then
@@ -389,6 +404,19 @@ classify_implicit_push() { # $1=remote(optional) $2=global destructive flag
       remotes=$(git_in_segment remote 2>/dev/null || true)
       if [ "$(printf '%s\n' "$remotes" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ]; then
         remote="$remotes"
+      else
+        # git pushes to origin when nothing else names a remote, so origin is
+        # where the mirror and remote.*.push checks below have to look. Stopping
+        # at "exactly one remote" left a fork layout (origin + upstream) with an
+        # empty remote, which skips both checks: a mirror origin was allowed.
+        # Compared with `[ ]`, which nocasematch does not reach: a remote named
+        # ORIGIN is a different remote, and assigning "origin" for it would query
+        # a config section that does not exist and read the answer as "not set".
+        while IFS= read -r candidate_remote; do
+          [ "$candidate_remote" = origin ] || continue
+          remote=origin
+          break
+        done <<< "$remotes"
       fi
     fi
   fi
@@ -446,6 +474,11 @@ check_segment() {
   local collect_command=0
   local force=0 delete=0 mirror=0 all=0 tags=0 prune=0 remote=""
   local subcommand="" alias_value="" alias_joined="" alias_token="" autocorrect=""
+  # Snapshot what the caller established for THIS segment, so the pre-scan of
+  # nested command strings below cannot overwrite it.
+  local entry_env_config_unknown="$segment_env_config_unknown"
+  local entry_env_alias_config_unknown="$segment_env_alias_config_unknown"
+  local entry_cwd_unknown="$segment_cwd_unknown"
   local positionals=() refspecs=() command_parts=() alias_tokens=() alias_args=()
   # git itself runs command strings: `submodule foreach`, `rebase --exec`,
   # `bisect run`. Quoted, the inner command is one token that never reaches the
@@ -479,6 +512,17 @@ check_segment() {
   elif [ "${#command_parts[@]}" -gt 1 ]; then
     scan_tokens "${command_parts[@]}"
   fi
+  # The pre-scan above re-enters the scanner, and check_scanned_segment assigns
+  # these three globals from its own arguments -- a nested command starts from a
+  # clean context, so it writes 0 over what this segment had already
+  # established. Restore them: the nested command line says nothing about
+  # whether THIS segment's cwd or config could be resolved. Without this,
+  # appending one nested command to a push clears the protection, e.g.
+  # `git -c alias.p=push --config-env=remote.origin.mirror=FOO p --exec='git version' origin`
+  # goes from deny to allow.
+  segment_env_config_unknown="$entry_env_config_unknown"
+  segment_env_alias_config_unknown="$entry_env_alias_config_unknown"
+  segment_cwd_unknown="$entry_cwd_unknown"
   # Only Git's first non-global-option argument is a subcommand. An option value
   # such as `git log --grep push` must not be mistaken for `git push`.
   segment_git_context=()
@@ -501,13 +545,20 @@ check_segment() {
         git_option_arg=1
         git_option_context=1
         ;;
+      # segment_env_config_unknown にも立てる。alias 展開と autocorrect は
+      # check_segment / scan_string_with_context で再分類するが、その入口は
+      # segment_config_unknown を segment_env_config_unknown から初期化し直す。
+      # 継承の運び手はこの変数なので、ここに乗せないと「設定が読めない」事実が
+      # 再帰の先で失われ、mirror を仕込んだ push が素通りする。
       --config-env)
         segment_config_unknown=1
+        segment_env_config_unknown=1
         git_option_arg=1
         git_option_context=2
         ;;
       --config-env=*)
         segment_config_unknown=1
+        segment_env_config_unknown=1
         case "${a#--config-env=}" in alias.*=*) segment_alias_config_unknown=1 ;; esac
         ;;
       --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|-C?*|-c?*)
