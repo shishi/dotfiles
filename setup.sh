@@ -677,6 +677,13 @@ if command -v claude >/dev/null 2>&1; then
     || echo "setup.sh: plugin install step reported issues (continuing)"
 fi
 
+# nix-config の herdr-bootstrap が PATH に居れば、herdr integration
+# (~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
+# 無い環境(nix 未導入)では次の home-manager switch が同じことをする。
+if command -v herdr-bootstrap >/dev/null 2>&1; then
+  herdr-bootstrap || echo "setup.sh: herdr-bootstrap reported issues (continuing)"
+fi
+
 # Codex の plugin は Claude Code と違いアカウント側に保存され、サインインすれば
 # マシンをまたいで復元される。ここで収束させる必要はない。
 
