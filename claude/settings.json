@@ -271,7 +271,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash '/Users/shigenobu.407/.claude/hooks/herdr-agent-state.sh' session",
+            "command": "bash ~/.claude/hooks/herdr-agent-state.sh session",
             "timeout": 10
           }
         ]
@@ -313,8 +313,7 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": false,
-    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
+    "claude-code-herdr-plugin@claude-code-herdr-plugin": true,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "double-shot-latte@superpowers-marketplace": true,
@@ -333,12 +332,6 @@
     "vue-lsp@teachme-web-lsp": true
   },
   "extraKnownMarketplaces": {
-    "andrej-karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
-      }
-    },
     "claude-code-herdr-plugin": {
       "source": {
         "source": "github",
@@ -349,12 +342,6 @@
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
-      }
-    },
-    "karpathy-skills": {
-      "source": {
-        "source": "github",
-        "repo": "forrestchang/andrej-karpathy-skills"
       }
     },
     "superpowers-marketplace": {

@@ -1,29 +1,38 @@
 {
   "hooks": {
-    "SessionStart": [
+    "PreToolUse": [
       {
-        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
-            "type": "command",
+            "command": "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh'",
+            "statusMessage": "git push ガード確認中...",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "additionalContextLimit": 10000,
             "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
             "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
             "timeout": 10,
-            "additionalContextLimit": 10000
+            "type": "command"
           }
-        ]
-      }
-    ],
-    "PreToolUse": [
+        ],
+        "matcher": "startup|resume|clear|compact"
+      },
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh'",
-            "timeout": 10,
-            "statusMessage": "git push ガード確認中..."
+            "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "timeout": 10
           }
         ]
       }
@@ -32,10 +41,10 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
             "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/git-push-guard.sh --record-approval'",
-            "timeout": 10
+            "timeout": 10,
+            "type": "command"
           }
         ]
       }
