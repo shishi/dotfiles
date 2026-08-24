@@ -30,9 +30,15 @@
       {
         "hooks": [
           {
+<<<<<<< HEAD
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
             "timeout": 10
+=======
+            "command": "bash '/Users/shigenobu.407/.codex/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+>>>>>>> be3b63f (codex)
           }
         ]
       }
