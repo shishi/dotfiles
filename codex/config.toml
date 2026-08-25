@@ -1,6 +1,6 @@
 personality = "friendly"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "low"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
@@ -261,6 +261,7 @@ trusted_hash = "sha256:090a0300c0dffe76e99d456199bab41687f5edf1f2031212fe343e5e6
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
 [mcp_servers.node_repl]
+enabled = false
 args = []
 command = "/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/cua_node/bin/node_repl"
 startup_timeout_sec = 120
