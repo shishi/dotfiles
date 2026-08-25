@@ -257,6 +257,9 @@ trusted_hash = "sha256:c61fd3a8acadb64ff4e8afc15b4117965cbe3c9778fc42e71f2208e4a
 [hooks.state."/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_web_duvel/.codex/hooks.json:post_tool_use:1:0"]
 trusted_hash = "sha256:090a0300c0dffe76e99d456199bab41687f5edf1f2031212fe343e5e60340698"
 
+[hooks.state."/home/shishi/.codex/hooks.json:session_start:1:0"]
+trusted_hash = "sha256:cdb45465c937a59b479d2e100e37d477d6c5884cc718fd2c4d65b4a6570f3d7a"
+
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
