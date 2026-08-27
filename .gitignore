@@ -12,6 +12,7 @@
 !/claude/hooks/**
 !/claude/skills/
 !/claude/skills/**
+/claude/skills/hunk-review/
 !/claude/statusline.sh
 !/claude/install-plugins.sh
 /codex/*
@@ -23,6 +24,7 @@
 !/codex/rules/**
 !/codex/skills/
 !/codex/skills/**
+/codex/skills/hunk-review/
 /codex/skills/.system/
 !/codex/hooks/
 !/codex/hooks/**

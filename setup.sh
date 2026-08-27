@@ -151,6 +151,28 @@ resolve_existing_path() {
   realpath "$path" 2>/dev/null
 }
 
+run_with_indented_output() {
+  local -a pipeline_status
+
+  "$@" 2>&1 | sed 's/^/  /' 2>/dev/null
+  pipeline_status=("${PIPESTATUS[@]}")
+  if [ "${pipeline_status[1]}" -ne 0 ]; then
+    echo "  output formatting failed (exit ${pipeline_status[1]})"
+  fi
+  if [ "${pipeline_status[0]}" -ne 0 ]; then
+    return "${pipeline_status[0]}"
+  fi
+  return "${pipeline_status[1]}"
+}
+
+has_herdr_command_hook() {
+  local config="$1" command="$2"
+
+  jq -e --arg command "$command" \
+    'any(.hooks.SessionStart[]?.hooks[]?; .type == "command" and .command == $command)' \
+    "$config" >/dev/null 2>&1
+}
+
 normalize_agent_memory_remote() {
   local remote="$1"
 
@@ -671,17 +693,97 @@ ln -sfn ${DOTDIR}/.gitignore.global ~/.gitignore
 # .bashrc / .zsh 系 / .vim は追跡しているが張らない。
 
 # settings.json の enabledPlugins に従って Claude Code plugin を install する。
-# claude 未導入の環境では install-plugins.sh 側で黙ってスキップする。
+echo "setup.sh: claude-plugins"
 if command -v claude >/dev/null 2>&1; then
-  bash "${DOTDIR}/claude/install-plugins.sh" \
-    || echo "setup.sh: plugin install step reported issues (continuing)"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  result: skipped (jq not found)"
+  elif [ ! -f "$HOME/.claude/settings.json" ]; then
+    echo "  result: skipped (settings.json not found)"
+  elif run_with_indented_output env INSTALL_PLUGINS_SUMMARY=0 \
+    bash "${DOTDIR}/claude/install-plugins.sh"; then
+    echo "  result: ok"
+  else
+    echo "  result: failed (continuing)"
+  fi
+else
+  echo "  result: skipped (claude not found)"
 fi
 
 # nix-config の herdr-bootstrap が PATH に居れば、herdr integration
 # (~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
 # 無い環境(nix 未導入)では次の home-manager switch が同じことをする。
+echo "setup.sh: herdr-integrations"
 if command -v herdr-bootstrap >/dev/null 2>&1; then
-  herdr-bootstrap || echo "setup.sh: herdr-bootstrap reported issues (continuing)"
+  herdr_integrations_ok=0
+  if run_with_indented_output env INSTALL_PLUGINS_QUIET=1 \
+    INSTALL_PLUGINS_SUMMARY=0 herdr-bootstrap \
+    && command -v herdr >/dev/null 2>&1; then
+    herdr_integration_status="$(herdr integration status 2>/dev/null)" \
+      || herdr_integration_status=
+    if printf '%s\n' "$herdr_integration_status" | grep -Eq '^claude: current( |$)' \
+      && printf '%s\n' "$herdr_integration_status" | grep -Eq '^codex: current( |$)' \
+      && has_herdr_command_hook "$HOME/.claude/settings.json" \
+        'bash ~/.claude/hooks/herdr-agent-state.sh session' \
+      && has_herdr_command_hook "$HOME/.codex/hooks.json" \
+        'bash ~/.codex/herdr-agent-state.sh session'; then
+      herdr_integrations_ok=1
+    fi
+  fi
+  if [ "$herdr_integrations_ok" -eq 1 ]; then
+    echo "  result: ok"
+  else
+    echo "  result: failed (continuing)"
+  fi
+else
+  echo "  result: skipped (herdr-bootstrap not found)"
+fi
+
+# Hunk は実行中の版と対応する skill を同梱している。固定コピーを追跡せず、
+# setup のたびに現在の bundled skill へ張り直して Hunk 更新へ追随する。
+echo "setup.sh: hunk-review-skills"
+if command -v hunk >/dev/null 2>&1; then
+  hunk_review_skills_ok=0
+  hunk_review_skill="$(hunk skill path hunk-review 2>/dev/null)" || hunk_review_skill=
+  if [ -n "$hunk_review_skill" ] && [ -f "$hunk_review_skill" ]; then
+    hunk_review_skills_ok=1
+    hunk_review_skill_real="$(resolve_existing_path "$hunk_review_skill")" \
+      || hunk_review_skills_ok=0
+    for skill_home in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+      hunk_skill_dir="${skill_home}/hunk-review"
+      if [ -L "$hunk_skill_dir" ] && ! rm "$hunk_skill_dir"; then
+        echo "  could not replace ${hunk_skill_dir} symlink; skip Hunk skill"
+        hunk_review_skills_ok=0
+        continue
+      fi
+      if mkdir -p "$hunk_skill_dir"; then
+        if ! ln -sfn "$hunk_review_skill" "$hunk_skill_dir/SKILL.md"; then
+          echo "  could not link Hunk skill into ${skill_home} (continuing)"
+          hunk_review_skills_ok=0
+        fi
+      else
+        echo "  could not create ${hunk_skill_dir}; skip Hunk skill"
+        hunk_review_skills_ok=0
+      fi
+    done
+    for skill_home in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+      hunk_skill_file="${skill_home}/hunk-review/SKILL.md"
+      hunk_skill_file_real="$(resolve_existing_path "$hunk_skill_file")" \
+        || hunk_skill_file_real=
+      if [ ! -L "$hunk_skill_file" ] \
+        || [ "$hunk_skill_file_real" != "$hunk_review_skill_real" ]; then
+        hunk_review_skills_ok=0
+      fi
+    done
+  else
+    echo "  hunk-review skill path is unavailable (continuing)"
+  fi
+  if [ "$hunk_review_skills_ok" -eq 1 ]; then
+    echo "  result: ok"
+  else
+    echo "  result: failed (continuing)"
+  fi
+else
+  echo "  result: skipped (hunk not found)"
 fi
 
 # Codex の plugin は Claude Code と違いアカウント側に保存され、サインインすれば

@@ -38,6 +38,31 @@ ng() {
   echo "NG: $1"
 }
 
+component_log_block() {
+  local file="$1" component="$2" header
+
+  header="setup.sh: ${component}"
+
+  [ "$(grep -cxF "$header" "$file")" = 1 ] || return 1
+  awk -v header="$header" '
+    $0 == header { in_block = 1 }
+    in_block && $0 != header && /^setup[.]sh: / { exit }
+    in_block && $0 == "please reload shell" { exit }
+    in_block { print }
+  ' "$file"
+}
+
+write_herdr_hook_configs() {
+  local root="$1"
+
+  cat >"${root}/dotfiles/claude/settings.json" <<'EOF'
+{"hooks":{"SessionStart":[{"matcher":"*","hooks":[{"type":"command","command":"bash ~/.claude/hooks/herdr-agent-state.sh session","timeout":10}]}]}}
+EOF
+  cat >"${root}/dotfiles/codex/hooks.json" <<'EOF'
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","timeout":10}]}]}}
+EOF
+}
+
 make_temp_root() {
   local variable="$1" path physical_path
   if ! path="$(mktemp -d)"; then
@@ -94,6 +119,7 @@ EOF
 run_setup() {
   local root="$1"
   HOME="${root}/home" XDG_CONFIG_HOME="${root}/config" REMOTE_CONTAINERS=true \
+    BASH_ENV="${SETUP_BASH_ENV:-}" \
     AGENT_MEMORY_DIR="${root}/agent-memory" \
     SETUP_SYSTEM_GIT="$SYSTEM_GIT" \
     SETUP_SYSTEM_MV="$SYSTEM_MV" \
@@ -430,7 +456,7 @@ wait_for_file() {
 
 # (1) fresh 環境で 2 本のリンクが張られる
 make_temp_root T1
-trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}" "${T36:-}" "${T37:-}"' EXIT
+trap 'rm -rf "$T1" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}" "${T10:-}" "${T11:-}" "${T12:-}" "${T13:-}" "${T14:-}" "${T15:-}" "${T16:-}" "${T17:-}" "${T18:-}" "${T19:-}" "${T20:-}" "${T21:-}" "${T22:-}" "${T23:-}" "${T24:-}" "${T25:-}" "${T26:-}" "${T27:-}" "${T28:-}" "${T29:-}" "${T30:-}" "${T31:-}" "${T32:-}" "${T33:-}" "${T34:-}" "${T35:-}" "${T36:-}" "${T37:-}" "${T38:-}" "${T39:-}" "${T40:-}" "${T41:-}" "${T42:-}" "${T43:-}" "${T44:-}" "${T45:-}" "${T46:-}" "${T47:-}" "${T48:-}" "${T49:-}"' EXIT
 make_fixture "$T1"
 run_setup "$T1"
 # setup.sh には set -e が無く末尾の echo で必ず exit 0 になるため、終了コードでは
@@ -1289,6 +1315,389 @@ if [ ! -L "${T7}/config/nushell" ] && [ -d "${T7}/config/nushell" ] \
   ok "a symlinked nushell directory becomes real, holding both per-file links"
 else
   ng "nushell stayed a symlink, or its per-file links are missing"
+fi
+
+# (20) Hunk が同梱する既定の review skill を、コピーせず Claude/Codex の
+# personal skill として読む。Hunk 更新後の setup 再実行で新しい同梱版へ追随できる。
+make_temp_root T38
+make_fixture "$T38"
+mkdir -p "${T38}/hunk-review-v1" "${T38}/hunk-review-v2"
+: >"${T38}/hunk-review-v1/SKILL.md"
+: >"${T38}/hunk-review-v2/SKILL.md"
+printf '%s\n' "${T38}/hunk-review-v1/SKILL.md" >"${T38}/hunk-skill-path"
+cat >"${T38}/bin/hunk" <<'EOF'
+#!/bin/sh
+if [ "$*" = "skill path hunk-review" ]; then
+  cat "$HOME/../hunk-skill-path"
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T38}/bin/hunk"
+run_setup "$T38"
+if resolves_to_file "${T38}/home/.claude/skills/hunk-review/SKILL.md" \
+  "${T38}/hunk-review-v1/SKILL.md" \
+  && resolves_to_file "${T38}/home/.agents/skills/hunk-review/SKILL.md" \
+    "${T38}/hunk-review-v1/SKILL.md"; then
+  ok "Hunk's bundled review skill is available to Claude and Codex"
+else
+  ng "Hunk's bundled review skill is not available to both agents"
+fi
+printf '%s\n' "${T38}/hunk-review-v2/SKILL.md" >"${T38}/hunk-skill-path"
+run_setup "$T38"
+if resolves_to_file "${T38}/home/.claude/skills/hunk-review/SKILL.md" \
+  "${T38}/hunk-review-v2/SKILL.md" \
+  && resolves_to_file "${T38}/home/.agents/skills/hunk-review/SKILL.md" \
+    "${T38}/hunk-review-v2/SKILL.md"; then
+  ok "re-running setup follows an updated bundled Hunk skill"
+else
+  ng "re-running setup did not follow the updated bundled Hunk skill"
+fi
+
+# (21) skill directory 自体が symlink でも外部を辿って書き換えない。setup が管理する
+# リンクだけを置き換え、リンク先にある既存 SKILL.md は保持する。
+make_temp_root T39
+make_fixture "$T39"
+mkdir -p "${T39}/hunk-review" "${T39}/external-claude-hunk" \
+  "${T39}/external-codex-hunk" "${T39}/dotfiles/claude/skills"
+: >"${T39}/hunk-review/SKILL.md"
+printf 'keep-claude\n' >"${T39}/external-claude-hunk/SKILL.md"
+printf 'keep-codex\n' >"${T39}/external-codex-hunk/SKILL.md"
+ln -s "${T39}/external-claude-hunk" \
+  "${T39}/dotfiles/claude/skills/hunk-review"
+ln -s "${T39}/external-codex-hunk" \
+  "${T39}/dotfiles/codex/skills/hunk-review"
+cat >"${T39}/bin/hunk" <<'EOF'
+#!/bin/sh
+if [ "$*" = "skill path hunk-review" ]; then
+  printf '%s\n' "$HOME/../hunk-review/SKILL.md"
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T39}/bin/hunk"
+run_setup "$T39"
+if [ ! -L "${T39}/external-claude-hunk/SKILL.md" ] \
+  && [ "$(cat "${T39}/external-claude-hunk/SKILL.md")" = keep-claude ] \
+  && [ ! -L "${T39}/external-codex-hunk/SKILL.md" ] \
+  && [ "$(cat "${T39}/external-codex-hunk/SKILL.md")" = keep-codex ] \
+  && resolves_to_file "${T39}/home/.claude/skills/hunk-review/SKILL.md" \
+    "${T39}/hunk-review/SKILL.md" \
+  && resolves_to_file "${T39}/home/.agents/skills/hunk-review/SKILL.md" \
+    "${T39}/hunk-review/SKILL.md"; then
+  ok "Hunk skill setup replaces parent links without modifying their targets"
+else
+  ng "Hunk skill setup followed a parent link or failed to install the bundled skill"
+fi
+
+# (22) optional integration は component header、indented detail、result の順で出す。
+# Herdr 内部の plugin 照合は通常 detail を抑え、子の集計は親 result へ委ねる。
+make_temp_root T40
+make_fixture "$T40"
+mkdir -p "${T40}/hunk-review"
+: >"${T40}/hunk-review/SKILL.md"
+write_herdr_hook_configs "$T40"
+cat >"${T40}/dotfiles/claude/install-plugins.sh" <<'EOF'
+#!/bin/sh
+printf 'install-plugins: detail\n'
+printf '%s\n' "${INSTALL_PLUGINS_SUMMARY:-unset}" >"$HOME/../plugin-summary"
+exit 0
+EOF
+cat >"${T40}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T40}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+printf '%s\n' "${INSTALL_PLUGINS_QUIET:-unset}" >"$HOME/../herdr-quiet"
+printf 'unchanged: herdr detail\n'
+exit 0
+EOF
+cat >"${T40}/bin/herdr" <<'EOF'
+#!/bin/sh
+if [ "$*" = "integration status" ]; then
+  printf 'claude: current (v8)\ncodex: current (v8)\n'
+  exit 0
+fi
+exit 64
+EOF
+cat >"${T40}/bin/hunk" <<'EOF'
+#!/bin/sh
+if [ "$*" = "skill path hunk-review" ]; then
+  printf '%s\n' "$HOME/../hunk-review/SKILL.md"
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T40}/dotfiles/claude/install-plugins.sh" "${T40}/bin/claude" \
+  "${T40}/bin/herdr-bootstrap" "${T40}/bin/herdr" "${T40}/bin/hunk"
+run_setup "$T40"
+if [ "$(component_log_block "${T40}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  install-plugins: detail\n  result: ok' ] \
+  && [ "$(component_log_block "${T40}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  unchanged: herdr detail\n  result: ok' ] \
+  && [ "$(component_log_block "${T40}/setup.log" hunk-review-skills)" = \
+    $'setup.sh: hunk-review-skills\n  result: ok' ] \
+  && [ "$(cat "${T40}/plugin-summary")" = 0 ] \
+  && [ "$(cat "${T40}/herdr-quiet")" = 1 ]; then
+  ok "successful integrations log header, indented details, then result"
+else
+  ng "successful integration logs are not ordered or nested consistently"
+fi
+
+# (23) optional integration が失敗しても、同じ階層形式で出して setup は継続する。
+make_temp_root T41
+make_fixture "$T41"
+printf '{}\n' >"${T41}/dotfiles/claude/settings.json"
+cat >"${T41}/dotfiles/claude/install-plugins.sh" <<'EOF'
+#!/bin/sh
+printf 'install-plugins: failed detail\n' >&2
+exit 41
+EOF
+cat >"${T41}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T41}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+printf 'herdr-bootstrap: failed detail\n' >&2
+exit 42
+EOF
+cat >"${T41}/bin/hunk" <<'EOF'
+#!/bin/sh
+if [ "$*" = "skill path hunk-review" ]; then
+  printf '/nonexistent/hunk-review/SKILL.md\n'
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T41}/dotfiles/claude/install-plugins.sh" "${T41}/bin/claude" \
+  "${T41}/bin/herdr-bootstrap" "${T41}/bin/hunk"
+run_setup "$T41"
+if [ "$(component_log_block "${T41}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  install-plugins: failed detail\n  result: failed (continuing)' ] \
+  && [ "$(component_log_block "${T41}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  herdr-bootstrap: failed detail\n  result: failed (continuing)' ] \
+  && [ "$(component_log_block "${T41}/setup.log" hunk-review-skills)" = \
+    $'setup.sh: hunk-review-skills\n  hunk-review skill path is unavailable (continuing)\n  result: failed (continuing)' ]; then
+  ok "failed integrations log header, indented details, then result"
+else
+  ng "failed integration logs are not ordered or nested consistently"
+fi
+
+# (24) optional command が無い環境でも、header の下に skip の理由を出す。
+make_temp_root T42
+make_fixture "$T42"
+cat >"${T42}/hide-integrations.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ]; then
+    case "${2:-}" in
+      claude | herdr-bootstrap | hunk) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+EOF
+SETUP_BASH_ENV="${T42}/hide-integrations.sh" run_setup "$T42"
+if [ "$(component_log_block "${T42}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  result: skipped (claude not found)' ] \
+  && [ "$(component_log_block "${T42}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: skipped (herdr-bootstrap not found)' ] \
+  && [ "$(component_log_block "${T42}/setup.log" hunk-review-skills)" = \
+    $'setup.sh: hunk-review-skills\n  result: skipped (hunk not found)' ]; then
+  ok "missing integrations log header followed by skipped result"
+else
+  ng "missing integration logs are not ordered consistently"
+fi
+
+# (25) Claude CLI だけあっても、installer の前提が無ければ ok と誤報告しない。
+make_temp_root T43
+make_fixture "$T43"
+printf '{}\n' >"${T43}/dotfiles/claude/settings.json"
+cat >"${T43}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${T43}/bin/claude"
+cat >"${T43}/hide-jq.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ]; then
+    case "${2:-}" in
+      jq | herdr-bootstrap | hunk) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+EOF
+SETUP_BASH_ENV="${T43}/hide-jq.sh" run_setup "$T43"
+if [ "$(component_log_block "${T43}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  result: skipped (jq not found)' ]; then
+  ok "a missing jq prerequisite reports Claude plugins as skipped"
+else
+  ng "a missing jq prerequisite is reported as Claude plugin success"
+fi
+
+make_temp_root T44
+make_fixture "$T44"
+cat >"${T44}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${T44}/bin/claude"
+cat >"${T44}/hide-other-integrations.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ]; then
+    case "${2:-}" in
+      herdr-bootstrap | hunk) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+EOF
+SETUP_BASH_ENV="${T44}/hide-other-integrations.sh" run_setup "$T44"
+if [ "$(component_log_block "${T44}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  result: skipped (settings.json not found)' ]; then
+  ok "a missing settings.json prerequisite reports Claude plugins as skipped"
+else
+  ng "a missing settings.json prerequisite is reported as Claude plugin success"
+fi
+
+# (26) bootstrap が 0 でも status が current でなければ Herdr 成功にはしない。
+make_temp_root T45
+make_fixture "$T45"
+write_herdr_hook_configs "$T45"
+cat >"${T45}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T45}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T45}/bin/herdr" <<'EOF'
+#!/bin/sh
+if [ "$*" = "integration status" ]; then
+  printf 'claude: current (v8)\ncodex: stale (v7)\n'
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T45}/bin/claude" "${T45}/bin/herdr-bootstrap" "${T45}/bin/herdr"
+run_setup "$T45"
+if [ "$(component_log_block "${T45}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
+  ok "a stale Herdr postcondition is reported as failed"
+else
+  ng "a stale Herdr postcondition is reported as successful"
+fi
+
+# (27) detail formatter が失敗した場合は、子が成功しても component を成功にしない。
+make_temp_root T46
+make_fixture "$T46"
+printf '{}\n' >"${T46}/dotfiles/claude/settings.json"
+cat >"${T46}/dotfiles/claude/install-plugins.sh" <<'EOF'
+#!/bin/sh
+printf 'install-plugins: detail that cannot be formatted\n'
+exit 0
+EOF
+cat >"${T46}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T46}/bin/sed" <<'EOF'
+#!/bin/sh
+exit 7
+EOF
+chmod +x "${T46}/dotfiles/claude/install-plugins.sh" "${T46}/bin/claude" \
+  "${T46}/bin/sed"
+run_setup "$T46"
+if [ "$(component_log_block "${T46}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  output formatting failed (exit 7)\n  result: failed (continuing)' ]; then
+  ok "a formatter failure prevents a false successful result"
+else
+  ng "a formatter failure is hidden behind a successful result"
+fi
+
+# (28) 子が signal で終了しても pipeline の formatter status で成功にしない。
+make_temp_root T47
+make_fixture "$T47"
+printf '{}\n' >"${T47}/dotfiles/claude/settings.json"
+cat >"${T47}/dotfiles/claude/install-plugins.sh" <<'EOF'
+#!/bin/sh
+printf 'install-plugins: interrupted detail\n' >&2
+kill -TERM $$
+EOF
+cat >"${T47}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${T47}/dotfiles/claude/install-plugins.sh" "${T47}/bin/claude"
+run_setup "$T47"
+if [ "$(component_log_block "${T47}/setup.log" claude-plugins)" = \
+    $'setup.sh: claude-plugins\n  install-plugins: interrupted detail\n  result: failed (continuing)' ]; then
+  ok "a signaled child keeps stderr detail and a failed result"
+else
+  ng "a signaled child lost stderr detail or reported success"
+fi
+
+# (29) marker と同じ文字列があっても、hook object でなければ後条件を満たさない。
+make_temp_root T48
+make_fixture "$T48"
+printf '{"note":"herdr-agent-state.sh"}\n' >"${T48}/dotfiles/claude/settings.json"
+printf '{"note":"herdr-agent-state.sh"}\n' >"${T48}/dotfiles/codex/hooks.json"
+cat >"${T48}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T48}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T48}/bin/herdr" <<'EOF'
+#!/bin/sh
+if [ "$*" = "integration status" ]; then
+  printf 'claude: current (v8)\ncodex: current (v8)\n'
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T48}/bin/claude" "${T48}/bin/herdr-bootstrap" "${T48}/bin/herdr"
+run_setup "$T48"
+if [ "$(component_log_block "${T48}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
+  ok "marker text outside a hook object does not satisfy Herdr postconditions"
+else
+  ng "marker text outside a hook object is accepted as a Herdr hook"
+fi
+
+# (30) 壊れた JSON は marker 文字列を含んでいても後条件を満たさない。
+make_temp_root T49
+make_fixture "$T49"
+printf 'herdr-agent-state.sh\n' >"${T49}/dotfiles/claude/settings.json"
+printf 'herdr-agent-state.sh\n' >"${T49}/dotfiles/codex/hooks.json"
+cat >"${T49}/bin/claude" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T49}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat >"${T49}/bin/herdr" <<'EOF'
+#!/bin/sh
+if [ "$*" = "integration status" ]; then
+  printf 'claude: current (v8)\ncodex: current (v8)\n'
+  exit 0
+fi
+exit 64
+EOF
+chmod +x "${T49}/bin/claude" "${T49}/bin/herdr-bootstrap" "${T49}/bin/herdr"
+run_setup "$T49"
+if [ "$(component_log_block "${T49}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
+  ok "invalid JSON does not satisfy Herdr postconditions"
+else
+  ng "invalid JSON is accepted as a Herdr hook configuration"
 fi
 
 echo "---"

@@ -26,6 +26,14 @@ CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 SETTINGS="$CLAUDE_DIR/settings.json"
 KNOWN_MKTS="$CLAUDE_DIR/plugins/known_marketplaces.json"
 INSTALLED="$CLAUDE_DIR/plugins/installed_plugins.json"
+# 親が component log を組み立てる場合、通常 detail と終了 status は維持する。
+# QUIET=1 は通常 detail も抑え、SUMMARY=0 は最後の集計だけを親へ委ねる。
+INSTALL_PLUGINS_QUIET="${INSTALL_PLUGINS_QUIET:-0}"
+INSTALL_PLUGINS_SUMMARY="${INSTALL_PLUGINS_SUMMARY:-1}"
+
+log_normal() {
+  [ "$INSTALL_PLUGINS_QUIET" = 1 ] || printf '%s\n' "$1"
+}
 
 # marketplace 名 -> GitHub repo。新しい marketplace を使い始めたら 1 行足す。
 # 同じ対応は settings.json の extraKnownMarketplaces[*].source.repo にもあり、この表は
@@ -37,9 +45,9 @@ declare -A MARKETPLACE_REPO=(
   [claude-code-herdr-plugin]="yigitkonur/claude-code-herdr-plugin"
 )
 
-command -v claude >/dev/null 2>&1 || { echo "install-plugins: claude CLI not found; skip"; exit 0; }
-command -v jq     >/dev/null 2>&1 || { echo "install-plugins: jq not found; skip"; exit 0; }
-[ -f "$SETTINGS" ] || { echo "install-plugins: $SETTINGS not found; skip"; exit 0; }
+command -v claude >/dev/null 2>&1 || { log_normal "install-plugins: claude CLI not found; skip"; exit 0; }
+command -v jq     >/dev/null 2>&1 || { log_normal "install-plugins: jq not found; skip"; exit 0; }
+[ -f "$SETTINGS" ] || { log_normal "install-plugins: $SETTINGS not found; skip"; exit 0; }
 
 marketplace_known() {
   [ -f "$KNOWN_MKTS" ] && jq -e --arg m "$1" 'has($m)' "$KNOWN_MKTS" >/dev/null 2>&1
@@ -83,12 +91,12 @@ while IFS= read -r plugin; do
   if [ "$src_kind" = "directory" ]; then
     src_path="$(marketplace_source_path "$marketplace")"
     if [ -z "$src_path" ]; then
-      echo "install-plugins: skip $plugin — marketplace '$marketplace' is a directory source with no path in settings.json"
+      log_normal "install-plugins: skip $plugin — marketplace '$marketplace' is a directory source with no path in settings.json"
       skipped=$((skipped + 1))
       continue
     fi
     if [ ! -d "$src_path" ]; then
-      echo "install-plugins: skip $plugin — marketplace '$marketplace' lives at $src_path, which does not exist on this machine"
+      log_normal "install-plugins: skip $plugin — marketplace '$marketplace' lives at $src_path, which does not exist on this machine"
       skipped=$((skipped + 1))
       continue
     fi
@@ -126,6 +134,10 @@ while IFS= read -r plugin; do
 # \r が残り MARKETPLACE_REPO のキーと一致せず全 plugin が unresolved になる。
 done < <(jq -r '.enabledPlugins // {} | to_entries[] | select(.value == true) | .key' "$SETTINGS" | tr -d '\r')
 
-echo "install-plugins: done (marketplaces added: $added, plugins installed: $installed, already present: $present, unresolved: $unresolved, skipped: $skipped, failed: $failed)"
+if [ "$INSTALL_PLUGINS_SUMMARY" != 0 ]; then
+  if [ "$INSTALL_PLUGINS_QUIET" != 1 ] || [ "$unresolved" -ne 0 ] || [ "$failed" -ne 0 ]; then
+    echo "install-plugins: done (marketplaces added: $added, plugins installed: $installed, already present: $present, unresolved: $unresolved, skipped: $skipped, failed: $failed)"
+  fi
+fi
 
 [ "$failed" -eq 0 ]

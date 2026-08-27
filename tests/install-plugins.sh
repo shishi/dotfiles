@@ -66,17 +66,21 @@ make_config() {
 # 通ってしまう (claude / jq 不在の skip 経路など)。ループが最後まで回ったことを
 # summary 行の到達で確かめ、以降のアサーションの前提を固定する。
 run_script() {
-  local root="$1"
+  local root="$1" quiet="${2:-0}" summary="${3:-1}"
   CLAUDE_CONFIG_DIR="${root}/config" \
     CLAUDE_STUB_LOG="${root}/claude-args.log" \
+    INSTALL_PLUGINS_QUIET="$quiet" \
+    INSTALL_PLUGINS_SUMMARY="$summary" \
     PATH="${root}/bin:$PATH" \
     bash "$SCRIPT" >"${root}/out.log" 2>&1
   echo "$?" >"${root}/exit"
-  grep -q 'install-plugins: done' "${root}/out.log" \
-    || ng "script never reached the summary line (early exit); later assertions are meaningless"
+  if [ "$quiet" != 1 ] && [ "$summary" != 0 ]; then
+    grep -q 'install-plugins: done' "${root}/out.log" \
+      || ng "script never reached the summary line (early exit); later assertions are meaningless"
+  fi
 }
 
-trap 'rm -rf "${T1:-}" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}"' EXIT
+trap 'rm -rf "${T1:-}" "${T2:-}" "${T3:-}" "${T4:-}" "${T5:-}" "${T6:-}" "${T7:-}" "${T8:-}" "${T9:-}"' EXIT
 
 # 1. directory marketplace の path がこのマシンに無い場合。
 #    このマシン用の plugin ではないので、WARN ではなく通常ログ 1 行にして飛ばす。
@@ -199,6 +203,78 @@ if [ ! -s "${T5}/claude-args.log" ]; then
   ok "no claude subcommand runs for a directory marketplace without a path"
 else
   ng "claude was invoked for a directory marketplace without a path"
+fi
+
+# 6. Herdr が同じ desired state を再確認する場合は、正常な skip と summary を黙らせる。
+T6="$(mktemp -d)"
+make_stub "$T6"
+make_config "$T6" \
+  '{"vue-lsp@teachme-web-lsp": true}' \
+  '{"teachme-web-lsp": {"source": {"source": "directory", "path": "/nonexistent/machine/local/marketplace"}}}'
+run_script "$T6" 1
+if [ ! -s "${T6}/out.log" ] && [ "$(cat "${T6}/exit")" = 0 ]; then
+  ok "quiet reconciliation suppresses normal skip and summary logs"
+else
+  ng "quiet reconciliation emitted normal logs or changed the successful exit status"
+fi
+
+# 7. quiet は障害を隠さない。plugin install 失敗と非 0 status は呼び出し元へ返す。
+T7="$(mktemp -d)"
+make_stub "$T7"
+cat >"${T7}/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${CLAUDE_STUB_LOG}"
+case "$*" in
+  'plugin install '*) exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "${T7}/bin/claude"
+make_config "$T7" '{"superpowers@superpowers-marketplace": true}' '{}'
+run_script "$T7" 1
+if grep -q 'WARN failed to install superpowers@superpowers-marketplace' "${T7}/out.log" \
+  && grep -q 'failed: 1' "${T7}/out.log" \
+  && [ "$(cat "${T7}/exit")" != 0 ]; then
+  ok "quiet reconciliation keeps failure details and status"
+else
+  ng "quiet reconciliation hid a plugin installation failure"
+fi
+
+# 8. setup.sh が親 result を出す場合、通常 detail は残して子 summary だけを消す。
+T8="$(mktemp -d)"
+make_stub "$T8"
+make_config "$T8" \
+  '{"vue-lsp@teachme-web-lsp": true}' \
+  '{"teachme-web-lsp": {"source": {"source": "directory", "path": "/nonexistent/machine/local/marketplace"}}}'
+run_script "$T8" 0 0
+if grep -q 'install-plugins: skip vue-lsp@teachme-web-lsp' "${T8}/out.log" \
+  && ! grep -q 'install-plugins: done' "${T8}/out.log" \
+  && [ "$(cat "${T8}/exit")" = 0 ]; then
+  ok "embedded reconciliation keeps detail and suppresses its summary"
+else
+  ng "embedded reconciliation hid detail or emitted a duplicate summary"
+fi
+
+# 9. summary を親へ委ねても、失敗 detail と非 0 status は維持する。
+T9="$(mktemp -d)"
+make_stub "$T9"
+cat >"${T9}/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${CLAUDE_STUB_LOG}"
+case "$*" in
+  'plugin install '*) exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "${T9}/bin/claude"
+make_config "$T9" '{"superpowers@superpowers-marketplace": true}' '{}'
+run_script "$T9" 0 0
+if grep -q 'WARN failed to install superpowers@superpowers-marketplace' "${T9}/out.log" \
+  && ! grep -q 'install-plugins: done' "${T9}/out.log" \
+  && [ "$(cat "${T9}/exit")" != 0 ]; then
+  ok "embedded reconciliation keeps failure detail and status"
+else
+  ng "embedded reconciliation hid a failure or emitted a duplicate summary"
 fi
 
 echo "---"
