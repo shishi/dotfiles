@@ -3,14 +3,16 @@ name: writing-prose
 description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread. Not for code identifiers.
 ---
 
-# Writing Prose(人間向け文章の執筆規約)
+# 人間向け文章の執筆規約
 
-## Overview
+## 概要
 
 読者が一度で読める文を書く。このファイルは執筆者(shishi)の規約で、モデルの一般的な好みより優先する。共通原則と文書種別ごとの方針は日本語・英語の両方に適用する。表記規約は日本語固有。
 
 ## 共通原則(全言語)
 
+- 対象読者とユーザー指定から文書の主言語を決める。見出し、定型欄、ラベル、本文を
+  その言語に統一する。標準テンプレートの初期表記は、言語を混在させる理由にしない
 - 一文一義。長くなったら分割する(日本語は 80 字が目安)
 - 主語と述語を近づける。二通りに読める文は書き直す
 - システムの動作説明は能動態で書く(「保存されます」→「保存します」)
@@ -47,5 +49,7 @@ description: Use when writing or revising prose for human readers in any languag
 
 ## チェック
 
+- 日本語: 見出し、定型欄、ラベル、本文に英語だけの文章や不要な英単語が残っていないか確認する。製品名、識別子、コマンド、引用は維持する
 - 日本語: 表記ゆれを grep で確認する(長音なしの「ユーザ」「サーバ」、「行なう」)。音読して詰まる文は書き直す
+- 独立レビューを依頼する場合は、主言語の統一を明示的な確認項目に含める
 - 英語: 共通原則に加えて、不要語を削る(omit needless words)
