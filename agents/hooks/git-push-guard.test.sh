@@ -83,10 +83,10 @@ assert_explicitly_approved() { # $1=desc $2=prompt $3=command $4=session $5=clie
   fi
 }
 
-assert_prompt_not_approved() { # $1=desc $2=prompt $3=session
+assert_prompt_not_approved() { # $1=desc $2=prompt $3=session $4=command(optional)
   local out rc decision
   record_approval "$2" "$3" || true
-  out=$(run_codex_guard "git push origin main" "" "$3"); rc=$?
+  out=$(run_codex_guard "${4:-git push origin main}" "" "$3"); rc=$?
   decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null)
   if [ "$rc" -eq 0 ] && [ "$decision" = deny ]; then
     PASS=$((PASS+1)); echo "ok: $1"
@@ -132,6 +132,14 @@ assert_explicitly_approved "Claude accepts the same explicit main push instructi
   "mainにpushしてください" "git push origin main" "approved-main-claude" claude
 assert_explicitly_approved "Codex accepts an explicit English master push instruction" \
   "Please push to master" "git push origin master" "approved-master" codex
+assert_explicitly_approved "Codex accepts a space-separated master push shorthand" \
+  "master push" "git push origin master" "approved-master-space-codex" codex
+assert_explicitly_approved "Claude accepts a space-separated master push shorthand" \
+  "master push" "git push origin master" "approved-master-space-claude" claude
+assert_explicitly_approved "Codex accepts a particle-separated master push shorthand" \
+  "masterにpush" "git push origin master" "approved-master-particle-codex" codex
+assert_explicitly_approved "Claude accepts a particle-separated master push shorthand" \
+  "masterにpush" "git push origin master" "approved-master-particle-claude" claude
 record_approval "mainにpushして" "branch-scoped"
 branch_scoped_out=$(run_codex_guard "git push origin master" "" "branch-scoped")
 if [ "$(printf '%s' "$branch_scoped_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
@@ -171,6 +179,8 @@ assert_explicitly_approved "one prompt can authorize normal pushes to both prote
   "mainとmasterにpushして" "git push origin main; git push origin master" "approved-both" codex
 assert_prompt_not_approved "a question is not explicit authorization" \
   "mainにpushしてもいい？" "question-main"
+assert_prompt_not_approved "a concatenated identifier is not explicit authorization" \
+  "masterpush" "concatenated-master" "git push origin master"
 assert_prompt_not_approved "quoted wording in a test request is not authorization" \
   "『mainにpushして』という文言をテストして" "quoted-main"
 assert_prompt_not_approved "denial phrased with 言っていない is not authorization" \

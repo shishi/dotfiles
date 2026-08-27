@@ -35,6 +35,13 @@ prepare_approval_dir() {
   chmod 700 "$approval_dir" 2>/dev/null || return 1
 }
 
+matches_explicit_push_target() { # $1=lowercase prompt $2=target regexp
+  local lower="$1" target_re="$2"
+  LC_ALL=C grep -Eq \
+    "^[[:space:]]*(${target_re})[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*(${target_re})([[:space:]]+|(に|へ)[[:space:]]*)(push|プッシュ)[[:space:]。！!]*$" \
+    <<< "$lower"
+}
+
 record_explicit_approval() {
   local input prompt session lower main=0 master=0 scopes tmp now
   input=$(cat)
@@ -52,14 +59,17 @@ record_explicit_approval() {
     *しない*|*するな*|*禁止*|*"don't"*|*"do not"*|*never*|*"not push"*) exit 0 ;;
   esac
 
-  if LC_ALL=C grep -Eq '^[[:space:]]*main[[:space:]]*(と|and)[[:space:]]*master[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*master[[:space:]]*(と|and)[[:space:]]*main[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:]]+(and|&)[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
+  if matches_explicit_push_target "$lower" 'main[[:space:]]*(と|and)[[:space:]]*master|master[[:space:]]*(と|and)[[:space:]]*main' ||
+    LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:]]+(and|&)[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
     main=1
     master=1
   else
-    if LC_ALL=C grep -Eq '^[[:space:]]*main[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:].!]*$' <<< "$lower"; then
+    if matches_explicit_push_target "$lower" main ||
+      LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:].!]*$' <<< "$lower"; then
       main=1
     fi
-    if LC_ALL=C grep -Eq '^[[:space:]]*master[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
+    if matches_explicit_push_target "$lower" master ||
+      LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
       master=1
     fi
   fi
