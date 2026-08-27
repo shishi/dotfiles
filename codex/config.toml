@@ -1,6 +1,6 @@
 personality = "friendly"
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
@@ -177,9 +177,8 @@ source_type = "local"
 source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\codex\.tmp\bundled-marketplaces\openai-bundled'
 
 [marketplaces.openai-primary-runtime]
-last_updated = "2026-08-20T03:21:05Z"
 source_type = "local"
-source = '\\?\C:\Users\shishi\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+source = "/home/shishi/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
 
 [plugins."documents@openai-primary-runtime"]
 enabled = true
