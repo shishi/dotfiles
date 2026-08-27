@@ -150,7 +150,18 @@ lock を除去する前にユーザーへ確認する。`⚠ 未 push` は degra
 
 - **書き込み前 bootstrap**: 詳細ルールと保存基準は、同期後の HEAD にある
   `CONVENTIONS.md` を正とする。
-  1. 上記の helper で正本を解決する。`~/.codex/memory` の物理的な解決先が
+  手順 1〜4 は tracked helper で 1 回の Bash 呼び出しにまとめて実行する。
+
+  ```bash
+  bash ~/.agents/bin/memory-write-preflight.sh ~/.codex/memory
+  ```
+
+  終了 status 0 のとき stdout の 1 行が手順 2 と同じ opaque handle で、lock は
+  保持されたまま返る(handle を記録してそのまま手順 5 へ進む)。nonzero のときは
+  出力を handle として使わず停止する。失敗時は helper 自身が取得した lock を解放して返るが、
+  解放失敗の警告が stderr に出た場合も、残った lock をユーザー確認なしで削除しない。
+  この helper が無いマシンに限り、以下の手順 1〜4 を個別の呼び出しで実行する。
+  1. `resolve-memory-dir.sh` で正本を解決する。`~/.codex/memory` の物理的な解決先が
      正本と一致しない場合は停止する。
   2. 共通 helper で cross-process write lock を取得する。正本を再解決して同じ shell process から渡す。
 
