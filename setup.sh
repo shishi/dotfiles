@@ -173,6 +173,61 @@ has_herdr_command_hook() {
     "$config" >/dev/null 2>&1
 }
 
+# herdr integration の後条件。hook エントリは tracked 設定が使うチルダ形式と、
+# herdr の installer が書く絶対パス(単引用符)形式のどちらでも満たす。
+# herdr は CLAUDE_CONFIG_DIR / CODEX_HOME を尊重するが、このステップは
+# $HOME/.claude と $HOME/.codex の tracked 構成を管理するため、herdr の呼び出し
+# からは override を外し、verifier と同じディレクトリを見せる。
+herdr_integrations_verified() {
+  local herdr_integration_status
+
+  command -v herdr >/dev/null 2>&1 || return 1
+  herdr_integration_status="$(env -u CLAUDE_CONFIG_DIR -u CODEX_HOME \
+    herdr integration status 2>/dev/null)" || return 1
+  printf '%s\n' "$herdr_integration_status" | grep -Eq '^claude: current( |$)' \
+    && printf '%s\n' "$herdr_integration_status" | grep -Eq '^codex: current( |$)' \
+    && { has_herdr_command_hook "$HOME/.claude/settings.json" \
+        'bash ~/.claude/hooks/herdr-agent-state.sh session' \
+      || has_herdr_command_hook "$HOME/.claude/settings.json" \
+        "bash '$HOME/.claude/hooks/herdr-agent-state.sh' session"; } \
+    && { has_herdr_command_hook "$HOME/.codex/hooks.json" \
+        'bash ~/.codex/herdr-agent-state.sh session' \
+      || has_herdr_command_hook "$HOME/.codex/hooks.json" \
+        "bash '$HOME/.codex/herdr-agent-state.sh' session"; }
+}
+
+# herdr が管理しようとする hook の配置(status が括弧内に示すパス)が tracked
+# 構成(bash + .sh)と一致するときだけ installer を許す。Windows 版 herdr は
+# PowerShell hook (.ps1) を書き、HERDR_INTEGRATION_ID を含む既存の .sh hook を
+# 削除するため、配置不一致のまま install すると tracked hook を破壊する。
+# 引数は取得済みの `herdr integration status` の出力(取得失敗は呼び出し側が
+# 別状態として扱う)。
+herdr_hook_layout_matches() {
+  printf '%s\n' "$1" \
+    | grep -Fq "($HOME/.claude/hooks/herdr-agent-state.sh)" \
+    && printf '%s\n' "$1" \
+      | grep -Fq "($HOME/.codex/herdr-agent-state.sh)"
+}
+
+# install は追記で動き、既存のチルダ形式エントリと併存すると SessionStart hook が
+# 二重実行になる。install の前に herdr hook エントリを取り除き、installer の書く
+# 形式だけが残る上書きにする。
+remove_herdr_hook_entries() {
+  local config="$1" tmp
+
+  [ -f "$config" ] || return 0
+  jq -e 'any(.hooks.SessionStart[]?.hooks[]?; .command | contains("herdr-agent-state"))' \
+    "$config" >/dev/null 2>&1 || return 0
+  tmp="$(mktemp "${config}.XXXXXX")" || return 1
+  if jq '.hooks.SessionStart |= map(select(any(.hooks[]?; .command | contains("herdr-agent-state")) | not))' \
+    "$config" >"$tmp"; then
+    mv "$tmp" "$config"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
 normalize_agent_memory_remote() {
   local remote="$1"
 
@@ -709,33 +764,55 @@ else
   echo "  result: skipped (claude not found)"
 fi
 
-# nix-config の herdr-bootstrap が PATH に居れば、herdr integration
-# (~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
-# 無い環境(nix 未導入)では次の home-manager switch が同じことをする。
+# herdr integration(~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
+# nix-config の herdr-bootstrap が PATH に居ればそれを使い(plugin 照合も内包する)、
+# 無ければ herdr 自身の公開 CLI で同じ収束を行う(private な wrapper を必須にしない)。
+# どちらも無い環境(nix 未導入)では次の home-manager switch が同じことをする。
 echo "setup.sh: herdr-integrations"
 if command -v herdr-bootstrap >/dev/null 2>&1; then
   herdr_integrations_ok=0
   if run_with_indented_output env INSTALL_PLUGINS_QUIET=1 \
     INSTALL_PLUGINS_SUMMARY=0 herdr-bootstrap \
-    && command -v herdr >/dev/null 2>&1; then
-    herdr_integration_status="$(herdr integration status 2>/dev/null)" \
-      || herdr_integration_status=
-    if printf '%s\n' "$herdr_integration_status" | grep -Eq '^claude: current( |$)' \
-      && printf '%s\n' "$herdr_integration_status" | grep -Eq '^codex: current( |$)' \
-      && has_herdr_command_hook "$HOME/.claude/settings.json" \
-        'bash ~/.claude/hooks/herdr-agent-state.sh session' \
-      && has_herdr_command_hook "$HOME/.codex/hooks.json" \
-        'bash ~/.codex/herdr-agent-state.sh session'; then
-      herdr_integrations_ok=1
-    fi
+    && herdr_integrations_verified; then
+    herdr_integrations_ok=1
   fi
   if [ "$herdr_integrations_ok" -eq 1 ]; then
     echo "  result: ok"
   else
     echo "  result: failed (continuing)"
   fi
+elif ! command -v herdr >/dev/null 2>&1; then
+  echo "  result: skipped (herdr not found)"
+elif ! command -v jq >/dev/null 2>&1; then
+  # 後条件の検証(has_herdr_command_hook)が jq を要する。検証できない環境では
+  # 書き込まない。
+  echo "  result: skipped (jq not found)"
+elif ! herdr_integration_status_output="$(env -u CLAUDE_CONFIG_DIR -u CODEX_HOME \
+  herdr integration status 2>/dev/null)"; then
+  echo "  herdr integration status failed"
+  echo "  result: failed (continuing)"
+elif ! herdr_hook_layout_matches "$herdr_integration_status_output"; then
+  echo "  result: skipped (herdr expects a different hook layout)"
 else
-  echo "  result: skipped (herdr-bootstrap not found)"
+  herdr_integrations_ok=0
+  # 収束済みなら書き込まない。healthy な機で installer を走らせると tracked
+  # 設定に毎回 diff を作るため。
+  if herdr_integrations_verified; then
+    herdr_integrations_ok=1
+  elif remove_herdr_hook_entries "$HOME/.claude/settings.json" \
+    && remove_herdr_hook_entries "$HOME/.codex/hooks.json" \
+    && run_with_indented_output env -u CLAUDE_CONFIG_DIR -u CODEX_HOME \
+      herdr integration install claude \
+    && run_with_indented_output env -u CLAUDE_CONFIG_DIR -u CODEX_HOME \
+      herdr integration install codex \
+    && herdr_integrations_verified; then
+    herdr_integrations_ok=1
+  fi
+  if [ "$herdr_integrations_ok" -eq 1 ]; then
+    echo "  result: ok"
+  else
+    echo "  result: failed (continuing)"
+  fi
 fi
 
 # Hunk は実行中の版と対応する skill を同梱している。固定コピーを追跡せず、

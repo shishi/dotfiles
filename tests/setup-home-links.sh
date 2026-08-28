@@ -63,6 +63,38 @@ EOF
 EOF
 }
 
+# 実マシンの herdr-bootstrap が PATH 経由で漏れ込むと、herdr CLI 直呼びの
+# fallback 経路を検証するケースが bootstrap 側へ逸れる。fixture ごとに隠す。
+write_hide_herdr_bootstrap() {
+  local root="$1"
+
+  cat >"${root}/hide-herdr-bootstrap.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ] && [ "${2:-}" = herdr-bootstrap ]; then
+    return 1
+  fi
+  builtin command "$@"
+}
+EOF
+}
+
+# herdr の fake を置かないケースで、実マシンの herdr / herdr-bootstrap が
+# 呼ばれないよう両方を隠す(herdr の呼び出しは daemon 接続を伴うため)。
+write_hide_herdr_all() {
+  local root="$1"
+
+  cat >"${root}/hide-herdr-all.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ]; then
+    case "${2:-}" in
+      herdr | herdr-bootstrap) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+EOF
+}
+
 make_temp_root() {
   local variable="$1" path physical_path
   if ! path="$(mktemp -d)"; then
@@ -1391,7 +1423,8 @@ else
 fi
 
 # (22) optional integration は component header、indented detail、result の順で出す。
-# Herdr 内部の plugin 照合は通常 detail を抑え、子の集計は親 result へ委ねる。
+# Herdr の fallback 経路は収束済みなら書き込まない(herdr の installer は tracked
+# 設定と別形式の hook エントリを追加するため、healthy な機で毎回 diff を作らせない)。
 make_temp_root T40
 make_fixture "$T40"
 mkdir -p "${T40}/hunk-review"
@@ -1407,18 +1440,25 @@ cat >"${T40}/bin/claude" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-cat >"${T40}/bin/herdr-bootstrap" <<'EOF'
-#!/bin/sh
-printf '%s\n' "${INSTALL_PLUGINS_QUIET:-unset}" >"$HOME/../herdr-quiet"
-printf 'unchanged: herdr detail\n'
-exit 0
-EOF
 cat >"${T40}/bin/herdr" <<'EOF'
 #!/bin/sh
-if [ "$*" = "integration status" ]; then
-  printf 'claude: current (v8)\ncodex: current (v8)\n'
-  exit 0
-fi
+case "$*" in
+  "integration install claude")
+    printf 'claude\n' >>"$HOME/../herdr-installs"
+    printf 'claude: unchanged\n'
+    exit 0
+    ;;
+  "integration install codex")
+    printf 'codex\n' >>"$HOME/../herdr-installs"
+    printf 'codex: unchanged\n'
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
 exit 64
 EOF
 cat >"${T40}/bin/hunk" <<'EOF'
@@ -1430,19 +1470,20 @@ fi
 exit 64
 EOF
 chmod +x "${T40}/dotfiles/claude/install-plugins.sh" "${T40}/bin/claude" \
-  "${T40}/bin/herdr-bootstrap" "${T40}/bin/herdr" "${T40}/bin/hunk"
-run_setup "$T40"
+  "${T40}/bin/herdr" "${T40}/bin/hunk"
+write_hide_herdr_bootstrap "$T40"
+SETUP_BASH_ENV="${T40}/hide-herdr-bootstrap.sh" run_setup "$T40"
 if [ "$(component_log_block "${T40}/setup.log" claude-plugins)" = \
     $'setup.sh: claude-plugins\n  install-plugins: detail\n  result: ok' ] \
   && [ "$(component_log_block "${T40}/setup.log" herdr-integrations)" = \
-    $'setup.sh: herdr-integrations\n  unchanged: herdr detail\n  result: ok' ] \
+    $'setup.sh: herdr-integrations\n  result: ok' ] \
   && [ "$(component_log_block "${T40}/setup.log" hunk-review-skills)" = \
     $'setup.sh: hunk-review-skills\n  result: ok' ] \
   && [ "$(cat "${T40}/plugin-summary")" = 0 ] \
-  && [ "$(cat "${T40}/herdr-quiet")" = 1 ]; then
-  ok "successful integrations log header, indented details, then result"
+  && [ ! -e "${T40}/herdr-installs" ]; then
+  ok "a converged Herdr fallback succeeds without calling install"
 else
-  ng "successful integration logs are not ordered or nested consistently"
+  ng "a converged Herdr fallback ran install or logged inconsistently"
 fi
 
 # (23) optional integration が失敗しても、同じ階層形式で出して setup は継続する。
@@ -1458,10 +1499,20 @@ cat >"${T41}/bin/claude" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-cat >"${T41}/bin/herdr-bootstrap" <<'EOF'
+cat >"${T41}/bin/herdr" <<'EOF'
 #!/bin/sh
-printf 'herdr-bootstrap: failed detail\n' >&2
-exit 42
+case "$*" in
+  "integration install claude")
+    printf 'herdr: failed detail\n' >&2
+    exit 42
+    ;;
+  "integration status")
+    printf 'claude: not installed (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: not installed (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
 EOF
 cat >"${T41}/bin/hunk" <<'EOF'
 #!/bin/sh
@@ -1472,12 +1523,13 @@ fi
 exit 64
 EOF
 chmod +x "${T41}/dotfiles/claude/install-plugins.sh" "${T41}/bin/claude" \
-  "${T41}/bin/herdr-bootstrap" "${T41}/bin/hunk"
-run_setup "$T41"
+  "${T41}/bin/herdr" "${T41}/bin/hunk"
+write_hide_herdr_bootstrap "$T41"
+SETUP_BASH_ENV="${T41}/hide-herdr-bootstrap.sh" run_setup "$T41"
 if [ "$(component_log_block "${T41}/setup.log" claude-plugins)" = \
     $'setup.sh: claude-plugins\n  install-plugins: failed detail\n  result: failed (continuing)' ] \
   && [ "$(component_log_block "${T41}/setup.log" herdr-integrations)" = \
-    $'setup.sh: herdr-integrations\n  herdr-bootstrap: failed detail\n  result: failed (continuing)' ] \
+    $'setup.sh: herdr-integrations\n  herdr: failed detail\n  result: failed (continuing)' ] \
   && [ "$(component_log_block "${T41}/setup.log" hunk-review-skills)" = \
     $'setup.sh: hunk-review-skills\n  hunk-review skill path is unavailable (continuing)\n  result: failed (continuing)' ]; then
   ok "failed integrations log header, indented details, then result"
@@ -1492,7 +1544,7 @@ cat >"${T42}/hide-integrations.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
     case "${2:-}" in
-      claude | herdr-bootstrap | hunk) return 1 ;;
+      claude | herdr | herdr-bootstrap | hunk) return 1 ;;
     esac
   fi
   builtin command "$@"
@@ -1502,7 +1554,7 @@ SETUP_BASH_ENV="${T42}/hide-integrations.sh" run_setup "$T42"
 if [ "$(component_log_block "${T42}/setup.log" claude-plugins)" = \
     $'setup.sh: claude-plugins\n  result: skipped (claude not found)' ] \
   && [ "$(component_log_block "${T42}/setup.log" herdr-integrations)" = \
-    $'setup.sh: herdr-integrations\n  result: skipped (herdr-bootstrap not found)' ] \
+    $'setup.sh: herdr-integrations\n  result: skipped (herdr not found)' ] \
   && [ "$(component_log_block "${T42}/setup.log" hunk-review-skills)" = \
     $'setup.sh: hunk-review-skills\n  result: skipped (hunk not found)' ]; then
   ok "missing integrations log header followed by skipped result"
@@ -1523,7 +1575,7 @@ cat >"${T43}/hide-jq.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
     case "${2:-}" in
-      jq | herdr-bootstrap | hunk) return 1 ;;
+      jq | herdr | herdr-bootstrap | hunk) return 1 ;;
     esac
   fi
   builtin command "$@"
@@ -1548,7 +1600,7 @@ cat >"${T44}/hide-other-integrations.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
     case "${2:-}" in
-      herdr-bootstrap | hunk) return 1 ;;
+      herdr | herdr-bootstrap | hunk) return 1 ;;
     esac
   fi
   builtin command "$@"
@@ -1562,7 +1614,7 @@ else
   ng "a missing settings.json prerequisite is reported as Claude plugin success"
 fi
 
-# (26) bootstrap が 0 でも status が current でなければ Herdr 成功にはしない。
+# (26) install が 0 でも status が current でなければ Herdr 成功にはしない。
 make_temp_root T45
 make_fixture "$T45"
 write_herdr_hook_configs "$T45"
@@ -1570,20 +1622,21 @@ cat >"${T45}/bin/claude" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-cat >"${T45}/bin/herdr-bootstrap" <<'EOF'
-#!/bin/sh
-exit 0
-EOF
 cat >"${T45}/bin/herdr" <<'EOF'
 #!/bin/sh
-if [ "$*" = "integration status" ]; then
-  printf 'claude: current (v8)\ncodex: stale (v7)\n'
-  exit 0
-fi
+case "$*" in
+  "integration install claude" | "integration install codex") exit 0 ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: stale (v7) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
 exit 64
 EOF
-chmod +x "${T45}/bin/claude" "${T45}/bin/herdr-bootstrap" "${T45}/bin/herdr"
-run_setup "$T45"
+chmod +x "${T45}/bin/claude" "${T45}/bin/herdr"
+write_hide_herdr_bootstrap "$T45"
+SETUP_BASH_ENV="${T45}/hide-herdr-bootstrap.sh" run_setup "$T45"
 if [ "$(component_log_block "${T45}/setup.log" herdr-integrations)" = \
     $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
   ok "a stale Herdr postcondition is reported as failed"
@@ -1610,7 +1663,8 @@ exit 7
 EOF
 chmod +x "${T46}/dotfiles/claude/install-plugins.sh" "${T46}/bin/claude" \
   "${T46}/bin/sed"
-run_setup "$T46"
+write_hide_herdr_all "$T46"
+SETUP_BASH_ENV="${T46}/hide-herdr-all.sh" run_setup "$T46"
 if [ "$(component_log_block "${T46}/setup.log" claude-plugins)" = \
     $'setup.sh: claude-plugins\n  output formatting failed (exit 7)\n  result: failed (continuing)' ]; then
   ok "a formatter failure prevents a false successful result"
@@ -1632,7 +1686,8 @@ cat >"${T47}/bin/claude" <<'EOF'
 exit 0
 EOF
 chmod +x "${T47}/dotfiles/claude/install-plugins.sh" "${T47}/bin/claude"
-run_setup "$T47"
+write_hide_herdr_all "$T47"
+SETUP_BASH_ENV="${T47}/hide-herdr-all.sh" run_setup "$T47"
 if [ "$(component_log_block "${T47}/setup.log" claude-plugins)" = \
     $'setup.sh: claude-plugins\n  install-plugins: interrupted detail\n  result: failed (continuing)' ]; then
   ok "a signaled child keeps stderr detail and a failed result"
@@ -1649,20 +1704,21 @@ cat >"${T48}/bin/claude" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-cat >"${T48}/bin/herdr-bootstrap" <<'EOF'
-#!/bin/sh
-exit 0
-EOF
 cat >"${T48}/bin/herdr" <<'EOF'
 #!/bin/sh
-if [ "$*" = "integration status" ]; then
-  printf 'claude: current (v8)\ncodex: current (v8)\n'
-  exit 0
-fi
+case "$*" in
+  "integration install claude" | "integration install codex") exit 0 ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
 exit 64
 EOF
-chmod +x "${T48}/bin/claude" "${T48}/bin/herdr-bootstrap" "${T48}/bin/herdr"
-run_setup "$T48"
+chmod +x "${T48}/bin/claude" "${T48}/bin/herdr"
+write_hide_herdr_bootstrap "$T48"
+SETUP_BASH_ENV="${T48}/hide-herdr-bootstrap.sh" run_setup "$T48"
 if [ "$(component_log_block "${T48}/setup.log" herdr-integrations)" = \
     $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
   ok "marker text outside a hook object does not satisfy Herdr postconditions"
@@ -1679,25 +1735,272 @@ cat >"${T49}/bin/claude" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-cat >"${T49}/bin/herdr-bootstrap" <<'EOF'
-#!/bin/sh
-exit 0
-EOF
 cat >"${T49}/bin/herdr" <<'EOF'
 #!/bin/sh
-if [ "$*" = "integration status" ]; then
-  printf 'claude: current (v8)\ncodex: current (v8)\n'
-  exit 0
-fi
+case "$*" in
+  "integration install claude" | "integration install codex") exit 0 ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
 exit 64
 EOF
-chmod +x "${T49}/bin/claude" "${T49}/bin/herdr-bootstrap" "${T49}/bin/herdr"
-run_setup "$T49"
+chmod +x "${T49}/bin/claude" "${T49}/bin/herdr"
+write_hide_herdr_bootstrap "$T49"
+SETUP_BASH_ENV="${T49}/hide-herdr-bootstrap.sh" run_setup "$T49"
 if [ "$(component_log_block "${T49}/setup.log" herdr-integrations)" = \
     $'setup.sh: herdr-integrations\n  result: failed (continuing)' ]; then
   ok "invalid JSON does not satisfy Herdr postconditions"
 else
   ng "invalid JSON is accepted as a Herdr hook configuration"
+fi
+
+# (31) 未収束の fallback は herdr integration install で収束させてから成功にする。
+# fake の install は herdr 実機の挙動(絶対パス形式の hook エントリ)を書く。
+make_temp_root T51
+make_fixture "$T51"
+printf '{}\n' >"${T51}/dotfiles/claude/settings.json"
+printf '{}\n' >"${T51}/dotfiles/codex/hooks.json"
+cat >"${T51}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration install claude")
+    printf 'claude\n' >>"$HOME/../herdr-installs"
+    printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash '\''%s/.claude/hooks/herdr-agent-state.sh'\'' session"}]}]}}\n' \
+      "$HOME" >"$HOME/.claude/settings.json"
+    printf 'claude: installed\n'
+    exit 0
+    ;;
+  "integration install codex")
+    printf 'codex\n' >>"$HOME/../herdr-installs"
+    printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash '\''%s/.codex/herdr-agent-state.sh'\'' session"}]}]}}\n' \
+      "$HOME" >"$HOME/.codex/hooks.json"
+    printf 'codex: installed\n'
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T51}/bin/herdr"
+write_hide_herdr_bootstrap "$T51"
+SETUP_BASH_ENV="${T51}/hide-herdr-bootstrap.sh" run_setup "$T51"
+if [ "$(component_log_block "${T51}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  claude: installed\n  codex: installed\n  result: ok' ] \
+  && [ "$(cat "${T51}/herdr-installs")" = $'claude\ncodex' ]; then
+  ok "an unconverged Herdr fallback installs and then reports success"
+else
+  ng "an unconverged Herdr fallback failed to install or misreported"
+fi
+
+# (32) herdr-bootstrap があればそれを優先し、herdr integration install は呼ばない。
+make_temp_root T50
+make_fixture "$T50"
+write_herdr_hook_configs "$T50"
+cat >"${T50}/bin/herdr-bootstrap" <<'EOF'
+#!/bin/sh
+printf '%s\n' "${INSTALL_PLUGINS_QUIET:-unset}" >"$HOME/../herdr-quiet"
+printf 'unchanged: herdr detail\n'
+exit 0
+EOF
+cat >"${T50}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration install"*)
+    printf '%s\n' "$*" >>"$HOME/../herdr-installs"
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T50}/bin/herdr-bootstrap" "${T50}/bin/herdr"
+run_setup "$T50"
+if [ "$(component_log_block "${T50}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  unchanged: herdr detail\n  result: ok' ] \
+  && [ "$(cat "${T50}/herdr-quiet")" = 1 ] \
+  && [ ! -e "${T50}/herdr-installs" ]; then
+  ok "herdr-bootstrap takes precedence and direct install is not called"
+else
+  ng "herdr-bootstrap precedence is broken or direct install ran anyway"
+fi
+
+# (33) fallback は jq が無ければ検証できないため、書き込む前に skip する。
+make_temp_root T52
+make_fixture "$T52"
+write_herdr_hook_configs "$T52"
+cat >"${T52}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration install"*)
+    printf '%s\n' "$*" >>"$HOME/../herdr-installs"
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T52}/bin/herdr"
+cat >"${T52}/hide-jq-and-bootstrap.sh" <<'EOF'
+command() {
+  if [ "${1:-}" = -v ]; then
+    case "${2:-}" in
+      jq | herdr-bootstrap) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+EOF
+SETUP_BASH_ENV="${T52}/hide-jq-and-bootstrap.sh" run_setup "$T52"
+if [ "$(component_log_block "${T52}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: skipped (jq not found)' ] \
+  && [ ! -e "${T52}/herdr-installs" ]; then
+  ok "a jq-less Herdr fallback skips before writing anything"
+else
+  ng "a jq-less Herdr fallback wrote or misreported"
+fi
+
+# (34) herdr が期待する hook 配置が tracked 構成と違うなら installer を呼ばない。
+# Windows 版 herdr は PowerShell hook (.ps1) を書き、HERDR_INTEGRATION_ID を含む
+# 既存の .sh を削除するため、配置不一致での install は tracked hook を壊す。
+make_temp_root T53
+make_fixture "$T53"
+write_herdr_hook_configs "$T53"
+cat >"${T53}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration install"*)
+    printf '%s\n' "$*" >>"$HOME/../herdr-installs"
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: not installed (%s/.claude/hooks/herdr-agent-state.ps1)\n' "$HOME"
+    printf 'codex: not installed (%s/.codex/herdr-agent-state.ps1)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T53}/bin/herdr"
+write_hide_herdr_bootstrap "$T53"
+SETUP_BASH_ENV="${T53}/hide-herdr-bootstrap.sh" run_setup "$T53"
+if [ "$(component_log_block "${T53}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: skipped (herdr expects a different hook layout)' ] \
+  && [ ! -e "${T53}/herdr-installs" ]; then
+  ok "a mismatched hook layout skips instead of calling the installer"
+else
+  ng "a mismatched hook layout reached the installer or misreported"
+fi
+
+# (35) herdr の呼び出しは CLAUDE_CONFIG_DIR / CODEX_HOME を外して行う。
+# このステップは $HOME/.claude と $HOME/.codex の tracked 構成を管理するため、
+# override が残ると installer と verifier が別ディレクトリを見て誤判定する。
+make_temp_root T54
+make_fixture "$T54"
+write_herdr_hook_configs "$T54"
+cat >"${T54}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration status")
+    printf '%s %s\n' "${CLAUDE_CONFIG_DIR:-unset}" "${CODEX_HOME:-unset}" \
+      >"$HOME/../herdr-env"
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T54}/bin/herdr"
+write_hide_herdr_bootstrap "$T54"
+CLAUDE_CONFIG_DIR="${T54}/bogus-claude" CODEX_HOME="${T54}/bogus-codex" \
+  SETUP_BASH_ENV="${T54}/hide-herdr-bootstrap.sh" run_setup "$T54"
+if [ "$(component_log_block "${T54}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: ok' ] \
+  && [ "$(cat "${T54}/herdr-env")" = "unset unset" ]; then
+  ok "herdr calls drop config-dir overrides and manage the tracked HOME"
+else
+  ng "herdr calls leaked config-dir overrides"
+fi
+
+# (36) 片側だけ未収束でも、install は追記ではなく上書きになる(二重登録を残さない)。
+# fake の install は実機の installer と同じく「自分の絶対パス形式エントリを追記」する。
+make_temp_root T55
+make_fixture "$T55"
+write_herdr_hook_configs "$T55"
+printf '{"hooks":{"SessionStart":[]}}\n' >"${T55}/dotfiles/codex/hooks.json"
+cat >"${T55}/bin/herdr" <<'EOF'
+#!/bin/sh
+append_hook() {
+  jq --arg cmd "bash '$2' session" \
+    '.hooks.SessionStart += [{"hooks":[{"type":"command","command":$cmd,"timeout":10}]}]' \
+    "$1" >"$1.tmp" && mv "$1.tmp" "$1"
+}
+case "$*" in
+  "integration install claude")
+    printf 'claude\n' >>"$HOME/../herdr-installs"
+    append_hook "$HOME/.claude/settings.json" "$HOME/.claude/hooks/herdr-agent-state.sh"
+    exit 0
+    ;;
+  "integration install codex")
+    printf 'codex\n' >>"$HOME/../herdr-installs"
+    append_hook "$HOME/.codex/hooks.json" "$HOME/.codex/herdr-agent-state.sh"
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.sh)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.sh)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T55}/bin/herdr"
+write_hide_herdr_bootstrap "$T55"
+SETUP_BASH_ENV="${T55}/hide-herdr-bootstrap.sh" run_setup "$T55"
+if [ "$(component_log_block "${T55}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: ok' ] \
+  && [ "$(grep -c 'herdr-agent-state.sh' "${T55}/dotfiles/claude/settings.json")" = 1 ] \
+  && [ "$(grep -c 'herdr-agent-state.sh' "${T55}/dotfiles/codex/hooks.json")" = 1 ]; then
+  ok "a partially converged fallback overwrites instead of appending duplicates"
+else
+  ng "a partially converged fallback left duplicate or missing hook entries"
+fi
+
+# (37) status 自体の失敗は配置不一致と区別し、failed として報告する。
+make_temp_root T56
+make_fixture "$T56"
+write_herdr_hook_configs "$T56"
+cat >"${T56}/bin/herdr" <<'EOF'
+#!/bin/sh
+if [ "$*" = "integration status" ]; then
+  printf 'herdr: daemon unreachable\n' >&2
+  exit 3
+fi
+exit 64
+EOF
+chmod +x "${T56}/bin/herdr"
+write_hide_herdr_bootstrap "$T56"
+SETUP_BASH_ENV="${T56}/hide-herdr-bootstrap.sh" run_setup "$T56"
+if [ "$(component_log_block "${T56}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  herdr integration status failed\n  result: failed (continuing)' ]; then
+  ok "a status failure is reported as failed, not as a layout mismatch"
+else
+  ng "a status failure was misreported"
 fi
 
 echo "---"
