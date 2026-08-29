@@ -1,9 +1,9 @@
 personality = "friendly"
 model = "gpt-5.6-sol"
 model_reasoning_effort = "xhigh"
-sandbox_mode = "workspace-write"
+default_permissions = ":danger-full-access"
 approval_policy = "on-request"
-approvals_reviewer = "user"
+approvals_reviewer = "auto_review"
 developer_instructions = """
 回答は日本語で行う。
 常に事実に基づいて回答し、事実か判断できない場合は未確認であることを明示する。
@@ -97,9 +97,6 @@ trust_level = "trusted"
 [projects."/home/shishi/dev/src/github.com/shishi/nix-config"]
 trust_level = "trusted"
 
-[windows]
-sandbox = "elevated"
-
 [shell_environment_policy]
 inherit = "all"
 ignore_default_excludes = false
@@ -130,8 +127,8 @@ conversationDetailMode = "STEPS_COMMANDS"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
-integratedTerminalShell = "wsl"
-composerEnterBehavior = "cmdAlways"
+integratedTerminalShell = "powershell"
+composerEnterBehavior = "cmdIfMultiline"
 localeOverride = "ja-JP"
 show-context-window-usage = true
 codeFontSize = 16
@@ -294,6 +291,9 @@ use_memories = false
 [tui.model_availability_nux]
 "gpt-5.6-sol" = 2
 
-[sandbox_workspace_write]
-network_access = true
+[permissions.workspace-with-dev]
+description = "Workspace editing with write access to ~/dev."
+extends = ":workspace"
 
+[permissions.workspace-with-dev.filesystem]
+'~/dev' = "write"
