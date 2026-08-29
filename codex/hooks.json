@@ -4,8 +4,8 @@
       {
         "hooks": [
           {
-            "command": "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c 'GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh'",
+            "command": "bash ~/.agents/hooks/git-push-guard.sh",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/git-push-guard.sh'",
             "statusMessage": "git push ガード確認中...",
             "timeout": 10,
             "type": "command"
