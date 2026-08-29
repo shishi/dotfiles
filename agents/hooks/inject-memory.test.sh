@@ -67,22 +67,26 @@ else FAIL=$((FAIL+1)); echo "NG: (q2) exit code $rc"; fi
 mkdir -p "$TMP/home/.claude/memory/projects" "$TMP/plain"
 pslug=$(printf '%s' "$TMP/plain" | tr ':/\\' '-')
 printf '# Memory Index\n- [t](t.md) — INDEX-HOOK-LINE\n' > "$TMP/home/.claude/memory/MEMORY.md"
+printf 'CORE-VALUES-SENTINEL\n' > "$TMP/home/.claude/memory/CORE.md"
 printf 'REMOTE-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/github.com-shishi-dotfiles.md"
 printf 'PATH-SLUG-MEMORY\n' > "$TMP/home/.claude/memory/projects/${pslug}.md"
 git -C "$TMP/home/.claude/memory" init -q -b main
-git -C "$TMP/home/.claude/memory" add MEMORY.md projects
+git -C "$TMP/home/.claude/memory" add CORE.md MEMORY.md projects
 $GITC -C "$TMP/home/.claude/memory" commit -qm init
 
-# (b) プロジェクト記憶なし -> 索引と slug 行のみ
+# (b) プロジェクト記憶なし -> 索引・全体価値観・不存在を明示した slug 行
 out=$(run_hook "$TMP")
 assert_contains "(b) index injected" "$out" "INDEX-HOOK-LINE"
+assert_contains "(b) core values injected" "$out" "CORE-VALUES-SENTINEL"
 assert_contains "(b) slug line present" "$out" "現在のプロジェクト slug:"
+assert_contains "(b) missing project memory is explicit" "$out" "プロジェクト記憶: なし"
 
 # (a)(d-1) origin あり -> remote slug
 mkdir -p "$TMP/repo-ssh" && git -C "$TMP/repo-ssh" init -q -b main
 git -C "$TMP/repo-ssh" remote add origin git@github.com:shishi/dotfiles.git
 out=$(run_hook "$TMP/repo-ssh")
 assert_contains "(a)(d) remote slug from ssh origin" "$out" "REMOTE-SLUG-MEMORY"
+assert_contains "(a)(d) present project path is explicit" "$out" "プロジェクト記憶: projects/github.com-shishi-dotfiles.md"
 
 # (e) https 形式でも同一 slug
 mkdir -p "$TMP/repo-https" && git -C "$TMP/repo-https" init -q -b main
@@ -480,7 +484,7 @@ else FAIL=$((FAIL+1)); echo "NG: (q5) exit code $rc"; fi
 mkdir -p "$TMP/secret-project"
 git -C "$TMP/secret-project" init -q -b main
 git -C "$TMP/secret-project" remote add origin git@github.com:shishi/dotfiles.git
-make_secret_repo() { # $1=path $2=MEMORY body $3=optional project body
+make_secret_repo() { # $1=path $2=MEMORY body $3=optional project body $4=optional CORE body
   mkdir -p "$1/projects"
   git -C "$1" init -q -b main
   printf '%s\n' "$2" > "$1/MEMORY.md"
@@ -488,6 +492,10 @@ make_secret_repo() { # $1=path $2=MEMORY body $3=optional project body
   if [ -n "$3" ]; then
     printf '%s\n' "$3" > "$1/projects/github.com-shishi-dotfiles.md"
     git -C "$1" add projects/github.com-shishi-dotfiles.md
+  fi
+  if [ -n "${4:-}" ]; then
+    printf '%s\n' "$4" > "$1/CORE.md"
+    git -C "$1" add CORE.md
   fi
   $GITC -C "$1" commit -qm secret-fixture
 }
@@ -501,6 +509,15 @@ assert_not_contains "(q6a) password assignment has no memory wrapper" "$out" "<p
 assert_not_contains "(q6a) password value is not leaked" "$out" "this-is-a-dummy-secret"
 assert_not_contains "(q6a) safe sibling body is also withheld" "$out" "SAFE-MEMORY-BODY"
 assert_not_contains "(q6a) secret warning omits absolute memory dir" "$out" "$TMP/secret-password"
+
+make_secret_repo "$TMP/secret-core" '# Memory Index' '' \
+  $'SAFE-CORE-BODY\npassword = core-secret-value'
+out=$(run_hook "$TMP/secret-project" "$TMP/secret-core")
+assert_contains "(q6m) core assignment warns with CORE path" "$out" "CORE.md"
+assert_contains "(q6m) core assignment uses warning wrapper" "$out" "personal-memory-warning"
+assert_not_contains "(q6m) core assignment has no memory wrapper" "$out" "<personal-memory>"
+assert_not_contains "(q6m) core value is not leaked" "$out" "core-secret-value"
+assert_not_contains "(q6m) safe core sibling body is also withheld" "$out" "SAFE-CORE-BODY"
 
 make_secret_repo "$TMP/secret-pat" '# Memory Index' \
   $'SAFE-PROJECT-BODY\ngithub_pat_abcdefghijklmnopqrstuvwxyz123456'

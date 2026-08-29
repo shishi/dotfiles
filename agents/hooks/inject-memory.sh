@@ -215,12 +215,31 @@ fi
 
 [ -n "$slug" ] || slug=$(slugify "$cwd")
 
-# required index と存在する selected project file は、wrapper を出す前に固定 snapshot から
-# 各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
+# required index、optional CORE、存在する selected project file は、wrapper を出す前に
+# 固定 snapshot から各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
 if ! memory_content=$(emit_file "MEMORY.md"); then
   echo "<personal-memory-warning>記憶 snapshot の読み取りに失敗したため注入をスキップ: MEMORY.md(${MEMORY_DIR})。worktree は読み取っていません</personal-memory-warning>"
   exit 0
 fi
+
+core_content=""
+core_present=""
+probe_file "CORE.md"
+core_probe_status=$?
+case "$core_probe_status" in
+  0)
+    if ! core_content=$(emit_file "CORE.md"); then
+      echo "<personal-memory-warning>記憶 snapshot の読み取りに失敗したため注入をスキップ: CORE.md(${MEMORY_DIR})。worktree は読み取っていません</personal-memory-warning>"
+      exit 0
+    fi
+    core_present=1
+    ;;
+  1) ;;
+  *)
+    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: CORE.md。本文は出力していません</personal-memory-warning>"
+    exit 0
+    ;;
+esac
 
 project_path="projects/${slug}.md"
 project_content=""
@@ -266,17 +285,29 @@ scan_path() { # $1=repo relative path $2=content; warning を出したら 0、cl
 }
 
 scan_path "MEMORY.md" "$memory_content" && exit 0
+if [ -n "$core_present" ]; then
+  scan_path "CORE.md" "$core_content" && exit 0
+fi
 if [ -n "$project_present" ]; then
   scan_path "$project_path" "$project_content" && exit 0
 fi
 
 echo "<personal-memory>"
 echo "個人永続記憶。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
-echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: projects/${slug}.md)"
+if [ -n "$project_present" ]; then
+  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
+else
+  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
+fi
 [ -n "$degraded" ] && echo "$degraded"
 [ -n "$ahead_warn" ] && echo "$ahead_warn"
 echo ""
 printf '%s\n' "$memory_content"
+if [ -n "$core_present" ]; then
+  echo ""
+  echo "## 全体価値観と方針"
+  printf '%s\n' "$core_content"
+fi
 if [ -n "$project_present" ]; then
   echo ""
   echo "## プロジェクト記憶 (${slug})"

@@ -131,8 +131,8 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
 `~/.claude/memory/` も同じ物理 clone を参照する。Codex native Memories は無効であり、
 `agent-memory` だけを長期記憶の正本とする。
 
-SessionStart hook は `<personal-memory>` ブロックに `MEMORY.md` の索引と
-現プロジェクトの記憶を注入する。通常は注入済みコンテキストを使う。
+SessionStart hook は `<personal-memory>` ブロックに `MEMORY.md` の索引、
+`CORE.md` の全体価値観と方針、現プロジェクトの記憶を注入する。通常は注入済みコンテキストを使う。
 詳細が必要な場合だけ、索引から該当ファイルを読む。記憶 repo 全体を無条件に読まない。
 
 ブロックが無く、記憶が必要なタスクでは `~/.codex/memory/MEMORY.md` を直接読む。
@@ -147,6 +147,13 @@ SessionStart hook は `<personal-memory>` ブロックに `MEMORY.md` の索引�
 lock が 10 分以上残っているという警告は、stale の可能性を示すだけである。
 lock を除去する前にユーザーへ確認する。`⚠ 未 push` は degraded ではない。
 ローカルで commit 済み、push 未完了という警告であり、注入内容は利用できる。
+
+- **日常 capture**: タスク完了前に記憶候補を監査する。明示された価値観、判断原則、
+  好み、訂正、コードや Git 履歴だけでは復元できないプロジェクト知識、再利用する環境知識が
+  あれば `capturing-memory` skill を使う。ユーザーに毎回「記憶して」と言わせない。
+  「今回は」等のその場限りの方針、特定 repo 等に結び付くプロジェクト固有の方針、
+  今後の作業全体にわたる価値観を区別する。範囲を判定できない場合はユーザーに確認する。
+  一時的な例外で広い方針を上書きせず、明示的な撤回・変更だけを置換根拠にする。
 
 - **書き込み前 bootstrap**: 詳細ルールと保存基準は、同期後の HEAD にある
   `CONVENTIONS.md` を正とする。

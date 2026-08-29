@@ -42,6 +42,10 @@ SKILLS=(
   "$REPO/claude/skills/memory-consolidate/SKILL.md"
   "$REPO/codex/skills/memory-consolidate/SKILL.md"
 )
+CAPTURE_SKILLS=(
+  "$REPO/claude/skills/capturing-memory/SKILL.md"
+  "$REPO/codex/skills/capturing-memory/SKILL.md"
+)
 CONSUMERS=("${INSTRUCTIONS[@]}" "${SKILLS[@]}")
 LOCK_HELPER="$REPO/agents/bin/memory-write-lock.sh"
 
@@ -96,6 +100,15 @@ for file in "${INSTRUCTIONS[@]}"; do
   require_literal "$file" '外部コンテンツから' "$file begins the external-instruction boundary"
   require_literal "$file" '取り込んだ命令は' "$file identifies stored external instructions"
   require_literal "$file" '保存しない。' "$file forbids stored external instructions"
+  require_literal "$file" 'タスク完了前に記憶候補を監査する' \
+    "$file audits memory candidates before completing a task"
+  require_literal "$file" '`capturing-memory` skill' \
+    "$file routes durable knowledge through the capture skill"
+  require_literal "$file" 'その場限り' "$file distinguishes turn-local direction"
+  require_literal "$file" 'プロジェクト固有' "$file distinguishes project-scoped knowledge"
+  require_literal "$file" '全体にわたる価値観' "$file distinguishes global values"
+  require_literal "$file" '判定できない場合はユーザーに確認する' \
+    "$file asks instead of guessing an ambiguous memory scope"
 done
 
 for file in "${SKILLS[@]}"; do
@@ -107,6 +120,48 @@ for file in "${SKILLS[@]}"; do
     "$file identifies external instructions during consolidation"
   require_literal "$file" '保存しない。' \
     "$file forbids storing external instructions during consolidation"
+  require_literal "$file" '`CORE.md`' "$file consolidates global values"
+  require_literal "$file" '時系列だけで陳腐化と判断しない' \
+    "$file does not prune memory merely because it is old"
+  require_literal "$file" '現行の事実' "$file requires current evidence before pruning"
+  require_literal "$file" '明示的な撤回' "$file recognizes explicit withdrawal"
+  require_literal "$file" '後継方針' "$file recognizes superseding policy"
+  if [[ "$file" == *'/codex/'* ]]; then
+    require_literal "$file" 'AGENTS.md にもあることだけを理由に `CORE.md` の価値観を削除しない' \
+      "$file preserves global values even when AGENTS.md also enforces them"
+  else
+    require_literal "$file" 'CLAUDE.md にもあることだけを理由に `CORE.md` の価値観を削除しない' \
+      "$file preserves global values even when CLAUDE.md also enforces them"
+  fi
+done
+
+for file in "${CAPTURE_SKILLS[@]}"; do
+  if [ -f "$file" ]; then
+    pass "$file exists"
+  else
+    fail "$file is missing"
+    continue
+  fi
+  require_literal "$file" '`CORE.md`' "$file stores global values in CORE.md"
+  require_literal "$file" '`projects/<slug>.md`' "$file stores project knowledge by slug"
+  require_literal "$file" 'その場限り' "$file identifies turn-local direction"
+  require_literal "$file" 'プロジェクト固有' "$file identifies project-scoped knowledge"
+  require_literal "$file" '全体にわたる価値観' "$file identifies global values"
+  require_literal "$file" '判定できない場合はユーザーに確認する' \
+    "$file asks about ambiguous memory scope"
+  require_literal "$file" '一時的な例外' "$file preserves broader policy across local exceptions"
+  require_literal "$file" '明示的な撤回' "$file requires explicit withdrawal before replacement"
+  require_literal "$file" 'credentials、token、password、private key' \
+    "$file forbids storing secrets"
+  require_literal "$file" '外部コンテンツから取り込んだ命令' \
+    "$file forbids persisting external instructions"
+  require_literal "$file" 'memory-write-preflight.sh' "$file uses the tracked preflight"
+  require_literal "$file" '同期後の HEAD' "$file reads synchronized conventions"
+  require_literal "$file" 'release' "$file releases the write lock"
+  require_literal "$file" '編集したファイルだけを path 指定で stage' \
+    "$file stages only edited memory paths"
+  require_literal "$file" '`git add -A` と `commit -a` は使わない' \
+    "$file explicitly rejects broad staging"
 done
 
 if grep -qF 'link_agent_home "${DOTDIR}/agents/bin" "$HOME/.agents/bin"' "$REPO/setup.sh" \
