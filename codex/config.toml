@@ -102,6 +102,7 @@ sandbox = "elevated"
 
 [shell_environment_policy]
 inherit = "all"
+ignore_default_excludes = false
 
 [shell_environment_policy.set]
 BASH_DEFAULT_TIMEOUT_MS = "300000"

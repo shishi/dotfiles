@@ -69,6 +69,7 @@ check_false() {
 check_false "features" "memories"
 check_false "memories" "generate_memories"
 check_false "memories" "use_memories"
+check_false "shell_environment_policy" "ignore_default_excludes"
 
 echo
 echo "PASS/FAIL: FAILURES=$FAILURES"
