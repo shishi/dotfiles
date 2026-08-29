@@ -35,6 +35,8 @@ output=$(printf '%s' "$payload" | bash "$INJECTOR" "$MEMORY_DIR") || fail 'share
 case "$output" in *'<personal-memory>'*'</personal-memory>'*) ;; *) fail 'personal-memory wrapper is missing' ;; esac
 case "$output" in *'GLOBAL_MEMORY_SENTINEL'*) ;; *) fail 'MEMORY.md content is missing' ;; esac
 case "$output" in *'CORE_MEMORY_SENTINEL'*) ;; *) fail 'CORE.md content is missing' ;; esac
+core_count=$(printf '%s\n' "$output" | grep -cF -- 'CORE_MEMORY_SENTINEL')
+[ "$core_count" -eq 1 ] || fail "CORE.md content appears ${core_count} times"
 case "$output" in *'projects/github.com-shishi-dotfiles.md'*) ;; *) fail 'dotfiles project slug is not selected' ;; esac
 case "$output" in *'PROJECT_MEMORY_SENTINEL'*) ;; *) fail 'dotfiles project memory content is missing' ;; esac
 

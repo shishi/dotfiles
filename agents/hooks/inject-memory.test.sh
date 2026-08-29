@@ -35,6 +35,11 @@ assert_not_contains() { # $1=desc $2=haystack $3=needle
   if printf '%s' "$2" | grep -qF -- "$3"; then FAIL=$((FAIL+1)); echo "NG: $1 (unexpected: $3)"
   else PASS=$((PASS+1)); echo "ok: $1"; fi
 }
+assert_line_count() { # $1=desc $2=haystack $3=needle $4=expected
+  actual=$(printf '%s\n' "$2" | grep -cF -- "$3")
+  if [ "$actual" -eq "$4" ]; then PASS=$((PASS+1)); echo "ok: $1"
+  else FAIL=$((FAIL+1)); echo "NG: $1 (expected=$4 actual=$actual)"; fi
+}
 assert_empty() { # $1=desc $2=output
   if [ -z "$2" ]; then PASS=$((PASS+1)); echo "ok: $1"
   else FAIL=$((FAIL+1)); echo "NG: $1 (expected empty output)"; fi
@@ -78,6 +83,7 @@ $GITC -C "$TMP/home/.claude/memory" commit -qm init
 out=$(run_hook "$TMP")
 assert_contains "(b) index injected" "$out" "INDEX-HOOK-LINE"
 assert_contains "(b) core values injected" "$out" "CORE-VALUES-SENTINEL"
+assert_line_count "(b) core values injected exactly once" "$out" "CORE-VALUES-SENTINEL" 1
 assert_contains "(b) slug line present" "$out" "現在のプロジェクト slug:"
 assert_contains "(b) missing project memory is explicit" "$out" "プロジェクト記憶: なし"
 
@@ -272,6 +278,7 @@ out=$(run_hook "$TMP" "$TMP/dirtymem")
 assert_contains "(k) dirty worktree still injects" "$out" "REPO-MEMORY"
 assert_contains "(k) dirty worktree is labeled degraded" "$out" "⚠ 記憶 repo の worktree が dirty"
 assert_contains "(k) dirty worktree states the content is committed-only" "$out" "最後の commit 時点"
+assert_contains "(k) missing project memory is snapshot-qualified" "$out" "プロジェクト記憶: 最後の commit 時点ではなし"
 assert_not_contains "(k) dirty worktree is not fatal" "$out" "personal-memory-warning"
 
 # (n) snapshot 読み: dirty な worktree の未 commit 編集は注入されない。

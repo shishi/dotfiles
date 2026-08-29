@@ -126,6 +126,10 @@ for file in "${SKILLS[@]}"; do
   require_literal "$file" '現行の事実' "$file requires current evidence before pruning"
   require_literal "$file" '明示的な撤回' "$file recognizes explicit withdrawal"
   require_literal "$file" '後継方針' "$file recognizes superseding policy"
+  require_literal "$file" '現行の事実・明示的な撤回・確認できる後継方針を根拠に解決した' \
+    "$file uses evidence rather than recency to resolve contradictions"
+  forbid_regex "$file" '矛盾を最新値で解決した' \
+    "$file does not keep the obsolete latest-wins checklist"
   if [[ "$file" == *'/codex/'* ]]; then
     require_literal "$file" 'AGENTS.md にもあることだけを理由に `CORE.md` の価値観を削除しない' \
       "$file preserves global values even when AGENTS.md also enforces them"
@@ -147,6 +151,8 @@ for file in "${CAPTURE_SKILLS[@]}"; do
   require_literal "$file" 'その場限り' "$file identifies turn-local direction"
   require_literal "$file" 'プロジェクト固有' "$file identifies project-scoped knowledge"
   require_literal "$file" '全体にわたる価値観' "$file identifies global values"
+  require_literal "$file" '再利用する技術・環境リファレンス' \
+    "$file routes cross-project technical reference knowledge"
   require_literal "$file" '判定できない場合はユーザーに確認する' \
     "$file asks about ambiguous memory scope"
   require_literal "$file" '一時的な例外' "$file preserves broader policy across local exceptions"
@@ -162,6 +168,8 @@ for file in "${CAPTURE_SKILLS[@]}"; do
     "$file stages only edited memory paths"
   require_literal "$file" '`git add -A` と `commit -a` は使わない' \
     "$file explicitly rejects broad staging"
+  require_literal "$file" '親 turn を終了する前に完了と lock 解放を確認する' \
+    "$file never ends the parent turn while an implicit capture still holds the lock"
 done
 
 if grep -qF 'link_agent_home "${DOTDIR}/agents/bin" "$HOME/.agents/bin"' "$REPO/setup.sh" \

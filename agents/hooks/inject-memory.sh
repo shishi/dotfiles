@@ -296,6 +296,8 @@ echo "<personal-memory>"
 echo "個人永続記憶。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
 if [ -n "$project_present" ]; then
   echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
+elif [ -n "$degraded" ]; then
+  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: 最後の commit 時点ではなし)"
 else
   echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
 fi
