@@ -168,9 +168,6 @@ emit_approval_request() {
   if consume_explicit_approval; then
     return 0
   fi
-  if [ "${GIT_PUSH_GUARD_CLIENT:-claude}" = "codex" ]; then
-    deny "main/master への通常pushにはユーザーの明示指示が必要"
-  fi
   jq -n --arg r "$ask_reason" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
 }

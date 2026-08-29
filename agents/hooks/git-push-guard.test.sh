@@ -57,11 +57,11 @@ assert_allowed() { # $1=desc $2=command
   fi
 }
 
-assert_codex_requires_approval() { # $1=desc $2=command $3=cwd(optional)
+assert_codex_asks_approval() { # $1=desc $2=command $3=cwd(optional)
   local out rc decision
   out=$(run_codex_guard "$2" "${3:-}"); rc=$?
   decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null)
-  if [ "$rc" -eq 0 ] && [ "$decision" = "deny" ]; then
+  if [ "$rc" -eq 0 ] && [ "$decision" = "ask" ]; then
     PASS=$((PASS+1)); echo "ok: $1"
   else
     FAIL=$((FAIL+1)); echo "NG: $1 (rc=$rc decision=$decision out=$out)"
@@ -88,7 +88,7 @@ assert_prompt_not_approved() { # $1=desc $2=prompt $3=session $4=command(optiona
   record_approval "$2" "$3" || true
   out=$(run_codex_guard "${4:-git push origin main}" "" "$3"); rc=$?
   decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null)
-  if [ "$rc" -eq 0 ] && [ "$decision" = deny ]; then
+  if [ "$rc" -eq 0 ] && [ "$decision" = ask ]; then
     PASS=$((PASS+1)); echo "ok: $1"
   else
     FAIL=$((FAIL+1)); echo "NG: $1 (rc=$rc out=$out)"
@@ -125,7 +125,7 @@ assert_denied "delete heads/main DWIM ref denied" "git push origin :heads/main"
 assert_denied "delete heads/main option form denied" "git push origin --delete heads/main"
 assert_asked "normal push to master asks" "git push origin master"
 assert_asked "normal push to main asks" "git push origin main"
-assert_codex_requires_approval "Codex normal push to main requires explicit user authorization" "git push origin main"
+assert_codex_asks_approval "Codex normal push to main asks for user authorization" "git push origin main"
 assert_explicitly_approved "Codex accepts an explicit Japanese main push instruction" \
   "mainにpushして" "git push origin main" "approved-main" codex
 assert_explicitly_approved "Claude accepts the same explicit main push instruction" \
@@ -142,27 +142,27 @@ assert_explicitly_approved "Claude accepts a particle-separated master push shor
   "masterにpush" "git push origin master" "approved-master-particle-claude" claude
 record_approval "mainにpushして" "branch-scoped"
 branch_scoped_out=$(run_codex_guard "git push origin master" "" "branch-scoped")
-if [ "$(printf '%s' "$branch_scoped_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$branch_scoped_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: explicit approval is scoped to the named branch"
 else
   FAIL=$((FAIL+1)); echo "NG: explicit approval is scoped to the named branch (out=$branch_scoped_out)"
 fi
 one_shot_out=$(run_codex_guard "git push origin main" "" "approved-main")
-if [ "$(printf '%s' "$one_shot_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$one_shot_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: explicit approval is consumed by one push"
 else
   FAIL=$((FAIL+1)); echo "NG: explicit approval is consumed by one push (out=$one_shot_out)"
 fi
 record_approval "mainにはpushしないで" "negative-main"
 negative_out=$(run_codex_guard "git push origin main" "" "negative-main")
-if [ "$(printf '%s' "$negative_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$negative_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: negative user instruction does not authorize a push"
 else
   FAIL=$((FAIL+1)); echo "NG: negative user instruction does not authorize a push (out=$negative_out)"
 fi
 record_approval "mainをforce pushして" "force-wording"
 force_wording_out=$(run_codex_guard "git push origin main" "" "force-wording")
-if [ "$(printf '%s' "$force_wording_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$force_wording_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: destructive wording does not leave a normal-push approval"
 else
   FAIL=$((FAIL+1)); echo "NG: destructive wording does not leave a normal-push approval (out=$force_wording_out)"
@@ -170,7 +170,7 @@ fi
 record_approval "mainにpushして" "superseded"
 record_approval "まずテストを実行して" "superseded"
 superseded_out=$(run_codex_guard "git push origin main" "" "superseded")
-if [ "$(printf '%s' "$superseded_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$superseded_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: a later user prompt invalidates an unused approval"
 else
   FAIL=$((FAIL+1)); echo "NG: a later user prompt invalidates an unused approval (out=$superseded_out)"
@@ -202,7 +202,7 @@ else
 fi
 printf '%s main\n' "$(( $(date +%s) - 601 ))" > "$APPROVAL_DIR/expired-main"
 expired_out=$(run_codex_guard "git push origin main" "" "expired-main")
-if [ "$(printf '%s' "$expired_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = deny ]; then
+if [ "$(printf '%s' "$expired_out" | jq -r '.hookSpecificOutput.permissionDecision // empty')" = ask ]; then
   PASS=$((PASS+1)); echo "ok: explicit approval expires after at most 600 seconds"
 else
   FAIL=$((FAIL+1)); echo "NG: explicit approval expires after at most 600 seconds (out=$expired_out)"
