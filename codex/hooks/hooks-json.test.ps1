@@ -21,11 +21,13 @@ if ($userPromptSubmit.Count -ne 1 -or $userPromptSubmit[0].hooks[0].command -ne 
     $failures += 'UserPromptSubmit Windows command must record authorization with the shared guard'
 }
 
-$sessionStart = @($config.hooks.SessionStart)
-if ($sessionStart.Count -ne 1) {
-    $failures += 'SessionStart must have exactly one hook group'
+$memorySessionStart = @($config.hooks.SessionStart | Where-Object {
+    $_.matcher -eq 'startup|resume|clear|compact'
+})
+if ($memorySessionStart.Count -ne 1) {
+    $failures += 'SessionStart must have exactly one memory hook group'
 } else {
-    $sessionStartGroup = $sessionStart[0]
+    $sessionStartGroup = $memorySessionStart[0]
     $sources = @($sessionStartGroup.matcher -split '\|')
     $expectedSources = @('startup', 'resume', 'clear', 'compact')
     if ((Compare-Object $expectedSources $sources).Count -ne 0) {

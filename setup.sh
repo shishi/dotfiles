@@ -173,8 +173,65 @@ has_herdr_command_hook() {
     "$config" >/dev/null 2>&1
 }
 
+codex_herdr_windows_command() {
+  printf '%s\n' \
+    "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'"
+}
+
+has_codex_herdr_command_hook() {
+  local config="$1" installed_command windows_command
+
+  installed_command="bash '$HOME/.codex/herdr-agent-state.sh' session"
+  windows_command="$(codex_herdr_windows_command)"
+  jq -e \
+    --arg tracked_command 'bash ~/.codex/herdr-agent-state.sh session' \
+    --arg installed_command "$installed_command" \
+    --arg windows_command "$windows_command" \
+    'any(.hooks.SessionStart[]?.hooks[]?;
+      .type == "command"
+        and (.command == $tracked_command or .command == $installed_command)
+        and .commandWindows == $windows_command)' \
+    "$config" >/dev/null 2>&1
+}
+
+ensure_codex_herdr_windows_command() {
+  local config="$1" installed_command tmp windows_command
+
+  [ -f "$config" ] || return 1
+  has_codex_herdr_command_hook "$config" && return 0
+  installed_command="bash '$HOME/.codex/herdr-agent-state.sh' session"
+  windows_command="$(codex_herdr_windows_command)"
+  jq -e \
+    --arg tracked_command 'bash ~/.codex/herdr-agent-state.sh session' \
+    --arg installed_command "$installed_command" \
+    'any(.hooks.SessionStart[]?.hooks[]?;
+      .type == "command"
+        and (.command == $tracked_command or .command == $installed_command))' \
+    "$config" >/dev/null 2>&1 || return 1
+  tmp="$(mktemp "${config}.XXXXXX")" || return 1
+  if jq \
+    --arg tracked_command 'bash ~/.codex/herdr-agent-state.sh session' \
+    --arg installed_command "$installed_command" \
+    --arg windows_command "$windows_command" \
+    '.hooks.SessionStart |= map(
+      .hooks |= map(
+        if .type == "command"
+          and (.command == $tracked_command or .command == $installed_command)
+        then .commandWindows = $windows_command
+        else .
+        end
+      )
+    )' "$config" >"$tmp" \
+    && mv "$tmp" "$config"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
 # herdr integration の後条件。hook エントリは tracked 設定が使うチルダ形式と、
 # herdr の installer が書く絶対パス(単引用符)形式のどちらでも満たす。
+# Codex hook は Windows 用 command も必須とする。
 # herdr は CLAUDE_CONFIG_DIR / CODEX_HOME を尊重するが、このステップは
 # $HOME/.claude と $HOME/.codex の tracked 構成を管理するため、herdr の呼び出し
 # からは override を外し、verifier と同じディレクトリを見せる。
@@ -190,10 +247,7 @@ herdr_integrations_verified() {
         'bash ~/.claude/hooks/herdr-agent-state.sh session' \
       || has_herdr_command_hook "$HOME/.claude/settings.json" \
         "bash '$HOME/.claude/hooks/herdr-agent-state.sh' session"; } \
-    && { has_herdr_command_hook "$HOME/.codex/hooks.json" \
-        'bash ~/.codex/herdr-agent-state.sh session' \
-      || has_herdr_command_hook "$HOME/.codex/hooks.json" \
-        "bash '$HOME/.codex/herdr-agent-state.sh' session"; }
+    && has_codex_herdr_command_hook "$HOME/.codex/hooks.json"
 }
 
 # herdr が管理しようとする hook の配置(status が括弧内に示すパス)が tracked
@@ -773,6 +827,7 @@ if command -v herdr-bootstrap >/dev/null 2>&1; then
   herdr_integrations_ok=0
   if run_with_indented_output env INSTALL_PLUGINS_QUIET=1 \
     INSTALL_PLUGINS_SUMMARY=0 herdr-bootstrap \
+    && ensure_codex_herdr_windows_command "$HOME/.codex/hooks.json" \
     && herdr_integrations_verified; then
     herdr_integrations_ok=1
   fi
@@ -805,6 +860,7 @@ else
       herdr integration install claude \
     && run_with_indented_output env -u CLAUDE_CONFIG_DIR -u CODEX_HOME \
       herdr integration install codex \
+    && ensure_codex_herdr_windows_command "$HOME/.codex/hooks.json" \
     && herdr_integrations_verified; then
     herdr_integrations_ok=1
   fi

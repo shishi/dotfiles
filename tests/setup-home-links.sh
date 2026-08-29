@@ -59,7 +59,7 @@ write_herdr_hook_configs() {
 {"hooks":{"SessionStart":[{"matcher":"*","hooks":[{"type":"command","command":"bash ~/.claude/hooks/herdr-agent-state.sh session","timeout":10}]}]}}
 EOF
   cat >"${root}/dotfiles/codex/hooks.json" <<'EOF'
-{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","timeout":10}]}]}}
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","commandWindows":"& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'","timeout":10}]}]}}
 EOF
 }
 
@@ -1975,10 +1975,14 @@ SETUP_BASH_ENV="${T55}/hide-herdr-bootstrap.sh" run_setup "$T55"
 if [ "$(component_log_block "${T55}/setup.log" herdr-integrations)" = \
     $'setup.sh: herdr-integrations\n  result: ok' ] \
   && [ "$(grep -c 'herdr-agent-state.sh' "${T55}/dotfiles/claude/settings.json")" = 1 ] \
-  && [ "$(grep -c 'herdr-agent-state.sh' "${T55}/dotfiles/codex/hooks.json")" = 1 ]; then
+  && jq -e --arg command "bash '${T55}/home/.codex/herdr-agent-state.sh' session" \
+    '[.hooks.SessionStart[]?.hooks[]? | select(.command == $command)] as $handlers
+      | ($handlers | length) == 1
+        and ($handlers[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.codex/herdr-agent-state\\.sh session'\''$"))' \
+    "${T55}/dotfiles/codex/hooks.json" >/dev/null; then
   ok "a partially converged fallback overwrites instead of appending duplicates"
 else
-  ng "a partially converged fallback left duplicate or missing hook entries"
+  ng "a partially converged fallback left incomplete or duplicate hook entries"
 fi
 
 # (37) status 自体の失敗は配置不一致と区別し、failed として報告する。

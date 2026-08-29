@@ -32,6 +32,7 @@
           {
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'",
             "timeout": 10
           }
         ]

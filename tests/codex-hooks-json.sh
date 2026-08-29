@@ -23,15 +23,18 @@ else
   ng "hooks.json is a valid JSON object"
 fi
 
-assert_jq "one SessionStart group" '((.hooks.SessionStart // []) | length) == 1'
-assert_jq "SessionStart matcher is exact" '.hooks.SessionStart[0].matcher == "startup|resume|clear|compact"'
-assert_jq "one SessionStart handler" '((.hooks.SessionStart[0].hooks // []) | length) == 1'
+assert_jq "one memory SessionStart group" \
+  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")] | length) == 1'
+assert_jq "SessionStart matcher is exact" \
+  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].matcher) == "startup|resume|clear|compact"'
+assert_jq "one SessionStart handler" \
+  '(([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks // []) | length) == 1'
 assert_jq "SessionStart invokes the shared injector" \
-  '.hooks.SessionStart[0].hooks[0].command == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory"'
+  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].command) == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory"'
 assert_jq "SessionStart Windows command is exact" \
-  '(.hooks.SessionStart[0].hooks[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.agents/hooks/inject-memory\\.sh ~/.codex/memory'\''$"))'
+  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.agents/hooks/inject-memory\\.sh ~/.codex/memory'\''$"))'
 assert_jq "SessionStart context limit is 10000" \
-  '.hooks.SessionStart[0].hooks[0].additionalContextLimit == 10000'
+  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].additionalContextLimit) == 10000'
 assert_jq "one PreToolUse Bash group" '((.hooks.PreToolUse // []) | length) == 1 and .hooks.PreToolUse[0].matcher == "Bash"'
 assert_jq "PreToolUse keeps the git push guard" \
   '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
