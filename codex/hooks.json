@@ -46,6 +46,12 @@
             "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/git-push-guard.sh --record-approval'",
             "timeout": 10,
             "type": "command"
+          },
+          {
+            "command": "bash ~/.agents/hooks/enforce-continuation.sh",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/enforce-continuation.sh'",
+            "timeout": 10,
+            "type": "command"
           }
         ]
       }
