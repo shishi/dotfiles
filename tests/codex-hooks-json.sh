@@ -34,9 +34,9 @@ assert_jq "SessionStart context limit is 10000" \
   '.hooks.SessionStart[0].hooks[0].additionalContextLimit == 10000'
 assert_jq "one PreToolUse Bash group" '((.hooks.PreToolUse // []) | length) == 1 and .hooks.PreToolUse[0].matcher == "Bash"'
 assert_jq "PreToolUse keeps the git push guard" \
-  '.hooks.PreToolUse[0].hooks[0].command == "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh"'
-assert_jq "PreToolUse Windows identifies Codex to the shared guard" \
-  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard\\.sh'\''$"))'
+  '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
+assert_jq "PreToolUse Windows keeps the shared git push guard" \
+  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''~/.agents/hooks/git-push-guard\\.sh'\''$"))'
 assert_jq "one UserPromptSubmit approval recorder" \
   '((.hooks.UserPromptSubmit // []) | length) == 1 and .hooks.UserPromptSubmit[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval"'
 assert_jq "UserPromptSubmit Windows approval recorder is exact" \

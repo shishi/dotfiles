@@ -18,9 +18,9 @@ assert_jq "Claude uses the shared git push guard" "$REPO/claude/settings.json" \
 assert_jq "Claude has no deny rule that overrides the git push guard" "$REPO/claude/settings.json" \
   '([.permissions.deny[] | select(test("^Bash\\(git push"))] | length) == 0'
 assert_jq "Codex uses the shared git push guard" "$REPO/codex/hooks.json" \
-  '.hooks.PreToolUse[0].hooks[0].command == "GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard.sh"'
+  '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
 assert_jq "Codex Windows uses the shared git push guard" "$REPO/codex/hooks.json" \
-  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''GIT_PUSH_GUARD_CLIENT=codex bash ~/.agents/hooks/git-push-guard\\.sh'\''$"))'
+  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''~/.agents/hooks/git-push-guard\\.sh'\''$"))'
 assert_jq "Claude records explicit push authorization with the shared guard" "$REPO/claude/settings.json" \
   '([.hooks.UserPromptSubmit[].hooks[].command | select(. == "bash ~/.agents/hooks/git-push-guard.sh --record-approval")] | length) == 1'
 assert_jq "Codex records explicit push authorization with the shared guard" "$REPO/codex/hooks.json" \
