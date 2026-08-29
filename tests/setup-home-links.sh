@@ -59,7 +59,7 @@ write_herdr_hook_configs() {
 {"hooks":{"SessionStart":[{"matcher":"*","hooks":[{"type":"command","command":"bash ~/.claude/hooks/herdr-agent-state.sh session","timeout":10}]}]}}
 EOF
   cat >"${root}/dotfiles/codex/hooks.json" <<'EOF'
-{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","commandWindows":"& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'","timeout":10}]}]}}
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","commandWindows":"& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'","timeout":10}]}]}}
 EOF
 }
 
@@ -1978,7 +1978,7 @@ if [ "$(component_log_block "${T55}/setup.log" herdr-integrations)" = \
   && jq -e --arg command "bash '${T55}/home/.codex/herdr-agent-state.sh' session" \
     '[.hooks.SessionStart[]?.hooks[]? | select(.command == $command)] as $handlers
       | ($handlers | length) == 1
-        and ($handlers[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.codex/herdr-agent-state\\.sh session'\''$"))' \
+        and ($handlers[0].commandWindows == "& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.codex/herdr-agent-state.sh session'\''")' \
     "${T55}/dotfiles/codex/hooks.json" >/dev/null; then
   ok "a partially converged fallback overwrites instead of appending duplicates"
 else

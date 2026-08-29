@@ -23,39 +23,51 @@ else
   ng "hooks.json is a valid JSON object"
 fi
 
-assert_jq "one memory SessionStart group" \
-  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")] | length) == 1'
-assert_jq "SessionStart matcher is exact" \
-  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].matcher) == "startup|resume|clear|compact"'
-assert_jq "one SessionStart handler" \
-  '(([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks // []) | length) == 1'
-assert_jq "SessionStart invokes the shared injector" \
-  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].command) == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory"'
-assert_jq "SessionStart Windows command is exact" \
-  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.agents/hooks/inject-memory\\.sh ~/.codex/memory'\''$"))'
-assert_jq "SessionStart context limit is 10000" \
-  '([.hooks.SessionStart[]? | select(.matcher == "startup|resume|clear|compact")][0].hooks[0].additionalContextLimit) == 10000'
-assert_jq "one PreToolUse Bash group" '((.hooks.PreToolUse // []) | length) == 1 and .hooks.PreToolUse[0].matcher == "Bash"'
-assert_jq "PreToolUse keeps the git push guard" \
-  '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
-assert_jq "PreToolUse Windows keeps the shared git push guard" \
-  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''~/.agents/hooks/git-push-guard\\.sh'\''$"))'
+if python3 - "$CONFIG" 2>/dev/null <<'PY'
+import json
+import sys
+
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+with open(sys.argv[1], encoding="utf-8") as config:
+    json.load(config, object_pairs_hook=reject_duplicate_keys)
+PY
+then
+  ok "hooks.json has no duplicate object keys"
+else
+  ng "hooks.json has no duplicate object keys"
+fi
+
+assert_jq "one SessionStart shared injector" \
+  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory")] | length) == 1'
+assert_jq "SessionStart shared injector matcher is exact" \
+  '([.hooks.SessionStart[]? | select(any(.hooks[]?; .command == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory")) | .matcher] == ["startup|resume|clear|compact"])'
+assert_jq "SessionStart shared injector context limit is 10000" \
+  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory") | .additionalContextLimit] == [10000])'
+assert_jq "SessionStart Windows command uses the portable launcher" \
+  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/inject-memory.sh ~/.codex/memory'\''"])'
+assert_jq "one PreToolUse shared git push guard" \
+  '([.hooks.PreToolUse[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh")] | length) == 1'
+assert_jq "PreToolUse shared git push guard belongs to the Bash matcher" \
+  '([.hooks.PreToolUse[]? | select(any(.hooks[]?; .command == "bash ~/.agents/hooks/git-push-guard.sh")) | .matcher] == ["Bash"])'
+assert_jq "PreToolUse Windows command uses the portable launcher" \
+  '([.hooks.PreToolUse[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/git-push-guard.sh'\''"])'
 assert_jq "one UserPromptSubmit approval recorder" \
-  '((.hooks.UserPromptSubmit // []) | length) == 1 and .hooks.UserPromptSubmit[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval"'
-assert_jq "UserPromptSubmit Windows approval recorder is exact" \
-  '(.hooks.UserPromptSubmit[0].hooks[0].commandWindows | test("^& '\''[^'\'']*bash\\.exe'\'' -c '\''~/.agents/hooks/git-push-guard\\.sh --record-approval'\''$"))'
-assert_jq "every handler has commandWindows" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select((type != "string") or (length == 0))] | length) == 0'
-assert_jq "every Windows handler starts with call operator" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select(test("^& ") | not)] | length) == 0'
-assert_jq "every Windows handler invokes bash.exe" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select(test("bash\\.exe") | not)] | length) == 0'
-assert_jq "no Windows handler invokes the WSL launcher" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select(test("System32[/\\\\]bash\\.exe"; "i"))] | length) == 0'
-assert_jq "every Windows handler passes -c as a token" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select(test("(^|[[:space:]])-c([[:space:]]|$)") | not)] | length) == 0'
-assert_jq "no Windows handler starts a login shell" \
-  '([.hooks | to_entries[] | .value[] | .hooks[] | .commandWindows | select(test("(^|[[:space:]])-[A-Za-z]*l[A-Za-z]*([[:space:]]|$)"))] | length) == 0'
+  '([.hooks.UserPromptSubmit[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval")] | length) == 1'
+assert_jq "UserPromptSubmit Windows command uses the portable launcher" \
+  '([.hooks.UserPromptSubmit[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/git-push-guard.sh --record-approval'\''"])'
+assert_jq "Herdr SessionStart uses the portable launcher" \
+  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.codex/herdr-agent-state.sh session") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.codex/herdr-agent-state.sh session'\''"])'
+assert_jq "every Windows handler uses the portable launcher" \
+  '([.hooks | to_entries[] | .value[]? | .hooks[]? | .commandWindows | select(startswith("& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''") | not)] | length) == 0'
+assert_jq "Windows handlers contain no absolute home path" \
+  '([.hooks | to_entries[] | .value[]? | .hooks[]? | (.commandWindows // "") | select(test("C:/Users/|C:\\\\Users\\\\|/Users/|/home/"; "i"))] | length) == 0'
 
 registered=""
 while IFS= read -r script; do

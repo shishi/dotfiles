@@ -175,7 +175,7 @@ has_herdr_command_hook() {
 
 codex_herdr_windows_command() {
   printf '%s\n' \
-    "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'"
+    "& (Join-Path \$HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'"
 }
 
 has_codex_herdr_command_hook() {

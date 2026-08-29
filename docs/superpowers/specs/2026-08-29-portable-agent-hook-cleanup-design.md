@@ -28,7 +28,8 @@ POSIX 環境では、既存の `command` をそのまま使います。Windows �
 
 ### Herdr ownership
 
-Herdr が生成した `herdr-agent-state.*` は外部管理物です。dotfiles は内容を共通化せず、
+Herdr が生成した `herdr-agent-state.*` の内容は共通化しません。POSIX 用 `.sh` は
+portable な初期状態として追跡し、Windows 用 `.ps1` は runtime 生成物として ignore します。
 Herdr の再インストールや更新による上書きを許容します。
 
 生成物は次の情報で識別できます。
@@ -40,21 +41,23 @@ Herdr の再インストールや更新による上書きを許容します。
 両 integration は `SessionStart` で `session` action を実行します。入力形式の違いに対応する
 guard は Herdr 側に残します。dotfiles は両スクリプトの byte-level な同一性を要求しません。
 
-生成 script は Git で追跡しません。Herdr が hook 設定へ再挿入するマシン固有パスは、
-手動確認時に上記の識別情報で判別します。dotfiles の共通 launcher へ書き換えて、
-Herdr の管理処理と競合させません。
+tracked 設定では portable な `~` 形式を使います。Windows の `commandWindows` は共有
+launcher を経由し、`setup.sh` の収束処理も同じ形式を復元します。Herdr installer が
+実行環境向けの script と設定を再生成した場合は、上記の識別情報で所有者を判別します。
 
 ### Test consolidation
 
-Codex の `hooks.json` 契約テストは `tests/codex-hooks-json.sh` を正本にします。
-同じ契約を検査する PowerShell 版は削除します。
+Codex の `hooks.json` 契約は、Bash 版と PowerShell 版の両方で検査します。Bash 版は
+意味単位の構造と portable path を、PowerShell 版はWindows launcherと実装到達性を検査します。
+実行環境と責務が異なるため、どちらも保持します。
 
 契約テストは hook の配列位置や `SessionStart` group の総数を固定しません。
-共有 memory hook と push guard を内容で特定します。Git Bash の要件は共有 Bash hook にだけ
-適用し、Herdr が追加する native PowerShell hook には適用しません。
+共有 memory hook と push guard を内容で特定します。tracked 設定にあるWindows handlerは
+Herdrを含めて共有launcher経由であることを要求します。
 
-Codex 固有の injector テストは共有 injector suite の部分集合なので削除します。
-設定から共有 injector を呼ぶ契約は `tests/codex-hooks-json.sh` が検査します。
+Codex 固有の injector テストは、Codex SessionStart入力からglobal・core・project memoryが
+一度ずつ届くintegration契約を検査するため保持します。共有 injector suiteのunit境界とは
+責務が異なります。
 
 空の `.claude/settings.json` も削除します。空 object は project scope へ設定を追加しません。
 
@@ -80,7 +83,10 @@ Claude Code と Codex の処理を `agents/hooks/` に実装すれば、生成 s
 
 - launcher の Red-Green テスト
 - `tests/codex-hooks-json.sh`
+- `codex/hooks/hooks-json.test.ps1`
+- `codex/hooks/inject-memory.test.sh`
 - `tests/shared-agent-hooks.sh`
+- `tests/setup-home-links.sh`
 - `agents/hooks/inject-memory.test.sh`
 - `agents/hooks/git-push-guard.test.sh`
 - JSON と PowerShell の構文確認

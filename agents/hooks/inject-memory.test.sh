@@ -86,6 +86,8 @@ assert_contains "(b) core values injected" "$out" "CORE-VALUES-SENTINEL"
 assert_line_count "(b) core values injected exactly once" "$out" "CORE-VALUES-SENTINEL" 1
 assert_contains "(b) slug line present" "$out" "現在のプロジェクト slug:"
 assert_contains "(b) missing project memory is explicit" "$out" "プロジェクト記憶: なし"
+assert_contains "(b) opening wrapper present" "$out" "<personal-memory>"
+assert_contains "(b) closing wrapper present" "$out" "</personal-memory>"
 
 # (a)(d-1) origin あり -> remote slug
 mkdir -p "$TMP/repo-ssh" && git -C "$TMP/repo-ssh" init -q -b main

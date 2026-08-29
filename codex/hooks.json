@@ -5,7 +5,7 @@
         "hooks": [
           {
             "command": "bash ~/.agents/hooks/git-push-guard.sh",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/git-push-guard.sh'",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/git-push-guard.sh'",
             "statusMessage": "git push ガード確認中...",
             "timeout": 10,
             "type": "command"
@@ -20,7 +20,7 @@
           {
             "additionalContextLimit": 10000,
             "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
             "timeout": 10,
             "type": "command"
           }
@@ -32,7 +32,7 @@
           {
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.codex/herdr-agent-state.sh session'",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'",
             "timeout": 10
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
-            "commandWindows": "& 'C:/Users/shishi/scoop/apps/git/current/bin/bash.exe' -c '~/.agents/hooks/git-push-guard.sh --record-approval'",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/git-push-guard.sh --record-approval'",
             "timeout": 10,
             "type": "command"
           }

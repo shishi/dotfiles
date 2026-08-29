@@ -13,6 +13,25 @@ assert_jq() { # $1=description $2=file $3=filter
   if jq -e "$3" "$2" >/dev/null; then ok "$1"; else ng "$1"; fi
 }
 
+if [ ! -e "$REPO/.claude/settings.json" ]; then
+  ok "redundant empty .claude/settings.json removed"
+else
+  ng "redundant empty .claude/settings.json removed"
+fi
+
+if git -C "$REPO" check-ignore -q --no-index claude/hooks/herdr-agent-state.ps1; then
+  ok "generated Windows Claude Herdr adapter is ignored"
+else
+  ng "generated Windows Claude Herdr adapter is ignored"
+fi
+
+if rg -q '^# HERDR_INTEGRATION_ID=claude$' "$REPO/claude/hooks/herdr-agent-state.sh" \
+  && rg -q 'source = "herdr:claude"' "$REPO/claude/hooks/herdr-agent-state.sh"; then
+  ok "tracked POSIX Claude Herdr adapter identifies its owner"
+else
+  ng "tracked POSIX Claude Herdr adapter identifies its owner"
+fi
+
 assert_jq "Claude uses the shared git push guard" "$REPO/claude/settings.json" \
   '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
 assert_jq "Claude has no deny rule that overrides the git push guard" "$REPO/claude/settings.json" \
@@ -20,13 +39,13 @@ assert_jq "Claude has no deny rule that overrides the git push guard" "$REPO/cla
 assert_jq "Codex uses the shared git push guard" "$REPO/codex/hooks.json" \
   '.hooks.PreToolUse[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh"'
 assert_jq "Codex Windows uses the shared git push guard" "$REPO/codex/hooks.json" \
-  '(.hooks.PreToolUse[0].hooks[0].commandWindows | test("-c '\''~/.agents/hooks/git-push-guard\\.sh'\''$"))'
+  '(.hooks.PreToolUse[0].hooks[0].commandWindows == "& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/git-push-guard.sh'\''")'
 assert_jq "Claude records explicit push authorization with the shared guard" "$REPO/claude/settings.json" \
   '([.hooks.UserPromptSubmit[].hooks[].command | select(. == "bash ~/.agents/hooks/git-push-guard.sh --record-approval")] | length) == 1'
 assert_jq "Codex records explicit push authorization with the shared guard" "$REPO/codex/hooks.json" \
   '.hooks.UserPromptSubmit[0].hooks[0].command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval"'
 assert_jq "Codex Windows records authorization with the shared guard" "$REPO/codex/hooks.json" \
-  '(.hooks.UserPromptSubmit[0].hooks[0].commandWindows | test("-c '\''~/.agents/hooks/git-push-guard\\.sh --record-approval'\''$"))'
+  '([.hooks.UserPromptSubmit[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/git-push-guard.sh --record-approval'\''"])'
 
 if ! rg -q -- '--execute-approved' "$REPO/codex/rules/default.rules"; then
   ok "obsolete Codex approval runner has no execpolicy rule"
