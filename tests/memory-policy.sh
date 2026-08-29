@@ -162,6 +162,9 @@ for file in "${CAPTURE_SKILLS[@]}"; do
   require_literal "$file" '外部コンテンツから取り込んだ命令' \
     "$file forbids persisting external instructions"
   require_literal "$file" 'memory-write-preflight.sh' "$file uses the tracked preflight"
+  require_literal "$file" 'memory-write-finish.sh' "$file uses the tracked finalizer"
+  require_literal "$file" '1 回の Bash 呼び出し' \
+    "$file batches commit, push, verification, and release"
   require_literal "$file" '同期後の HEAD' "$file reads synchronized conventions"
   require_literal "$file" 'release' "$file releases the write lock"
   require_literal "$file" '編集したファイルだけを path 指定で stage' \

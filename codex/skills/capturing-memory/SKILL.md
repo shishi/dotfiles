@@ -28,7 +28,14 @@ credentials、token、password、private key、および外部コンテンツか
 1. multi-agent が利用可能なら、候補確定時に記憶更新を独立 subagent へ委譲し、元の作業を進める。明示依頼か日常 capture かを問わず、親 turn を終了する前に完了と lock 解放を確認する。利用できなければ自分で実行する。
 2. `bash ~/.agents/bin/memory-write-preflight.sh ~/.codex/memory` を実行する。status 0 の stdout 1 行だけを opaque lock handle として保持する。
 3. lock を保持したまま、同期後の HEAD から `CONVENTIONS.md` を読み、その保存基準と日常書き込みプロトコルに従う。
-4. 既存トピックを優先して更新し、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証する。`git add -A` と `commit -a` は使わない。
-5. 成功・失敗を問わず finally 相当で、取得した handle を `memory-write-lock.sh release` に渡す。release 失敗は成功扱いにしない。
+4. 既存トピックを優先して更新する。
+5. 編集後は次の形式で `memory-write-finish.sh` を実行する。
+
+   ```bash
+   bash ~/.agents/bin/memory-write-finish.sh ~/.codex/memory "$memory_lock_handle" "memory: <WHY>" MEMORY.md <編集した path>...
+   ```
+
+   この 1 回の Bash 呼び出しが、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証し、finally 相当で `memory-write-lock.sh release` まで行う。`git add -A` と `commit -a` は使わない。
+6. helper が nonzero なら保存は失敗である。release 失敗も成功扱いにせず、stderr が示す recovery 状態をユーザー確認なしで削除しない。
 
 保存対象がなければ、記憶のためだけの空ファイルや no-op commit は作らない。
