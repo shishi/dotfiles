@@ -80,6 +80,28 @@ Assert-Equal -Expected 0 -Actual $forwardResult.ExitCode -Message 'stdin forward
 Assert-Equal -Expected $payload -Actual $forwardResult.Stdout -Message 'stdin should be forwarded to Bash stdout exactly'
 Assert-Equal -Expected '' -Actual $forwardResult.Stderr -Message 'successful invocation should not write stderr'
 
+$tildeFixtureName = ".invoke-git-bash-hook-$([guid]::NewGuid().ToString('N'))"
+$tildeFixtureRoot = Join-Path $HOME $tildeFixtureName
+$tildeProbe = Join-Path $tildeFixtureRoot 'probe.sh'
+try {
+    New-Item -ItemType Directory -Path $tildeFixtureRoot | Out-Null
+    [IO.File]::WriteAllText(
+        $tildeProbe,
+        "#!/usr/bin/env bash`nprintf %s tilde-path-probe`n",
+        [Text.UTF8Encoding]::new($false)
+    )
+
+    $tildeResult = Invoke-Launcher -Command "~/$tildeFixtureName/probe.sh"
+    Assert-Equal -Expected 0 -Actual $tildeResult.ExitCode -Message 'tilde-prefixed path command should succeed'
+    Assert-Equal -Expected 'tilde-path-probe' -Actual $tildeResult.Stdout -Message 'Bash should expand the tilde-prefixed command path'
+    Assert-Equal -Expected '' -Actual $tildeResult.Stderr -Message 'tilde-prefixed path command should not write stderr'
+}
+finally {
+    if (Test-Path -LiteralPath $tildeFixtureRoot) {
+        Remove-Item -LiteralPath $tildeFixtureRoot -Recurse -Force
+    }
+}
+
 $stderrMarker = 'invoke-git-bash-hook-stderr-probe'
 $stderrResult = Invoke-Launcher -Command "printf '%s\n' '$stderrMarker' >&2"
 Assert-Equal -Expected 0 -Actual $stderrResult.ExitCode -Message 'stderr forwarding command should succeed'

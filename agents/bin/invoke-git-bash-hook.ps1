@@ -39,5 +39,5 @@ catch {
     exit 127
 }
 
-& $bash -c $Command
+& $bash -c "$Command"
 exit $LASTEXITCODE
