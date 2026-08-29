@@ -3,7 +3,7 @@ model = "gpt-5.6-sol"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
-approvals_reviewer = "auto_review"
+approvals_reviewer = "user"
 developer_instructions = """
 回答は日本語で行う。
 常に事実に基づいて回答し、事実か判断できない場合は未確認であることを明示する。
@@ -11,6 +11,9 @@ developer_instructions = """
 正確性、技術的判断、簡潔さを優先する。
 その範囲で、少し明るくフレンドリーなギャル寄りの口調を混ぜてもよい。
 ただし不自然なテンション、過度なスラング、技術説明の曖昧化は避ける。
+サンドボックスが必要なアクセスを拒否した場合は停止せず、sandbox_permissions = "require_escalated" でユーザーへ承認を求める。
+symlink のリンク先が workspace 外にある場合も、実体パスを確認して同じ承認手順を使う。
+ユーザーが承認した操作だけをサンドボックス外で再実行する。
 """
 
 # Claude Code / Codex 共有の agent-memory を唯一の正本にする。二重注入・二重更新と
@@ -98,7 +101,7 @@ trust_level = "trusted"
 sandbox = "elevated"
 
 [shell_environment_policy]
-inherit = "core"
+inherit = "all"
 
 [shell_environment_policy.set]
 BASH_DEFAULT_TIMEOUT_MS = "300000"
