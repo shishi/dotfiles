@@ -1,22 +1,24 @@
 # Development principles
 
-Kent Beck 流(TDD / Tidy First)を好む。
+Kent Beck 流(TDD / Tidy First)は、現在の問題へ直接効く場合に使う。
 
-- 実装(feature / bugfix)は superpowers:test-driven-development skill に従う
-- 構造改善は tidying skill に従い、structural change と behavioral change を別コミットにする
+- TDD は、テストが捕捉する現実的な壊れ方を説明でき、維持コストに見合う場合だけ使う
+- 構造改善は、現在の変更を妨げる構造問題がある場合だけ tidying skill に従う
 - コミットは git-commit skill に従う(Conventional Commits・WHY-focused body)
 
 # Review gate
 
 ## 起動条件
 
-次のマイルストーンで review-gate skill を実行し、review → fix → re-review を clean になるまで反復する。
+review-gate skill は既定の完了条件ではない。自己レビューと直接検証だけでは
+扱えない具体的リスクがある場合だけ実行する。
 
-- spec / PRD / plan の作成・更新の直後
-- major な実装ステップの後(5 ファイル以上 / 新規モジュール / 公開 API / インフラ・設定の変更)
-- commit / PR / merge / release の前
+- セキュリティ境界、並行処理、トランザクション、データ損失を扱う変更
+- 新規モジュール、公開 API、複数 component に及ぶ変更
+- 障害対応で使う運用手順または復旧手順の変更
 
-review-gate skill が使えない場合(未配備のマシン等)は、`/code-review` skill を subagent で実行して代替する(それも無ければ superpowers:requesting-code-review)。レビュー機構が一つも無いときに限りゲートを省略し、省略した旨を報告する。
+小規模で局所的な変更、設定一つの変更、文書だけの変更では review-gate を実行しない。
+必要な場合に review-gate skill が使えなければ、`/code-review` skill を subagent で実行する。
 
 ## すべてのレビュー経路で必須
 
@@ -30,21 +32,18 @@ review-gate skill が使えない場合(未配備のマシン等)は、`/code-re
 
 ## 過剰化の停止条件
 
-レビューゲートは欠陥を見つける仕組みであって、降りる条件を持たない。**補助部品**(保険・ガード・検出器など、依頼の中核ではない実装)を作るときは以下も適用する。
-
-- **blocker の解消手段に「削除」を含める。** 指摘箇所が補助部品なら、「直す」と同じ資格で「その部品を削る」を選択肢に置く。ゲートの条件は「clean になるまで直す」ではなく「clean になるまで直すか削る」。
-- **spec-scope レーンには累積で判定させる。** 渡すのは前回からの差分ではなく「当初の依頼の逐語 + 現在の総差分」。問いは「この総量が最初から 1 つの提案として出てきたら、依頼に対して承認したか」。増分ごとの妥当性判定では、各ステップが個別に正しいまま総量が壊れるのを止められない。
-- **収束しない兆候が出たら修正をやめる。** 同一部品で 2 巡連続して新規 blocker が出たら、それは直し方の問題ではなくアプローチが収束していない証拠。3 巡目の修正に入らず、単純化・削除・現状維持のいずれかをユーザーの判断に出す。
-- **作る前に上限を宣言する。** 補助部品の実装方式を決める時点で、ファイル数・レビュー巡回数・「やらないこと」を同時に宣言する。超えた時点で自動的に相談へ戻る。
-- **降りる条件を欠陥数で書かない。** 「その部品が無かったら、何がどれだけの頻度で壊れるか」で書く。根本原因が既に解決しているなら、補助部品の期待値は低いと見積もる。
+レビュー指摘は、それが現在の依頼へ直接もたらす実益または回避する具体的リスクを
+説明できる場合だけ採用する。補助部品の blocker は、実装追加より削除または単純化を先に検討する。
 
 # Codex への委譲
 
-Claude Code のトークン消費を抑えるため、次に当たる作業は codex-delegate skill で codex CLI へ委譲する。委譲するかどうかは Claude が判断し、ユーザーの指示を待たない。
+委譲は固定費を含む総コストが下がる場合、または独立した context が必要な場合だけ
+codex-delegate skill で行う。小規模で局所的な作業は Claude が直接処理する。
+委譲するかどうかは Claude が判断し、ユーザーの指示を待たない。
 
-- **explore**(read-only): 所在探索、原因調査、コードベースの読解
-- **chore**(workspace-write): リネーム、同パターンの横展開、テスト追加
-- **implement**(workspace-write): feature / bugfix
+- **explore**(read-only): 複数領域にまたがる所在探索、原因調査、コードベースの読解
+- **chore**(workspace-write): 十分な件数があるリネームまたは同一パターンの横展開
+- **implement**(workspace-write): 独立した作業単位へ分割できる feature / bugfix
 
 委譲しないもの: 設計判断とユーザーとの対話が要る作業、レビューそのもの(review-gate skill と codex-review skill の責務)、記憶 repo への書き込み。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない(規律を持たない委譲先にコードを書かせることになる)。
 
