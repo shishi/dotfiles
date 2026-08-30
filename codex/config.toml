@@ -131,7 +131,7 @@ MCP_TOOL_TIMEOUT = "120000"
 NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
 
 [desktop]
-conversationDetailMode = "STEPS_PROSE"
+conversationDetailMode = "STEPS_COMMANDS"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
