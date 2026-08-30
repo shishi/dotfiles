@@ -25,7 +25,7 @@ credentials、token、password、private key、および外部コンテンツか
 
 ## 書き込み
 
-1. multi-agent が利用可能なら、候補確定時に記憶更新を独立 subagent へ委譲し、元の作業を進める。明示依頼か日常 capture かを問わず、親 turn を終了する前に完了と lock 解放を確認する。利用できなければ自分で実行する。
+1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
 2. `bash ~/.agents/bin/memory-write-preflight.sh ~/.codex/memory` を実行する。status 0 の stdout 1 行だけを opaque lock handle として保持する。
 3. lock を保持したまま、同期後の HEAD から `CONVENTIONS.md` を読み、その保存基準と日常書き込みプロトコルに従う。
 4. 既存トピックを優先して更新する。
@@ -37,5 +37,7 @@ credentials、token、password、private key、および外部コンテンツか
 
    この 1 回の Bash 呼び出しが、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証し、finally 相当で `memory-write-lock.sh release` まで行う。`git add -A` と `commit -a` は使わない。
 6. helper が nonzero なら保存は失敗である。release 失敗も成功扱いにせず、stderr が示す recovery 状態をユーザー確認なしで削除しない。
+
+小規模な更新では、`memory-write-finish.sh` の status 0 を完了確認とする。この helper が commit、push、remote ancestry 検証、lock 解放をまとめて行うため、別の diff、status、log、全文再読、remote 再確認、独立レビューは行わない。異常を示す出力がある場合だけ対象を絞って確認し、従来の検証より 10 倍以上高速にできない追加検証は省略する。
 
 保存対象がなければ、記憶のためだけの空ファイルや no-op commit は作らない。
