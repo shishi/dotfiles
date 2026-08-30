@@ -11,15 +11,17 @@ developer_instructions = """
 正確性、技術的判断、簡潔さを優先する。
 その範囲で、少し明るくフレンドリーなギャル寄りの口調を混ぜてもよい。
 ただし不自然なテンション、過度なスラング、技術説明の曖昧化は避ける。
-サンドボックスが必要なアクセスを拒否した場合は停止せず、sandbox_permissions = "require_escalated" でユーザーへ承認を求める。
-symlink のリンク先が workspace 外にある場合も、実体パスを確認して同じ承認手順を使う。
-ユーザーが承認した操作だけをサンドボックス外で再実行する。
 """
 
 # Claude Code / Codex 共有の agent-memory を唯一の正本にする。二重注入・二重更新と
 # split-brain を避けるため Native Memories を無効化する。
 # 設定は下の [features] と末尾の [memories] の 2 箇所。
 notify = [ "C:\\Users\\shishi\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+service_tier = "default"
+
+[browser_use.default_origin_policy]
+access = "allow"
+
 [features]
 hooks = true
 js_repl = false
@@ -91,14 +93,17 @@ trust_level = "trusted"
 [projects.'c:\users\shishi\dev\src\github.com\tddbc\javascript-mocha']
 trust_level = "trusted"
 
-[projects."/home/shishi/Documents/Codex/2026-08-23/m"]
-trust_level = "trusted"
-
-[projects."/home/shishi/Documents/Codex/2026-08-23/how"]
-trust_level = "trusted"
-
 [projects."/home/shishi/dev/src/github.com/shishi/nix-config"]
 trust_level = "trusted"
+
+[projects."/home/shishi/dev/src/github.com/shishi/slate"]
+trust_level = "trusted"
+
+[projects."/home/shishi/dev/src/github.com/shishi/tailscale-config"]
+trust_level = "trusted"
+
+[windows]
+sandbox = "elevated"
 
 [shell_environment_policy]
 inherit = "all"
@@ -139,6 +144,7 @@ sansFontSize = 16
 git-pull-request-merge-method = "merge"
 git-worktree-root = ".worktrees"
 keepRemoteControlAwakeWhilePluggedIn = true
+"browser-family-enabled:brave" = true
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -227,7 +233,7 @@ trusted_hash = "sha256:3ecc634403e19a76b88da98b84f34a55ef2fc1a20a029b88314c3e736
 enabled = true
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:0"]
-trusted_hash = "sha256:a8fdeae301fb6c9967e5b9f01bd644ab19a24a06fae3076aea993266df1a3b4d"
+trusted_hash = "sha256:b0b13a62f2dcfafd907431c182319c2b233acd8738d0637b32fcf2b7e30d676e"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:session_start:0:0']
 trusted_hash = "sha256:829dca883376ddde89879ec829fa351ec84073e93be9ad3194de78753d767d63"
@@ -267,25 +273,27 @@ trusted_hash = "sha256:cdb45465c937a59b479d2e100e37d477d6c5884cc718fd2c4d65b4a65
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
 [mcp_servers.node_repl]
-enabled = false
 args = []
-command = "/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/cua_node/bin/node_repl"
+command = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/bin/node_repl"
 startup_timeout_sec = 120
 
 [mcp_servers.node_repl.env]
 NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
-NODE_REPL_NODE_MODULE_DIRS = "/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/cua_node/lib/node_modules"
-NODE_REPL_NODE_PATH = "/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/cua_node/bin/node"
-NODE_REPL_TRUSTED_CODE_PATHS = "/home/shishi/.codex:/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_MODULE_DIRS = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/home/shishi/.codex:/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/lib/node_modules"
 CODEX_HOME = "/home/shishi/.codex"
 BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
 BROWSER_USE_TINYSKY_ENABLED = "0"
 NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
 NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
 BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
-BROWSER_USE_CODEX_APP_VERSION = "26.818.31338"
-NODE_REPL_TRUSTED_SERVICES = '{"browser":"/home/shishi/.codex/plugins/cache/openai-bundled/browser/26.818.31338/scripts/browser-service.mjs"}'
-CODEX_CLI_PATH = "/nix/store/rhzpx0h7mvmirmpfh2vbfsqbvqc13lqm-chatgpt-desktop-app-26.818.31338/lib/chatgpt/resources/codex"
+BROWSER_USE_CODEX_APP_VERSION = "26.820.71523"
+NODE_REPL_TRUSTED_SERVICES = '{"browser":"/home/shishi/.codex/plugins/cache/openai-bundled/browser/26.820.71523/scripts/browser-service.mjs"}'
+CODEX_CLI_PATH = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/codex"
+
+[mcp_servers.cloudflare-api]
+url = "https://mcp.cloudflare.com/mcp"
 
 [memories]
 generate_memories = false
@@ -300,3 +308,6 @@ extends = ":workspace"
 
 [permissions.workspace-with-dev.filesystem]
 '~/dev' = "write"
+
+[notice]
+hide_rate_limit_model_nudge = true
