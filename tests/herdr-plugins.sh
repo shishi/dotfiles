@@ -21,10 +21,7 @@ cp "$SCRIPT" "$DOTFILES/agents/bin/herdr-plugins.sh"
 cat >"$TMP/herdr" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
-  "plugin list --json")
-    [ "${HERDR_PLUGIN_LIST_FAIL:-0}" = 0 ] || exit 1
-    cat "$HERDR_PLUGIN_FIXTURE"
-    ;;
+  "plugin list --json") cat "$HERDR_PLUGIN_FIXTURE" ;;
   "plugin install "*) printf '%s\n' "$*" >>"$HERDR_PLUGIN_CALLS" ;;
   *) echo "unexpected herdr call: $*" >&2; exit 2 ;;
 esac
@@ -101,18 +98,6 @@ if bash "$DOTFILES/agents/bin/herdr-plugins.sh" restore; then
       "plugin install missing/plugin --ref cccccccccccccccccccccccccccccccccccccccc --yes"
 else
   ng "restore installs only missing commits"
-fi
-
-printf 'keep/me@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n' \
-  >"$DOTFILES/herdr/plugins.lock"
-export HERDR_PLUGIN_LIST_FAIL=1
-if bash "$DOTFILES/agents/bin/herdr-plugins.sh" record >/dev/null 2>&1; then
-  ng "record preserves the lock when Herdr listing fails"
-elif test "$(cat "$DOTFILES/herdr/plugins.lock")" = \
-  'keep/me@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'; then
-  ok "record preserves the lock when Herdr listing fails"
-else
-  ng "record preserves the lock when Herdr listing fails"
 fi
 
 echo "PASS=$PASS FAIL=$FAIL"

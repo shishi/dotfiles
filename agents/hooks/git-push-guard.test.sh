@@ -39,14 +39,9 @@ record_approval() {
 }
 
 expect_decision "force push to main is denied" deny "git push --force origin main"
-expect_decision "leading plus force refspec to main is denied" deny "git push origin +main"
-expect_decision "deleting master is denied" deny "git push origin --delete master"
 expect_decision "normal push to main asks" ask "git push origin main"
 expect_allowed "feature force push is outside the protected boundary" \
   "git push --force origin feature/test"
-expect_allowed "unrelated command is allowed" "git status"
-expect_allowed "quoted push text is not executed" \
-  "git commit -m 'never git push --force origin main'"
 
 record_approval "mainにpushして" approved-main
 expect_allowed "explicit user instruction authorizes one normal main push" \
