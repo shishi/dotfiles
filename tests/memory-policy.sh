@@ -130,6 +130,18 @@ for file in "${SKILLS[@]}"; do
     "$file uses evidence rather than recency to resolve contradictions"
   forbid_regex "$file" '矛盾を最新値で解決した' \
     "$file does not keep the obsolete latest-wins checklist"
+  require_literal "$file" 'frontmatter の `type` だけでなく本文の適用範囲' \
+    "$file audits memory placement from content rather than metadata alone"
+  require_literal "$file" 'フックが注入する指示' \
+    "$file compares memory against runtime hook instructions"
+  require_literal "$file" '実際の注入出力' \
+    "$file measures the effective injected memory payload"
+  require_literal "$file" '設定仕様で定義された単位' \
+    "$file compares injected output with its limit using the configured unit"
+  require_literal "$file" '整理プロトコルを正本として従う' \
+    "$file delegates the memory-repository workflow to synchronized conventions"
+  forbid_regex "$file" 'git switch -c consolidation/<YYYY-MM-DD>|git push origin HEAD.*レビュー' \
+    "$file does not retain the obsolete hard-coded consolidation workflow"
   if [[ "$file" == *'/codex/'* ]]; then
     require_literal "$file" 'AGENTS.md にもあることだけを理由に `CORE.md` の価値観を削除しない' \
       "$file preserves global values even when AGENTS.md also enforces them"
@@ -137,6 +149,11 @@ for file in "${SKILLS[@]}"; do
     require_literal "$file" 'CLAUDE.md にもあることだけを理由に `CORE.md` の価値観を削除しない' \
       "$file preserves global values even when CLAUDE.md also enforces them"
   fi
+done
+
+for file in "${INSTRUCTIONS[@]}"; do
+  require_literal "$file" '同期後の `CONVENTIONS.md` にある' \
+    "$file delegates consolidation to synchronized memory conventions"
 done
 
 for file in "${CAPTURE_SKILLS[@]}"; do

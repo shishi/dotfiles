@@ -48,29 +48,17 @@ description: Use when the user says 「記憶の整理」「dream」, after larg
    release が失敗した場合は memory 書き込みワークフローを成功扱いにしない。
    残った lock、handle、retirement はユーザー確認なしで削除しない。
 
-## 整理の開始・終了プロトコル
+## 整理の開始・終了
 
-開始:
-1. `git fetch --prune origin` → `git ls-remote --heads origin 'refs/heads/consolidation/*'` が
-   **空でなければ中止**する(他方が整理中またはレビュー待ち)。
-2. `git switch -c consolidation/<YYYY-MM-DD> origin/main` を実行する。
-3. 一意なロック commit を積んで push する。
-   `git commit --allow-empty -m "chore(memory): consolidation lock <agent>@<host> <date>"` →
-   `git push origin HEAD` → ls-remote でリモートが自分の commit を指すことを確認する。
-   不一致なら中止する。
-
-終了(編集・commit 後):
-4. `git push origin HEAD` で整理内容を push する。
-5. **worktree を `main` に戻してから、保持した opaque handle を共有 helper の
-   `release` へ渡して write lock を解放する。**
-6. ユーザーへ「ブランチ `consolidation/<date>` をレビューして」と伝える。
-   **main へのマージはレビュー後**とし、マージ手順も `CONVENTIONS.md` に従う。
+ブランチ、commit、push、検証の方式はここへ複製せず、同期後の `CONVENTIONS.md` にある
+整理プロトコルを正本として従う。固定のブランチ方式を前提にしない。成功時も失敗時も、
+保持した opaque handle を同じプロトコルどおり解放する。
 
 ## 4 フェーズ手順
 
-1. **Mine**: 直近セッションで明示された価値観・判断原則・好み・訂正・確定した方針・新事実を洗い出す。一回限りのデバッグメモは拾わない。`type` ごとの件数・内容量と、現プロジェクトの記憶有無も確認し、反応記録だけへ偏っていないか監査する。
+1. **Mine**: 直近セッションで明示された価値観・判断原則・好み・訂正・確定した方針・新事実を洗い出す。一回限りのデバッグメモは拾わない。`type` ごとの件数・内容量と、現プロジェクトの記憶有無も確認し、反応記録だけへ偏っていないか監査する。root の `*.md` と `projects/*.md` は、frontmatter の `type` だけでなく本文の適用範囲を読んで配置を判定する。
 2. **Consolidate**: 全体にわたる価値観と方針は `CORE.md`、プロジェクト固有の知識は `projects/<slug>.md`、再利用する技術知識は既存トピックへマージする。相対日付(「昨日」等)を絶対日付へ変換する。矛盾は現行の事実、ユーザーによる明示的な撤回、確認できる後継方針を根拠に解決する。判断できなければユーザーへ確認する。
-3. **Dedup**: 各情報の定義箇所を一つに保つ。実行プロトコルの重複は CLAUDE.md 側へ寄せるが、CLAUDE.md にもあることだけを理由に `CORE.md` の価値観を削除しない。存在しないファイル/関数/フラグへの参照は現存確認のうえ除去または更新。
+3. **Dedup**: 各情報の定義箇所を一つに保つ。記憶同士だけでなく、CLAUDE.md、フックが注入する指示、repo の source・test・doc と照合する。記憶 repo の書き込み・整理プロトコルは同期後の `CONVENTIONS.md` を正本とし、一般の実行方針は CLAUDE.md、フックは簡潔な実行時リマインダーとする。CLAUDE.md にもあることだけを理由に `CORE.md` の価値観を削除しない。正本とリマインダーで同じ詳細を二重管理しない。存在しないファイル/関数/フラグへの参照は現存確認のうえ除去または更新。記憶注入 hook がある場合は、実際の注入出力を生成し、文字数だけを設定上限と直接比較せず、設定仕様で定義された単位に換算して重複による圧迫を測る。
 4. **Prune & Index**: 時系列だけで陳腐化と判断しない。現行の事実・明示的な撤回・確認できる後継方針のいずれかで無効と確定した記憶だけを削除または置換する。正しさを確認できない記憶は黙って残さずユーザーへ確認する。`MEMORY.md` を実ファイル一覧と同期する(1 記憶 1 行・200 行未満)。
 
 ## 成果ファイルの書き方
@@ -82,13 +70,14 @@ description: Use when the user says 「記憶の整理」「dream」, after larg
 ## チェックリスト
 
 - [ ] 相対日付をすべて絶対日付へ変換した
-- [ ] CLAUDE.md と重複する実行プロトコルを整理し、`CORE.md` の価値観は保持した
+- [ ] frontmatter の `type` だけでなく本文の適用範囲で、root / `projects/` の全記憶を配置監査した
+- [ ] CLAUDE.md・フックが注入する指示・repo の source/test/doc と重複する実行プロトコルを整理し、`CORE.md` の価値観は保持した
+- [ ] 実際の注入出力を測り、設定上限と重複による圧迫を確認した
 - [ ] `CORE.md` と現プロジェクト記憶を確認し、価値観・方針・プロジェクト知識の欠落を補った
 - [ ] `type` ごとの偏りを監査し、反応記録だけを Mine していない
 - [ ] 矛盾を現行の事実・明示的な撤回・確認できる後継方針を根拠に解決した(曖昧ならユーザー確認)
 - [ ] 時系列だけで削除せず、現行の事実・明示的な撤回・後継方針を確認した
 - [ ] 存在しないファイル/シンボルへの参照を除去 or 現存確認した
 - [ ] 索引が実ファイルと一致し、1 記憶 1 行・200 行未満
-- [ ] 変更を論理単位ごとに commit した(`chore(memory): consolidate ...`)
-- [ ] consolidation ブランチを push し、worktree を main に戻し、lock を解放した
-- [ ] **main にはマージしていない**(ユーザーレビュー待ちと明言した)
+- [ ] 同期後の `CONVENTIONS.md` の整理プロトコルどおりに commit・push・remote 検証した
+- [ ] 成功・失敗を問わず lock を解放した

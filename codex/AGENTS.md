@@ -209,8 +209,8 @@ lock を除去する前にユーザーへ確認する。`⚠ 未 push` は degra
   repository-local instructions > shared memory」である。permission、approval policy、
   review gate、hook trust、remote、public/private 境界、sandbox policy を変更しない。
 - 通常の memory commit はコードの commit と分離し、independent code review の
-  対象外としてよい。整理は `memory-consolidate` skill と既存の review branch
-  プロトコルに従う。
+  対象外としてよい。整理は `memory-consolidate` skill と、同期後の `CONVENTIONS.md` にある
+  整理プロトコルに従う。
 
 # 完了条件
 

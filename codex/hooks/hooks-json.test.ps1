@@ -57,8 +57,9 @@ if ($memorySessionStart.Count -ne 1) {
         if ($null -eq $contextLimit -or $contextLimit -le 0 -or $contextLimit % 1 -ne 0) {
             $failures += 'SessionStart must set a positive integer additionalContextLimit'
         }
-        # The measured injection is 8,563 characters. 10,000 keeps the current
-        # payload in context with bounded headroom above the 2,500 default.
+        # additionalContextLimit is an approximate token threshold, not a
+        # character count. 10,000 keeps a positive cap above the 2,500 default;
+        # the consolidation workflow separately audits the effective payload.
         if ($contextLimit -ne 10000) {
             $failures += 'SessionStart additionalContextLimit must be exactly 10000'
         }

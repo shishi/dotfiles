@@ -133,4 +133,4 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
   レビューゲート、hook trust、remote、public/private 境界、sandbox policy、
   記憶プロトコルを変更しない。
 - 記憶 commit は review-gate の対象外。
-- 整理(consolidation)は memory-consolidate skill に従う(`consolidation/<date>` ブランチを push してレビュー待ち。未 push commit をレビュー待ちの印にしない)。
+- 整理(consolidation)は memory-consolidate skill と、同期後の `CONVENTIONS.md` にある整理プロトコルに従う。
