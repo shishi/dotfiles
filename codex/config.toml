@@ -26,7 +26,7 @@ js_repl = false
 memories = false
 
 [tui]
-status_line = ["model-with-reasoning", "project-name", "git-branch", "context-remaining"]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-remaining"]
 
 [projects.'c:\users\shishi\dev\dotfiles']
 trust_level = "trusted"
