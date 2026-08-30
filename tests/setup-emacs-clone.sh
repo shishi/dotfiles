@@ -6,8 +6,7 @@
 # 次回の再試行を止める。さらに link_config_dir は対象が実ディレクトリなら
 # rm -fr するため、既存の設定を消したうえで壊れたリンクだけが残る。
 #
-# tests/setup-home-links.sh は REMOTE_CONTAINERS=true を渡すのでこの分岐を通らない。
-# ここでは通したうえで、GIT_SSH_COMMAND=false により ssh を即座に失敗させ、
+# GIT_SSH_COMMAND=false により ssh を即座に失敗させ、
 # ネットワークの状態に依存せず clone を落とす。
 set -u
 
