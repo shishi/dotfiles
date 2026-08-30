@@ -37,13 +37,11 @@ review-gate skill は既定の完了条件ではない。自己レビューと�
 
 # Codex への委譲
 
-委譲は固定費を含む総コストが下がる場合、または独立した context が必要な場合だけ
-codex-delegate skill で行う。小規模で局所的な作業は Claude が直接処理する。
-委譲するかどうかは Claude が判断し、ユーザーの指示を待たない。
+Claude Code のトークン消費を抑えるため、次に当たる作業は codex-delegate skill で codex CLI へ委譲する。委譲するかどうかは Claude が判断し、ユーザーの指示を待たない。
 
-- **explore**(read-only): 複数領域にまたがる所在探索、原因調査、コードベースの読解
-- **chore**(workspace-write): 十分な件数があるリネームまたは同一パターンの横展開
-- **implement**(workspace-write): 独立した作業単位へ分割できる feature / bugfix
+- **explore**(read-only): 所在探索、原因調査、コードベースの読解
+- **chore**(workspace-write): リネーム、同パターンの横展開、テスト追加
+- **implement**(workspace-write): feature / bugfix
 
 委譲しないもの: 設計判断とユーザーとの対話が要る作業、レビューそのもの(review-gate skill と codex-review skill の責務)、記憶 repo への書き込み。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない(規律を持たない委譲先にコードを書かせることになる)。
 
