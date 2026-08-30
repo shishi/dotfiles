@@ -22,15 +22,12 @@ fi
 
 if printf '%s' "$out" | jq -e '
   .hookSpecificOutput.hookEventName == "UserPromptSubmit"
-  and (.hookSpecificOutput.additionalContext | contains("必要があると報告しただけでターンを終えるな"))
-  and (.hookSpecificOutput.additionalContext | contains("問い合わせで代替するな"))
-  and (.hookSpecificOutput.additionalContext | contains("未完了タスクが 1 件でもあれば"))
-  and (.hookSpecificOutput.additionalContext | contains("トークン消費"))
-  and (.hookSpecificOutput.additionalContext | contains("停止してよいのは"))
+  and (.hookSpecificOutput.additionalContext
+    | contains("現在の依頼へ直接もたらす実益または回避する具体的リスク"))
 ' >/dev/null 2>&1; then
-  ok "hook injects the continuation audit as UserPromptSubmit context"
+  ok "hook injects the necessity rule as UserPromptSubmit context"
 else
-  ng "hook injects the continuation audit as UserPromptSubmit context"
+  ng "hook injects the necessity rule as UserPromptSubmit context"
 fi
 
 if jq -e '
