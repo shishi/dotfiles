@@ -1,0 +1,13 @@
+onboarding = false
+
+[[keys.command]]
+key = "prefix+i"
+type = "plugin_action"
+command = "herdr-paste-image.paste-windows"
+description = "paste clipboard image as a file path"
+
+[[keys.command]]
+key = "prefix+shift+l"
+type = "plugin_action"
+command = "herdr-lazy.manage-windows"
+description = "manage plugins"

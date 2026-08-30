@@ -64,6 +64,22 @@ link_config_dir "${DOTDIR}/fish" "${XDG_CONFIG_HOME}/fish"
 link_config_dir "${DOTDIR}/nvim" "${XDG_CONFIG_HOME}/nvim"
 link_config_dir "${DOTDIR}/helix" "${XDG_CONFIG_HOME}/helix"
 
+# Herdr の設定ディレクトリには log / socket / session state が同居するため、
+# ディレクトリ全体ではなく config.toml だけを張る。plugin action id も OS ごとに
+# 異なるので source を分ける。
+case "$(uname -s)" in
+  MINGW* | MSYS*)
+    herdr_config_dir="$(cygpath -u "$APPDATA")/herdr"
+    herdr_config_source="${DOTDIR}/herdr/config.windows.toml"
+    ;;
+  *)
+    herdr_config_dir="${XDG_CONFIG_HOME}/herdr"
+    herdr_config_source="${DOTDIR}/herdr/config.unix.toml"
+    ;;
+esac
+mkdir -p "$herdr_config_dir"
+ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
+
 # agent のホーム (~/.claude ~/.codex ~/.agents/{skills,bin,hooks}) を張る。実行後は必ずこの
 # checkout を指している状態にする。既に何かが在れば .back へ退避してから張る。
 # 消さないのは、ignore された runtime (auth.json / sessions/ / history.jsonl /
@@ -827,6 +843,19 @@ if command -v claude >/dev/null 2>&1; then
   fi
 else
   echo "  result: skipped (claude not found)"
+fi
+
+# herdr-lazy 自身だけ bootstrap し、その設定を dotfiles へ張る。
+if command -v herdr >/dev/null 2>&1; then
+  herdr plugin list --plugin herdr-lazy --json \
+    | grep -Fq '"plugin_id":"herdr-lazy"' \
+    || herdr plugin install natori-hrj/herdr-lazy --yes \
+    || exit 1
+  herdr_lazy_config_dir="$(herdr plugin config-dir herdr-lazy)" || exit 1
+  case "$(uname -s)" in
+    MINGW* | MSYS*) herdr_lazy_config_dir="$(cygpath -u "$herdr_lazy_config_dir")" ;;
+  esac
+  link_config_dir "${DOTDIR}/herdr/herdr-lazy" "$herdr_lazy_config_dir" || exit 1
 fi
 
 # herdr integration(~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
