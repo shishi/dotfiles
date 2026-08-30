@@ -55,6 +55,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agents/hooks/reject-workflow-excuse.sh",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/reject-workflow-excuse.sh'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
     ]
   }
 }
