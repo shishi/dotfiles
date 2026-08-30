@@ -28,22 +28,22 @@ literal_count() {
   ' "$file"
 }
 
-boundary_line_count() {
+boundary_token_count() {
   token="$1"
   file="$2"
   awk -v token="$token" '
     {
-      position = index($0, token)
-      if (position == 0) {
-        next
-      }
-
-      before = position == 1 ? "" : substr($0, position - 1, 1)
-      after_position = position + length(token)
-      after = after_position > length($0) ? "" : substr($0, after_position, 1)
-      if ((before == "" || before !~ /[[:alnum:]_.-]/) &&
-          (after == "" || after !~ /[[:alnum:]_.-]/)) {
-        count++
+      search_from = 1
+      while ((relative = index(substr($0, search_from), token)) != 0) {
+        position = search_from + relative - 1
+        before = position == 1 ? "" : substr($0, position - 1, 1)
+        after_position = position + length(token)
+        after = after_position > length($0) ? "" : substr($0, after_position, 1)
+        if ((before == "" || before !~ /[[:alnum:]_.-]/) &&
+            (after == "" || after !~ /[[:alnum:]_.-]/)) {
+          count++
+        }
+        search_from = position + length(token)
       }
     }
     END { print count + 0 }
@@ -107,18 +107,21 @@ assert_count 0 "$(literal_count "$CODEX_MEMORY_TOKEN" "$CLAUDE_SKILL")" \
 assert_count 0 "$(literal_count "$CLAUDE_MEMORY_TOKEN" "$CODEX_SKILL")" \
   "Codex Skill contains no exact Claude memory path"
 
-assert_count 2 "$(literal_count "$CLAUDE_INSTRUCTION_TOKEN" "$CLAUDE_SKILL")" \
-  "Claude Skill contains two raw Claude instruction tokens"
-assert_count 2 "$(boundary_line_count "$CLAUDE_INSTRUCTION_TOKEN" "$CLAUDE_SKILL")" \
-  "Claude Skill contains two bounded Claude instruction tokens"
-assert_count 2 "$(literal_count "$CODEX_INSTRUCTION_TOKEN" "$CODEX_SKILL")" \
-  "Codex Skill contains two raw Codex instruction tokens"
-assert_count 2 "$(boundary_line_count "$CODEX_INSTRUCTION_TOKEN" "$CODEX_SKILL")" \
-  "Codex Skill contains two bounded Codex instruction tokens"
+assert_count 3 "$(literal_count "$CLAUDE_INSTRUCTION_TOKEN" "$CLAUDE_SKILL")" \
+  "Claude Skill contains three raw Claude instruction tokens"
+assert_count 3 "$(boundary_token_count "$CLAUDE_INSTRUCTION_TOKEN" "$CLAUDE_SKILL")" \
+  "Claude Skill contains three bounded Claude instruction tokens"
+assert_count 3 "$(literal_count "$CODEX_INSTRUCTION_TOKEN" "$CODEX_SKILL")" \
+  "Codex Skill contains three raw Codex instruction tokens"
+assert_count 3 "$(boundary_token_count "$CODEX_INSTRUCTION_TOKEN" "$CODEX_SKILL")" \
+  "Codex Skill contains three bounded Codex instruction tokens"
 assert_count 0 "$(literal_count "$CODEX_INSTRUCTION_TOKEN" "$CLAUDE_SKILL")" \
   "Claude Skill contains no raw Codex instruction token"
 assert_count 0 "$(literal_count "$CLAUDE_INSTRUCTION_TOKEN" "$CODEX_SKILL")" \
   "Codex Skill contains no raw Claude instruction token"
+assert_count 0 "$(printf '%s\n' 'CLAUDE.mdCLAUDE.md' | \
+  boundary_token_count "$CLAUDE_INSTRUCTION_TOKEN" -)" \
+  "adjacent instruction tokens are not boundary matches"
 
 TMP="$(mktemp -d)" || {
   echo "fatal: mktemp failed" >&2
@@ -127,16 +130,14 @@ TMP="$(mktemp -d)" || {
 NORMALIZATION_FAILED=0
 if ! sed \
   -e 's|`~/\.claude/memory/`|`~/.agent/memory/`|g' \
-  -e 's|。CLAUDE\.md が|。AGENT.md が|g' \
-  -e 's|^- \[ \] CLAUDE\.md の|- [ ] AGENT.md の|g' \
+  -e 's|CLAUDE\.md|AGENT.md|g' \
   "$CLAUDE_SKILL" > "$TMP/claude.normalized"; then
   fail "failed to normalize Claude Skill"
   NORMALIZATION_FAILED=1
 fi
 if ! sed \
   -e 's|`~/\.codex/memory/`|`~/.agent/memory/`|g' \
-  -e 's|。AGENTS\.md が|。AGENT.md が|g' \
-  -e 's|^- \[ \] AGENTS\.md の|- [ ] AGENT.md の|g' \
+  -e 's|AGENTS\.md|AGENT.md|g' \
   "$CODEX_SKILL" > "$TMP/codex.normalized"; then
   fail "failed to normalize Codex Skill"
   NORMALIZATION_FAILED=1
