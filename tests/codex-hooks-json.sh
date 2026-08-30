@@ -62,10 +62,14 @@ assert_jq "one UserPromptSubmit approval recorder" \
   '([.hooks.UserPromptSubmit[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval")] | length) == 1'
 assert_jq "UserPromptSubmit Windows command uses the portable launcher" \
   '([.hooks.UserPromptSubmit[]? | .hooks[]? | select(.command == "bash ~/.agents/hooks/git-push-guard.sh --record-approval") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.agents/hooks/git-push-guard.sh --record-approval'\''"])'
-assert_jq "Herdr SessionStart uses the portable launcher" \
-  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.codex/herdr-agent-state.sh session") | .commandWindows] == ["& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.codex/herdr-agent-state.sh session'\''"])'
-assert_jq "every Windows handler uses the portable launcher" \
-  '([.hooks | to_entries[] | .value[]? | .hooks[]? | .commandWindows | select(startswith("& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''") | not)] | length) == 0'
+assert_jq "Herdr SessionStart uses the generated Windows adapter" \
+  '([.hooks.SessionStart[]? | .hooks[]? | select(.command == "bash ~/.codex/herdr-agent-state.sh session") | .commandWindows] == ["powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '\''.codex/herdr-agent-state.ps1'\'') session"])'
+assert_jq "shared Bash hooks use the portable launcher on Windows" \
+  '([.hooks | to_entries[] | .value[]? | .hooks[]?
+      | select(.command | startswith("bash ~/.agents/"))
+      | .commandWindows
+      | select(startswith("& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''") | not)]
+    | length) == 0'
 assert_jq "Windows handlers contain no absolute home path" \
   '([.hooks | to_entries[] | .value[]? | .hooks[]? | (.commandWindows // "") | select(test("C:/Users/|C:\\\\Users\\\\|/Users/|/home/"; "i"))] | length) == 0'
 

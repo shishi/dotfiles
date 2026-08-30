@@ -175,7 +175,7 @@ has_herdr_command_hook() {
 
 codex_herdr_windows_command() {
   printf '%s\n' \
-    "& (Join-Path \$HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'"
+    "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path \$HOME '.codex/herdr-agent-state.ps1') session"
 }
 
 has_codex_herdr_command_hook() {
@@ -195,27 +195,37 @@ has_codex_herdr_command_hook() {
 }
 
 ensure_codex_herdr_windows_command() {
-  local config="$1" installed_command tmp windows_command
+  local config="$1" installed_command installed_windows_pattern tmp windows_command
 
   [ -f "$config" ] || return 1
   has_codex_herdr_command_hook "$config" && return 0
   installed_command="bash '$HOME/.codex/herdr-agent-state.sh' session"
+  installed_windows_pattern='^powershell(?:\.exe)? -NoProfile -ExecutionPolicy Bypass -File "[^"]+[/\\]\.codex[/\\]herdr-agent-state\.ps1" session$'
   windows_command="$(codex_herdr_windows_command)"
   jq -e \
     --arg tracked_command 'bash ~/.codex/herdr-agent-state.sh session' \
     --arg installed_command "$installed_command" \
+    --arg installed_windows_pattern "$installed_windows_pattern" \
     'any(.hooks.SessionStart[]?.hooks[]?;
       .type == "command"
-        and (.command == $tracked_command or .command == $installed_command))' \
+        and (
+          .command == $tracked_command
+            or .command == $installed_command
+            or ((.command // "") | test($installed_windows_pattern; "i"))
+        ))' \
     "$config" >/dev/null 2>&1 || return 1
   tmp="$(mktemp "${config}.XXXXXX")" || return 1
   if jq \
     --arg tracked_command 'bash ~/.codex/herdr-agent-state.sh session' \
     --arg installed_command "$installed_command" \
+    --arg installed_windows_pattern "$installed_windows_pattern" \
     --arg windows_command "$windows_command" \
     '.hooks.SessionStart |= map(
       .hooks |= map(
         if .type == "command"
+          and ((.command // "") | test($installed_windows_pattern; "i"))
+        then .command = $tracked_command | .commandWindows = $windows_command
+        elif .type == "command"
           and (.command == $tracked_command or .command == $installed_command)
         then .commandWindows = $windows_command
         else .
@@ -230,8 +240,9 @@ ensure_codex_herdr_windows_command() {
 }
 
 # herdr integration の後条件。hook エントリは tracked 設定が使うチルダ形式と、
-# herdr の installer が書く絶対パス(単引用符)形式のどちらでも満たす。
-# Codex hook は Windows 用 command も必須とする。
+# POSIX 版 herdr installer が書く絶対パス(単引用符)形式のどちらでも満たす。
+# Windows installer の absolute PowerShell command は先に tracked 形式へ正規化する。
+# Codex hook は Windows で Herdr が生成する PowerShell adapter 用 command も必須とする。
 # herdr は CLAUDE_CONFIG_DIR / CODEX_HOME を尊重するが、このステップは
 # $HOME/.claude と $HOME/.codex の tracked 構成を管理するため、herdr の呼び出し
 # からは override を外し、verifier と同じディレクトリを見せる。
@@ -846,6 +857,9 @@ elif ! herdr_integration_status_output="$(env -u CLAUDE_CONFIG_DIR -u CODEX_HOME
   herdr integration status 2>/dev/null)"; then
   echo "  herdr integration status failed"
   echo "  result: failed (continuing)"
+elif ensure_codex_herdr_windows_command "$HOME/.codex/hooks.json" \
+  && herdr_integrations_verified; then
+  echo "  result: ok"
 elif ! herdr_hook_layout_matches "$herdr_integration_status_output"; then
   echo "  result: skipped (herdr expects a different hook layout)"
 else

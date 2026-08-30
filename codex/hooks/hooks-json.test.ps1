@@ -6,6 +6,8 @@ $failures = @()
 $registered = @()
 $launcherPrefix = "& (Join-Path `$HOME '.agents/bin/invoke-git-bash-hook.ps1') '"
 $launcherPath = Join-Path $PSScriptRoot '..\..\agents\bin\invoke-git-bash-hook.ps1'
+$herdrCommand = 'bash ~/.codex/herdr-agent-state.sh session'
+$herdrWindowsCommand = "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path `$HOME '.codex/herdr-agent-state.ps1') session"
 
 if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
     $failures += 'portable Git Bash launcher is missing'
@@ -71,7 +73,9 @@ foreach ($event in $config.hooks.PSObject.Properties) {
                 $failures += "$label has no commandWindows override"
                 continue
             }
-            if (-not $handler.commandWindows.StartsWith($launcherPrefix, [StringComparison]::Ordinal)) {
+            if ($handler.command -eq $herdrCommand -and $handler.commandWindows -ne $herdrWindowsCommand) {
+                $failures += "$label does not use the generated Windows Herdr adapter"
+            } elseif ($handler.command -ne $herdrCommand -and -not $handler.commandWindows.StartsWith($launcherPrefix, [StringComparison]::Ordinal)) {
                 $failures += "$label does not use the portable Git Bash launcher"
             }
             if ($handler.commandWindows -match '(?i)C:/Users/|C:\\Users\\|/Users/|/home/') {
@@ -103,4 +107,4 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Output 'ok: every Codex hook uses the portable Git Bash launcher, and hooks.json and hooks/ agree on what exists'
+Write-Output 'ok: Codex hooks use their platform adapter, and hooks.json and hooks/ agree on what exists'

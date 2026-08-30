@@ -32,7 +32,7 @@
           {
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
             "timeout": 10
           }
         ]

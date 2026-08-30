@@ -59,7 +59,7 @@ write_herdr_hook_configs() {
 {"hooks":{"SessionStart":[{"matcher":"*","hooks":[{"type":"command","command":"bash ~/.claude/hooks/herdr-agent-state.sh session","timeout":10}]}]}}
 EOF
   cat >"${root}/dotfiles/codex/hooks.json" <<'EOF'
-{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","commandWindows":"& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.codex/herdr-agent-state.sh session'","timeout":10}]}]}}
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash ~/.codex/herdr-agent-state.sh session","commandWindows":"powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session","timeout":10}]}]}}
 EOF
 }
 
@@ -1978,7 +1978,7 @@ if [ "$(component_log_block "${T55}/setup.log" herdr-integrations)" = \
   && jq -e --arg command "bash '${T55}/home/.codex/herdr-agent-state.sh' session" \
     '[.hooks.SessionStart[]?.hooks[]? | select(.command == $command)] as $handlers
       | ($handlers | length) == 1
-        and ($handlers[0].commandWindows == "& (Join-Path $HOME '\''.agents/bin/invoke-git-bash-hook.ps1'\'') '\''~/.codex/herdr-agent-state.sh session'\''")' \
+        and ($handlers[0].commandWindows == "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '\''.codex/herdr-agent-state.ps1'\'') session")' \
     "${T55}/dotfiles/codex/hooks.json" >/dev/null; then
   ok "a partially converged fallback overwrites instead of appending duplicates"
 else
@@ -2005,6 +2005,52 @@ if [ "$(component_log_block "${T56}/setup.log" herdr-integrations)" = \
   ok "a status failure is reported as failed, not as a layout mismatch"
 else
   ng "a status failure was misreported"
+fi
+
+# (38) Windows Herdr v8 が書く absolute PowerShell command も tracked の
+# POSIX command + portable commandWindows へ戻し、再 setup 後に hook を壊さない。
+make_temp_root T57
+make_fixture "$T57"
+printf '{"hooks":{"SessionStart":[{"matcher":"*","hooks":[{"type":"command","command":"bash ~/.claude/hooks/herdr-agent-state.sh session","timeout":10}]}]}}\n' \
+  >"${T57}/dotfiles/claude/settings.json"
+windows_installed_command='powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\fixture\.codex\herdr-agent-state.ps1" session'
+jq -n --arg command "$windows_installed_command" '{
+  hooks: {
+    SessionStart: [{
+      hooks: [{type: "command", command: $command, timeout: 10}]
+    }]
+  }
+}' >"${T57}/dotfiles/codex/hooks.json"
+cat >"${T57}/bin/herdr" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "integration install"*)
+    printf '%s\n' "$*" >>"$HOME/../herdr-installs"
+    exit 0
+    ;;
+  "integration status")
+    printf 'claude: current (v8) (%s/.claude/hooks/herdr-agent-state.ps1)\n' "$HOME"
+    printf 'codex: current (v8) (%s/.codex/herdr-agent-state.ps1)\n' "$HOME"
+    exit 0
+    ;;
+esac
+exit 64
+EOF
+chmod +x "${T57}/bin/herdr"
+write_hide_herdr_bootstrap "$T57"
+SETUP_BASH_ENV="${T57}/hide-herdr-bootstrap.sh" run_setup "$T57"
+if [ "$(component_log_block "${T57}/setup.log" herdr-integrations)" = \
+    $'setup.sh: herdr-integrations\n  result: ok' ] \
+  && [ ! -e "${T57}/herdr-installs" ] \
+  && jq -e '
+    [.hooks.SessionStart[]?.hooks[]?] as $handlers
+      | ($handlers | length) == 1
+        and ($handlers[0].command == "bash ~/.codex/herdr-agent-state.sh session")
+        and ($handlers[0].commandWindows == "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '\''.codex/herdr-agent-state.ps1'\'') session")
+  ' "${T57}/dotfiles/codex/hooks.json" >/dev/null; then
+  ok "a current Windows Herdr hook converges to the tracked cross-platform command"
+else
+  ng "a current Windows Herdr hook was skipped or left non-portable"
 fi
 
 echo "---"
