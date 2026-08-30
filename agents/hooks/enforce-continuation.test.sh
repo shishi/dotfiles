@@ -24,6 +24,10 @@ if printf '%s' "$out" | jq -e '
   .hookSpecificOutput.hookEventName == "UserPromptSubmit"
   and (.hookSpecificOutput.additionalContext
     | contains("現在の依頼へ直接もたらす実益または回避する具体的リスク"))
+  and (.hookSpecificOutput.additionalContext
+    | contains("既存の宣言的設定 1 ファイルを 3 行以内で変更"))
+  and (.hookSpecificOutput.additionalContext
+    | contains("今回の変更だけを意味のある粒度で commit"))
 ' >/dev/null 2>&1; then
   ok "hook injects the necessity rule as UserPromptSubmit context"
 else
