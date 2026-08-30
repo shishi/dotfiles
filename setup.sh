@@ -845,38 +845,22 @@ else
   echo "  result: skipped (claude not found)"
 fi
 
-# herdr-lazy 自身だけ bootstrap し、その設定を dotfiles へ張る。
-if command -v herdr >/dev/null 2>&1; then
-  herdr plugin list --plugin herdr-lazy --json \
-    | grep -Fq '"plugin_id":"herdr-lazy"' \
-    || herdr plugin install natori-hrj/herdr-lazy --yes \
-    || exit 1
-  herdr_lazy_config_dir="$(herdr plugin config-dir herdr-lazy)" || exit 1
-  case "$(uname -s)" in
-    MINGW* | MSYS*) herdr_lazy_config_dir="$(cygpath -u "$herdr_lazy_config_dir")" ;;
-  esac
-  link_config_dir "${DOTDIR}/herdr/herdr-lazy" "$herdr_lazy_config_dir" || exit 1
+# GitHub plugin を tracked lock の commit へ復元する。同一 commit は再インストールせず、
+# plugin の build を setup のたびに走らせない。
+echo "setup.sh: herdr-plugins"
+if ! command -v herdr >/dev/null 2>&1; then
+  echo "  result: skipped (herdr not found)"
+elif ! command -v jq >/dev/null 2>&1; then
+  echo "  result: skipped (jq not found)"
+elif run_with_indented_output bash "${DOTDIR}/agents/bin/herdr-plugins.sh" restore; then
+  echo "  result: ok"
+else
+  echo "  result: failed (continuing)"
 fi
 
-# herdr integration(~/.claude / ~/.codex の hook)の版ズレをここで収束させる。
-# nix-config の herdr-bootstrap が PATH に居ればそれを使い(plugin 照合も内包する)、
-# 無ければ herdr 自身の公開 CLI で同じ収束を行う(private な wrapper を必須にしない)。
-# どちらも無い環境(nix 未導入)では次の home-manager switch が同じことをする。
+# herdr integration(~/.claude / ~/.codex の hook)の版ズレを公開 CLI で収束させる。
 echo "setup.sh: herdr-integrations"
-if command -v herdr-bootstrap >/dev/null 2>&1; then
-  herdr_integrations_ok=0
-  if run_with_indented_output env INSTALL_PLUGINS_QUIET=1 \
-    INSTALL_PLUGINS_SUMMARY=0 herdr-bootstrap \
-    && ensure_codex_herdr_windows_command "$HOME/.codex/hooks.json" \
-    && herdr_integrations_verified; then
-    herdr_integrations_ok=1
-  fi
-  if [ "$herdr_integrations_ok" -eq 1 ]; then
-    echo "  result: ok"
-  else
-    echo "  result: failed (continuing)"
-  fi
-elif ! command -v herdr >/dev/null 2>&1; then
+if ! command -v herdr >/dev/null 2>&1; then
   echo "  result: skipped (herdr not found)"
 elif ! command -v jq >/dev/null 2>&1; then
   # 後条件の検証(has_herdr_command_hook)が jq を要する。検証できない環境では

@@ -28,12 +28,13 @@ mkdir -p \
   "$DOTFILES/agents/bin" "$DOTFILES/agents/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
-  "$DOTFILES/nushell" "$DOTFILES/herdr/herdr-lazy" \
+  "$DOTFILES/nushell" "$DOTFILES/herdr" \
   "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agents/skills" \
   "$CONFIG_DIR" "$TMP/appdata" "$MEMORY_DIR"
 
 cp "$SETUP" "$DOTFILES/setup.sh"
 cp "$REPO/agents/bin/resolve-memory-dir.sh" "$DOTFILES/agents/bin/resolve-memory-dir.sh"
+cp "$REPO/agents/bin/herdr-plugins.sh" "$DOTFILES/agents/bin/herdr-plugins.sh"
 printf 'runtime\n' >"$HOME_DIR/.claude/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.agents/skills/local.txt"
@@ -41,6 +42,7 @@ printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
 printf '' >"$DOTFILES/herdr/config.windows.toml"
+printf '' >"$DOTFILES/herdr/plugins.lock"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$DOTFILES/claude/install-plugins.sh"
 for file in .gitconfig.linux .gitconfig.mac .gitconfig.win .gitignore.global \
   .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
@@ -62,7 +64,7 @@ printf '# Conventions\n' >"$MEMORY_DIR/CONVENTIONS.md"
 cat >"$TMP/hide-optional.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
-    case "${2:-}" in claude | herdr | herdr-bootstrap | hunk) return 1 ;; esac
+    case "${2:-}" in claude | herdr | hunk) return 1 ;; esac
   fi
   builtin command "$@"
 }

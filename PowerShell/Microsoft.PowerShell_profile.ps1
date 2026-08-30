@@ -52,6 +52,26 @@ function gd
     git diff $args
 }
 
+# Keep the tracked Herdr plugin lock in sync after successful mutations.
+function herdr
+{
+    & herdr.exe @args
+    $herdrStatus = $LASTEXITCODE
+
+    if (
+        $herdrStatus -eq 0 -and
+        $args.Count -ge 2 -and
+        $args[0] -eq 'plugin' -and
+        $args[1] -in @('install', 'uninstall')
+    ) {
+        & (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') `
+            'bash ~/.agents/bin/herdr-plugins.sh record'
+        $herdrStatus = $LASTEXITCODE
+    }
+
+    $global:LASTEXITCODE = $herdrStatus
+}
+
 # One scoop app per child process, so one failure does not abort the rest.
 # See PowerShell/scoop-update-all.ps1 for why.
 # Launched as an external 5.1 process rather than dot-called, so the exit code
