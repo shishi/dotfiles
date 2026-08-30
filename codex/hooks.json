@@ -32,8 +32,8 @@
           {
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
-            "timeout": 10
+            "timeout": 10,
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session"
           }
         ]
       }
