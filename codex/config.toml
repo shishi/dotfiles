@@ -276,7 +276,10 @@ trusted_hash = "sha256:8a2ddd3b580bba1d58185536188533bd2a8b9c4c8dbd1a5739642e486
 trusted_hash = "sha256:03f18facb3e3774aaba1d4704677ee9e647a5601d293f46f7e4bdc76a5def544"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:0:1']
-trusted_hash = "sha256:f15fde583988296da6e520b5512e5c6109a3da22019a8a4a76f5026e4608c3f1"
+trusted_hash = "sha256:6ade5a4db26551fde3c41bbd496b84d688354c804799c1a324c2ae877f29513c"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:stop:0:0']
+trusted_hash = "sha256:4f74534e0f67a528201e6888f243aff1b2d9695d199e04d077dbe1b95daa88db"
 
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true

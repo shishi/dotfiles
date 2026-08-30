@@ -48,8 +48,8 @@
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/enforce-continuation.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/enforce-continuation.sh'",
+            "command": "bash ~/.agents/hooks/task-necessity-gate.sh start",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/task-necessity-gate.sh start'",
             "timeout": 10,
             "type": "command"
           }
@@ -60,9 +60,10 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agents/hooks/reject-workflow-excuse.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/reject-workflow-excuse.sh'",
-            "timeout": 10,
+            "command": "bash ~/.agents/hooks/task-necessity-gate.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/task-necessity-gate.sh stop'",
+            "statusMessage": "依頼と差分の必要性を確認中...",
+            "timeout": 120,
             "type": "command"
           }
         ]
