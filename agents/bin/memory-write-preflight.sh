@@ -15,10 +15,6 @@ BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 warn() { echo "memory-write-preflight: $1" >&2; }
 
-# テスト専用の境界注入点。env 未設定の通常実行では no-op。
-# signal 到達窓 (マイクロ秒級) を契約テストが決定的に狙えるようにする。
-test_pause() { if [ -n "$1" ]; then sleep "$1"; fi; }
-
 # lock 保持中の全終了経路 (失敗 exit・HUP/INT/TERM) で自分の lock だけを解放する。
 # 成功時は handle の移譲完了後に preflight_owns_lock=false で解放を止める。
 preflight_owns_lock=false
@@ -106,8 +102,6 @@ if [ -z "$handle" ]; then
   warn "write lock helper returned no handle"
   exit 1
 fi
-test_pause "${PREFLIGHT_PAUSE_AFTER_ACQUIRE:-}"
-
 # 手順 3-4: lock を保持したまま前提を検証し、pull --rebase 後に再検証する。
 # git の進捗出力は stdout 1 行 (handle) の契約を守るため stderr へ流す。
 verify_repo_state "$memory_repo" pre || exit 1
@@ -122,7 +116,5 @@ trap '' HUP INT TERM PIPE
 # handle が呼び出し側へ渡って初めて解放責任が移る。出力に失敗したら自分で解放する。
 printf '%s\n' "$handle" \
   || { warn "lock handle could not be transferred"; exit 1; }
-test_pause "${PREFLIGHT_PAUSE_AFTER_TRANSFER:-}"
 preflight_owns_lock=false
-test_pause "${PREFLIGHT_PAUSE_BEFORE_EXIT:-}"
 exit 0

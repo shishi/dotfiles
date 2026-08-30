@@ -78,16 +78,16 @@ worktree へ fallback せず記憶本文を出力しません。
 
 ```bash
 for test_file in tests/*.sh; do bash "$test_file" || exit 1; done
-bash agents/hooks/inject-memory.test.sh
-bash codex/hooks/inject-memory.test.sh
+for test_file in agents/hooks/*.test.sh; do bash "$test_file" || exit 1; done
 bash -n agents/bin/*.sh agents/hooks/*.sh setup.sh tests/*.sh codex/hooks/*.sh claude/hooks/*.sh
 jq -e . claude/settings.json codex/hooks.json >/dev/null
 codex features list | rg '^memories[[:space:]]+stable[[:space:]]+false$'
 ```
 
-path gate は旧 resolver / injector 参照が無いことを確認します。setup fixture は
-`~/.agents/bin` と `~/.agents/hooks` の link target を確認します。injector と
-write-lock suite は snapshot の fail-closed と persistent handle の所有者検証を確認します。
+setup fixture は `~/.agents/bin` と `~/.agents/hooks` の link target を確認します。
+injector と memory helper の suite は commit snapshot、秘密らしい内容の非注入、lock の
+所有権、dirty worktree の拒否、指定した path だけの publish を確認します。旧 path の
+不在や agent 固有設定の全文は standing test で固定せず、関連変更時に直接確認します。
 
 macOS 環境に `pwsh` が無かったため、PowerShell 固有テストは未実行です。
 共有 hooks JSON contract は Bash と `jq` で確認しています。

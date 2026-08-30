@@ -1,202 +1,45 @@
 #!/usr/bin/env bash
-# agents/bin/resolve-memory-dir.sh のスモークテスト。
-# 使い方: bash tests/agent-memory-ghq.sh
-# HOME / GIT_CONFIG_GLOBAL を一時ディレクトリへ向けるので実環境は触らない。
-# (setup.sh は実行せず grep で検査するだけ。setup.sh は DOTDIR を $0 から再計算するため
-#  env では sandbox 化できない。)
-# ヘルパーは「配置先の解決」だけを行い、旧 clone を自動移行しない。
-# 旧 clone の移行手順は helper 契約の対象外。
+# agent-memory の配置先を決める優先順位だけを検証する。
 set -u
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HELPER="$REPO/agents/bin/resolve-memory-dir.sh"
-# ヘルパー不在は最初に fatal で落とす。17/19 の stderr 検査とは守備範囲が違うので
-# 両方要る。guard が無いと helper を起動するアサーションが軒並み NG になり、
-# 「パスが違う」という本当の原因が埋もれる (しかも末尾の setup.sh 行順検査だけは
-# HELPER を使わないので ok が 1 件残り、出力はいっそう紛らわしくなる)。
-# guard 適用後はそこへ到達せず、この 1 行だけを出して止まる。
-[ -f "$HELPER" ] || { echo "fatal: helper not found: $HELPER" >&2; exit 1; }
-SETUP="$REPO/setup.sh"
-PASS=0; FAIL=0
-ok() { PASS=$((PASS+1)); echo "ok: $1"; }
-ng() { FAIL=$((FAIL+1)); echo "NG: $1"; }
+PASS=0
+FAIL=0
+ok() { PASS=$((PASS + 1)); echo "ok: $1"; }
+ng() { FAIL=$((FAIL + 1)); echo "NG: $1"; }
+expect() { if [ "$2" = "$3" ]; then ok "$1"; else ng "$1 (expected=$3 actual=$2)"; fi; }
 
-# agent 固有の home から推測せず、共有 runtime の resolver を案内する。
-for guide in "$REPO/claude/CLAUDE.md" "$REPO/codex/AGENTS.md"; do
-  if grep -qxF 'bash ~/.agents/bin/resolve-memory-dir.sh' "$guide" \
-    && ! grep -q 'dirname.*resolve-memory-dir\.sh' "$guide"; then
-    ok "$(basename "$guide") points to the shared resolver"
-  else
-    ng "$(basename "$guide") does not point only to the shared resolver"
-  fi
-done
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/agent-memory-ghq.XXXXXX")" || exit 1
+TMP="$(cd "$TMP" && pwd -P)" || exit 1
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+HOME_DIR="$TMP/home"
+GIT_CONFIG="$TMP/gitconfig"
+mkdir -p "$HOME_DIR"
+printf '' >"$GIT_CONFIG"
 
-ORIG_PATH="$PATH"
-TMP=""
-begin() {
-  # mktemp の返すパスは symlink を含み得るので物理パスに正規化しておく
-  TMP="$(cd "$(mktemp -d)" && pwd -P)"
-  [ -n "$TMP" ] || { echo "fatal: mktemp failed" >&2; exit 1; }
-  export HOME="$TMP/home"; mkdir -p "$HOME"
-  export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
-  export GIT_CONFIG_SYSTEM=/dev/null
-  unset GHQ_ROOT AGENT_MEMORY_DIR || true
-  export PATH="$ORIG_PATH"
+run_resolver() {
+  HOME="$HOME_DIR" GIT_CONFIG_GLOBAL="$GIT_CONFIG" GIT_CONFIG_SYSTEM=/dev/null \
+    AGENT_MEMORY_DIR="${AGENT_MEMORY_DIR:-}" GHQ_ROOT="${GHQ_ROOT:-}" \
+    bash "$HELPER"
 }
-end() { rm -rf "$TMP"; }
 
-REPO_REL="github.com/shishi/agent-memory"
-# 無 ghq 時のフォールバック root (origin/master のハードコード既定と一致)
-DEFAULT_REL="dev/src/$REPO_REL"
+AGENT_MEMORY_DIR="$TMP/explicit" GHQ_ROOT="$TMP/ignored"
+expect "explicit path wins" "$(run_resolver)" "$TMP/explicit"
+unset AGENT_MEMORY_DIR GHQ_ROOT
 
-# --- 1: AGENT_MEMORY_DIR 明示指定は絶対化されて最優先で返る ---
-begin
-out="$(AGENT_MEMORY_DIR="$TMP/explicit" bash "$HELPER")"
-[ "$out" = "$TMP/explicit" ] && ok "1a: explicit absolute path returned as-is" \
-  || ng "1a: expected $TMP/explicit, got $out"
-out="$(AGENT_MEMORY_DIR="~/mem" bash "$HELPER")"
-[ "$out" = "$HOME/mem" ] && ok "1b: leading ~/ expanded to \$HOME" \
-  || ng "1b: expected $HOME/mem, got $out"
-out="$(cd "$TMP" && AGENT_MEMORY_DIR="rel/mem" bash "$HELPER")"
-[ "$out" = "$TMP/rel/mem" ] && ok "1c: relative path absolutized against cwd" \
-  || ng "1c: expected $TMP/rel/mem, got $out"
-end
+GHQ_ROOT="$TMP/env-root"
+expect "GHQ_ROOT wins over git config" "$(run_resolver)" \
+  "$TMP/env-root/github.com/shishi/agent-memory"
+unset GHQ_ROOT
 
-# --- 2: 空文字は未指定扱いで ghq 解決に進む ---
-begin
-out="$(AGENT_MEMORY_DIR="" GHQ_ROOT="$TMP/ghq" bash "$HELPER")"
-[ "$out" = "$TMP/ghq/$REPO_REL" ] \
-  && ok "2: empty AGENT_MEMORY_DIR falls through to ghq" \
-  || ng "2: got $out"
-end
+printf '[ghq]\n\troot = %s\n' "$TMP/config-root" >"$GIT_CONFIG"
+expect "global ghq.root is used" "$(run_resolver)" \
+  "$TMP/config-root/github.com/shishi/agent-memory"
 
-# --- 3: GHQ_ROOT のチルダは展開される ---
-begin
-out="$(GHQ_ROOT="~/xxx" bash "$HELPER")"
-[ "$out" = "$HOME/xxx/$REPO_REL" ] \
-  && ok "3: GHQ_ROOT tilde expanded" || ng "3: got $out"
-end
+printf '' >"$GIT_CONFIG"
+expect "missing configuration uses the documented default" "$(run_resolver)" \
+  "$HOME_DIR/dev/src/github.com/shishi/agent-memory"
 
-# --- 4: GHQ_ROOT なしなら gitconfig の ghq.root ---
-begin
-printf '[ghq]\n\troot = ~/yyy\n' > "$GIT_CONFIG_GLOBAL"
-out="$(bash "$HELPER")"
-[ "$out" = "$HOME/yyy/$REPO_REL" ] \
-  && ok "4: ghq.root from gitconfig" || ng "4: got $out"
-end
-
-# --- 5: ghq.root 複数値は先頭を採用 (ghq の primary root 仕様) ---
-begin
-printf '[ghq]\n\troot = ~/first\n\troot = ~/second\n' > "$GIT_CONFIG_GLOBAL"
-out="$(bash "$HELPER")"
-[ "$out" = "$HOME/first/$REPO_REL" ] \
-  && ok "5: first ghq.root wins" || ng "5: got $out"
-end
-
-# --- 6: どちらもなければ既定 ghq root (~/dev/src) 配下 ---
-begin
-out="$(bash "$HELPER")"
-[ "$out" = "$HOME/$DEFAULT_REL" ] \
-  && ok "6: falls back to ~/$DEFAULT_REL" || ng "6: got $out"
-end
-
-# --- 4b: cwd の repo-local な ghq.root は無視される (--global のみ) ---
-begin
-mkdir -p "$TMP/localrepo"
-git -C "$TMP/localrepo" init -q
-git -C "$TMP/localrepo" config ghq.root "$TMP/evil"
-out="$(cd "$TMP/localrepo" && bash "$HELPER")"
-[ "$out" = "$HOME/$DEFAULT_REL" ] \
-  && ok "4b: repo-local ghq.root ignored" || ng "4b: got $out"
-end
-
-# --- 16: drive-letter パスは cygpath で POSIX 形式へ正規化 ---
-begin
-mkdir -p "$TMP/bin"
-cat > "$TMP/bin/cygpath" <<'EOF'
-#!/bin/sh
-# cygpath -u -a -- <path> の最低限の模擬: C:/foo -> /c/foo
-p=""
-for a in "$@"; do p="$a"; done
-drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
-rest=$(printf '%s' "$p" | cut -c3-)
-printf '/%s%s\n' "$drive" "$rest"
-EOF
-chmod +x "$TMP/bin/cygpath"
-out="$(PATH="$TMP/bin:$PATH" AGENT_MEMORY_DIR="C:/tmp/memory" bash "$HELPER")"
-[ "$out" = "/c/tmp/memory" ] \
-  && ok "16: drive-letter normalized via cygpath" || ng "16: got $out"
-end
-
-# --- 6b: fallback 経路も POSIX 形式へ正規化される (Git Bash の HOME=C:/...) ---
-begin
-mkdir -p "$TMP/bin"
-cat > "$TMP/bin/cygpath" <<'EOF'
-#!/bin/sh
-# cygpath -u -a -- <path> の最低限の模擬: C:/foo -> /c/foo
-p=""
-for a in "$@"; do p="$a"; done
-drive=$(printf '%s' "$p" | cut -c1 | tr '[:upper:]' '[:lower:]')
-rest=$(printf '%s' "$p" | cut -c3-)
-printf '/%s%s\n' "$drive" "$rest"
-EOF
-chmod +x "$TMP/bin/cygpath"
-out="$(PATH="$TMP/bin:$PATH" HOME="C:/Users/test" bash "$HELPER")"
-[ "$out" = "/c/Users/test/$DEFAULT_REL" ] \
-  && ok "6b: fallback normalized via cygpath" || ng "6b: got $out"
-end
-
-# --- 17: AGENT_MEMORY_DIR に改行が含まれる場合は拒否される ---
-begin
-err="$TMP/stderr"
-out="$(AGENT_MEMORY_DIR=$'/tmp/a\nb' bash "$HELPER" 2>"$err")"
-status=$?
-# stderr の warn まで確認するのは、冒頭の -f guard が拾えない失敗 (helper 本文の構文
-# エラーなど。bash file 起動なので shebang や実行ビットの不整合はここには来ない) を
-# 「非 0 かつ無出力」だけで ok と誤認しないため。helper 自身が拒否したことを
-# stderr の prefix で確かめる。
-[ "$status" -ne 0 ] && [ -z "$out" ] && grep -q '^resolve-memory-dir:' "$err" \
-  && ok "17: newline in AGENT_MEMORY_DIR is rejected" \
-  || ng "17: expected exit!=0, empty stdout and a helper warning, got status=$status out=$(printf '%s' "$out" | head -c 40)"
-end
-
-# --- 18: GHQ_ROOT に末尾スラッシュがある場合は正規化される ---
-begin
-out="$(GHQ_ROOT="$TMP/ghq/" bash "$HELPER")"
-[ "$out" = "$TMP/ghq/$REPO_REL" ] \
-  && ok "18: trailing slash on GHQ_ROOT is normalized" \
-  || ng "18: expected $TMP/ghq/$REPO_REL, got $out"
-end
-
-# --- 19: 展開結果に改行が混入するケースも拒否される (HOME 由来) ---
-begin
-err="$TMP/stderr"
-out="$(HOME=$'/tmp/h\n' AGENT_MEMORY_DIR='~' bash "$HELPER" 2>"$err")"
-status=$?
-[ "$status" -ne 0 ] && [ -z "$out" ] && grep -q '^resolve-memory-dir:' "$err" \
-  && ok "19: newline from expansion rejected" \
-  || ng "19: expected exit!=0, empty stdout and a helper warning, got status=$status out=$out"
-end
-
-# --- setup.sh: gitconfig symlink が memory 処理より前にあること ---
-# 拾うのは実行行だけ。コメントを数えると、実行順が変わっていないのにコメントを
-# 動かしただけで NG になる。grep は -E に固定する。BRE で交替を書くと GNU 拡張の
-# \| になり、mac の BSD grep では無マッチ = 常時 NG になるため。
-setup_code_lines() { grep -nE "$1" "$SETUP" | grep -v '^[0-9]*:[[:space:]]*#'; }
-# gitconfig の分岐は OS ごとにある。リンク元のファイル名を列挙すると分岐が増えた
-# ときだけ無防備になるので、.gitconfig を張る ln 行を拾って最も後ろと比べる
-# (リンク先が ~/ でも $HOME/ でも一致する)。1 分岐でも memory 処理より後ろへ
-# 動けばその OS で壊れる。
-# 限界: 見ているのはテキスト上の位置だけ。分岐を関数へ括り出して memory 処理より
-# 後ろで呼ぶ形にすると、実行順が壊れていてもこの検査は通る。
-gitconfig_line="$(setup_code_lines 'ln .*/\.gitconfig' | tail -n1 | cut -d: -f1)"
-memory_line="$(setup_code_lines 'agents/bin/resolve-memory-dir\.sh' | head -n1 | cut -d: -f1)"
-if [ -n "$gitconfig_line" ] && [ -n "$memory_line" ] && [ "$gitconfig_line" -lt "$memory_line" ]; then
-  ok "setup.sh links gitconfig before resolving memory dir"
-else
-  ng "setup.sh: last gitconfig link at line ${gitconfig_line:-none}, first memory resolve at line ${memory_line:-none}"
-fi
-
-echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

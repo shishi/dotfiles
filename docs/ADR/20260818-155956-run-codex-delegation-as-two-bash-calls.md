@@ -53,7 +53,7 @@ Claude Code のトークン消費を抑えるため、探索・定型作業・�
 
 ### Confirmation
 
-`bash tests/codex-delegate.sh` が、スニペットの構文(`zsh -n` と `sh -n`)、要素の順序、`--config` の内容、出力経路のリダイレクトを検査する。これは静的検査で、codex を起動しない。
+`codex-delegate` skill の変更時は shell block を抽出し、`zsh -n` と `sh -n` で直接検証する。`--config`、出力先、後始末の順序は diff で確認し、skill 本文を写経する静的テストは置かない。
 
 実挙動のうち確認済みのもの — `-s` の実効性(`read-only` は書き込みを拒否し、`workspace-write` + `writable_roots=[]` は workspace 内を許してホームを拒否する)、`network_access` の実効性と `read-only` では効かないこと、記憶ストアの論理内容が委譲を跨いで変わらないこと、プロンプトがシェルを経由しないこと、schema の上限が実際に切ること、使用済み判定の原子性、パスの形の照合、認証失敗で作業ディレクトリが残らないこと、Bash の timeout が委譲を SIGTERM で終了させて codex の子プロセスまで届くこと、background で起動した委譲が完走して JSON が task の出力に載ること。
 
