@@ -197,7 +197,7 @@ fi
 # --- B) レビュー反復予算 ---
 skill=$(printf '%s' "$input" | jq -r '.tool_input.skill // empty' 2>/dev/null) || skill=""
 case "$skill" in
-  review-gate | codex-review | code-review | spec-scope-review | security-review | *:code-review)
+  review-gate | codex-review | code-review | spec-scope-review | security-review | *:code-review | *:requesting-code-review)
     prepare_state_dir || exit 0
     f="$state_dir/review.$sess"
     count=0
