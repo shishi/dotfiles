@@ -8,7 +8,6 @@ esac
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 SETUP="$REPO/setup.sh"
-SYSTEM_GIT="$(command -v git)"
 PASS=0
 FAIL=0
 
@@ -28,7 +27,7 @@ mkdir -p \
   "$DOTFILES/agents/bin" "$DOTFILES/agents/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
-  "$DOTFILES/nushell" "$DOTFILES/herdr/herdr-lazy" \
+  "$DOTFILES/nushell" "$DOTFILES/herdr" \
   "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agents/skills" \
   "$CONFIG_DIR" "$TMP/appdata" "$MEMORY_DIR"
 
@@ -41,28 +40,15 @@ printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
 printf '' >"$DOTFILES/herdr/config.windows.toml"
-printf '#!/usr/bin/env bash\nexit 0\n' >"$DOTFILES/claude/install-plugins.sh"
-for file in .gitconfig.linux .gitconfig.mac .gitconfig.win .gitignore.global \
-  .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
-  printf '' >"$DOTFILES/$file"
-done
-
-"$SYSTEM_GIT" -C "$MEMORY_DIR" init -q
-"$SYSTEM_GIT" -C "$MEMORY_DIR" branch -M main
-"$SYSTEM_GIT" -C "$MEMORY_DIR" config user.name test
-"$SYSTEM_GIT" -C "$MEMORY_DIR" config user.email test@example.invalid
-"$SYSTEM_GIT" -C "$MEMORY_DIR" config commit.gpgSign false
-"$SYSTEM_GIT" -C "$MEMORY_DIR" remote add origin git@github.com:shishi/agent-memory.git
-printf '# Memory\n' >"$MEMORY_DIR/MEMORY.md"
-printf '# Conventions\n' >"$MEMORY_DIR/CONVENTIONS.md"
-"$SYSTEM_GIT" -C "$MEMORY_DIR" add MEMORY.md CONVENTIONS.md
-"$SYSTEM_GIT" -C "$MEMORY_DIR" commit -qm init
+git -C "$MEMORY_DIR" init -q
+git -C "$MEMORY_DIR" -c user.name=test -c user.email=test@example.invalid \
+  -c commit.gpgSign=false commit --allow-empty -qm init
 
 # 実マシンの任意 integration は fixture の対象外。
 cat >"$TMP/hide-optional.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
-    case "${2:-}" in claude | herdr | herdr-bootstrap | hunk) return 1 ;; esac
+    case "${2:-}" in claude | herdr | hunk) return 1 ;; esac
   fi
   builtin command "$@"
 }

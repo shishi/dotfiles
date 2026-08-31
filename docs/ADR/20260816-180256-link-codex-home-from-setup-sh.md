@@ -80,7 +80,7 @@ No test asserts the contents of the tracked `config.toml`, and none classifies i
 
 `tests/setup-home-links.sh` runs the real `setup.sh` against a fixture `HOME`. It checks the contract that can lose user data: existing Claude, Codex, and personal-skill runtime moves to `.back` before the managed links replace it. It also checks both memory links and verifies that a rerun creates no extra backup.
 
-`tests/setup-emacs-clone.sh` checks that a failed clone never destroys an existing Emacs configuration or blocks the next retry. Editor links, optional integrations, and tracked configuration values have no standing text-matching tests. Their direct validators and the review diff are the source of truth.
+`tests/setup-emacs-clone.sh` checks that a failed clone never destroys an existing Emacs configuration. Editor links, optional integrations, and tracked configuration values have no standing text-matching tests. Their direct validators and the review diff are the source of truth.
 
 ## Pros and Cons of the Options
 

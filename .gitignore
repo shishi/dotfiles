@@ -1,5 +1,4 @@
 /fish/fish_variables
-/herdr/herdr-lazy/plugins.lock.[1-3]
 # マシンローカルの Claude Code 設定。追跡すると片方のマシンの許可が全マシンへ配られる。
 /.claude/settings.local.json
 /claude/*
