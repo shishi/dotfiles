@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/outward-write-readback.sh'",
+            "statusMessage": "投稿された実物を取得中...",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -50,10 +64,32 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
             "timeout": 10,
-            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HOME '.codex/herdr-agent-state.ps1') session"
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/home/shishi/.codex/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh stop'",
+            "statusMessage": "依頼と差分の必要性を確認中...",
+            "timeout": 120,
+            "type": "command"
           }
         ]
       }
@@ -83,33 +119,6 @@
             "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
             "timeout": 10,
-            "type": "command"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/outward-write-readback.sh'",
-            "statusMessage": "投稿された実物を取得中...",
-            "timeout": 30,
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh stop'",
-            "statusMessage": "依頼と差分の必要性を確認中...",
-            "timeout": 120,
             "type": "command"
           }
         ]
