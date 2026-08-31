@@ -187,6 +187,7 @@ if [ "$event" = "UserPromptSubmit" ]; then
     rm -f "$state_dir/cnt.$sess."* "$state_dir/churn.$sess."* \
       "$state_dir/review.$sess" "$state_dir/reviewmark.$sess" \
       "$state_dir/editsall.$sess" "$state_dir/testbudget.$sess" \
+      "$state_dir/cases.$sess" \
       "$state_dir"/churnok.* 2>/dev/null
     find "$state_dir" -type f -mtime +1 -delete 2>/dev/null
   fi

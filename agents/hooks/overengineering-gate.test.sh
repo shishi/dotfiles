@@ -114,5 +114,16 @@ else
   ng "fourth justified test file in one session is denied"
 fi
 
+# 9. justify 済みでもケース追加の累計が予算を超えたら deny(一括追加も同じ)
+export OVERENG_GATE_CASE_BUDGET=3
+bash "$HOOK" justify "$TMP/c.test.ts" "依頼された挙動Zの証明に必要" >/dev/null || true
+o1="$(printf '{"session_id":"sc","tool_input":{"file_path":"%s","content":"it('"'"'a'"'"', () => {})\\nit('"'"'b'"'"', () => {})"}}' "$TMP/c.test.ts" | bash "$HOOK")"
+o2="$(printf '{"session_id":"sc","tool_input":{"file_path":"%s","old_string":"x","new_string":"it('"'"'c'"'"', () => {})\\nit('"'"'d'"'"', () => {})"}}' "$TMP/c.test.ts" | bash "$HOOK")"
+if [ -z "$o1" ] && denied "$o2" && grep -q "ケース" <<<"$o2"; then
+  ok "cumulative test-case additions beyond budget are denied"
+else
+  ng "cumulative test-case additions beyond budget are denied"
+fi
+
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]
