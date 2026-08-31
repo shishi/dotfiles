@@ -206,6 +206,17 @@
         ]
       },
       {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/overengineering-gate.sh",
+            "timeout": 10,
+            "statusMessage": "過剰テストゲート確認中..."
+          }
+        ]
+      },
+      {
         "matcher": "AskUserQuestion",
         "hooks": [
           {

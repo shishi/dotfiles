@@ -9,6 +9,13 @@
             "statusMessage": "git push ガード確認中...",
             "timeout": 10,
             "type": "command"
+          },
+          {
+            "command": "bash ~/.agents/hooks/overengineering-gate.sh",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/overengineering-gate.sh'",
+            "statusMessage": "過剰テストゲート確認中...",
+            "timeout": 10,
+            "type": "command"
           }
         ],
         "matcher": "Bash"
