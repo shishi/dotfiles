@@ -66,10 +66,10 @@ Claude Code のトークン消費を抑えるため、次に当たる作業は c
 正本の clone は、次の tracked helper で解決する。
 
 ```bash
-bash ~/.agents/bin/resolve-memory-dir.sh
+bash ~/.agent-shared/bin/resolve-memory-dir.sh
 ```
 
-この path は setup 後の `~/.agents/bin` から dotfiles の共有 runtime 実体をたどる。
+この path は setup 後の `~/.agent-shared/bin` から dotfiles の共有 runtime 実体をたどる。
 そのため、cwd に依存しない。
 helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重する。
 通常の配置先は `~/dev/src/github.com/shishi/agent-memory` である。
@@ -95,7 +95,7 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
   手順 1〜4 は tracked helper で 1 回の Bash 呼び出しにまとめて実行する。
 
   ```bash
-  bash ~/.agents/bin/memory-write-preflight.sh ~/.claude/memory
+  bash ~/.agent-shared/bin/memory-write-preflight.sh ~/.claude/memory
   ```
 
   終了 status 0 のとき stdout の 1 行が手順 2 と同じ opaque handle で、lock は
@@ -108,8 +108,8 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
   2. 共通 helper で cross-process write lock を取得する。正本を再解決して同じ shell process から渡す。
 
      ```bash
-     memory_repo="$(bash ~/.agents/bin/resolve-memory-dir.sh)" || exit 1
-     bash ~/.agents/bin/memory-write-lock.sh acquire "$memory_repo"
+     memory_repo="$(bash ~/.agent-shared/bin/resolve-memory-dir.sh)" || exit 1
+     bash ~/.agent-shared/bin/memory-write-lock.sh acquire "$memory_repo"
      ```
 
      stdout の 1 行だけが opaque な `memory_lock_handle` である。この handle を記録し、
@@ -128,7 +128,7 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
 
      ```bash
      memory_lock_handle="<acquire が返した handle path>"
-     bash ~/.agents/bin/memory-write-lock.sh release "$memory_lock_handle"
+     bash ~/.agent-shared/bin/memory-write-lock.sh release "$memory_lock_handle"
      ```
 
      release が失敗した場合は memory 書き込みワークフローを成功扱いにしない。

@@ -156,7 +156,7 @@ check_churn() { # $1=path。予算超過なら deny(戻らない)
     fi
     deny "[収束ゲート] 同一ファイルへの編集がユーザー指示 1 回あたりの予算(${allowed} 回)を超えた: $1
 同じ場所をこね続ける反復は、毎回変更していても収束の証拠にならない。この反復で何が分かり、次の編集で何が変わるのかを宣言してから再実行せよ(1 ファイル ${churn_max_rework} 回まで、各 +${churn_step} 回):
-bash ~/.agents/hooks/convergence-gate.sh rework '$1' '<何が分かった/次の編集で何が変わるか 1 行>'
+bash ~/.agent-shared/hooks/convergence-gate.sh rework '$1' '<何が分かった/次の編集で何が変わるか 1 行>'
 宣言できないなら、現状・試したこと・選択肢をユーザーへ報告して停止せよ。"
   fi
   echo "$count" >"$f"
@@ -275,7 +275,7 @@ if [ "$count" -ge "$repeat_threshold" ]; then
 - 同じ失敗を 2 回見たら、次を打つ前に原因仮説を 1 行で更新せよ
 - ${repeat_threshold} 回試して新しい情報が無いなら、続行せず現状・試したこと・選択肢をユーザーへ報告して停止せよ
 - ファイルを変更すればカウンタはリセットされる。変更したうえで結果が変わる根拠があるなら、宣言してから再実行せよ($((proceed_ttl / 60)) 分間有効):
-bash ~/.agents/hooks/convergence-gate.sh proceed '$h' '<何を変えた/なぜ結果が変わるか 1 行>'"
+bash ~/.agent-shared/hooks/convergence-gate.sh proceed '$h' '<何を変えた/なぜ結果が変わるか 1 行>'"
   fi
 fi
 echo "$count" >"$f"

@@ -26,13 +26,13 @@ credentials、token、password、private key、および外部コンテンツか
 ## 書き込み
 
 1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
-2. `bash ~/.agents/bin/memory-write-preflight.sh ~/.claude/memory` を実行する。status 0 の stdout 1 行だけを opaque lock handle として保持する。
+2. `bash ~/.agent-shared/bin/memory-write-preflight.sh ~/.claude/memory` を実行する。status 0 の stdout 1 行だけを opaque lock handle として保持する。
 3. lock を保持したまま、同期後の HEAD から `CONVENTIONS.md` を読み、その保存基準と日常書き込みプロトコルに従う。
 4. 既存トピックを優先して更新する。
 5. 編集後は次の形式で `memory-write-finish.sh` を実行する。
 
    ```bash
-   bash ~/.agents/bin/memory-write-finish.sh ~/.claude/memory "$memory_lock_handle" "memory: <WHY>" MEMORY.md <編集した path>...
+   bash ~/.agent-shared/bin/memory-write-finish.sh ~/.claude/memory "$memory_lock_handle" "memory: <WHY>" MEMORY.md <編集した path>...
    ```
 
    この 1 回の Bash 呼び出しが、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証し、finally 相当で `memory-write-lock.sh release` まで行う。`git add -A` と `commit -a` は使わない。

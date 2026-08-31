@@ -101,7 +101,7 @@ case "$(uname -s)" in
   MINGW* | MSYS*) ln -sfn "$DOTDIR/.gitconfig.win" "$HOME/.gitconfig" ;;
 esac
 
-memory_dir="$(bash "$DOTDIR/agents/bin/resolve-memory-dir.sh")" || memory_dir=
+memory_dir="$(bash "$DOTDIR/agent-shared/bin/resolve-memory-dir.sh")" || memory_dir=
 if [ -n "$memory_dir" ]; then
   if [ ! -d "$memory_dir" ]; then
     mkdir -p "$(dirname "$memory_dir")"
@@ -123,10 +123,18 @@ if [ -n "$memory_dir" ]; then
 fi
 
 link_agent_home "$DOTDIR/codex" "$HOME/.codex"
-mkdir -p "$HOME/.agents"
-link_agent_home "$DOTDIR/codex/skills" "$HOME/.agents/skills"
-link_agent_home "$DOTDIR/agents/bin" "$HOME/.agents/bin"
-link_agent_home "$DOTDIR/agents/hooks" "$HOME/.agents/hooks"
+mkdir -p "$HOME/.agent-shared"
+link_agent_home "$DOTDIR/codex/skills" "$HOME/.agent-shared/skills"
+link_agent_home "$DOTDIR/agent-shared/bin" "$HOME/.agent-shared/bin"
+link_agent_home "$DOTDIR/agent-shared/hooks" "$HOME/.agent-shared/hooks"
+
+# 旧名 ~/.agents(実ディレクトリ + 個別 link)は互換 symlink に置き換える。
+# pull 済みで setup 未実行のセッションが旧 path の hook 参照で壊れないようにする
+if [ -d "$HOME/.agents" ] && [ ! -L "$HOME/.agents" ]; then
+  rm -f "$HOME/.agents/bin" "$HOME/.agents/hooks" "$HOME/.agents/skills"
+  rmdir "$HOME/.agents" 2>/dev/null || echo "setup.sh: ~/.agents is not empty; skip compat link"
+fi
+[ -e "$HOME/.agents" ] || ln -sfn "$HOME/.agent-shared" "$HOME/.agents"
 
 if [ -L "$XDG_CONFIG_HOME/nushell" ]; then
   rm "$XDG_CONFIG_HOME/nushell"
@@ -146,7 +154,7 @@ if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
 fi
 
 if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  bash "$DOTDIR/agents/bin/herdr-plugins.sh" restore \
+  bash "$DOTDIR/agent-shared/bin/herdr-plugins.sh" restore \
     || echo "setup.sh: Herdr plugin restore failed"
 fi
 
@@ -163,7 +171,7 @@ fi
 if command -v hunk >/dev/null 2>&1; then
   hunk_review_skill="$(hunk skill path hunk-review 2>/dev/null)" || hunk_review_skill=
   if [ -f "$hunk_review_skill" ]; then
-    for skill_home in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+    for skill_home in "$HOME/.claude/skills" "$HOME/.agent-shared/skills"; do
       mkdir -p "$skill_home/hunk-review"
       ln -sfn "$hunk_review_skill" "$skill_home/hunk-review/SKILL.md"
     done

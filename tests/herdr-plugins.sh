@@ -3,7 +3,7 @@
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-SCRIPT="$REPO/agents/bin/herdr-plugins.sh"
+SCRIPT="$REPO/agent-shared/bin/herdr-plugins.sh"
 PASS=0
 FAIL=0
 
@@ -15,8 +15,8 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/herdr-plugins.XXXXXX")" || exit 1
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
 DOTFILES="$TMP/dotfiles"
-mkdir -p "$DOTFILES/agents/bin" "$DOTFILES/herdr"
-cp "$SCRIPT" "$DOTFILES/agents/bin/herdr-plugins.sh"
+mkdir -p "$DOTFILES/agent-shared/bin" "$DOTFILES/herdr"
+cp "$SCRIPT" "$DOTFILES/agent-shared/bin/herdr-plugins.sh"
 
 cat >"$TMP/herdr" <<'EOF'
 #!/usr/bin/env bash
@@ -75,7 +75,7 @@ export HERDR_BIN_PATH="$TMP/herdr"
 export HERDR_PLUGIN_FIXTURE="$TMP/installed.json"
 export HERDR_PLUGIN_CALLS="$TMP/calls"
 
-if bash "$DOTFILES/agents/bin/herdr-plugins.sh" record; then
+if bash "$DOTFILES/agent-shared/bin/herdr-plugins.sh" record; then
   actual="$(grep -v '^#' "$DOTFILES/herdr/plugins.lock" | sed '/^[[:space:]]*$/d')"
   expected="$(printf '%s\n' \
     'alpha/plugins/tools/alpha@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
@@ -92,7 +92,7 @@ missing/plugin@cccccccccccccccccccccccccccccccccccccccc
 EOF
 : >"$HERDR_PLUGIN_CALLS"
 
-if bash "$DOTFILES/agents/bin/herdr-plugins.sh" restore; then
+if bash "$DOTFILES/agent-shared/bin/herdr-plugins.sh" restore; then
   assert "restore installs only missing commits" \
     test "$(cat "$HERDR_PLUGIN_CALLS")" = \
       "plugin install missing/plugin --ref cccccccccccccccccccccccccccccccccccccccc --yes"

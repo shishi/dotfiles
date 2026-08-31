@@ -3,7 +3,7 @@
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-HOOK="$REPO/agents/hooks/task-necessity-gate.sh"
+HOOK="$REPO/agent-shared/hooks/task-necessity-gate.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/task-necessity-gate.XXXXXX")" || exit 1
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 

@@ -7,8 +7,8 @@ case "$(uname -s)" in
 esac
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-HELPER="$REPO/agents/bin/memory-write-preflight.sh"
-LOCK_HELPER="$REPO/agents/bin/memory-write-lock.sh"
+HELPER="$REPO/agent-shared/bin/memory-write-preflight.sh"
+LOCK_HELPER="$REPO/agent-shared/bin/memory-write-lock.sh"
 PASS=0
 FAIL=0
 ok() { PASS=$((PASS + 1)); echo "ok: $1"; }

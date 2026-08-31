@@ -21,7 +21,7 @@ description: Use when the user says 「記憶の整理」「dream」, after larg
 まとめて実行する。
 
 ```bash
-bash ~/.agents/bin/memory-write-preflight.sh ~/.claude/memory
+bash ~/.agent-shared/bin/memory-write-preflight.sh ~/.claude/memory
 ```
 
 status 0 のとき stdout の 1 行が opaque な lock handle で、lock は保持されたまま
@@ -38,7 +38,7 @@ CLAUDE.md の手動手順 1〜4 に従う。続けて同期後の HEAD から `C
   `memory-write-finish.sh` がその path を stage できず失敗する(未 stage の削除は
   helper が stage する)。
 - 成功時も全失敗経路も、取得した handle を
-  `bash ~/.agents/bin/memory-write-lock.sh release "<handle>"` で明示的に解放する。
+  `bash ~/.agent-shared/bin/memory-write-lock.sh release "<handle>"` で明示的に解放する。
   release が失敗した場合は成功扱いにせず、残った lock、handle、retirement を
   ユーザー確認なしで削除しない。
 

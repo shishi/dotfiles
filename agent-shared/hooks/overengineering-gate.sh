@@ -143,7 +143,7 @@ deny() { # $1=path
 - 新しいテスト基盤を作るより既存テストの修正・再利用を優先する
 - 停止条件: 元の失敗を再現した / 修正がその再現を通った / 直接関係する既存テストが通った / 未確認の具体的リスクが無い — 揃ったら追加をやめる
 この追加が依頼された結果の証明に必要なら、次を実行してから同じ書き込みを再実行せよ(path は一字一句このまま):
-bash ~/.agents/hooks/overengineering-gate.sh justify '$1' '<依頼された挙動とこのテストの対応を 1 行>'
+bash ~/.agent-shared/hooks/overengineering-gate.sh justify '$1' '<依頼された挙動とこのテストの対応を 1 行>'
 宣言は $((ttl_seconds / 60)) 分間そのファイルに有効。別経路(heredoc 等)でこのゲートを迂回する書き込みは規約違反である。"
   jq -n --arg r "$rule" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'

@@ -10,7 +10,7 @@ DOTFILES="$TMP/dotfiles"
 HOME_DIR="$TMP/home"
 CONFIG_DIR="$TMP/config"
 mkdir -p \
-  "$DOTFILES/agents/bin" "$DOTFILES/agents/hooks" \
+  "$DOTFILES/agent-shared/bin" "$DOTFILES/agent-shared/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/wezterm" "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
   "$DOTFILES/nushell" "$DOTFILES/herdr" \
@@ -20,7 +20,7 @@ printf 'user config\n' >"$HOME_DIR/.emacs.d/init.el"
 printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
-printf '#!/usr/bin/env bash\nexit 1\n' >"$DOTFILES/agents/bin/resolve-memory-dir.sh"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
 
 HOME="$HOME_DIR" XDG_CONFIG_HOME="$CONFIG_DIR" REMOTE_CONTAINERS=false \
   GIT_SSH_COMMAND=false bash "$DOTFILES/setup.sh" >/dev/null 2>&1

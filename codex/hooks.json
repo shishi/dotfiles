@@ -4,22 +4,22 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agents/hooks/git-push-guard.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/git-push-guard.sh'",
+            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/git-push-guard.sh'",
             "statusMessage": "git push ガード確認中...",
             "timeout": 10,
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/overengineering-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/overengineering-gate.sh'",
+            "command": "bash ~/.agent-shared/hooks/overengineering-gate.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/overengineering-gate.sh'",
             "statusMessage": "過剰テストゲート確認中...",
             "timeout": 10,
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/convergence-gate.sh'",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
             "statusMessage": "収束ゲート確認中...",
             "timeout": 10,
             "type": "command"
@@ -33,8 +33,8 @@
         "hooks": [
           {
             "additionalContextLimit": 30000,
-            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory'",
             "timeout": 10,
             "type": "command"
           }
@@ -56,26 +56,26 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/git-push-guard.sh --record-approval'",
+            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh --record-approval",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/git-push-guard.sh --record-approval'",
             "timeout": 10,
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/enforce-continuation.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/enforce-continuation.sh'",
+            "command": "bash ~/.agent-shared/hooks/enforce-continuation.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/enforce-continuation.sh'",
             "timeout": 10,
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/task-necessity-gate.sh start",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/task-necessity-gate.sh start'",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh start",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh start'",
             "timeout": 10,
             "type": "command"
           },
           {
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/convergence-gate.sh'",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
             "timeout": 10,
             "type": "command"
           }
@@ -86,8 +86,8 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agents/hooks/task-necessity-gate.sh stop",
-            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/task-necessity-gate.sh stop'",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh stop'",
             "statusMessage": "依頼と差分の必要性を確認中...",
             "timeout": 120,
             "type": "command"

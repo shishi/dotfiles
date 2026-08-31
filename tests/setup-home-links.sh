@@ -24,18 +24,18 @@ HOME_DIR="$TMP/home"
 CONFIG_DIR="$TMP/config"
 MEMORY_DIR="$TMP/agent-memory"
 mkdir -p \
-  "$DOTFILES/agents/bin" "$DOTFILES/agents/hooks" \
+  "$DOTFILES/agent-shared/bin" "$DOTFILES/agent-shared/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
   "$DOTFILES/nushell" "$DOTFILES/herdr" \
-  "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agents/skills" \
+  "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agent-shared/skills" \
   "$CONFIG_DIR" "$TMP/appdata" "$MEMORY_DIR"
 
 cp "$SETUP" "$DOTFILES/setup.sh"
-cp "$REPO/agents/bin/resolve-memory-dir.sh" "$DOTFILES/agents/bin/resolve-memory-dir.sh"
+cp "$REPO/agent-shared/bin/resolve-memory-dir.sh" "$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
 printf 'runtime\n' >"$HOME_DIR/.claude/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
-printf 'runtime\n' >"$HOME_DIR/.agents/skills/local.txt"
+printf 'runtime\n' >"$HOME_DIR/.agent-shared/skills/local.txt"
 printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
@@ -72,10 +72,10 @@ resolves_to() {
 run_setup
 assert "Claude home is linked" resolves_to "$HOME_DIR/.claude" "$DOTFILES/claude"
 assert "Codex home is linked" resolves_to "$HOME_DIR/.codex" "$DOTFILES/codex"
-assert "personal skills are linked" resolves_to "$HOME_DIR/.agents/skills" "$DOTFILES/codex/skills"
+assert "personal skills are linked" resolves_to "$HOME_DIR/.agent-shared/skills" "$DOTFILES/codex/skills"
 assert "Claude runtime is preserved in backup" test -f "$HOME_DIR/.claude.back/history.jsonl"
 assert "Codex runtime is preserved in backup" test -f "$HOME_DIR/.codex.back/history.jsonl"
-assert "personal skill runtime is preserved in backup" test -f "$HOME_DIR/.agents/skills.back/local.txt"
+assert "personal skill runtime is preserved in backup" test -f "$HOME_DIR/.agent-shared/skills.back/local.txt"
 assert "Claude memory uses the canonical private repo" resolves_to "$DOTFILES/claude/memory" "$MEMORY_DIR"
 assert "Codex memory uses the canonical private repo" resolves_to "$DOTFILES/codex/memory" "$MEMORY_DIR"
 

@@ -177,7 +177,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/git-push-guard.sh",
+            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh",
             "timeout": 10,
             "statusMessage": "git push ガード確認中..."
           },
@@ -195,7 +195,7 @@
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10,
             "statusMessage": "収束ゲート確認中..."
           }
@@ -206,7 +206,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10,
             "statusMessage": "レビュー反復予算を確認中..."
           }
@@ -227,13 +227,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/overengineering-gate.sh",
+            "command": "bash ~/.agent-shared/hooks/overengineering-gate.sh",
             "timeout": 10,
             "statusMessage": "過剰テストゲート確認中..."
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10,
             "statusMessage": "収束カウンタをリセット中..."
           }
@@ -285,7 +285,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/inject-memory.sh ~/.claude/memory",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory",
             "timeout": 10,
             "statusMessage": "個人記憶を注入中..."
           }
@@ -321,22 +321,22 @@
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/git-push-guard.sh --record-approval",
+            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh --record-approval",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/enforce-continuation.sh",
+            "command": "bash ~/.agent-shared/hooks/enforce-continuation.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/task-necessity-gate.sh start",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh start",
             "timeout": 10
           }
         ]
@@ -347,7 +347,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agents/hooks/task-necessity-gate.sh stop",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
             "timeout": 120,
             "statusMessage": "依頼と差分の必要性を確認中..."
           }

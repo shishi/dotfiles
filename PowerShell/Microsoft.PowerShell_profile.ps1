@@ -64,8 +64,8 @@ function herdr
         $args[0] -eq 'plugin' -and
         $args[1] -in @('install', 'uninstall')
     ) {
-        & (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') `
-            'bash ~/.agents/bin/herdr-plugins.sh record'
+        & (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') `
+            'bash ~/.agent-shared/bin/herdr-plugins.sh record'
         $herdrStatus = $LASTEXITCODE
     }
 

@@ -3,7 +3,7 @@
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-HELPER="$REPO/agents/bin/memory-write-lock.sh"
+HELPER="$REPO/agent-shared/bin/memory-write-lock.sh"
 PASS=0
 FAIL=0
 ok() { PASS=$((PASS + 1)); echo "ok: $1"; }

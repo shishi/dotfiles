@@ -3,7 +3,7 @@
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-HELPER="$REPO/agents/bin/resolve-memory-dir.sh"
+HELPER="$REPO/agent-shared/bin/resolve-memory-dir.sh"
 PASS=0
 FAIL=0
 ok() { PASS=$((PASS + 1)); echo "ok: $1"; }
