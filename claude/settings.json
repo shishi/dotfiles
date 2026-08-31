@@ -333,6 +333,23 @@
             "type": "command",
             "command": "bash ~/.agents/hooks/convergence-gate.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/task-necessity-gate.sh start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/task-necessity-gate.sh stop",
+            "timeout": 120,
+            "statusMessage": "依頼と差分の必要性を確認中..."
           }
         ]
       }
