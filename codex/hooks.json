@@ -25,7 +25,7 @@
       {
         "hooks": [
           {
-            "additionalContextLimit": 10000,
+            "additionalContextLimit": 30000,
             "command": "bash ~/.agents/hooks/inject-memory.sh ~/.codex/memory",
             "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/inject-memory.sh ~/.codex/memory'",
             "timeout": 10,
