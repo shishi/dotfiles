@@ -94,8 +94,10 @@ spec-scope は照合相手が差分の外にあるため、上の前置きだけ
 ## 反復と clean 判定
 
 - **review-gate 経由では 1 パスのみ**(反復ループ・修正適用・引用検証は gate の責務)
-- **単独発動時のみ**この skill が反復を回す: 指摘の引用を検証(引用不一致は棄却・記録)→
-  blocker/should を修正 → secrets-scan → 同モード再実行。clean 判定:
+- **単独発動時のみ**この skill が反復を回す(**2 周まで**。予算到達で残件があれば採否と
+  理由を列挙して停止・報告): 指摘の引用を検証(引用不一致は棄却・記録)→ 採否判定
+  (指摘は採用命令ではない。現在の依頼への実益か回避する具体的リスクを説明できるものだけ
+  修正し、他は理由付きで棄却)→ 修正 → secrets-scan → 同モード再実行。clean 判定:
   correctness = blocker/should ゼロ(note は任意対応)/ adversarial = safe 相当の結論 /
   spec-scope = blocker/should ゼロ、**かつ「判断できない」と判定された要件が無いこと**
 - **spec-scope の「判断できない」は clean に数えない。** blocker / should / note のいずれでもない
