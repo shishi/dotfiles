@@ -217,7 +217,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/doc-no-narrative.sh",
+            "command": "bash ~/.agent-shared/hooks/doc-no-narrative.sh",
             "timeout": 10
           }
         ]

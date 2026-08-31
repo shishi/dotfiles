@@ -23,6 +23,12 @@
             "statusMessage": "収束ゲート確認中...",
             "timeout": 10,
             "type": "command"
+          },
+          {
+            "command": "bash ~/.agent-shared/hooks/doc-no-narrative.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/doc-no-narrative.sh'",
+            "timeout": 10,
+            "type": "command"
           }
         ],
         "matcher": "Bash"

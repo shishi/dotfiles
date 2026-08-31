@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
-# PreToolUse (Write|Edit) — Markdown を書く瞬間にドキュメントの規則を差し込む。
+# PreToolUse — Markdown を書く瞬間にドキュメントの規則を差し込む。
+# Claude は Write|Edit(file_path)、codex は Bash の apply_patch(command)で書くため
+# 両方の入力形を受ける。
 #
 # 規則の本文は agent-memory の writing-decision-docs / usage-docs-in-readme にあるが、
 # セッションに注入されるのは索引だけなので「書く瞬間」には結びつかない。
 # harness 側から出すことでエージェントの記憶や判断に依存させない。block はしない。
 set -o pipefail
 
-path=$(jq -r '.tool_input.file_path // empty')
-[ -z "$path" ] && exit 0
+input=$(cat)
+path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
+cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 
-case "$path" in
-  *.md | *.mdx) ;;
-  *) exit 0 ;;
-esac
+if [ -n "$path" ]; then
+  case "$path" in
+    *.md | *.mdx) ;;
+    *) exit 0 ;;
+  esac
+elif [ -n "$cmd" ]; then
+  case "$cmd" in
+    *"*** Begin Patch"* | *apply_patch*) ;;
+    *) exit 0 ;;
+  esac
+  LC_ALL=C grep -Eq '^\*\*\* (Add|Update) File: .*\.(md|mdx)[[:space:]]*$' <<<"$cmd" || exit 0
+else
+  exit 0
+fi
 
 read -r -d '' msg <<'EOF'
 [docs] ドキュメントは読者のためのもので、経緯の記録場所ではない。
