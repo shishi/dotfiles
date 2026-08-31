@@ -139,7 +139,7 @@ cmd_rework() {
 check_churn() { # $1=path。予算超過なら deny(戻らない)
   local key f okf count ext rest allowed
   key=$(hash_key "$1")
-  f="$state_dir/churn.$sess.$key"
+  f="$state_dir/churn.$key"
   count=0
   [ -f "$f" ] && IFS= read -r count <"$f"
   case "$count" in "" | *[!0-9]*) count=0 ;; esac
@@ -175,21 +175,19 @@ if [ "${1:-}" = "rework" ]; then
 fi
 
 input=$(cat)
-session_raw=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || exit 0
-sess=$(sanitize_session "$session_raw") || exit 0
+# 予算(レビュー・churn・editsall)は worktree 単位の共有プールで、session を
+# キーにしない。subagent や codex 単独実行が session を替えても同じ予算に当たる。
+# session は同一コマンド反復カウンタ(エージェント固有の意味を持つ)だけに使う。
+session_raw=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session_raw=""
+sess=$(sanitize_session "$session_raw") || sess=""
 hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null) || hook_cwd=""
 resolve_state_dir "$hook_cwd"
 
-# --- ユーザー入力 = human-in-the-loop。全カウンタ・全予算をリセット ---
+# --- ユーザー入力 = human-in-the-loop。この worktree の全カウンタ・全予算をリセット ---
 event=$(printf '%s' "$input" | jq -r '.hook_event_name // empty' 2>/dev/null) || event=""
 if [ "$event" = "UserPromptSubmit" ]; then
-  if [ -d "$state_dir" ]; then
-    rm -f "$state_dir/cnt.$sess."* "$state_dir/churn.$sess."* \
-      "$state_dir/review.$sess" "$state_dir/reviewmark.$sess" \
-      "$state_dir/editsall.$sess" "$state_dir/testbudget.$sess" \
-      "$state_dir/cases.$sess" \
-      "$state_dir"/churnok.* 2>/dev/null
-    find "$state_dir" -type f -mtime +1 -delete 2>/dev/null
+  if [ -d "$state_dir" ] && [ ! -L "$state_dir" ] && [ -O "$state_dir" ]; then
+    find "$state_dir" -maxdepth 1 -type f -delete 2>/dev/null
   fi
   exit 0
 fi
@@ -199,15 +197,15 @@ skill=$(printf '%s' "$input" | jq -r '.tool_input.skill // empty' 2>/dev/null) |
 case "$skill" in
   review-gate | codex-review | code-review | spec-scope-review | security-review | *:code-review | *:requesting-code-review)
     prepare_state_dir || exit 0
-    f="$state_dir/review.$sess"
+    f="$state_dir/review"
     count=0
     [ -f "$f" ] && IFS= read -r count <"$f"
     case "$count" in "" | *[!0-9]*) count=0 ;; esac
     edits_total=0
-    [ -f "$state_dir/editsall.$sess" ] && IFS= read -r edits_total <"$state_dir/editsall.$sess"
+    [ -f "$state_dir/editsall" ] && IFS= read -r edits_total <"$state_dir/editsall"
     case "$edits_total" in "" | *[!0-9]*) edits_total=0 ;; esac
     mark=""
-    [ -f "$state_dir/reviewmark.$sess" ] && IFS= read -r mark <"$state_dir/reviewmark.$sess"
+    [ -f "$state_dir/reviewmark" ] && IFS= read -r mark <"$state_dir/reviewmark"
     case "$mark" in *[!0-9]*) mark="" ;; esac
     # 前回レビュー以降に十分な実装が進んでいれば、同じ作業の再レビューではなく
     # 新しいマイルストーンなので周回を数え直す
@@ -220,16 +218,16 @@ case "$skill" in
 残りの指摘を 1 件ずつ「採用 / 不採用 + 理由 1 行」で列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。"
     fi
     echo $((count + 1)) >"$f"
-    echo "$edits_total" >"$state_dir/reviewmark.$sess"
+    echo "$edits_total" >"$state_dir/reviewmark"
     exit 0
     ;;
 esac
 
 bump_edits() {
   local t=0
-  [ -f "$state_dir/editsall.$sess" ] && IFS= read -r t <"$state_dir/editsall.$sess"
+  [ -f "$state_dir/editsall" ] && IFS= read -r t <"$state_dir/editsall"
   case "$t" in "" | *[!0-9]*) t=0 ;; esac
-  echo $((t + 1)) >"$state_dir/editsall.$sess"
+  echo $((t + 1)) >"$state_dir/editsall"
 }
 
 path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
@@ -237,10 +235,10 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 
 # --- A) 変更を挟まない同一コマンド反復 ---
 if [ -n "$path" ]; then
-  # ファイル編集は状態を変える。コマンド反復カウンタをリセットし、
+  # ファイル編集は状態を変える。全セッションのコマンド反復カウンタをリセットし、
   # 同一ファイルの churn を数える
   prepare_state_dir || exit 0
-  rm -f "$state_dir/cnt.$sess."* 2>/dev/null
+  rm -f "$state_dir"/cnt.* 2>/dev/null
   check_churn "$path"
   bump_edits
   exit 0
@@ -250,7 +248,7 @@ fi
 case "$cmd" in
   *"*** Begin Patch"* | *apply_patch*)
     prepare_state_dir || exit 0
-    rm -f "$state_dir/cnt.$sess."* 2>/dev/null
+    rm -f "$state_dir"/cnt.* 2>/dev/null
     while IFS= read -r line; do
       p="${line#\*\*\* Add File: }"
       p="${p#\*\*\* Update File: }"
@@ -263,6 +261,7 @@ case "$cmd" in
     ;;
 esac
 
+[ -n "$sess" ] || exit 0
 prepare_state_dir || exit 0
 h=$(hash_key "$cmd")
 f="$state_dir/cnt.$sess.$h"

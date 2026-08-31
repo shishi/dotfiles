@@ -72,15 +72,10 @@ marker_count() { # stdin -> マーカー行数
   LC_ALL=C grep -Ec "$marker_re" || true
 }
 
-sanitize_session() { # $1=session id -> stdout(不正なら空)
-  case "$1" in
-    "" | *[!A-Za-z0-9._-]*) return 1 ;;
-  esac
-  [ "${#1}" -le 128 ] || return 1
-  printf '%s' "$1"
-}
-
 # justify で通せるのはユーザー指示 1 回あたり test_file_budget ファイルまで。
+# 予算は worktree 単位の共有プール(session をキーにしない)。subagent や
+# codex 単独実行が session を替えても同じ予算に当たり、リセットは
+# convergence-gate が UserPromptSubmit で行う。
 # 宣言を積み増して「テストを増やす→落ちる→また増やす」を永遠に続ける経路を
 # 物理的に塞ぐ。広い正当な作業(複数モジュールへ各 1 テストファイル)は
 # この枠内に収まる想定で、超えたら報告して指示を待つ。
@@ -90,18 +85,17 @@ test_file_budget="${OVERENG_GATE_FILE_BUDGET:-5}"
 test_case_budget="${OVERENG_GATE_CASE_BUDGET:-20}"
 allow_within_budget() { # $1=path $2=マーカー増分。予算内なら exit 0、超過なら deny
   local f key n delta cf cases
-  [ -n "$sess" ] || exit 0
   prepare_state_dir || exit 0
   delta="${2:-0}"
   case "$delta" in "" | *[!0-9]*) delta=0 ;; esac
-  cf="$state_dir/cases.$sess"
+  cf="$state_dir/cases"
   cases=0
   [ -f "$cf" ] && IFS= read -r cases <"$cf"
   case "$cases" in "" | *[!0-9]*) cases=0 ;; esac
   if [ $((cases + delta)) -gt "$test_case_budget" ]; then
     deny_case_budget "$1"
   fi
-  f="$state_dir/testbudget.$sess"
+  f="$state_dir/testbudget"
   key=$(hash_key "$1")
   if [ ! -f "$f" ] || ! LC_ALL=C grep -qx "$key" "$f" 2>/dev/null; then
     n=0
@@ -182,8 +176,6 @@ path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null) || hook_cwd=""
 resolve_state_dir "$hook_cwd"
-session_raw=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session_raw=""
-sess=$(sanitize_session "$session_raw") || sess=""
 
 if [ -n "$path" ]; then
   # Write は content(旧値 = 既存ファイル全文)、Edit/MultiEdit は

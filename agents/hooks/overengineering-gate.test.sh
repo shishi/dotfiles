@@ -98,23 +98,26 @@ else
   ng "expired justification is invalid"
 fi
 
-# 8. justify 済みでもテスト追加予算(テストでは 3 に絞る)を超えたら deny
+# 8. justify 済みでもテスト追加予算(テストでは 3 に絞る)を超えたら deny。
+#    予算は worktree 共有なので session が毎回違っても数える
+export OVERENG_GATE_STATE_DIR="$TMP/state-fb"
 export OVERENG_GATE_FILE_BUDGET=3
 for i in 1 2 3 4; do
   bash "$HOOK" justify "$TMP/b$i.test.ts" "依頼された挙動$i の証明に必要" >/dev/null || true
 done
 for i in 1 2 3; do
-  out="$(printf '{"session_id":"sb","tool_input":{"file_path":"%s","content":"x"}}' "$TMP/b$i.test.ts" | bash "$HOOK")"
+  out="$(printf '{"session_id":"s%s","tool_input":{"file_path":"%s","content":"x"}}' "$i" "$TMP/b$i.test.ts" | bash "$HOOK")"
   [ -z "$out" ] || break
 done
-out4="$(printf '{"session_id":"sb","tool_input":{"file_path":"%s","content":"x"}}' "$TMP/b4.test.ts" | bash "$HOOK")"
+out4="$(printf '{"session_id":"s4","tool_input":{"file_path":"%s","content":"x"}}' "$TMP/b4.test.ts" | bash "$HOOK")"
 if [ -z "$out" ] && denied "$out4"; then
-  ok "fourth justified test file in one session is denied"
+  ok "fourth justified test file is denied across sessions"
 else
-  ng "fourth justified test file in one session is denied"
+  ng "fourth justified test file is denied across sessions"
 fi
 
 # 9. justify 済みでもケース追加の累計が予算を超えたら deny(一括追加も同じ)
+export OVERENG_GATE_STATE_DIR="$TMP/state-cb"
 export OVERENG_GATE_CASE_BUDGET=3
 bash "$HOOK" justify "$TMP/c.test.ts" "依頼された挙動Zの証明に必要" >/dev/null || true
 o1="$(printf '{"session_id":"sc","tool_input":{"file_path":"%s","content":"it('"'"'a'"'"', () => {})\\nit('"'"'b'"'"', () => {})"}}' "$TMP/c.test.ts" | bash "$HOOK")"

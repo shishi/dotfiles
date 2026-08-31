@@ -78,15 +78,16 @@ else
   ng "expired declaration is invalid"
 fi
 
-# 7. レビュー系 skill は 2 周まで、3 周目は deny(自己解除なし)
-review() { printf '{"session_id":"s5","tool_input":{"skill":"%s"}}' "$1" | bash "$HOOK"; }
-o1="$(review review-gate)"
-o2="$(review codex-review)"
-o3="$(review review-gate)"
+# 7. レビュー系 skill は 2 周まで、3 周目は deny(自己解除なし)。
+#    予算は worktree 共有なので session が毎回違っても数える
+review() { printf '{"session_id":"%s","tool_input":{"skill":"%s"}}' "$2" "$1" | bash "$HOOK"; }
+o1="$(review review-gate s5a)"
+o2="$(review codex-review s5b)"
+o3="$(review review-gate s5c)"
 if [ -z "$o1" ] && [ -z "$o2" ] && denied "$o3"; then
-  ok "third review round in one session is denied"
+  ok "third review round is denied across sessions"
 else
-  ng "third review round in one session is denied"
+  ng "third review round is denied across sessions"
 fi
 
 # 8-11. 同一ファイル churn 予算(テストは free=2 に絞って検証)
