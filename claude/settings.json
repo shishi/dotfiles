@@ -360,7 +360,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/outward-write-readback.sh",
+            "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
             "timeout": 30,
             "statusMessage": "投稿された実物を取得中..."
           }

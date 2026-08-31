@@ -43,7 +43,9 @@ if [ -n "$push_call" ]; then
   if [ -n "$dir" ]; then
     cd "$dir" 2>/dev/null || notify "[readback] git -C の指定先 ($dir) に移動できなかった。push 先を自分で確認すること。未確認のまま push 済みと報告しない。"
   else
-    cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || true
+    # codex は CLAUDE_PROJECT_DIR を持たないため hook 入力の cwd を先に使う
+    hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
+    cd "${hook_cwd:-${CLAUDE_PROJECT_DIR:-.}}" 2>/dev/null || true
   fi
 
   [ -z "$dst" ] && dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)

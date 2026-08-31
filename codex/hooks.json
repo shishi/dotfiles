@@ -88,6 +88,20 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/outward-write-readback.sh'",
+            "statusMessage": "投稿された実物を取得中...",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
     "Stop": [
       {
         "hooks": [
