@@ -108,7 +108,11 @@ case "$action" in
         } | sed '1s/^[:： ]*//'
       )
       [ -n "$reason" ] || reason='依頼または観測済み障害に直接対応しない構造が差分に含まれている。'
-      jq -n --arg reason "$reason" '{decision:"block", reason:$reason}'
+      # 指摘を採用命令として全のみさせない。必要性を宣言できるものは残させ、
+      # 判断を作業エージェントへ返す(block は 1 turn 1 回なので再停止で通る)
+      guidance='指摘は採用命令ではない。各指摘を採否判定し、依頼された結果への必要性を宣言できる構造は残して、残す理由を最終報告に含めよ。宣言できないものだけ削除して停止せよ。'
+      jq -n --arg reason "$reason" --arg guidance "$guidance" \
+        '{decision:"block", reason:($reason + "\n" + $guidance)}'
     else
       printf '{}\n'
     fi
