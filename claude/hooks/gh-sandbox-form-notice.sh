@@ -36,7 +36,9 @@ notify() {
   exit 0
 }
 
-calls=$(printf '%s' "$input" | python3 "$HOME/.agent-shared/hooks/lib/detect-wrapped-gh.py" 2>/dev/null)
+# python の bin 名は環境で変わる(python3 / python)。能力で解決する
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+calls=$(printf '%s' "$input" | "$py_bin" "$HOME/.agent-shared/hooks/lib/detect-wrapped-gh.py" 2>/dev/null)
 detector_status=$?
 
 # 検出器が動かないまま黙ると、警告が出ないことを「安全な形」と誤読する。拾い直す後段は

@@ -13,19 +13,24 @@
 input=$(cat)
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# python の bin 名は環境で変わる(python3 / python)。能力で解決する
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+
 deny() {
-  printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":sys.stdin.read()}}))'
+  jq -n --arg r "$1" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
   exit 0
 }
 
-calls=$(printf '%s' "$input" | python3 "$HOME/.agent-shared/hooks/lib/detect-invocation.py" gh 2>/dev/null)
+[ -n "$py_bin" ] || exit 0
+calls=$(printf '%s' "$input" | "$py_bin" "$HOME/.agent-shared/hooks/lib/detect-invocation.py" gh 2>/dev/null)
 [ -z "$calls" ] && exit 0
 
 if [ "$calls" = "EPARSE" ]; then
   deny "コマンドを解析できなかった (クォートが閉じていない可能性)。gh の呼び出しを含むため保守的に停止する。コマンドを整理して再実行すること。"
 fi
 
-offender=$(printf '%s' "$calls" | python3 -c '
+offender=$(printf '%s' "$calls" | "$py_bin" -c '
 import re, sys
 
 for line in sys.stdin:

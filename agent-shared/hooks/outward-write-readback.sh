@@ -18,19 +18,24 @@
 input=$(cat)
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# python の bin 名は環境で変わる(python3 / python)。能力で解決する
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+
 notify() {
-  printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":sys.stdin.read()}}))'
+  jq -n --arg m "$1" \
+    '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$m}}'
   exit 0
 }
 
-calls=$(printf '%s' "$input" | python3 "$here/lib/detect-invocation.py" gh git 2>/dev/null)
+[ -n "$py_bin" ] || exit 0
+calls=$(printf '%s' "$input" | "$py_bin" "$here/lib/detect-invocation.py" gh git 2>/dev/null)
 [ -z "$calls" ] && exit 0
 
 push_call=$(printf '%s' "$calls" | grep -E '^git( -[^ ]+ [^ ]+)* push( |$)' | head -1)
 gh_call=$(printf '%s' "$calls" | grep -E '^gh (pr|issue) (create|edit|comment)( |$)' | head -1)
 
 if [ -n "$push_call" ]; then
-  { read -r dir; read -r remote; read -r src; read -r dst; } < <(printf '%s' "$push_call" | python3 "$here/lib/parse-push.py")
+  { read -r dir; read -r remote; read -r src; read -r dst; } < <(printf '%s' "$push_call" | "$py_bin" "$here/lib/parse-push.py")
 
   # hook はシェル変数を展開できない。未展開のまま突き合わせると別リポジトリ・別ブランチを
   # 見て誤警告する。誤警告は hook を無視する習慣を作るので、解決できない時点で止める。

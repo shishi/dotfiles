@@ -179,9 +179,12 @@ emit_approval_request() {
 # Newlines separate commands too, but shlex only treats them as whitespace, so
 # they are rewritten to `;` first. Inside quotes that rewrite only alters the
 # text of one token, which no decision depends on.
+# python の bin 名は環境で変わる(python3 / python)。能力で解決する
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+
 tokenize() { # $1=command string
-  if command -v python3 >/dev/null 2>&1; then
-    printf '%s' "$1" | python3 -c '
+  if [ -n "$py_bin" ]; then
+    printf '%s' "$1" | "$py_bin" -c '
 import sys, shlex
 src = sys.stdin.read().replace("\n", " ; ")
 try:
