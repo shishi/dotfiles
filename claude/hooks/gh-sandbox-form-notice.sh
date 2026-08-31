@@ -36,7 +36,7 @@ notify() {
   exit 0
 }
 
-calls=$(printf '%s' "$input" | python3 "$here/../../agent-shared/hooks/lib/detect-wrapped-gh.py" 2>/dev/null)
+calls=$(printf '%s' "$input" | python3 "$HOME/.agent-shared/hooks/lib/detect-wrapped-gh.py" 2>/dev/null)
 detector_status=$?
 
 # 検出器が動かないまま黙ると、警告が出ないことを「安全な形」と誤読する。拾い直す後段は
