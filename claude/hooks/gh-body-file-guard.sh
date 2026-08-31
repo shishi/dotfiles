@@ -18,7 +18,7 @@ deny() {
   exit 0
 }
 
-calls=$(printf '%s' "$input" | python3 "$here/lib/detect-invocation.py" gh 2>/dev/null)
+calls=$(printf '%s' "$input" | python3 "$HOME/.agent-shared/hooks/lib/detect-invocation.py" gh 2>/dev/null)
 [ -z "$calls" ] && exit 0
 
 if [ "$calls" = "EPARSE" ]; then
