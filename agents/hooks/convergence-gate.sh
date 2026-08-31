@@ -29,9 +29,12 @@ set -u
 repeat_threshold=3
 review_budget=2
 proceed_ttl=600
-churn_free="${CONVERGE_GATE_CHURN_FREE:-8}"
+churn_free="${CONVERGE_GATE_CHURN_FREE:-12}"
 churn_step=4
 churn_max_rework=2
+# 前回のレビュー以降にこれだけ編集が進んでいれば「同じ作業の再レビュー」では
+# なく新しいマイルストーンとみなし、レビュー周回の数え直しを許す
+milestone_edits="${CONVERGE_GATE_MILESTONE_EDITS:-15}"
 
 # エージェントの sandbox 内(proceed)と sandbox 外(hook)の両方から同じ path で
 # 見える場所は作業 repo の .git 配下だけ。
@@ -182,7 +185,8 @@ event=$(printf '%s' "$input" | jq -r '.hook_event_name // empty' 2>/dev/null) ||
 if [ "$event" = "UserPromptSubmit" ]; then
   if [ -d "$state_dir" ]; then
     rm -f "$state_dir/cnt.$sess."* "$state_dir/churn.$sess."* \
-      "$state_dir/review.$sess" "$state_dir/testbudget.$sess" \
+      "$state_dir/review.$sess" "$state_dir/reviewmark.$sess" \
+      "$state_dir/editsall.$sess" "$state_dir/testbudget.$sess" \
       "$state_dir"/churnok.* 2>/dev/null
     find "$state_dir" -type f -mtime +1 -delete 2>/dev/null
   fi
@@ -198,15 +202,34 @@ case "$skill" in
     count=0
     [ -f "$f" ] && IFS= read -r count <"$f"
     case "$count" in "" | *[!0-9]*) count=0 ;; esac
+    edits_total=0
+    [ -f "$state_dir/editsall.$sess" ] && IFS= read -r edits_total <"$state_dir/editsall.$sess"
+    case "$edits_total" in "" | *[!0-9]*) edits_total=0 ;; esac
+    mark=""
+    [ -f "$state_dir/reviewmark.$sess" ] && IFS= read -r mark <"$state_dir/reviewmark.$sess"
+    case "$mark" in *[!0-9]*) mark="" ;; esac
+    # 前回レビュー以降に十分な実装が進んでいれば、同じ作業の再レビューではなく
+    # 新しいマイルストーンなので周回を数え直す
+    if [ -n "$mark" ] && [ $((edits_total - mark)) -ge "$milestone_edits" ]; then
+      count=0
+    fi
     if [ "$count" -ge "$review_budget" ]; then
       deny "[収束ゲート] レビュー反復がユーザー指示 1 回あたりの予算(${review_budget} 周)を超えた。
 レビュー指摘は採用命令ではない。指摘を全部飲んで再レビューする反復は、反復のたびに完了条件が遠ざかる規約違反である。
 残りの指摘を 1 件ずつ「採用 / 不採用 + 理由 1 行」で列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。"
     fi
     echo $((count + 1)) >"$f"
+    echo "$edits_total" >"$state_dir/reviewmark.$sess"
     exit 0
     ;;
 esac
+
+bump_edits() {
+  local t=0
+  [ -f "$state_dir/editsall.$sess" ] && IFS= read -r t <"$state_dir/editsall.$sess"
+  case "$t" in "" | *[!0-9]*) t=0 ;; esac
+  echo $((t + 1)) >"$state_dir/editsall.$sess"
+}
 
 path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
@@ -218,6 +241,7 @@ if [ -n "$path" ]; then
   prepare_state_dir || exit 0
   rm -f "$state_dir/cnt.$sess."* 2>/dev/null
   check_churn "$path"
+  bump_edits
   exit 0
 fi
 [ -n "$cmd" ] || exit 0
@@ -229,7 +253,10 @@ case "$cmd" in
     while IFS= read -r line; do
       p="${line#\*\*\* Add File: }"
       p="${p#\*\*\* Update File: }"
-      [ -n "$p" ] && check_churn "$p"
+      if [ -n "$p" ]; then
+        check_churn "$p"
+        bump_edits
+      fi
     done < <(LC_ALL=C grep -E '^\*\*\* (Add|Update) File: ' <<<"$cmd")
     exit 0
     ;;

@@ -80,9 +80,11 @@ sanitize_session() { # $1=session id -> stdout(不正なら空)
   printf '%s' "$1"
 }
 
-# justify で通せるのは 1 セッション test_file_budget ファイルまで。宣言を積み
-# 増して「テストを増やす→落ちる→また増やす」を永遠に続ける経路を物理的に塞ぐ。
-test_file_budget=3
+# justify で通せるのはユーザー指示 1 回あたり test_file_budget ファイルまで。
+# 宣言を積み増して「テストを増やす→落ちる→また増やす」を永遠に続ける経路を
+# 物理的に塞ぐ。広い正当な作業(複数モジュールへ各 1 テストファイル)は
+# この枠内に収まる想定で、超えたら報告して指示を待つ。
+test_file_budget="${OVERENG_GATE_FILE_BUDGET:-5}"
 allow_within_budget() { # $1=path。予算内なら exit 0、超過なら deny
   local f key n
   [ -n "$sess" ] || exit 0

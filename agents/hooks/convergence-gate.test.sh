@@ -132,5 +132,23 @@ else
 fi
 unset CONVERGE_GATE_CHURN_FREE
 
+# 12. 前回レビュー以降に実装が進んでいれば新マイルストーンとして数え直す。
+#     進んでいない再レビューは従来どおり止まる(テストでは閾値 3 に絞る)
+export CONVERGE_GATE_MILESTONE_EDITS=3
+review7() { printf '{"session_id":"s7","tool_input":{"skill":"review-gate"}}' | bash "$HOOK"; }
+edit7() { printf '{"session_id":"s7","tool_input":{"file_path":"/x/m%s.ts"}}' "$1" | bash "$HOOK"; }
+review7 >/dev/null
+review7 >/dev/null
+for i in 1 2 3; do edit7 "$i" >/dev/null; done
+r3="$(review7)"
+r4="$(review7)"
+r5="$(review7)"
+if [ -z "$r3" ] && [ -z "$r4" ] && denied "$r5"; then
+  ok "sufficient new work resets review rounds, stalled re-review still stops"
+else
+  ng "sufficient new work resets review rounds, stalled re-review still stops"
+fi
+unset CONVERGE_GATE_MILESTONE_EDITS
+
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]

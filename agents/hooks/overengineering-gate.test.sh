@@ -98,7 +98,8 @@ else
   ng "expired justification is invalid"
 fi
 
-# 8. justify 済みでも 1 セッションのテスト追加は 3 ファイルまで、4 つ目は deny
+# 8. justify 済みでもテスト追加予算(テストでは 3 に絞る)を超えたら deny
+export OVERENG_GATE_FILE_BUDGET=3
 for i in 1 2 3 4; do
   bash "$HOOK" justify "$TMP/b$i.test.ts" "依頼された挙動$i の証明に必要" >/dev/null || true
 done
