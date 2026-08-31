@@ -102,7 +102,7 @@ allow_within_budget() { # $1=path。予算内なら exit 0、超過なら deny
 }
 
 deny_budget() { # $1=path
-  jq -n --arg r "[過剰テストゲート] このセッションのテスト追加予算(${test_file_budget} ファイル)を使い切った: $1 は通せない。
+  jq -n --arg r "[過剰テストゲート] ユーザー指示 1 回あたりのテスト追加予算(${test_file_budget} ファイル)を使い切った: $1 は通せない。
 テストを増やす→落ちる→検証をやり直す→また増やす、という反復は、反復のたびに完了条件が遠ざかる規約違反である。
 これ以上のテスト追加が本当に依頼された結果の証明に必要なら、追加したい対象と理由を列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'

@@ -89,5 +89,48 @@ else
   ng "third review round in one session is denied"
 fi
 
+# 8-11. 同一ファイル churn 予算(テストは free=2 に絞って検証)
+export CONVERGE_GATE_CHURN_FREE=2
+edit() { printf '{"session_id":"s6","tool_input":{"file_path":"/x/app.ts"}}' | bash "$HOOK"; }
+
+# 8. free 枠(2 回)は許可、3 回目は deny(rework を案内)
+e1="$(edit)"; e2="$(edit)"; e3="$(edit)"
+if [ -z "$e1" ] && [ -z "$e2" ] && denied "$e3" && grep -q rework <<<"$e3"; then
+  ok "edits beyond per-file budget are denied with rework guidance"
+else
+  ng "edits beyond per-file budget are denied with rework guidance"
+fi
+
+# 9. rework 宣言で +4 され、続きの編集が通る
+bash "$HOOK" rework '/x/app.ts' '原因は import 順と判明、次で並びを修正する' >/dev/null || true
+e="$(edit)"
+if [ -z "$e" ]; then
+  ok "rework declaration extends the per-file budget"
+else
+  ng "rework declaration extends the per-file budget"
+fi
+
+# 10. 2 回目の rework まで使い切ったら hard deny、3 回目の rework は拒否される
+for i in 1 2 3; do edit >/dev/null; done   # 4..6 消費(allowed=6)
+bash "$HOOK" rework '/x/app.ts' 'タイムアウト値が原因、次で閾値を直す' >/dev/null || true
+for i in 1 2 3 4; do edit >/dev/null; done # 7..10 消費(allowed=10)
+e="$(edit)"
+r3=0; bash "$HOOK" rework '/x/app.ts' '三度目の正直で直るはずだから' >/dev/null 2>&1 || r3=$?
+if denied "$e" && ! grep -q rework <<<"$e" && [ "$r3" != 0 ]; then
+  ok "exhausted rework budget is a hard stop"
+else
+  ng "exhausted rework budget is a hard stop"
+fi
+
+# 11. UserPromptSubmit が予算をリセットする
+printf '{"session_id":"s6","hook_event_name":"UserPromptSubmit","prompt":"続けて"}' | bash "$HOOK" >/dev/null
+e="$(edit)"
+if [ -z "$e" ]; then
+  ok "user prompt resets budgets"
+else
+  ng "user prompt resets budgets"
+fi
+unset CONVERGE_GATE_CHURN_FREE
+
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]

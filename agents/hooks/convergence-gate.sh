@@ -5,20 +5,33 @@
 #     「何を変えたから結果が変わるか」を proceed で宣言した場合だけ
 #     proceed_ttl の間その反復を許可する。ファイル変更(Write/Edit/apply_patch)
 #     はカウンタをリセットするので、編集を挟む正常な red→green 反復は止めない。
-#  B) レビュー系 skill の発動は 1 セッション review_budget 周まで → 超過は deny。
-#     自己解除は無い。残指摘の採否と理由を列挙してユーザーへ報告して停止する。
+#  B) レビュー系 skill の発動はユーザー指示 1 回あたり review_budget 周まで
+#     → 超過は deny。自己解除は無い。残指摘の採否と理由を列挙して報告して停止する。
+#  C) 同一ファイルへの編集はユーザー指示 1 回あたり churn_free 回まで。
+#     超過は deny。rework の宣言(1 ファイル churn_max_rework 回まで、各
+#     +churn_step)で延長でき、それも尽きたら報告して停止する。
+#     「毎回なにか変えながら同じ場所を永遠にこね続ける」を有限にする層で、
+#     多数のファイルへ広がる長い作業は制限しない。
 #
-# カバーしない経路(fail-open 側): session_id の無い入力、単一の codex exec
-# 内部で完結する反復、state の手動削除。削除による迂回は規約違反として扱う。
+# UserPromptSubmit でそのセッションの全カウンタ・全予算をリセットする
+# (ユーザーが介入した = human-in-the-loop が回った)。総量の上限は置かない。
+#
+# カバーしない経路(fail-open 側): session_id の無い入力、このゲートが
+# 配線されていないツール(Read 等)、state の手動削除。削除による迂回は
+# 規約違反として扱う。
 #
 # 使い方:
-#   引数なし: stdin の PreToolUse JSON を判定
+#   引数なし: stdin の hook JSON(PreToolUse / UserPromptSubmit)を判定
 #   proceed <command|hash> <理由>: その反復を proceed_ttl の間だけ許可
+#   rework <path> <理由>: そのファイルの編集予算を +churn_step(churn_max_rework 回まで)
 set -u
 
 repeat_threshold=3
 review_budget=2
 proceed_ttl=600
+churn_free="${CONVERGE_GATE_CHURN_FREE:-8}"
+churn_step=4
+churn_max_rework=2
 
 # エージェントの sandbox 内(proceed)と sandbox 外(hook)の両方から同じ path で
 # 見える場所は作業 repo の .git 配下だけ。
@@ -96,9 +109,65 @@ has_valid_proceed() { # $1=cmd hash
   [ $((now - epoch)) -ge 0 ] && [ $((now - epoch)) -le "$proceed_ttl" ]
 }
 
+cmd_rework() {
+  local path="${1:-}" reason="${2:-}" key f count rest
+  if [ -z "$path" ] || [ "${#reason}" -lt 10 ]; then
+    echo "usage: convergence-gate.sh rework <path> <何が分かった/次の編集で何が変わるか 1 行>" >&2
+    exit 2
+  fi
+  resolve_state_dir ""
+  prepare_state_dir || {
+    echo "state dir を用意できない: $state_dir" >&2
+    exit 1
+  }
+  key=$(hash_key "$path")
+  f="$state_dir/churnok.$key"
+  count=0
+  [ -f "$f" ] && IFS=$'\t' read -r count rest <"$f"
+  case "$count" in "" | *[!0-9]*) count=0 ;; esac
+  if [ "$count" -ge "$churn_max_rework" ]; then
+    echo "rework の上限(${churn_max_rework} 回)。この反復は自己判断では続行できない。現状・試したこと・選択肢をユーザーへ報告して停止せよ。" >&2
+    exit 1
+  fi
+  printf '%s\t%s\n' "$((count + 1))" "$reason" >"$f" || exit 1
+  echo "宣言を記録: このファイルの編集予算 +${churn_step}($((count + 1))/${churn_max_rework})"
+}
+
+check_churn() { # $1=path。予算超過なら deny(戻らない)
+  local key f okf count ext rest allowed
+  key=$(hash_key "$1")
+  f="$state_dir/churn.$sess.$key"
+  count=0
+  [ -f "$f" ] && IFS= read -r count <"$f"
+  case "$count" in "" | *[!0-9]*) count=0 ;; esac
+  count=$((count + 1))
+  ext=0
+  okf="$state_dir/churnok.$key"
+  [ -f "$okf" ] && IFS=$'\t' read -r ext rest <"$okf"
+  case "$ext" in "" | *[!0-9]*) ext=0 ;; esac
+  allowed=$((churn_free + churn_step * ext))
+  if [ "$count" -gt "$allowed" ]; then
+    if [ "$ext" -ge "$churn_max_rework" ]; then
+      deny "[収束ゲート] 同一ファイルへの編集が延長込みの上限(${allowed} 回)に達した: $1
+これ以上の自己解除手段は無い。現状・試したこと・残る選択肢をユーザーへ報告して停止し、指示を待て(ユーザーの次の入力で予算はリセットされる)。"
+    fi
+    deny "[収束ゲート] 同一ファイルへの編集がユーザー指示 1 回あたりの予算(${allowed} 回)を超えた: $1
+同じ場所をこね続ける反復は、毎回変更していても収束の証拠にならない。この反復で何が分かり、次の編集で何が変わるのかを宣言してから再実行せよ(1 ファイル ${churn_max_rework} 回まで、各 +${churn_step} 回):
+bash ~/.agents/hooks/convergence-gate.sh rework '$1' '<何が分かった/次の編集で何が変わるか 1 行>'
+宣言できないなら、現状・試したこと・選択肢をユーザーへ報告して停止せよ。"
+  fi
+  echo "$count" >"$f"
+  return 0
+}
+
 if [ "${1:-}" = "proceed" ]; then
   shift
   cmd_proceed "$@"
+  exit 0
+fi
+if [ "${1:-}" = "rework" ]; then
+  shift
+  cmd_rework "$@"
   exit 0
 fi
 
@@ -107,6 +176,18 @@ session_raw=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) |
 sess=$(sanitize_session "$session_raw") || exit 0
 hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null) || hook_cwd=""
 resolve_state_dir "$hook_cwd"
+
+# --- ユーザー入力 = human-in-the-loop。全カウンタ・全予算をリセット ---
+event=$(printf '%s' "$input" | jq -r '.hook_event_name // empty' 2>/dev/null) || event=""
+if [ "$event" = "UserPromptSubmit" ]; then
+  if [ -d "$state_dir" ]; then
+    rm -f "$state_dir/cnt.$sess."* "$state_dir/churn.$sess."* \
+      "$state_dir/review.$sess" "$state_dir/testbudget.$sess" \
+      "$state_dir"/churnok.* 2>/dev/null
+    find "$state_dir" -type f -mtime +1 -delete 2>/dev/null
+  fi
+  exit 0
+fi
 
 # --- B) レビュー反復予算 ---
 skill=$(printf '%s' "$input" | jq -r '.tool_input.skill // empty' 2>/dev/null) || skill=""
@@ -118,7 +199,7 @@ case "$skill" in
     [ -f "$f" ] && IFS= read -r count <"$f"
     case "$count" in "" | *[!0-9]*) count=0 ;; esac
     if [ "$count" -ge "$review_budget" ]; then
-      deny "[収束ゲート] レビュー反復が 1 セッションの予算(${review_budget} 周)を超えた。
+      deny "[収束ゲート] レビュー反復がユーザー指示 1 回あたりの予算(${review_budget} 周)を超えた。
 レビュー指摘は採用命令ではない。指摘を全部飲んで再レビューする反復は、反復のたびに完了条件が遠ざかる規約違反である。
 残りの指摘を 1 件ずつ「採用 / 不採用 + 理由 1 行」で列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。"
     fi
@@ -132,15 +213,24 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 
 # --- A) 変更を挟まない同一コマンド反復 ---
 if [ -n "$path" ]; then
-  # ファイル編集は状態を変える。反復カウンタをリセットする
+  # ファイル編集は状態を変える。コマンド反復カウンタをリセットし、
+  # 同一ファイルの churn を数える
+  prepare_state_dir || exit 0
   rm -f "$state_dir/cnt.$sess."* 2>/dev/null
+  check_churn "$path"
   exit 0
 fi
 [ -n "$cmd" ] || exit 0
 
 case "$cmd" in
   *"*** Begin Patch"* | *apply_patch*)
+    prepare_state_dir || exit 0
     rm -f "$state_dir/cnt.$sess."* 2>/dev/null
+    while IFS= read -r line; do
+      p="${line#\*\*\* Add File: }"
+      p="${p#\*\*\* Update File: }"
+      [ -n "$p" ] && check_churn "$p"
+    done < <(LC_ALL=C grep -E '^\*\*\* (Add|Update) File: ' <<<"$cmd")
     exit 0
     ;;
 esac
