@@ -98,5 +98,20 @@ else
   ng "expired justification is invalid"
 fi
 
+# 8. justify 済みでも 1 セッションのテスト追加は 3 ファイルまで、4 つ目は deny
+for i in 1 2 3 4; do
+  bash "$HOOK" justify "$TMP/b$i.test.ts" "依頼された挙動$i の証明に必要" >/dev/null || true
+done
+for i in 1 2 3; do
+  out="$(printf '{"session_id":"sb","tool_input":{"file_path":"%s","content":"x"}}' "$TMP/b$i.test.ts" | bash "$HOOK")"
+  [ -z "$out" ] || break
+done
+out4="$(printf '{"session_id":"sb","tool_input":{"file_path":"%s","content":"x"}}' "$TMP/b4.test.ts" | bash "$HOOK")"
+if [ -z "$out" ] && denied "$out4"; then
+  ok "fourth justified test file in one session is denied"
+else
+  ng "fourth justified test file in one session is denied"
+fi
+
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]

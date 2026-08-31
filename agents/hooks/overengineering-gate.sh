@@ -15,7 +15,25 @@
 set -u
 
 ttl_seconds=900
-state_dir="${OVERENG_GATE_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/overeng-gate-${UID:-user}}"
+
+# justify はエージェントの sandbox 内、hook 本体は sandbox 外で走る。両者から
+# 同じ path で見えて書けるのは作業 repo の .git 配下だけ(/tmp や TMPDIR は
+# sandbox 内外で食い違うか read-only)。repo 外の cwd では TMPDIR に落ちるが、
+# その場合 justify と hook が別 dir を見て通らないことがある(repo 内で使う前提)。
+state_dir=""
+resolve_state_dir() { # $1=cwd(空なら PWD)
+  local gitdir
+  if [ -n "${OVERENG_GATE_STATE_DIR:-}" ]; then
+    state_dir="$OVERENG_GATE_STATE_DIR"
+    return 0
+  fi
+  gitdir=$(git -C "${1:-$PWD}" rev-parse --absolute-git-dir 2>/dev/null) || gitdir=""
+  if [ -n "$gitdir" ]; then
+    state_dir="$gitdir/agent-gates"
+  else
+    state_dir="${TMPDIR:-/tmp}/agent-gates-${UID:-user}"
+  fi
+}
 
 # JS/TS のテストブロック(直後に文字列リテラルが続く形だけ。regex.test(str) や
 # 散文中の it "..." を誤検出しないよう、先行文字に . と英数字を許さない)、
@@ -54,6 +72,43 @@ marker_count() { # stdin -> マーカー行数
   LC_ALL=C grep -Ec "$marker_re" || true
 }
 
+sanitize_session() { # $1=session id -> stdout(不正なら空)
+  case "$1" in
+    "" | *[!A-Za-z0-9._-]*) return 1 ;;
+  esac
+  [ "${#1}" -le 128 ] || return 1
+  printf '%s' "$1"
+}
+
+# justify で通せるのは 1 セッション test_file_budget ファイルまで。宣言を積み
+# 増して「テストを増やす→落ちる→また増やす」を永遠に続ける経路を物理的に塞ぐ。
+test_file_budget=3
+allow_within_budget() { # $1=path。予算内なら exit 0、超過なら deny
+  local f key n
+  [ -n "$sess" ] || exit 0
+  prepare_state_dir || exit 0
+  f="$state_dir/testbudget.$sess"
+  key=$(hash_key "$1")
+  if [ -f "$f" ] && LC_ALL=C grep -qx "$key" "$f" 2>/dev/null; then
+    exit 0
+  fi
+  n=0
+  [ -f "$f" ] && n=$(wc -l <"$f" | tr -d ' ')
+  if [ "$n" -ge "$test_file_budget" ]; then
+    deny_budget "$1"
+  fi
+  echo "$key" >>"$f"
+  exit 0
+}
+
+deny_budget() { # $1=path
+  jq -n --arg r "[過剰テストゲート] このセッションのテスト追加予算(${test_file_budget} ファイル)を使い切った: $1 は通せない。
+テストを増やす→落ちる→検証をやり直す→また増やす、という反復は、反復のたびに完了条件が遠ざかる規約違反である。
+これ以上のテスト追加が本当に依頼された結果の証明に必要なら、追加したい対象と理由を列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+  exit 0
+}
+
 has_valid_justification() { # $1=path
   local f epoch rest now
   f="$state_dir/$(hash_key "$1")"
@@ -86,6 +141,7 @@ cmd_justify() {
     echo "usage: overengineering-gate.sh justify <path> <依頼された挙動とテストの対応を 1 行>" >&2
     exit 2
   fi
+  resolve_state_dir ""
   prepare_state_dir || {
     echo "state dir を用意できない: $state_dir" >&2
     exit 1
@@ -103,6 +159,10 @@ fi
 input=$(cat)
 path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null) || hook_cwd=""
+resolve_state_dir "$hook_cwd"
+session_raw=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session_raw=""
+sess=$(sanitize_session "$session_raw") || sess=""
 
 if [ -n "$path" ]; then
   # Write は content(旧値 = 既存ファイル全文)、Edit/MultiEdit は
@@ -125,7 +185,7 @@ if [ -n "$path" ]; then
   # 中身がまだ無い新規テストファイル(scaffold)も作成時点で捕まえる
   if [ ! -f "$path" ] && is_test_path "$path"; then gate=1; fi
   [ "$gate" = 1 ] || exit 0
-  has_valid_justification "$path" && exit 0
+  has_valid_justification "$path" && allow_within_budget "$path"
   deny "$path"
 fi
 
@@ -153,7 +213,7 @@ if [ -n "$cmd" ]; then
     [ -n "$gate_path" ] || gate_path="apply_patch"
   fi
   [ -n "$gate_path" ] || exit 0
-  has_valid_justification "$gate_path" && exit 0
+  has_valid_justification "$gate_path" && allow_within_budget "$gate_path"
   deny "$gate_path"
 fi
 

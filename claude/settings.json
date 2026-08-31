@@ -192,6 +192,23 @@
             "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
             "timeout": 10,
             "statusMessage": "gh の呼び出し形を確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "timeout": 10,
+            "statusMessage": "収束ゲート確認中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "timeout": 10,
+            "statusMessage": "レビュー反復予算を確認中..."
           }
         ]
       },
@@ -213,6 +230,12 @@
             "command": "bash ~/.agents/hooks/overengineering-gate.sh",
             "timeout": 10,
             "statusMessage": "過剰テストゲート確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "timeout": 10,
+            "statusMessage": "収束カウンタをリセット中..."
           }
         ]
       },

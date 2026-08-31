@@ -16,6 +16,13 @@
             "statusMessage": "過剰テストゲート確認中...",
             "timeout": 10,
             "type": "command"
+          },
+          {
+            "command": "bash ~/.agents/hooks/convergence-gate.sh",
+            "commandWindows": "& (Join-Path $HOME '.agents/bin/invoke-git-bash-hook.ps1') '~/.agents/hooks/convergence-gate.sh'",
+            "statusMessage": "収束ゲート確認中...",
+            "timeout": 10,
+            "type": "command"
           }
         ],
         "matcher": "Bash"
