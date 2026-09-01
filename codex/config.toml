@@ -311,26 +311,6 @@ trusted_hash = "sha256:6c636ce267fa2524e5d9b3efb6f5b1331a94ceb19e6924ccb7b9bcae6
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
-[mcp_servers.node_repl]
-args = []
-command = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/bin/node_repl"
-startup_timeout_sec = 120
-
-[mcp_servers.node_repl.env]
-NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
-NODE_REPL_NODE_MODULE_DIRS = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/lib/node_modules"
-NODE_REPL_NODE_PATH = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/bin/node"
-NODE_REPL_TRUSTED_CODE_PATHS = "/home/shishi/.codex:/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/cua_node/lib/node_modules"
-CODEX_HOME = "/home/shishi/.codex"
-BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
-BROWSER_USE_TINYSKY_ENABLED = "0"
-NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
-NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
-BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
-BROWSER_USE_CODEX_APP_VERSION = "26.820.71523"
-NODE_REPL_TRUSTED_SERVICES = '{"browser":"/home/shishi/.codex/plugins/cache/openai-bundled/browser/26.820.71523/scripts/browser-service.mjs"}'
-CODEX_CLI_PATH = "/nix/store/m2sk25sf8j66z5wgg94qdmim9v27nr9h-codex-desktop-26.820.71523/opt/codex-desktop/resources/codex"
-
 [mcp_servers.cloudflare-api]
 url = "https://mcp.cloudflare.com/mcp"
 
