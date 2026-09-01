@@ -409,8 +409,7 @@ elseif wezterm.target_triple == 'x86_64-unknown-linux-gnu' then
 elseif wezterm.target_triple == 'aarch64-apple-darwin' then
   local macos_config = {
     use_ime = true,
-    front_end = 'WebGpu',
-    webgpu_power_preference = 'HighPerformance',
+    front_end = 'OpenGL',
     max_fps = 120,
     macos_forward_to_ime_modifier_mask = 'CTRL|SHIFT',
   }
