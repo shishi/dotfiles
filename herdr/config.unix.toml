@@ -1,5 +1,8 @@
 onboarding = false
 
+[experimental]
+kitty_graphics = true
+
 [[keys.command]]
 key = "prefix+i"
 type = "plugin_action"
