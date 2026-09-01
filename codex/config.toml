@@ -1,7 +1,7 @@
 personality = "friendly"
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
-default_permissions = ":danger-full-access"
+default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
 developer_instructions = """
