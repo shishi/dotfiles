@@ -336,6 +336,16 @@ function ln_setup
     bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
 end
 
+# Force Codex to keep its app server in-process inside Herdr. Reusing the
+# desktop app-server daemon would lose the pane-scoped HERDR_* environment.
+function codex --wraps codex
+    if set -q HERDR_ENV; and test "$HERDR_ENV" = 1
+        command codex -c 'shell_environment_policy.inherit="all"' $argv
+    else
+        command codex $argv
+    end
+end
+
 # Keep the tracked Herdr plugin lock in sync after successful mutations.
 function herdr --wraps herdr
     command herdr $argv
