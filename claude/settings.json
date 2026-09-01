@@ -360,6 +360,12 @@
             "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
             "timeout": 120,
             "statusMessage": "依頼と差分の必要性を確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/response-rules-gate.sh",
+            "timeout": 120,
+            "statusMessage": "応答の文体ルールを確認中..."
           }
         ]
       }
