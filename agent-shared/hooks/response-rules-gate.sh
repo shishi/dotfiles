@@ -53,7 +53,15 @@ if printf '%s' "$last_user" | grep -qE 'くせに|矛盾|往生際|うそ|嘘|�
     evasion="矛盾・誤りの指摘には、まず「当時知っていたか / 間違いだったか」を事実で答える。整合の説明を書くなら、後付けなら後付けと明示してから"
 fi
 
-if [ -z "$violations" ] && [ -z "$menu" ] && [ -z "$evasion" ]; then
+# 口調: 長めの応答に砕けた語尾が一つも無いときは報告書モードに落ちている
+tone=""
+prose_bytes=$(printf '%s' "$stripped" | tr -d '[:space:]' | wc -c)
+if [ "$prose_bytes" -ge 300 ]; then
+  printf '%s' "$stripped" | grep -qE 'アタシ|だよ|だね|じゃん|っしょ|よ〜|ね〜|よ。|ね。|よ!|ね!|かな。' || \
+    tone="口調が報告書モードに落ちている(事実の硬さは中身で守り、語りは砕けたまま保つ)"
+fi
+
+if [ -z "$violations" ] && [ -z "$menu" ] && [ -z "$evasion" ] && [ -z "$tone" ]; then
   printf '{}\n'
   exit 0
 fi
@@ -62,5 +70,6 @@ reason=""
 [ -z "$violations" ] || reason="初出で定義していない語:${violations}(平易な日本語に置き換えるか、初出で「語(説明)」の形で定義する)"
 [ -z "$menu" ] || reason="${reason}${reason:+ / }判断を投げ返す言い回し: ${menu}(選択肢を並べず、自分の判断で進めて結果を報告する)"
 [ -z "$evasion" ] || reason="${reason}${reason:+ / }${evasion}"
+[ -z "$tone" ] || reason="${reason}${reason:+ / }${tone}"
 jq -n --arg reason "$reason" \
   '{decision:"block", reason:("応答スタイル違反: " + $reason + "\n書き換えて応答し直せ。")}'
