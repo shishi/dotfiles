@@ -39,7 +39,21 @@ done
 
 menu=$(printf '%s' "$stripped" | grep -oE 'どれにする|どちらにする|どっちにする|選んでね|どうする[?？]' | sort -u | tr '\n' ' ')
 
-if [ -z "$violations" ] && [ -z "$menu" ]; then
+# ユーザーが直前の発言で矛盾・誤りを指摘しているターンでは、応答に
+# 「当時知っていたか / 間違いだったか」への事実の表明を必ず含めさせる。
+# 表明を飛ばして整合の説明だけを組み立てる応答(後付けの抵抗)をブロックする。
+evasion=""
+last_user=$(jq -rs '
+  [ .[] | select(.type == "user") | .message.content
+    | if type == "string" then . else (map(select(.type? == "text") | .text) | join("\n")) end
+    | select(. != "") ]
+  | last // ""' "$transcript" 2>/dev/null)
+if printf '%s' "$last_user" | grep -qE 'くせに|矛盾|往生際|うそ|嘘|いったよね|言ったよね|言ってたのに'; then
+  printf '%s' "$stripped" | grep -qE '知らな(かった|い)|知りませんでした|わかっていな(かった|い)|分かっていな(かった|い)|把握していな(かった|い)|間違(い|って)|誤り|その通り|当時から知って' || \
+    evasion="矛盾・誤りの指摘には、まず「当時知っていたか / 間違いだったか」を事実で答える。整合の説明を書くなら、後付けなら後付けと明示してから"
+fi
+
+if [ -z "$violations" ] && [ -z "$menu" ] && [ -z "$evasion" ]; then
   printf '{}\n'
   exit 0
 fi
@@ -47,5 +61,6 @@ fi
 reason=""
 [ -z "$violations" ] || reason="初出で定義していない語:${violations}(平易な日本語に置き換えるか、初出で「語(説明)」の形で定義する)"
 [ -z "$menu" ] || reason="${reason}${reason:+ / }判断を投げ返す言い回し: ${menu}(選択肢を並べず、自分の判断で進めて結果を報告する)"
+[ -z "$evasion" ] || reason="${reason}${reason:+ / }${evasion}"
 jq -n --arg reason "$reason" \
   '{decision:"block", reason:("応答スタイル違反: " + $reason + "\n書き換えて応答し直せ。")}'
