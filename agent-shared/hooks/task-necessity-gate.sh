@@ -74,6 +74,28 @@ case "$action" in
       exit 0
     fi
 
+    # reviewer へ渡すのは「このターンで増えた差分」1 本。全文 2 本を渡すと入力が
+    # 倍以上に膨らみ、待ち時間が差分サイズに比例して伸びる。両状態を一時 index の
+    # ツリーへ再構成して差分を潰し、再構成に失敗したときだけ従来の 2 本へ戻す。
+    turn_diff=""
+    tmp_index=$(mktemp 2>/dev/null) && {
+      turn_diff=$(
+        export GIT_INDEX_FILE="$tmp_index"
+        git -C "$repo" read-tree "$start_head" 2>/dev/null || exit 1
+        if [ -n "$initial_diff" ]; then
+          printf '%s\n' "$initial_diff" | git -C "$repo" apply --cached - 2>/dev/null || exit 1
+        fi
+        tree_initial=$(git -C "$repo" write-tree 2>/dev/null) || exit 1
+        git -C "$repo" read-tree "$start_head" 2>/dev/null || exit 1
+        if [ -n "$current_diff" ]; then
+          printf '%s\n' "$current_diff" | git -C "$repo" apply --cached - 2>/dev/null || exit 1
+        fi
+        tree_current=$(git -C "$repo" write-tree 2>/dev/null) || exit 1
+        git -C "$repo" diff --no-ext-diff "$tree_initial" "$tree_current" 2>/dev/null
+      ) || turn_diff=""
+      rm -f -- "$tmp_index"
+    }
+
     {
       printf '%s\n' 'あなたは、実装差分がユーザー依頼に必要十分かだけを判定する独立 reviewer です。'
       printf '%s\n' '現在の具体的な問題を直接解決しない test、guard、helper、abstraction、layer、設定、negative probe、error branch が本ターンで追加されていれば BLOCK にしてください。'
@@ -84,8 +106,12 @@ case "$action" in
       printf '%s\n' '出力は PASS の1行、または BLOCK の1行に続けて具体的な不要箇所と理由だけを書いてください。'
       printf '\n<user-request>\n%s\n</user-request>\n' "$(cat "$state_dir/prompt")"
       printf '\n<assistant-response>\n%s\n</assistant-response>\n' "$(printf '%s' "$hook_input" | jq -r '.last_assistant_message // ""')"
-      printf '\n<initial-diff>\n%s\n</initial-diff>\n' "$initial_diff"
-      printf '\n<current-diff>\n%s\n</current-diff>\n' "$current_diff"
+      if [ -n "$turn_diff" ]; then
+        printf '\n<turn-diff>\n%s\n</turn-diff>\n' "$turn_diff"
+      else
+        printf '\n<initial-diff>\n%s\n</initial-diff>\n' "$initial_diff"
+        printf '\n<current-diff>\n%s\n</current-diff>\n' "$current_diff"
+      fi
       printf '\n<initial-untracked-paths>\n%s\n</initial-untracked-paths>\n' "$initial_untracked"
       printf '\n<current-untracked-paths>\n%s\n</current-untracked-paths>\n' "$current_untracked"
     } >"$state_dir/review.prompt"
