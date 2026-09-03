@@ -16,8 +16,9 @@ developer_instructions = """
 # Claude Code / Codex 共有の agent-memory を唯一の正本にする。二重注入・二重更新と
 # split-brain を避けるため Native Memories を無効化する。
 # 設定は下の [features] と末尾の [memories] の 2 箇所。
-notify = [ "C:\\Users\\shishi\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 service_tier = "default"
+
+notify = ["/Users/shigenobu.407/dev/src/github.com/shishi/dotfiles/codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended", "--previous-notify", "[\"C:\\\\Users\\\\shishi\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\runtimes\\\\cua_node\\\\fb8898c05a62885e\\\\bin\\\\node_modules\\\\@oai\\\\sky\\\\bin\\\\windows\\\\codex-computer-use.exe\",\"turn-ended\"]"]
 
 [browser_use.default_origin_policy]
 access = "allow"
@@ -102,6 +103,9 @@ trust_level = "trusted"
 [projects."/home/shishi/dev/src/github.com/shishi/tailscale-config"]
 trust_level = "trusted"
 
+[projects."/Users/shigenobu.407"]
+trust_level = "trusted"
+
 [windows]
 sandbox = "elevated"
 
@@ -131,7 +135,7 @@ MCP_TOOL_TIMEOUT = "120000"
 NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
 
 [desktop]
-conversationDetailMode = "STEPS_COMMANDS"
+conversationDetailMode = "STEPS_PROSE"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
@@ -239,14 +243,14 @@ trusted_hash = "sha256:ef31911e7918e8c71214500ff66cd985824aca7f562c85bdfa199a78f
 trusted_hash = "sha256:50dfe193727ca3d9c69383f8ebc1b475dc6d11c6e28d6a5a29a9315c4e309da4"
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:pre_tool_use:0:0"]
-trusted_hash = "sha256:a8fdeae301fb6c9967e5b9f01bd644ab19a24a06fae3076aea993266df1a3b4d"
+trusted_hash = "sha256:ef31911e7918e8c71214500ff66cd985824aca7f562c85bdfa199a78f0eb8cee"
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:session_start:0:0"]
-trusted_hash = "sha256:8b0ce386acb146cfeb250c113891ecba9b9452e753512a92d310cc77361feb86"
+trusted_hash = "sha256:394e89f28a88134eb7e00427b4dbc654508a965d552331be933070258c8548ea"
 enabled = true
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:0:0"]
-trusted_hash = "sha256:4623df5159ace97274340915943ae0ed8f7ebb9680c83fdaa41fc4fba680aa01"
+trusted_hash = "sha256:475c0e95bbdb6bbc0bfc571d20f449e8656bb2d70d1fc32d39ffcef8a7f50274"
 
 [hooks.state."/home/shishi/.codex/hooks.json:session_start:0:0"]
 trusted_hash = "sha256:394e89f28a88134eb7e00427b4dbc654508a965d552331be933070258c8548ea"
@@ -255,7 +259,7 @@ trusted_hash = "sha256:394e89f28a88134eb7e00427b4dbc654508a965d552331be933070258
 trusted_hash = "sha256:475c0e95bbdb6bbc0bfc571d20f449e8656bb2d70d1fc32d39ffcef8a7f50274"
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:session_start:1:0"]
-trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6fafd0191a6"
+trusted_hash = "sha256:cdb45465c937a59b479d2e100e37d477d6c5884cc718fd2c4d65b4a6570f3d7a"
 
 [hooks.state."/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_web_duvel/.codex/hooks.json:pre_tool_use:0:0"]
 trusted_hash = "sha256:b211f499044bf6f90f7a721e730d5db87d4411ba1a73d0b7f13137ef07aa55fb"
@@ -308,11 +312,65 @@ trusted_hash = "sha256:46b87f5e0e8386d5ae7ba87248a14354a423e6e0a5a232950a6941fa7
 [hooks.state."/home/shishi/.codex/hooks.json:session_start:2:0"]
 trusted_hash = "sha256:6c636ce267fa2524e5d9b3efb6f5b1331a94ceb19e6924ccb7b9bcae65f0a7a3"
 
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:pre_tool_use:0:1"]
+trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:pre_tool_use:0:2"]
+trusted_hash = "sha256:5164396c9f7b77fdd1abf43dd6e6957a5faf5ae61925052c233853baed48b9d8"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:pre_tool_use:0:3"]
+trusted_hash = "sha256:498fa21350c285da9cccf27f9fcf38d2d789b735d153f20b12401a51676794e8"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:post_tool_use:0:0"]
+trusted_hash = "sha256:46b87f5e0e8386d5ae7ba87248a14354a423e6e0a5a232950a6941fa78946a1f"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:session_start:2:0"]
+trusted_hash = "sha256:6c636ce267fa2524e5d9b3efb6f5b1331a94ceb19e6924ccb7b9bcae65f0a7a3"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:0:1"]
+trusted_hash = "sha256:322e29cecf9c90e851a166aedb63d1564325d7fac9b4df6cc0872581088b5b09"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:0:2"]
+trusted_hash = "sha256:2376190b9b0e75afa8c2cd7ea4efc87ba9233b21df9a6e703cdb61ab1c8a7d9c"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:0:3"]
+trusted_hash = "sha256:8682faddfb4e064cee114d42cdae996cfc8a4341bad5572a4580e98867162bb0"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:stop:0:0"]
+trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da1420607277e01c2"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:session_start:3:0"]
+trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6fafd0191a6"
+
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
 [mcp_servers.cloudflare-api]
 url = "https://mcp.cloudflare.com/mcp"
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/shigenobu.407/.codex:/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
+CODEX_HOME = "/Users/shigenobu.407/.codex"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+BROWSER_USE_TINYSKY_ENABLED = "1"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.901.20858"
+NODE_REPL_TRUSTED_SERVICES = '{"browser":"/Users/shigenobu.407/.codex/plugins/cache/openai-bundled/browser/26.901.20858/scripts/browser-service.mjs"}'
+CODEX_CLI_PATH = "/Applications/ChatGPT.app/Contents/Resources/codex"
+
+[mcp_servers.cua_repl]
+command = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
+enabled = false
 
 [memories]
 generate_memories = false
