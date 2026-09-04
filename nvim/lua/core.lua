@@ -91,7 +91,7 @@ vim.opt.clipboard = 'unnamedplus'
 
 local utils = require('utils')
 
-if vim.fn.getenv('SSH_TTY') ~= vim.NIL then
+if vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('SSH_CONNECTION') ~= vim.NIL then
   vim.g.clipboard = 'osc52'
 elseif utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
   vim.g.clipboard = {
