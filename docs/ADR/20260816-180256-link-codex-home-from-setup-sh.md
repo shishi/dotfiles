@@ -52,9 +52,9 @@ The bind-mount case stays outside both, and it is the one place a home is left a
 
 Adopting a machine that already has a real `~/.codex` needs one manual step after the run: carry the runtime out of `.back` into the repository home. What must not move over is whatever `git ls-files` reports as tracked at that home's top level, since that turns machine-specific content into uncommitted changes. Leaving the runtime behind entirely gives a working but signed-out home, so the choice is between doing it and accepting a fresh sign-in.
 
-Setup performs no Codex plugin reconciliation. Codex keeps plugin selection with the signed-in account and restores it after sign-in, unlike Claude Code, whose plugins are installed from tracked `settings.json`; that difference is the maintainer's observation of the app rather than a re-verified CLI interface. The tracked `config.toml` still carries whatever plugin and marketplace state the app writes into the linked home, but no step converges installations toward it.
+Setup performs no Codex plugin reconciliation. Codex keeps plugin selection with the signed-in account and restores it after sign-in, unlike Claude Code, whose plugins are installed from tracked `settings.json`; that difference is the maintainer's observation of the app rather than a re-verified CLI interface. The tracked `config.toml` still carries shared plugin state, but machine-generated marketplace paths, Desktop notification and REPL paths, and the REPL client hash remain only in each working tree. A Git clean filter removes those known entries from the index while a no-op smudge filter leaves checkout content unchanged. `setup.sh` installs the filter commands in the clone-local Git config; no system-level Git configuration or elevated write is needed.
 
-No test asserts the contents of the tracked `config.toml`, and none classifies its keys. Codex owns that file and rewrites it inside the linked home, so pinning its model, plugin table, marketplaces, or trust entries reports drift rather than defects. The boundary that keeps credentials and sessions out of version control is the default-deny `.gitignore` itself, and secrets are caught by gitleaks over every changed file in the review gate — a broader ruleset than a hand-written one, and one that needs no credential-shaped literal stored in the repository in order to test itself.
+The filter deliberately classifies only entries Codex Desktop has already written with machine-bound absolute paths. Other settings, including project trust and hook state from all three operating systems, remain tracked so they can coexist and continue to be updated directly in `config.toml`. The boundary that keeps credentials and sessions out of version control remains the default-deny `.gitignore` itself, and secrets are caught by gitleaks over every changed file in the review gate.
 
 ### Consequences
 
@@ -70,7 +70,7 @@ No test asserts the contents of the tracked `config.toml`, and none classifies i
 * A failed link does not fail the run. `setup.sh` still exits 0 and prints `please reload shell`, so the reported line is the only signal, and on Windows a first run without Developer Mode leaves no link at all.
 * A signed-out fresh machine has no local plugin desired state to converge to, so plugins depend on signing in.
 * Adopting an existing real `~/.codex` depends on the operator copying the runtime entries by hand, and copying too much puts machine-specific content into tracked files.
-* A key the app newly writes into the tracked `config.toml` reaches a commit unless a human notices it in the diff. No test flags it, and gitleaks only objects when the value looks like a credential.
+* A new kind of machine-bound key reaches a commit until the clean filter is taught to remove it. The filter does not infer portability from arbitrary TOML values.
 
 **Neutral:**
 
@@ -81,6 +81,8 @@ No test asserts the contents of the tracked `config.toml`, and none classifies i
 `tests/setup-home-links.sh` runs the real `setup.sh` against a fixture `HOME`. It checks the contract that can lose user data: existing Claude, Codex, and personal-skill runtime moves to `.back` before the managed links replace it. It also checks both memory links and verifies that a rerun creates no extra backup.
 
 `tests/setup-emacs-clone.sh` checks that a failed clone never destroys an existing Emacs configuration. Editor links, optional integrations, and tracked configuration values have no standing text-matching tests. Their direct validators and the review diff are the source of truth.
+
+`tests/codex-config-filter.sh` runs the real cleaner against a representative Codex config. It verifies that the known machine-generated entries disappear while surrounding shared settings remain unchanged.
 
 ## Pros and Cons of the Options
 

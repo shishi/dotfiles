@@ -53,6 +53,19 @@ link_agent_home() {
     || echo "setup.sh: could not link $target_path"
 }
 
+configure_codex_config_filter() {
+  if ! git -C "$DOTDIR" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "setup.sh: $DOTDIR is not a Git checkout; skip Codex config filter"
+    return
+  fi
+
+  git -C "$DOTDIR" config --local filter.codex-config.clean \
+    "bash agent-shared/bin/clean-codex-config.sh" \
+    && git -C "$DOTDIR" config --local filter.codex-config.smudge cat \
+    && git -C "$DOTDIR" config --local filter.codex-config.required true \
+    || echo "setup.sh: could not configure Codex config filter"
+}
+
 if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
 
@@ -122,6 +135,7 @@ if [ -n "$memory_dir" ]; then
   fi
 fi
 
+configure_codex_config_filter
 link_agent_home "$DOTDIR/codex" "$HOME/.codex"
 mkdir -p "$HOME/.agent-shared"
 link_agent_home "$DOTDIR/codex/skills" "$HOME/.agent-shared/skills"

@@ -182,14 +182,6 @@ skill = "#ad7bf9"
 [desktop.open-in-target-preferences]
 global = "fileManager"
 
-[marketplaces.openai-bundled]
-source_type = "local"
-source = "/home/shishi/.codex/.tmp/bundled-marketplaces/openai-bundled"
-
-[marketplaces.openai-primary-runtime]
-source_type = "local"
-source = "/home/shishi/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
-
 [plugins."documents@openai-primary-runtime"]
 enabled = true
 
