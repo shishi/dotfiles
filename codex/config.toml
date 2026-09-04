@@ -18,8 +18,6 @@ developer_instructions = """
 # 設定は下の [features] と末尾の [memories] の 2 箇所。
 service_tier = "default"
 
-notify = ["/Users/shigenobu.407/dev/src/github.com/shishi/dotfiles/codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended", "--previous-notify", "[\"C:\\\\Users\\\\shishi\\\\AppData\\\\Local\\\\OpenAI\\\\Codex\\\\runtimes\\\\cua_node\\\\fb8898c05a62885e\\\\bin\\\\node_modules\\\\@oai\\\\sky\\\\bin\\\\windows\\\\codex-computer-use.exe\",\"turn-ended\"]"]
-
 [browser_use.default_origin_policy]
 access = "allow"
 
@@ -132,7 +130,6 @@ DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
 DISABLE_TELEMETRY = "1"
 MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
-NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
 
 [desktop]
 conversationDetailMode = "STEPS_PROSE"
@@ -186,9 +183,8 @@ skill = "#ad7bf9"
 global = "fileManager"
 
 [marketplaces.openai-bundled]
-last_updated = "2026-08-21T09:37:57Z"
 source_type = "local"
-source = '\\?\C:\Users\shishi\dev\src\github.com\shishi\dotfiles\codex\.tmp\bundled-marketplaces\openai-bundled'
+source = "/home/shishi/.codex/.tmp/bundled-marketplaces/openai-bundled"
 
 [marketplaces.openai-primary-runtime]
 source_type = "local"
@@ -347,30 +343,6 @@ trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6faf
 
 [mcp_servers.cloudflare-api]
 url = "https://mcp.cloudflare.com/mcp"
-
-[mcp_servers.node_repl]
-args = []
-command = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
-startup_timeout_sec = 120
-
-[mcp_servers.node_repl.env]
-NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
-NODE_REPL_NODE_MODULE_DIRS = "/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
-NODE_REPL_NODE_PATH = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"
-NODE_REPL_TRUSTED_CODE_PATHS = "/Users/shigenobu.407/.codex:/Applications/ChatGPT.app/Contents/Resources/cua_node/lib/node_modules"
-CODEX_HOME = "/Users/shigenobu.407/.codex"
-BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
-BROWSER_USE_TINYSKY_ENABLED = "1"
-NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
-NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
-BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
-BROWSER_USE_CODEX_APP_VERSION = "26.901.20858"
-NODE_REPL_TRUSTED_SERVICES = '{"browser":"/Users/shigenobu.407/.codex/plugins/cache/openai-bundled/browser/26.901.20858/scripts/browser-service.mjs"}'
-CODEX_CLI_PATH = "/Applications/ChatGPT.app/Contents/Resources/codex"
-
-[mcp_servers.cua_repl]
-command = "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"
-enabled = false
 
 [memories]
 generate_memories = false
