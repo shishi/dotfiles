@@ -91,7 +91,9 @@ vim.opt.clipboard = 'unnamedplus'
 
 local utils = require('utils')
 
-if utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
+if vim.fn.getenv('SSH_TTY') ~= vim.NIL then
+  vim.g.clipboard = 'osc52'
+elseif utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
   vim.g.clipboard = {
     name = 'win32yank_wsl',
     copy = {
@@ -104,7 +106,7 @@ if utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank
     },
     cache_enable = 1,
   }
-elseif vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('USER') == 'app' then
+elseif vim.fn.getenv('USER') == 'app' then
   local function paste()
     return {
       vim.fn.split(vim.fn.getreg(''), '\n'),
