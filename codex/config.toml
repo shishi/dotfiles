@@ -130,6 +130,8 @@ DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
 DISABLE_TELEMETRY = "1"
 MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
 
 [desktop]
 conversationDetailMode = "STEPS_PROSE"
@@ -332,9 +334,6 @@ trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6faf
 
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
-
-[mcp_servers.cloudflare-api]
-url = "https://mcp.cloudflare.com/mcp"
 
 [memories]
 generate_memories = false
