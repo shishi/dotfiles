@@ -14,16 +14,8 @@ set -x PATH ~/.local/bin ~/dev/bin ~/.bun/bin /usr/local/sbin /usr/local/bin $PA
 
 set -x GPG_TTY (tty)
 
-set -x EDITOR (status dirname)/nvim-edit
-set -x VISUAL (status dirname)/nvim-edit
-
-# if type emacsclient > /dev/null 2>&1
-#     set -x EDITOR 'emacsclient -n --alternate-editor vim'
-#     set -x VISUAL 'emacsclient -n --alternate-editor vim'
-# else
-#     set -x EDITOR vim
-#     set -x VISUAL vim
-# end
+set -x EDITOR nvim
+set -x VISUAL nvim
 
 # nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
 set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
