@@ -4,6 +4,14 @@ onboarding = false
 kitty_graphics = true
 
 [[keys.command]]
+key = "prefix+t"
+type = "popup"
+command = "exec \"${SHELL:-sh}\""
+description = "open scratch terminal"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
 key = "prefix+i"
 type = "plugin_action"
 command = "herdr-paste-image.paste"
