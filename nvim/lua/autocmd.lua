@@ -151,23 +151,6 @@ vim.api.nvim_create_autocmd({ 'TermOpen', 'BufEnter' }, {
   end,
 })
 
--- enter insert mode when opened as $EDITOR (via nvim-edit wrapper)
-local augroup_start_insert = vim.api.nvim_create_augroup('augroup_start_insert', {
-  clear = true,
-})
-if vim.env.NVIM_START_INSERT then
-  ---@diagnostic disable-next-line: param-type-mismatch, assign-type-mismatch
-  vim.api.nvim_create_autocmd('VimEnter', {
-    group = augroup_start_insert,
-    once = true,
-    callback = function()
-      vim.schedule(function()
-        vim.api.nvim_feedkeys('i', 'n', false)
-      end)
-    end,
-  })
-end
-
 -- disable spell check highlight
 local augroup_disable_spell_highlight = vim.api.nvim_create_augroup('augroup_disable_spell_highlight', {
   clear = true,
