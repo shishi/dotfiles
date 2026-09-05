@@ -162,8 +162,14 @@ SessionStart hook は `<personal-memory>` ブロックに `MEMORY.md` の索引�
 `git -C ~/.codex/memory show main:<repo 相対パス>` で commit 済みの内容を読む。
 未 commit の内容を共有済みの記憶として扱わない。
 
-lock が 10 分以上残っているという警告は、stale の可能性を示すだけである。
-lock を除去する前にユーザーへ確認する。`⚠ 未 push` は degraded ではない。
+lock が 10 分以上残っているという警告は参考情報として放置せず、元の作業より先に正本、
+経過時間、worktree、handle・lock・retirement の個数と構造を調査する。現在の workflow が
+取得して保持中の handle なら、継続時は解放せず通常の finish まで完遂する。中断・放棄時だけ
+`memory-write-lock.sh release` で解放して以後は変更せず、再開時は preflight から取り直す。
+所有者不明の handle は構造と token の一致だけでは writer の停止を証明できないため自動 release しない。
+確認できた状態をユーザーへ報告して復旧判断を求め、解消まで記憶を使う作業を停止する。
+dirty、複数 handle、retirement、検証・release 失敗でも raw delete しない。
+`⚠ 未 push` は degraded ではない。
 ローカルで commit 済み、push 未完了という警告であり、注入内容は利用できる。
 
 - **日常 capture**: タスク完了前に記憶候補を監査する。明示された価値観、判断原則、

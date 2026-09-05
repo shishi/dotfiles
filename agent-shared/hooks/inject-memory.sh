@@ -104,11 +104,11 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
     if [ -z "$lock_min" ]; then
       repo_state="記憶 repo に write lock あり(取得時刻は不明)"
     elif [ "$lock_min" -ge 10 ]; then
-      repo_state="記憶 repo の write lock が ${lock_min} 分前から残存(10 分以上 = stale の可能性。除去はユーザー確認のうえで)"
+      repo_state="記憶 repo の write lock が ${lock_min} 分前から残存(10 分以上 = 要調査。参考情報として放置せず、元の作業より先に状態を調査。現在の workflow が継続中なら通常の finish まで保持、中断時だけ release して以後の変更を禁止。所有者不明なら自動 release・raw delete せず具体的状態を報告して復旧まで停止)"
     else
       repo_state="記憶 repo に write lock あり(${lock_min} 分前に取得・書き込み進行中)"
     fi
-    # lock と dirty は同時に成立する(書き込み途中で落ちたセッション)。lock を消してよいか
+    # lock と dirty は同時に成立する(書き込み途中で落ちたセッション)。自律復旧できるか
     # 判断するには未 commit の変更が残っているかが要るので、片方に畳まず両方伝える。
     [ -n "$porcelain" ] && repo_state="${repo_state}。worktree に未 commit の変更あり"
   elif [ -n "$porcelain" ]; then

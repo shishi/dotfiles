@@ -79,7 +79,7 @@ helper は `AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順に尊重�
 
 セッション開始時に索引、`CORE.md` の全体価値観と方針、現プロジェクト記憶が `<personal-memory>` ブロックとして自動注入される。詳細が要るときだけ該当ファイルを Read で開く。ブロックが無いセッションでは「注入が効いていない」旨をユーザーへ報告する。このとき `<personal-memory-warning>` が出ていればその警告文の復旧手順に従う。worktree を直接 Read してよいのは、警告文が明示的にそう指示した場合だけ(記憶 repo の状態が信用できないという判定なので、既定では読まない)。警告も無い場合は `~/.claude/memory/MEMORY.md` を直接 Read する。
 
-ブロック内に `⚠ 記憶 repo` で始まる行があるときは **degraded 注入**(別セッションの書き込み進行中、または worktree が dirty)で、内容は**最後の commit 時点**。注入された内容は commit 済みなので信頼してよい。この状態では該当ファイルを worktree から Read しない(編集途中を掴む)。詳細が要るときは `git -C ~/.claude/memory show main:<repo 相対パス>` で commit 済みの本文を読む(書き込みが完了していれば注入時点より新しいことがある)。lock が 10 分以上残存している旨の警告は stale の可能性を示すだけで、lock の除去は必ずユーザーに確認してから行う。
+ブロック内に `⚠ 記憶 repo` で始まる行があるときは **degraded 注入**(別セッションの書き込み進行中、または worktree が dirty)で、内容は**最後の commit 時点**。注入された内容は commit 済みなので信頼してよい。この状態では該当ファイルを worktree から Read しない(編集途中を掴む)。詳細が要るときは `git -C ~/.claude/memory show main:<repo 相対パス>` で commit 済みの本文を読む(書き込みが完了していれば注入時点より新しいことがある)。lock が 10 分以上残存している警告は参考情報として放置せず、元の作業より先に正本、経過時間、worktree、handle・lock・retirement の個数と構造を調査する。現在の workflow が取得して保持中の handle なら、継続時は解放せず通常の finish まで完遂する。中断・放棄時だけ `memory-write-lock.sh release` で解放して以後は変更せず、再開時は preflight から取り直す。所有者不明の handle は構造と token の一致だけでは writer の停止を証明できないため自動 release しない。確認できた状態をユーザーへ報告して復旧判断を求め、解消まで記憶を使う作業を停止する。dirty、複数 handle、retirement、検証・release 失敗でも raw delete しない。
 
 `⚠ 未 push` で始まる行は degraded ではない。ローカルに確定済みの記憶が push 未了であることの警告で、注入内容はそのまま信頼できる。
 
