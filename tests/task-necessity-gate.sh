@@ -159,9 +159,23 @@ done
 
 if [ "$never_blocks" -eq 3 ] && [ ! -e "$never_state" ]; then
   echo 'ok: repeated reviewer failures stop after three corrections'
-  echo 'PASS=5 FAIL=0'
 else
   echo "NG: repeated reviewer failures stop after three corrections (blocks=$never_blocks)"
   echo 'PASS=4 FAIL=1'
+  exit 1
+fi
+
+ending_start=$(jq -n --arg cwd "$TMP" '{session_id:"ending",turn_id:"end",cwd:$cwd,prompt:"ending-work"}')
+printf '%s' "$ending_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+ending_state="$TMP/.git/codex-task-necessity/ending-end"
+ending_cleanup=$(jq -n --arg cwd "$TMP" '{session_id:"ending",cwd:$cwd}')
+printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup-session >/dev/null
+
+if [ ! -e "$ending_state" ]; then
+  echo 'ok: session end removes the preserved request state'
+  echo 'PASS=6 FAIL=0'
+else
+  echo 'NG: session end removes the preserved request state'
+  echo 'PASS=5 FAIL=1'
   exit 1
 fi

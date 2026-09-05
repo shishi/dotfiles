@@ -33,6 +33,15 @@ cleanup_dir() {
 
 cleanup() { cleanup_dir "$state_dir"; }
 
+cleanup_session() {
+  local keep=${1:-}
+  for old_state in "$state_root/$session_key-"*; do
+    [ -d "$old_state" ] || continue
+    [ -n "$keep" ] && [ "$old_state" = "$keep" ] && continue
+    cleanup_dir "$old_state"
+  done
+}
+
 case "$action" in
   start)
     submitted_prompt=$(printf '%s' "$hook_input" | jq -r '.prompt // ""')
@@ -43,11 +52,7 @@ case "$action" in
       exit 0
     fi
     # 同じ session で前の turn が中断されていれば、別 session へ触れず既知 state だけ掃除する。
-    for old_state in "$state_root/$session_key-"*; do
-      [ -d "$old_state" ] || continue
-      [ "$old_state" = "$state_dir" ] && continue
-      cleanup_dir "$old_state"
-    done
+    cleanup_session "$state_dir"
     umask 077
     mkdir -p "$state_dir" || {
       printf '{}\n'
@@ -181,6 +186,11 @@ case "$action" in
     else
       printf '{}\n'
     fi
+    ;;
+
+  cleanup-session)
+    cleanup_session
+    printf '{}\n'
     ;;
 
   *)

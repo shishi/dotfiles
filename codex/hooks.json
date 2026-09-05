@@ -80,6 +80,18 @@
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
