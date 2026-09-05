@@ -26,10 +26,16 @@ while [ "$#" -gt 0 ]; do
 done
 prompt=$(cat)
 case "$prompt" in
-  *'元のユーザー依頼に対して実行したこと、結果、未完了事項を報告していない'*requested-change*'+added guard'*) ;;
-  *) exit 2 ;;
+  *'元のユーザー依頼に対して実行したこと、結果、未完了事項を報告していない'*requested-change*'+added guard'*)
+    printf 'BLOCK: 追加した guard は依頼にも観測済み障害にも対応していない。\n' >"$output"
+    ;;
+  *'作業を求める依頼'*report-work*'<assistant-response>'*done*)
+    printf 'BLOCK: 実行したことと結果が報告されていない。\n' >"$output"
+    ;;
+  *)
+    exit 2
+    ;;
 esac
-printf 'BLOCK: 追加した guard は依頼にも観測済み障害にも対応していない。\n' >"$output"
 EOF
 chmod +x "$TMP/codex"
 
@@ -43,9 +49,23 @@ result=$(printf '%s' "$stop_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" st
 if [ "$(printf '%s' "$result" | jq -r '.decision // ""')" = block ] &&
   printf '%s' "$result" | jq -r '.reason // ""' | grep -qF 'hook の指摘への返答を主文にせず、元のユーザー依頼に対して実行したこと、結果、未完了事項を報告'; then
   echo 'ok: unsupported structure blocks Stop'
-  echo 'PASS=1 FAIL=0'
 else
   echo 'NG: unsupported structure blocks Stop'
-  echo 'PASS=0 FAIL=1'
+  exit 1
+fi
+
+report_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"report",cwd:$cwd,prompt:"report-work"}')
+printf '%s' "$report_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+
+report_stop=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"report",cwd:$cwd,last_assistant_message:"done",stop_hook_active:false}')
+report_result=$(printf '%s' "$report_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$report_result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$report_result" | jq -r '.reason // ""' | grep -qF '実行したことと結果が報告されていない'; then
+  echo 'ok: missing report blocks Stop without a repository diff'
+  echo 'PASS=2 FAIL=0'
+else
+  echo 'NG: missing report blocks Stop without a repository diff'
+  echo 'PASS=1 FAIL=1'
   exit 1
 fi
