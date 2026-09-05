@@ -26,7 +26,7 @@ while [ "$#" -gt 0 ]; do
 done
 prompt=$(cat)
 case "$prompt" in
-  *requested-change*'+added guard'*) ;;
+  *'元のユーザー依頼に対して実行したこと、結果、未完了事項を報告していない'*requested-change*'+added guard'*) ;;
   *) exit 2 ;;
 esac
 printf 'BLOCK: 追加した guard は依頼にも観測済み障害にも対応していない。\n' >"$output"
@@ -40,7 +40,8 @@ printf 'added guard\n' >>"$TMP/code.txt"
 stop_input=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"turn",cwd:$cwd,last_assistant_message:"done",stop_hook_active:false}')
 result=$(printf '%s' "$stop_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
 
-if [ "$(printf '%s' "$result" | jq -r '.decision // ""')" = block ]; then
+if [ "$(printf '%s' "$result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$result" | jq -r '.reason // ""' | grep -qF 'hook の指摘への返答を主文にせず、元のユーザー依頼に対して実行したこと、結果、未完了事項を報告'; then
   echo 'ok: unsupported structure blocks Stop'
   echo 'PASS=1 FAIL=0'
 else
