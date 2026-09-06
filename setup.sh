@@ -150,6 +150,9 @@ if [ -d "$HOME/.agents" ] && [ ! -L "$HOME/.agents" ]; then
 fi
 [ -e "$HOME/.agents" ] || ln -sfn "$HOME/.agent-shared" "$HOME/.agents"
 
+bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync \
+  || echo "setup.sh: managed skill sync failed"
+
 if [ -L "$XDG_CONFIG_HOME/nushell" ]; then
   rm "$XDG_CONFIG_HOME/nushell"
 fi

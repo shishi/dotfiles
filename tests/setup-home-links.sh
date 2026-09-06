@@ -29,10 +29,12 @@ mkdir -p \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
   "$DOTFILES/nushell" "$DOTFILES/herdr" \
   "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agent-shared/skills" \
-  "$CONFIG_DIR" "$TMP/appdata" "$MEMORY_DIR"
+  "$CONFIG_DIR" "$TMP/appdata" "$MEMORY_DIR" "$TMP/bin"
 
 cp "$SETUP" "$DOTFILES/setup.sh"
 cp "$REPO/agent-shared/bin/resolve-memory-dir.sh" "$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
+cp "$REPO/agent-shared/bin/managed-skills.sh" "$DOTFILES/agent-shared/bin/managed-skills.sh"
+cp "$REPO/agent-shared/managed-skills.tsv" "$DOTFILES/agent-shared/managed-skills.tsv"
 printf 'runtime\n' >"$HOME_DIR/.claude/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.agent-shared/skills/local.txt"
@@ -54,8 +56,16 @@ command() {
 }
 EOF
 
+cat >"$TMP/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$FAKE_GH_CALLS"
+[ "$*" = "skill --help" ]
+EOF
+chmod +x "$TMP/bin/gh"
+export FAKE_GH_CALLS="$TMP/gh-calls"
+
 run_setup() {
-  HOME="$HOME_DIR" XDG_CONFIG_HOME="$CONFIG_DIR" APPDATA="$TMP/appdata" \
+  HOME="$HOME_DIR" PATH="$TMP/bin:$PATH" XDG_CONFIG_HOME="$CONFIG_DIR" APPDATA="$TMP/appdata" \
     REMOTE_CONTAINERS=true AGENT_MEMORY_DIR="$MEMORY_DIR" \
     BASH_ENV="$TMP/hide-optional.sh" bash "$DOTFILES/setup.sh" \
     >"$TMP/setup.log" 2>&1
@@ -78,6 +88,7 @@ assert "Codex runtime is preserved in backup" test -f "$HOME_DIR/.codex.back/his
 assert "personal skill runtime is preserved in backup" test -f "$HOME_DIR/.agent-shared/skills.back/local.txt"
 assert "Claude memory uses the canonical private repo" resolves_to "$DOTFILES/claude/memory" "$MEMORY_DIR"
 assert "Codex memory uses the canonical private repo" resolves_to "$DOTFILES/codex/memory" "$MEMORY_DIR"
+assert "setup synchronizes managed external skills" grep -q '^skill --help$' "$FAKE_GH_CALLS"
 
 run_setup
 if [ ! -e "$HOME_DIR/.claude.back.1" ] && [ ! -e "$HOME_DIR/.codex.back.1" ]; then
