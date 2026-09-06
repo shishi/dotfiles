@@ -52,6 +52,12 @@ case "$prompt" in
   *'ユーザーにしか実行できない'*user-action-work*'<assistant-response>'*'未完了: approval required'*)
     printf 'BLOCK: ユーザーに必要な行動が報告されていない。\n' >"$output"
     ;;
+  *'提案・選択肢・今後の候補は実装差分ではありません'*proposal-work*'<assistant-response>'*'提案: path ownership を使う'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *proposal-work*'<assistant-response>'*'提案: path ownership を使う'*)
+    printf 'BLOCK: 正当な提案を未実施として訂正している。\n' >"$output"
+    ;;
   *ownership-work*'+unrelated change'*)
     printf 'BLOCK: 別セッションの差分が混入している。\n' >"$output"
     ;;
@@ -178,6 +184,23 @@ else
   exit 1
 fi
 
+proposal_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"proposal",cwd:$cwd,prompt:"proposal-work"}')
+printf '%s' "$proposal_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+proposal_stop=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"proposal",cwd:$cwd,last_assistant_message:"提案: path ownership を使う",stop_hook_active:false}')
+proposal_result=$(printf '%s' "$proposal_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+proposal_review="$TMP/.git/codex-task-necessity/session-proposal/review.prompt"
+proposal_verdict="$TMP/.git/codex-task-necessity/session-proposal/review.result"
+
+if [ "$(printf '%s' "$proposal_result" | jq -r '.decision // ""')" != block ] &&
+  [ -f "$proposal_review" ] &&
+  [ "$(sed -n '1p' "$proposal_verdict")" = PASS ]; then
+  echo 'ok: legitimate proposals are not treated as unimplemented changes'
+else
+  echo 'NG: legitimate proposals are not treated as unimplemented changes'
+  echo 'PASS=5 FAIL=1'
+  exit 1
+fi
+
 ownership_start=$(jq -n --arg cwd "$TMP" \
   '{session_id:"owner-session",turn_id:"parallel",cwd:$cwd,prompt:"ownership-work"}')
 printf '%s' "$ownership_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
@@ -248,9 +271,9 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=8 FAIL=0'
+  echo 'PASS=9 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
-  echo 'PASS=7 FAIL=1'
+  echo 'PASS=8 FAIL=1'
   exit 1
 fi
