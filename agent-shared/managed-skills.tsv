@@ -3,3 +3,4 @@ domain-modeling	mattpocock/skills	skills/engineering/domain-modeling	claude,code
 grill-me	mattpocock/skills	skills/productivity/grill-me	claude,codex
 grill-with-docs	mattpocock/skills	skills/engineering/grill-with-docs	claude,codex
 grilling	mattpocock/skills	skills/productivity/grilling	claude,codex
+show-me	humanlayer/skills	plugins/show-me/skills/show-me	claude,codex
