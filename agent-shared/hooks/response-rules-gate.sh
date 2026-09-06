@@ -77,7 +77,7 @@ if [ -z "$violations" ] && [ -z "$menu" ] && [ -z "$evasion" ] && [ -z "$tone" ]
 fi
 
 reason=""
-[ -z "$violations" ] || reason="初出で定義していない語:${violations}(平易な日本語に置き換えるか、初出で「語(説明)」の形で定義する)"
+[ -z "$violations" ] || reason="初出で定義していない語:${violations}(初出で「語(説明)」の形で解説する。平易な日本語へ置き換えるのは、意味と正確さを損なわない場合だけ)"
 [ -z "$menu" ] || reason="${reason}${reason:+ / }判断を投げ返す言い回し: ${menu}(選択肢を並べず、自分の判断で進めて結果を報告する)"
 [ -z "$evasion" ] || reason="${reason}${reason:+ / }${evasion}"
 [ -z "$tone" ] || reason="${reason}${reason:+ / }${tone}"

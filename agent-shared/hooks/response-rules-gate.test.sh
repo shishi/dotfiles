@@ -44,10 +44,13 @@ cat >"$TMP/codex-bootstrap.jsonl" <<'EOF'
 {"type":"event_msg","payload":{"type":"user_message","message":"テストして"}}
 EOF
 out=$(run_gate "$TMP/codex-bootstrap.jsonl" 'TDD を採用したよ。')
-if printf '%s' "$out" | jq -e '.decision == "block" and (.reason | contains("TDD"))' >/dev/null; then
-  ok "Codex bootstrapをユーザー語彙に混ぜない"
+if printf '%s' "$out" | jq -e '.decision == "block" and
+  (.reason | contains("TDD")) and
+  (.reason | contains("初出で「語(説明)」の形で解説する")) and
+  (.reason | contains("平易な日本語へ置き換えるのは、意味と正確さを損なわない場合だけ"))' >/dev/null; then
+  ok "Codex bootstrapをユーザー語彙に混ぜず、解説を第一候補にする"
 else
-  ng "Codex bootstrapをユーザー語彙に混ぜない"
+  ng "Codex bootstrapをユーザー語彙に混ぜず、解説を第一候補にする"
 fi
 
 cat >"$TMP/claude-vocabulary.jsonl" <<'EOF'
