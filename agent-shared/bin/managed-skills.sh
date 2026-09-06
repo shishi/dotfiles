@@ -107,19 +107,16 @@ EOF
   targets_include "$targets" "$2"
 }
 
-refresh_git_exclude() {
-  local exclude_path tmp root name
-  exclude_path="$(git -C "$REPO_ROOT" rev-parse --git-path info/exclude 2>/dev/null)" || return 0
-  case "$exclude_path" in /*) ;; *) exclude_path="$REPO_ROOT/$exclude_path" ;; esac
-  mkdir -p "$(dirname "$exclude_path")" || return 1
-  [ -e "$exclude_path" ] || : >"$exclude_path"
-  tmp="$(mktemp "$(dirname "$exclude_path")/.managed-skills-exclude.XXXXXX")" || return 1
+refresh_gitignore() {
+  local ignore_path="$REPO_ROOT/.gitignore" tmp root name
+  [ -e "$ignore_path" ] || : >"$ignore_path"
+  tmp="$(mktemp "$REPO_ROOT/.managed-skills-gitignore.XXXXXX")" || return 1
 
   awk -v begin="$EXCLUDE_BEGIN" -v end="$EXCLUDE_END" '
     $0 == begin { skipping=1; next }
     $0 == end { skipping=0; next }
     !skipping { print }
-  ' "$exclude_path" >"$tmp" || { rm -f "$tmp"; return 1; }
+  ' "$ignore_path" >"$tmp" || { rm -f "$tmp"; return 1; }
 
   printf '%s\n' "$EXCLUDE_BEGIN" >>"$tmp"
   for root in "$CLAUDE_SKILLS" "$CODEX_SKILLS"; do
@@ -134,7 +131,7 @@ refresh_git_exclude() {
     done
   done
   printf '%s\n' "$EXCLUDE_END" >>"$tmp"
-  mv "$tmp" "$exclude_path"
+  mv "$tmp" "$ignore_path"
 }
 
 prune_managed() {
@@ -200,7 +197,7 @@ sync_all() {
   validate_manifest || die "$MANIFEST is invalid"
 
   if ! command -v gh >/dev/null 2>&1 || ! gh skill --help >/dev/null 2>&1; then
-    refresh_git_exclude || true
+    refresh_gitignore || true
     die "gh skill is unavailable; existing skills were left unchanged"
   fi
 
@@ -213,7 +210,7 @@ sync_all() {
   done <"$MANIFEST"
 
   prune_managed || failed=$((failed + 1))
-  refresh_git_exclude || failed=$((failed + 1))
+  refresh_gitignore || failed=$((failed + 1))
   printf 'managed-skills: done (installed: %d, updated: %d, removed: %d, failed: %d)\n' \
     "$installed" "$updated" "$removed" "$failed"
   [ "$failed" -eq 0 ]
@@ -260,7 +257,7 @@ EOF
       warn "$path is not manager-owned; preserved"
     fi
   done
-  refresh_git_exclude || failed=$((failed + 1))
+  refresh_gitignore || failed=$((failed + 1))
   [ "$failed" -eq 0 ]
 }
 
@@ -327,7 +324,7 @@ EOF
   else
     write_manifest "$name" || die "could not update $MANIFEST"
   fi
-  refresh_git_exclude || die "could not update Git exclude"
+  refresh_gitignore || die "could not update Git ignore rules"
 }
 
 list_skills() {

@@ -57,7 +57,7 @@ Git で追跡し、外部 skill の本体は追跡しません。利用者は台
 `~/.agent-shared/skills/<name>` へ直接導入します。各コピーへ
 `.dotfiles-managed-skill` を置き、管理スクリプトの所有物であることを示します。
 
-管理対象のパスは `.git/info/exclude` の専用区間へ自動登録します。`fork` は管理印と
+管理対象のパスはルートの `.gitignore` にある専用区間へ自動登録します。`fork` は管理印と
 `gh skill` が追加した GitHub 更新情報を外し、除外設定からも削除します。その結果、
 現在の内容を保持したまま自作 skill として Git 管理へ移せます。
 

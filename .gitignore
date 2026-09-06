@@ -36,3 +36,7 @@ __pycache__/
 /.worktrees/
 
 /docs/superpowers/*
+# BEGIN managed external skills
+/claude/skills/grill-me/
+/codex/skills/grill-me/
+# END managed external skills
