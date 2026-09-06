@@ -15,6 +15,7 @@
 !/claude/skills/
 !/claude/skills/**
 /claude/skills/hunk-review/
+/claude/skills/terminal-browser
 !/claude/statusline.sh
 !/claude/install-plugins.sh
 /codex/*
@@ -27,6 +28,7 @@
 !/codex/skills/
 !/codex/skills/**
 /codex/skills/hunk-review/
+/codex/skills/terminal-browser
 /codex/skills/.system/
 !/codex/hooks/
 !/codex/hooks/**
