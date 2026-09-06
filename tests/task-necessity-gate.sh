@@ -11,7 +11,9 @@ git -C "$TMP" init -q
 git -C "$TMP" config user.name test
 git -C "$TMP" config user.email test@example.invalid
 printf 'base\n' >"$TMP/code.txt"
-git -C "$TMP" add code.txt
+printf 'base\n' >"$TMP/owned.txt"
+printf 'base\n' >"$TMP/unrelated.txt"
+git -C "$TMP" add code.txt owned.txt unrelated.txt
 git -C "$TMP" -c commit.gpgSign=false commit -qm init
 
 cat >"$TMP/codex" <<'EOF'
@@ -50,6 +52,12 @@ case "$prompt" in
   *'ユーザーにしか実行できない'*user-action-work*'<assistant-response>'*'未完了: approval required'*)
     printf 'BLOCK: ユーザーに必要な行動が報告されていない。\n' >"$output"
     ;;
+  *ownership-work*'+unrelated change'*)
+    printf 'BLOCK: 別セッションの差分が混入している。\n' >"$output"
+    ;;
+  *ownership-work*'+owned change'*)
+    printf 'PASS\n' >"$output"
+    ;;
   *never-pass-work*)
     printf 'BLOCK: reviewer failure repeats.\n' >"$output"
     ;;
@@ -63,6 +71,9 @@ chmod +x "$TMP/codex"
 start_input=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"turn",cwd:$cwd,prompt:"requested-change"}')
 printf '%s' "$start_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
 
+track_input=$(jq -n --arg cwd "$TMP" --arg path "$TMP/code.txt" \
+  '{session_id:"session",turn_id:"turn",cwd:$cwd,tool_input:{file_path:$path}}')
+printf '%s' "$track_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" track >/dev/null
 printf 'added guard\n' >>"$TMP/code.txt"
 stop_input=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"turn",cwd:$cwd,last_assistant_message:"done",stop_hook_active:false}')
 result=$(printf '%s' "$stop_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
@@ -167,6 +178,47 @@ else
   exit 1
 fi
 
+ownership_start=$(jq -n --arg cwd "$TMP" \
+  '{session_id:"owner-session",turn_id:"parallel",cwd:$cwd,prompt:"ownership-work"}')
+printf '%s' "$ownership_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+child_start=$(jq -n --arg cwd "$TMP" \
+  '{session_id:"owner-session",turn_id:"child-turn",agent_id:"child",agent_type:"default",cwd:$cwd,prompt:"child-work"}')
+printf '%s' "$child_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+other_session_start=$(jq -n --arg cwd "$TMP" \
+  '{session_id:"other-session",turn_id:"parallel",cwd:$cwd,prompt:"other-work"}')
+printf '%s' "$other_session_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+
+other_track=$(jq -n --arg cwd "$TMP" --arg path "$TMP/unrelated.txt" \
+  '{session_id:"other-session",turn_id:"parallel",cwd:$cwd,tool_input:{file_path:$path}}')
+printf '%s' "$other_track" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" track >/dev/null
+printf 'unrelated change\n' >>"$TMP/unrelated.txt"
+
+# subagent hook は親 session_id と固有 turn_id を受け取り、親 state へ集約される。
+delegated_track=$(jq -n --arg cwd "$TMP" \
+  '{session_id:"owner-session",turn_id:"child-turn",agent_id:"child",agent_type:"default",cwd:$cwd,tool_input:{command:"*** Begin Patch\n*** Update File: owned.txt\n*** End Patch"}}')
+printf '%s' "$delegated_track" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" track >/dev/null
+printf 'owned change\n' >>"$TMP/owned.txt"
+
+ownership_stop=$(jq -n --arg cwd "$TMP" \
+  '{session_id:"owner-session",turn_id:"parallel",cwd:$cwd,last_assistant_message:"done",stop_hook_active:false}')
+ownership_result=$(printf '%s' "$ownership_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+ownership_review="$TMP/.git/codex-task-necessity/owner-session-parallel/review.prompt"
+codex_tracker_count=$(jq '[.hooks.PreToolUse[] |
+  select((.matcher // "") | test("apply_patch")) | .hooks[] |
+  select(.command == "bash ~/.agent-shared/hooks/task-necessity-gate.sh track")] | length' "$REPO/codex/hooks.json")
+
+if [ "$(printf '%s' "$ownership_result" | jq -r '.decision // ""')" != block ] &&
+  [ -f "$ownership_review" ] &&
+  grep -qF '+owned change' "$ownership_review" &&
+  ! grep -qF '+unrelated change' "$ownership_review" &&
+  [ "$codex_tracker_count" -eq 1 ]; then
+  echo 'ok: reviewer diff is limited to the parent session and turn'
+else
+  echo 'NG: reviewer diff is limited to the parent session and turn'
+  echo 'PASS=5 FAIL=1'
+  exit 1
+fi
+
 never_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"never",cwd:$cwd,prompt:"never-pass-work"}')
 printf '%s' "$never_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
 never_state="$TMP/.git/codex-task-necessity/session-never"
@@ -196,9 +248,9 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=7 FAIL=0'
+  echo 'PASS=8 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
-  echo 'PASS=6 FAIL=1'
+  echo 'PASS=7 FAIL=1'
   exit 1
 fi

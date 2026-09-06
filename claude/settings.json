@@ -198,6 +198,11 @@
             "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10,
             "statusMessage": "収束ゲート確認中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh track",
+            "timeout": 10
           }
         ]
       },
@@ -236,6 +241,11 @@
             "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
             "timeout": 10,
             "statusMessage": "収束カウンタをリセット中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh track",
+            "timeout": 10
           }
         ]
       },
