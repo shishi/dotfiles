@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse (AskUserQuestion) — 質問する瞬間に「まず試したか」を差し込む。
+# PreToolUse (AskUserQuestion / request_user_input) — 質問する瞬間に「まず試したか」を差し込む。
 #
 # 規則の本文は agent-memory の autonomous-execution-preference にあるが、
 # 索引しか注入されないため質問を組み立てる瞬間には効かない。block はしない

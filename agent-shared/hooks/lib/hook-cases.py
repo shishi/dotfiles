@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 
-HOOKS = os.path.expanduser("~/.claude/hooks")
+HOOKS = os.path.expanduser("~/.agent-shared/hooks")
 GUARD = os.path.join(HOOKS, "gh-body-file-guard.sh")
 READBACK = os.path.join(HOOKS, "outward-write-readback.sh")
 

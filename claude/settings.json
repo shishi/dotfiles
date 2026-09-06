@@ -183,7 +183,7 @@
           },
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/gh-body-file-guard.sh",
+            "command": "bash ~/.agent-shared/hooks/gh-body-file-guard.sh",
             "timeout": 10,
             "statusMessage": "gh の本文受け渡しを確認中..."
           },
@@ -254,7 +254,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/verify-before-asking.sh",
+            "command": "bash ~/.agent-shared/hooks/verify-before-asking.sh",
             "timeout": 10
           }
         ]
@@ -305,7 +305,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/herdr-skill-nudge.sh",
+            "command": "bash ~/.agent-shared/hooks/herdr-skill-nudge.sh",
             "timeout": 10
           }
         ]

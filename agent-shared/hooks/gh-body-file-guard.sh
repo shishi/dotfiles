@@ -1,9 +1,9 @@
 #!/bin/bash
 # PreToolUse (Bash) hook: gh の本文をパス渡しするのを禁止し、stdin に強制する。
 #
-# 背景: sandbox の有無で $TMPDIR が別ディレクトリになるため、sandbox 内で書いた本文ファイルを
-# sandbox 外の gh から読むとパスが解決されない。同名の残骸ファイルが存在すると gh はエラーを出さず
-# 別内容の本文で PR を作成する (実例: PR #21220 に無関係な PR の本文が入った)。
+# 背景: agent の sandbox 内外で $TMPDIR が別ディレクトリになるため、sandbox 内で書いた本文ファイルを
+# sandbox 外の gh から読むとパスが解決されないことがある。同名の残骸ファイルが存在すると gh は
+# エラーを出さず別内容の本文で PR を作成する (実例: PR #21220 に無関係な本文が入った)。
 # ヒアドキュメントを stdin に流せば中間ファイルが無くなり、この乖離は原理的に起きない。
 #
 # 対象はコマンド位置に現れた gh の呼び出しのみ (detect-invocation.py)。
@@ -11,7 +11,6 @@
 # 別内容を投稿してしまう事故は投稿後に気づけないため。
 
 input=$(cat)
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # python の bin 名は環境で変わる(python3 / python)。能力で解決する
 py_bin=$(command -v python3 || command -v python) || py_bin=""

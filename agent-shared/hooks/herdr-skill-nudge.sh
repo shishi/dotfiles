@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SessionStart hook: herdr 内 (HERDR_ENV=1) のセッションで herdr skill の使用を促す。
+# SessionStart hook: herdr 内 (HERDR_ENV=1) の各 agent に herdr skill の使用を促す。
 # skill の発動はモデルが description に気づくかに依存するため、確定的に注入する。
 # fail-open: herdr 外では何も出力せず正常終了する。
 set -u

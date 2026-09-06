@@ -24,11 +24,25 @@ transcript=$(printf '%s' "$hook_input" | jq -r '.transcript_path // ""')
 # コードフェンスとバッククォート表記(コード識別子・コマンドは対象外)を除去
 stripped=$(printf '%s\n' "$last" | awk '/^ *```/{fence=!fence;next} !fence' | sed -E 's/`[^`]*`//g')
 
+# Claude Code と Codex の transcript からユーザー発言だけを同じ配列へ正規化する。
+user_messages=$(jq -rs '
+  def content_text:
+    if type == "string" then .
+    elif type == "array" then
+      map(if type == "string" then . elif type == "object" then (.text? // "") else "" end)
+      | join("\n")
+    else ""
+    end;
+  [ .[] |
+    if .type == "user" then (.message.content | content_text)
+    elif .type == "event_msg" and .payload.type == "user_message" then
+      (.payload.message | content_text)
+    else empty
+    end
+    | select(. != "") ]' "$transcript" 2>/dev/null) || user_messages='[]'
+
 # ユーザーが自分の発言で使った語は共有語彙として対象外にする
-user_text=$(jq -rs '
-  [ .[] | select(.type == "user") | .message.content
-    | if type == "string" then . else (map(.text? // "") | join("\n")) end ]
-  | join("\n")' "$transcript" 2>/dev/null)
+user_text=$(printf '%s' "$user_messages" | jq -r 'join("\n")' 2>/dev/null)
 
 violations=""
 for term in $(printf '%s' "$stripped" | grep -oE '\b[A-Z][A-Z0-9]{2,7}\b' | sort -u); do
@@ -43,11 +57,7 @@ menu=$(printf '%s' "$stripped" | grep -oE 'どれにする|どちらにする|�
 # 「当時知っていたか / 間違いだったか」への事実の表明を必ず含めさせる。
 # 表明を飛ばして整合の説明だけを組み立てる応答(後付けの抵抗)をブロックする。
 evasion=""
-last_user=$(jq -rs '
-  [ .[] | select(.type == "user") | .message.content
-    | if type == "string" then . else (map(select(.type? == "text") | .text) | join("\n")) end
-    | select(. != "") ]
-  | last // ""' "$transcript" 2>/dev/null)
+last_user=$(printf '%s' "$user_messages" | jq -r 'last // ""' 2>/dev/null)
 if printf '%s' "$last_user" | grep -qE 'くせに|矛盾|往生際|うそ|嘘|いったよね|言ったよね|言ってたのに'; then
   printf '%s' "$stripped" | grep -qE '知らな(かった|い)|知りませんでした|わかっていな(かった|い)|分かっていな(かった|い)|把握していな(かった|い)|間違(い|って)|誤り|その通り|当時から知って' || \
     evasion="矛盾・誤りの指摘には、まず「当時知っていたか / 間違いだったか」を事実で答える。整合の説明を書くなら、後付けなら後付けと明示してから"
