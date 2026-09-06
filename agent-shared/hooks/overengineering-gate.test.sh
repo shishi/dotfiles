@@ -70,16 +70,18 @@ else
   ng "editing existing tests without adding markers passes"
 fi
 
-# 6. apply_patch の Add File でテストファイルを作るコマンドは deny、justify 後は許可
-patch_cmd='apply_patch <<EOF\n*** Begin Patch\n*** Add File: src/util_test.py\n+def test_x():\n+    pass\n*** End Patch\nEOF'
-out="$(payload "{\"command\":\"$patch_cmd\"}" | bash "$HOOK")"
+# 6. Codex の直接 apply_patch でテストファイルを作るコマンドは deny、justify 後は許可
+patch_cmd=$'*** Begin Patch\n*** Add File: src/util_test.py\n+def test_x():\n+    pass\n*** End Patch'
+out="$(jq -n --arg command "$patch_cmd" \
+  '{tool_name:"apply_patch",tool_input:{command:$command}}' | bash "$HOOK")"
 if denied "$out"; then
   ok "apply_patch adding a test file is denied"
 else
   ng "apply_patch adding a test file is denied"
 fi
 bash "$HOOK" justify "src/util_test.py" "依頼された挙動Yの証明に必要" >/dev/null || true
-out="$(payload "{\"command\":\"$patch_cmd\"}" | bash "$HOOK")"
+out="$(jq -n --arg command "$patch_cmd" \
+  '{tool_name:"apply_patch",tool_input:{command:$command}}' | bash "$HOOK")"
 if [ -z "$out" ]; then
   ok "justified apply_patch is allowed"
 else

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse — Markdown を書く瞬間にドキュメントの規則を差し込む。
-# Claude は Write|Edit(file_path)、codex は Bash の apply_patch(command)で書くため
-# 両方の入力形を受ける。
+# Claude の Write|Edit(file_path)・Bash 内の apply_patch(command)と、Codex の
+# 直接 apply_patch(command)の入力形を受ける。
 #
 # 規則の本文は agent-memory の writing-decision-docs / usage-docs-in-readme にあるが、
 # セッションに注入されるのは索引だけなので「書く瞬間」には結びつかない。

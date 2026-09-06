@@ -3,8 +3,9 @@
 #
 #  A) 変更を挟まず同じコマンドを repeat_threshold 回目 → deny。
 #     「何を変えたから結果が変わるか」を proceed で宣言した場合だけ
-#     proceed_ttl の間その反復を許可する。ファイル変更(Write/Edit/apply_patch)
-#     はカウンタをリセットするので、編集を挟む正常な red→green 反復は止めない。
+#     proceed_ttl の間その反復を許可する。Claude の Write/Edit・Bash 内の
+#     apply_patch と Codex の直接 apply_patch はカウンタをリセットするので、
+#     編集を挟む正常な red→green 反復は止めない。
 #  B) レビュー系 skill の発動はユーザー指示 1 回あたり review_budget 周まで
 #     → 超過は deny。自己解除は無い。残指摘の採否と理由を列挙して報告して停止する。
 #  C) 同一ファイルへの編集はユーザー指示 1 回あたり churn_free 回まで。

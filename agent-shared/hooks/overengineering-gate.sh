@@ -9,8 +9,8 @@
 # fail-open であり、そこを使った迂回は規約違反として扱う。
 #
 # 使い方:
-#   引数なし: stdin の PreToolUse JSON を判定(Write/Edit/MultiEdit と
-#             apply_patch を含む Bash に対応)
+#   引数なし: stdin の PreToolUse JSON を判定(Claude の Write/Edit/MultiEdit・
+#             Bash 内の apply_patch と、Codex の直接 apply_patch に対応)
 #   justify <path> <理由>: <path> へのテスト追加を TTL の間だけ許可
 set -u
 

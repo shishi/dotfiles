@@ -16,6 +16,11 @@ export CONVERGE_GATE_STATE_DIR="$TMP/state"
 run() { # $1=command $2=session
   printf '{"session_id":"%s","tool_input":{"command":"%s"}}' "$2" "$1" | bash "$HOOK"
 }
+codex_patch() { # $1=patch $2=session
+  jq -n --arg command "$1" --arg session "$2" \
+    '{hook_event_name:"PreToolUse",tool_name:"apply_patch",session_id:$session,tool_input:{command:$command}}' \
+    | bash "$HOOK"
+}
 denied() { grep -q '"permissionDecision": *"deny"' <<<"$1"; }
 
 # 1. 同一コマンド 2 回までは許可
@@ -44,10 +49,10 @@ else
   ng "declared repeat is allowed"
 fi
 
-# 4. ファイル変更(apply_patch)がカウンタをリセットする
+# 4. Codex の直接 apply_patch がカウンタをリセットする
 run 'npm test' s2 >/dev/null
 run 'npm test' s2 >/dev/null
-run 'apply_patch <<EOF\n*** Begin Patch\n*** Update File: src/a.ts\n-const a=1\n+const a=2\n*** End Patch\nEOF' s2 >/dev/null
+codex_patch $'*** Begin Patch\n*** Update File: src/a.ts\n-const a=1\n+const a=2\n*** End Patch' s2 >/dev/null
 out="$(run 'npm test' s2)"
 if [ -z "$out" ]; then
   ok "mutation resets the repeat counter"
