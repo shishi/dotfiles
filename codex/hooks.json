@@ -119,15 +119,6 @@
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
             "command": "bash ~/.agent-shared/hooks/herdr-skill-nudge.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/herdr-skill-nudge.sh'",
             "timeout": 10,
@@ -138,9 +129,9 @@
       {
         "hooks": [
           {
-            "command": "bash '/Users/shigenobu.407/.codex/herdr-agent-state.sh' session",
-            "timeout": 10,
-            "type": "command"
+            "type": "command",
+            "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "timeout": 10
           }
         ]
       }
