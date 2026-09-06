@@ -44,6 +44,12 @@ case "$prompt" in
   *other-hook-work*'<assistant-response>'*hook-only*)
     printf 'BLOCK: retry response does not satisfy the user request.\n' >"$output"
     ;;
+  *'ユーザーにしか実行できない'*user-action-work*'<assistant-response>'*'ユーザーの必要な行動: approve'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *'ユーザーにしか実行できない'*user-action-work*'<assistant-response>'*'未完了: approval required'*)
+    printf 'BLOCK: ユーザーに必要な行動が報告されていない。\n' >"$output"
+    ;;
   *never-pass-work*)
     printf 'BLOCK: reviewer failure repeats.\n' >"$output"
     ;;
@@ -144,6 +150,23 @@ else
   exit 1
 fi
 
+action_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"action",cwd:$cwd,prompt:"user-action-work"}')
+printf '%s' "$action_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+action_missing=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"action",cwd:$cwd,last_assistant_message:"実行: requested\n結果: blocked\n未完了: approval required",stop_hook_active:false}')
+action_missing_result=$(printf '%s' "$action_missing" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+action_reported=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"action",cwd:$cwd,last_assistant_message:"実行: requested\n結果: blocked\n未完了: approval required\nユーザーの必要な行動: approve",stop_hook_active:true}')
+action_reported_result=$(printf '%s' "$action_reported" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$action_missing_result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$action_missing_result" | jq -r '.reason // ""' | grep -qF 'ユーザーに必要な行動が報告されていない' &&
+  [ "$(printf '%s' "$action_reported_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: required user action is preserved in the final report'
+else
+  echo 'NG: required user action is preserved in the final report'
+  echo 'PASS=4 FAIL=1'
+  exit 1
+fi
+
 never_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"never",cwd:$cwd,prompt:"never-pass-work"}')
 printf '%s' "$never_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
 never_state="$TMP/.git/codex-task-necessity/session-never"
@@ -173,9 +196,9 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=6 FAIL=0'
+  echo 'PASS=7 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
-  echo 'PASS=5 FAIL=1'
+  echo 'PASS=6 FAIL=1'
   exit 1
 fi
