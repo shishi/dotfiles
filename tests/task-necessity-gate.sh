@@ -34,6 +34,42 @@ case "$prompt" in
   *'作業を求める依頼'*report-work*'<assistant-response>'*done*)
     printf 'BLOCK: 実行したことと結果が報告されていない。\n' >"$output"
     ;;
+  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'Androidエミュレーターを再起動'*'<turn-tool-calls>'*'systemctl --user restart android-emulator'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'実行: hookを更新'*'<turn-tool-calls>'*'systemctl --user restart android-emulator'*)
+    printf 'BLOCK: Androidエミュレーターの再起動が報告されていない。\n' >"$output"
+    ;;
+  *'ユーザーが求めた観測可能な結果を、変更対象そのものから確認した具体的な証拠'*verify-outcome-work*'<assistant-response>'*'設定を128GBに変更したので完了'*)
+    printf 'BLOCK: 設定値だけで完了扱いしており、変更対象そのものの実測がない。\n' >"$output"
+    ;;
+  *'ユーザーが求めた観測可能な結果を、変更対象そのものから確認した具体的な証拠'*verify-outcome-work*'<assistant-response>'*'Androidのdfで128GBを確認'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *'依頼対象がターン開始時の repository 外'*external-repo-work*'<assistant-response>'*'external.txt'*'commit: external-commit'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *external-repo-work*)
+    printf 'BLOCK: ターン開始時の repository 内に担当差分がない。\n' >"$output"
+    ;;
+  *'既存の状態や resource を作り直す'*preserve-existing-work*'<assistant-response>'*'容量128GB、画面1440x2560を確認'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *'既存の状態や resource を作り直す'*preserve-existing-work*)
+    printf 'BLOCK: 作り直し前の画面設定が維持された証拠がない。\n' >"$output"
+    ;;
+  *preserve-existing-work*)
+    printf 'BLOCK: 作り直し前の保証を確認する規則がない。\n' >"$output"
+    ;;
+  *'安全策、backup、rollback'*meaningless-safety-work*'<assistant-response>'*'復元を実行して旧状態を確認'*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *'安全策、backup、rollback'*meaningless-safety-work*)
+    printf 'BLOCK: 復元を確認していない退避を安全策としている。\n' >"$output"
+    ;;
+  *meaningless-safety-work*)
+    printf 'BLOCK: 実益のない安全策を拒否する規則がない。\n' >"$output"
+    ;;
   *retry-work*'<assistant-response>'*hook-only*)
     printf 'BLOCK: hook への返答だけで、ユーザーへの作業報告がない。\n' >"$output"
     ;;
@@ -105,6 +141,79 @@ if [ "$(printf '%s' "$report_result" | jq -r '.decision // ""')" = block ] &&
 else
   echo 'NG: missing report blocks Stop without a repository diff'
   echo 'PASS=1 FAIL=1'
+  exit 1
+fi
+
+material_transcript="$TMP/material-transcript.jsonl"
+jq -nc '{type:"turn_context",payload:{turn_id:"material"}}' >"$material_transcript"
+jq -nc '{type:"response_item",payload:{type:"custom_tool_call",name:"functions.exec",input:"await tools.exec_command({cmd:\"systemctl --user restart android-emulator\"})"}}' >>"$material_transcript"
+material_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"material",cwd:$cwd,prompt:"material-report-work"}')
+printf '%s' "$material_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+material_missing=$(jq -n --arg cwd "$TMP" --arg transcript "$material_transcript" \
+  '{session_id:"session",turn_id:"material",cwd:$cwd,transcript_path:$transcript,last_assistant_message:"実行: hookを更新\n結果: 成功\n未完了: なし",stop_hook_active:false}')
+material_missing_result=$(printf '%s' "$material_missing" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+material_reported=$(jq -n --arg cwd "$TMP" --arg transcript "$material_transcript" \
+  '{session_id:"session",turn_id:"material",cwd:$cwd,transcript_path:$transcript,last_assistant_message:"実行: hookを更新し、Androidエミュレーターを再起動\n結果: 成功\n未完了: なし",stop_hook_active:true}')
+material_reported_result=$(printf '%s' "$material_reported" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$material_missing_result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$material_missing_result" | jq -r '.reason // ""' | grep -qF '再起動が報告されていない' &&
+  [ "$(printf '%s' "$material_reported_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: final report covers material actions from the current turn'
+else
+  echo 'NG: final report covers material actions from the current turn'
+  exit 1
+fi
+
+verify_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"verify",cwd:$cwd,prompt:"verify-outcome-work"}')
+printf '%s' "$verify_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+verify_unchecked=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"verify",cwd:$cwd,last_assistant_message:"設定を128GBに変更したので完了",stop_hook_active:false}')
+verify_unchecked_result=$(printf '%s' "$verify_unchecked" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+verify_checked=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"verify",cwd:$cwd,last_assistant_message:"実行: 仮想ディスクを拡張\n検証: Androidのdfで128GBを確認\n未完了: なし",stop_hook_active:true}')
+verify_checked_result=$(printf '%s' "$verify_checked" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$verify_unchecked_result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$verify_unchecked_result" | jq -r '.reason // ""' | grep -qF '変更対象そのものの実測がない' &&
+  [ "$(printf '%s' "$verify_checked_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: completion claims require observed user-visible outcomes'
+else
+  echo 'NG: completion claims require observed user-visible outcomes'
+  exit 1
+fi
+
+external_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"external",cwd:$cwd,prompt:"external-repo-work"}')
+printf '%s' "$external_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+external_stop=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"external",cwd:$cwd,last_assistant_message:"実装: /tmp/other-repo/external.txt\ncommit: external-commit\n未完了: なし",stop_hook_active:false}')
+external_result=$(printf '%s' "$external_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$external_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: verifiable work in the requested external repository is accepted'
+else
+  echo 'NG: verifiable work in the requested external repository is accepted'
+  exit 1
+fi
+
+preserve_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"preserve",cwd:$cwd,prompt:"preserve-existing-work"}')
+printf '%s' "$preserve_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+preserve_stop=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"preserve",cwd:$cwd,last_assistant_message:"容量128GB、画面1440x2560を確認",stop_hook_active:false}')
+preserve_result=$(printf '%s' "$preserve_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$preserve_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: replacements preserve verified existing behavior'
+else
+  echo 'NG: replacements preserve verified existing behavior'
+  exit 1
+fi
+
+safety_start=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"safety",cwd:$cwd,prompt:"meaningless-safety-work"}')
+printf '%s' "$safety_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+safety_stop=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"safety",cwd:$cwd,last_assistant_message:"実行: 復元を実行して旧状態を確認\n未完了: なし",stop_hook_active:false}')
+safety_result=$(printf '%s' "$safety_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+
+if [ "$(printf '%s' "$safety_result" | jq -r '.decision // ""')" != block ]; then
+  echo 'ok: safety claims require a verified recovery path'
+else
+  echo 'NG: safety claims require a verified recovery path'
   exit 1
 fi
 
@@ -271,9 +380,9 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=9 FAIL=0'
+  echo 'PASS=14 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
-  echo 'PASS=8 FAIL=1'
+  echo 'PASS=13 FAIL=1'
   exit 1
 fi
