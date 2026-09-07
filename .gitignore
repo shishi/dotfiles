@@ -1,43 +1,54 @@
+# シェルが生成する状態
 /fish/fish_variables
+
+# Claude Code
 # マシンローカルの Claude Code 設定。追跡すると片方のマシンの許可が全マシンへ配られる。
 /.claude/settings.local.json
 /claude/*
 !/claude/CLAUDE.md
 !/claude/settings.json
-!/claude/rules/
-!/claude/rules/**
+!/claude/statusline.sh
+!/claude/install-plugins.sh
 !/claude/agents/
 !/claude/agents/**
 !/claude/hooks/
 !/claude/hooks/**
 # Herdr が Windows 用に生成・更新する runtime hook。POSIX 用 .sh は追跡する。
 /claude/hooks/herdr-agent-state.ps1
+!/claude/rules/
+!/claude/rules/**
 !/claude/skills/
 !/claude/skills/**
-/claude/skills/hunk-review/
-/claude/skills/terminal-browser
-!/claude/statusline.sh
-!/claude/install-plugins.sh
+
+# Codex
 /codex/*
 !/codex/AGENTS.md
 !/codex/config.toml
+!/codex/hooks.json
 !/codex/agents/
 !/codex/agents/**
+!/codex/hooks/
+!/codex/hooks/**
 !/codex/rules/
 !/codex/rules/**
 !/codex/skills/
 !/codex/skills/**
+/codex/skills/.system/
+
+# ツール自身が生成する skill の link
+/claude/skills/hunk-review/
+/claude/skills/terminal-browser
 /codex/skills/hunk-review/
 /codex/skills/terminal-browser
-/codex/skills/.system/
-!/codex/hooks/
-!/codex/hooks/**
-!/codex/hooks.json
+
+# 言語処理系が生成する一時ファイル
 __pycache__/
 *.py[co]
-/.worktrees/
 
+# 作業用ディレクトリ
+/.worktrees/
 /docs/superpowers/*
+
 # BEGIN managed external skills
 /claude/skills/domain-modeling/
 /claude/skills/grill-me/
