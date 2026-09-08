@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code と Codex の transcript からユーザー発言を同じ規則で読む契約を検証する。
+# 略語の誤検知と、Claude Code / Codex のユーザー指摘への応答検査を検証する。
 set -u
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -19,16 +19,6 @@ run_gate() {
     | bash "$HOOK"
 }
 
-cat >"$TMP/codex-vocabulary.jsonl" <<'EOF'
-{"type":"event_msg","payload":{"type":"user_message","message":"API を使って"}}
-EOF
-out=$(run_gate "$TMP/codex-vocabulary.jsonl" 'API を使ったよ。')
-if printf '%s' "$out" | jq -e 'type == "object" and length == 0' >/dev/null; then
-  ok "Codex transcriptのユーザー語彙を定義済みとして扱う"
-else
-  ng "Codex transcriptのユーザー語彙を定義済みとして扱う"
-fi
-
 cat >"$TMP/codex-contradiction.jsonl" <<'EOF'
 {"type":"event_msg","payload":{"type":"user_message","message":"それ矛盾してる"}}
 EOF
@@ -39,25 +29,21 @@ else
   ng "Codex transcriptの直近ユーザー指摘を応答検査に使う"
 fi
 
-cat >"$TMP/codex-bootstrap.jsonl" <<'EOF'
-{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<INSTRUCTIONS>TDD を適用する</INSTRUCTIONS>"}]}}
+cat >"$TMP/codex-terms.jsonl" <<'EOF'
 {"type":"event_msg","payload":{"type":"user_message","message":"テストして"}}
 EOF
-out=$(run_gate "$TMP/codex-bootstrap.jsonl" 'TDD を採用したよ。')
-if printf '%s' "$out" | jq -e '.decision == "block" and
-  (.reason | contains("TDD")) and
-  (.reason | contains("初出で「語(説明)」の形で解説する")) and
-  (.reason | contains("平易な日本語へ置き換えるのは、意味と正確さを損なわない場合だけ"))' >/dev/null; then
-  ok "Codex bootstrapをユーザー語彙に混ぜず、解説を第一候補にする"
+out=$(run_gate "$TMP/codex-terms.jsonl" 'HTTPS で API に接続するよ。')
+if printf '%s' "$out" | jq -e 'type == "object" and length == 0' >/dev/null; then
+  ok "ユーザー未使用の略語でも機械的に説明を強制しない"
 else
-  ng "Codex bootstrapをユーザー語彙に混ぜず、解説を第一候補にする"
+  ng "ユーザー未使用の略語でも機械的に説明を強制しない"
 fi
 
-cat >"$TMP/claude-vocabulary.jsonl" <<'EOF'
-{"type":"user","message":{"content":"API を使って"}}
+cat >"$TMP/claude-contradiction.jsonl" <<'EOF'
+{"type":"user","message":{"content":"それ矛盾してる"}}
 EOF
-out=$(run_gate "$TMP/claude-vocabulary.jsonl" 'API を使ったよ。')
-if printf '%s' "$out" | jq -e 'type == "object" and length == 0' >/dev/null; then
+out=$(run_gate "$TMP/claude-contradiction.jsonl" '説明は整合しています。')
+if printf '%s' "$out" | jq -e '.decision == "block" and (.reason | contains("当時知っていたか"))' >/dev/null; then
   ok "Claude Code transcriptの既存契約を維持する"
 else
   ng "Claude Code transcriptの既存契約を維持する"

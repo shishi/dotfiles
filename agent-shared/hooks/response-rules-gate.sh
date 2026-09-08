@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # 応答の文体ルールを Stop 時に検査する:
-#   1. コード表記の外の ASCII 略語は、ユーザー自身が使った語か、応答内で
-#      「語(説明)」の形で初出定義していなければブロック
-#   2. 判断をユーザーへ投げ返す言い回しがあればブロック
+#   判断の投げ返し・誤りの指摘への回避・口調を検査する。
+#   用語の説明が必要かは文脈に依存するため、略語の表記だけではブロックしない。
 # 共有 hook(Claude Code / codex)なので片方にしかないコマンドへ依存しない。
 # transcript が読めない環境では素通しになる。
 set -u
@@ -41,16 +40,6 @@ user_messages=$(jq -rs '
     end
     | select(. != "") ]' "$transcript" 2>/dev/null) || user_messages='[]'
 
-# ユーザーが自分の発言で使った語は共有語彙として対象外にする
-user_text=$(printf '%s' "$user_messages" | jq -r 'join("\n")' 2>/dev/null)
-
-violations=""
-for term in $(printf '%s' "$stripped" | grep -oE '\b[A-Z][A-Z0-9]{2,7}\b' | sort -u); do
-  printf '%s' "$user_text" | grep -qiF -- "$term" && continue
-  printf '%s' "$stripped" | grep -qE -- "${term}[((]" && continue
-  violations="$violations $term"
-done
-
 menu=$(printf '%s' "$stripped" | grep -oE 'どれにする|どちらにする|どっちにする|選んでね|どうする[?？]' | sort -u | tr '\n' ' ')
 
 # ユーザーが直前の発言で矛盾・誤りを指摘しているターンでは、応答に
@@ -71,13 +60,12 @@ if [ "$prose_bytes" -ge 300 ]; then
     tone="口調が報告書モードに落ちている(事実の硬さは中身で守り、語りは砕けたまま保つ)"
 fi
 
-if [ -z "$violations" ] && [ -z "$menu" ] && [ -z "$evasion" ] && [ -z "$tone" ]; then
+if [ -z "$menu" ] && [ -z "$evasion" ] && [ -z "$tone" ]; then
   printf '{}\n'
   exit 0
 fi
 
 reason=""
-[ -z "$violations" ] || reason="初出で定義していない語:${violations}(初出で「語(説明)」の形で解説する。平易な日本語へ置き換えるのは、意味と正確さを損なわない場合だけ)"
 [ -z "$menu" ] || reason="${reason}${reason:+ / }判断を投げ返す言い回し: ${menu}(選択肢を並べず、自分の判断で進めて結果を報告する)"
 [ -z "$evasion" ] || reason="${reason}${reason:+ / }${evasion}"
 [ -z "$tone" ] || reason="${reason}${reason:+ / }${tone}"
