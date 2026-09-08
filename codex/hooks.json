@@ -25,6 +25,13 @@
             "type": "command"
           },
           {
+            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/reboot-guard.sh'",
+            "statusMessage": "OS 再起動の明示許可を確認中...",
+            "timeout": 10,
+            "type": "command"
+          },
+          {
             "command": "bash ~/.agent-shared/hooks/overengineering-gate.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/overengineering-gate.sh'",
             "statusMessage": "過剰テストゲート確認中...",
@@ -174,6 +181,12 @@
           {
             "command": "bash ~/.agent-shared/hooks/git-push-guard.sh --record-approval",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/git-push-guard.sh --record-approval'",
+            "timeout": 10,
+            "type": "command"
+          },
+          {
+            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh --record-approval",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/reboot-guard.sh --record-approval'",
             "timeout": 10,
             "type": "command"
           },
