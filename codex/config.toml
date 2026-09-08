@@ -1,6 +1,6 @@
 personality = "friendly"
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "medium"
 default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
@@ -28,6 +28,10 @@ memories = false
 
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-remaining"]
+
+[tui.model_availability_nux]
+"gpt-5.6-sol" = 2
+gpt-6-astra = 4
 
 [projects.'c:\users\shishi\dev\dotfiles']
 trust_level = "trusted"
@@ -104,6 +108,9 @@ trust_level = "trusted"
 [projects."/Users/shigenobu.407"]
 trust_level = "trusted"
 
+[projects."/home/shishi"]
+trust_level = "trusted"
+
 [windows]
 sandbox = "elevated"
 
@@ -130,8 +137,6 @@ DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
 DISABLE_TELEMETRY = "1"
 MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
-BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
-NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\shishi\.codex'
 
 [desktop]
 conversationDetailMode = "STEPS_PROSE"
@@ -276,25 +281,25 @@ trusted_hash = "sha256:6ade5a4db26551fde3c41bbd496b84d688354c804799c1a324c2ae877
 trusted_hash = "sha256:4f74534e0f67a528201e6888f243aff1b2d9695d199e04d077dbe1b95daa88db"
 
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:0:1"]
-trusted_hash = "sha256:322e29cecf9c90e851a166aedb63d1564325d7fac9b4df6cc0872581088b5b09"
+trusted_hash = "sha256:b975a1aeca47dd31e8d4e4b26aba7e4c8094fcdf4ac051677992708a2fdef4e3"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:1"]
-trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
+trusted_hash = "sha256:3279e78514cab7ae582b7e12fa3499a491f6516885522fb05e48a10cd988bade"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:2"]
-trusted_hash = "sha256:5164396c9f7b77fdd1abf43dd6e6957a5faf5ae61925052c233853baed48b9d8"
+trusted_hash = "sha256:b84f1092c5f5a64ad83c5ff60224907eeec4ea010d73b3c52bc0adefdc12f159"
 
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:0:2"]
-trusted_hash = "sha256:2376190b9b0e75afa8c2cd7ea4efc87ba9233b21df9a6e703cdb61ab1c8a7d9c"
+trusted_hash = "sha256:53cad90b0d7d318947db2e88e1813350bc754445f470c56db0c9de13231cce75"
 
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:0:3"]
-trusted_hash = "sha256:8682faddfb4e064cee114d42cdae996cfc8a4341bad5572a4580e98867162bb0"
+trusted_hash = "sha256:322e29cecf9c90e851a166aedb63d1564325d7fac9b4df6cc0872581088b5b09"
 
 [hooks.state."/home/shishi/.codex/hooks.json:stop:0:0"]
 trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da1420607277e01c2"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:3"]
-trusted_hash = "sha256:97df317579e8fc1c6ed573e98ac22fd960c3f71949cf3c8045c44becb04ec57b"
+trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
 
 [hooks.state."/home/shishi/.codex/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:46b87f5e0e8386d5ae7ba87248a14354a423e6e0a5a232950a6941fa78946a1f"
@@ -333,10 +338,10 @@ trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da14206072
 trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6fafd0191a6"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:4"]
-trusted_hash = "sha256:498fa21350c285da9cccf27f9fcf38d2d789b735d153f20b12401a51676794e8"
+trusted_hash = "sha256:5164396c9f7b77fdd1abf43dd6e6957a5faf5ae61925052c233853baed48b9d8"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:5"]
-trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
+trusted_hash = "sha256:97df317579e8fc1c6ed573e98ac22fd960c3f71949cf3c8045c44becb04ec57b"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:1:0"]
 trusted_hash = "sha256:ffd0817ff4eb69f9e65d6a138ac4c69481b95aab7d69ebd9970e45e22030e13f"
@@ -359,15 +364,24 @@ trusted_hash = "sha256:df8635c463bf25e0a40ef4d87aa80a0b500369cc6fb365b768d2ab9d5
 [hooks.state."/home/shishi/.codex/hooks.json:stop:0:1"]
 trusted_hash = "sha256:6902f7014609945653a7b827487ef76bf9f9cf6c45142cf6d5d5cb81d639d99b"
 
+[hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:6"]
+trusted_hash = "sha256:498fa21350c285da9cccf27f9fcf38d2d789b735d153f20b12401a51676794e8"
+
+[hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:7"]
+trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
+
+[hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:0:4"]
+trusted_hash = "sha256:2376190b9b0e75afa8c2cd7ea4efc87ba9233b21df9a6e703cdb61ab1c8a7d9c"
+
+[hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:0:5"]
+trusted_hash = "sha256:8682faddfb4e064cee114d42cdae996cfc8a4341bad5572a4580e98867162bb0"
+
 [computer_use.windows.always_allowed_app_ids]
 "Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
 
 [memories]
 generate_memories = false
 use_memories = false
-
-[tui.model_availability_nux]
-"gpt-5.6-sol" = 2
 
 [permissions.workspace-with-dev]
 description = "Workspace editing with write access to ~/dev."
@@ -378,3 +392,4 @@ extends = ":workspace"
 
 [notice]
 hide_rate_limit_model_nudge = true
+
