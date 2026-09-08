@@ -189,6 +189,12 @@
           },
           {
             "type": "command",
+            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh",
+            "timeout": 10,
+            "statusMessage": "操作不能化の明示許可を確認中..."
+          },
+          {
+            "type": "command",
             "command": "bash ~/.agent-shared/hooks/gh-body-file-guard.sh",
             "timeout": 10,
             "statusMessage": "gh の本文受け渡しを確認中..."
@@ -343,6 +349,11 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/reboot-guard.sh --record-approval",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh --record-approval",
             "timeout": 10
           },
           {
