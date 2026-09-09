@@ -314,3 +314,10 @@ end
 
 # Global, not exported: a newly started fish must initialize independently.
 set -gu __dotfiles_fish_initialized 1
+
+# Each interactive shell picks up edits when it next displays a prompt.
+if status is-interactive
+    set -g __dotfiles_fish_config_path (status filename)
+    source (status dirname)/functions/__dotfiles_reload_config.fish
+    __dotfiles_reload_config --remember
+end

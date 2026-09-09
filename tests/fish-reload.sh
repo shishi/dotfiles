@@ -5,8 +5,10 @@ REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/fish-reload.XXXXXX")"
 trap 'rm -rf "$fixture_dir"' EXIT
 mkdir -p "$fixture_dir/home"
+cp -R "$REPO/fish" "$fixture_dir/fish"
+printf '\nset -g reload_count (math $reload_count + 1)\n' >>"$fixture_dir/fish/config.fish"
 HOME="$fixture_dir/home" XDG_CONFIG_HOME="$fixture_dir/home/.config" \
-  FISH_RELOAD_CONFIG="$REPO/fish/config.fish" fish --no-config <<'FISH'
+  FISH_RELOAD_CONFIG="$fixture_dir/fish/config.fish" fish --no-config --interactive -c 'source /dev/stdin' <<'FISH'
 # Keep optional integrations deterministic and prevent startup filesystem writes.
 function type
     switch $argv[-1]
@@ -34,6 +36,7 @@ end
 set -e GUAKE_TAB_UUID
 set -g git_init_count 0
 set -g direnv_init_count 0
+set -g reload_count 0
 source $FISH_RELOAD_CONFIG
 ghc; or exit 1
 if test "$PWD" != "$HOME"
@@ -65,4 +68,33 @@ abbr --query g; or begin
     exit 1
 end
 printf 'PASS: stable PATH, preserved environment, one-time integrations, reloaded abbreviations\n'
+
+set -l previous_count $reload_count
+emit fish_prompt
+test $reload_count -eq $previous_count; or exit 1
+printf '\nabbr --add autoreload_probe updated\n' >>$FISH_RELOAD_CONFIG
+emit fish_prompt
+if not abbr --query autoreload_probe; or test $reload_count -ne (math $previous_count + 1)
+    echo 'FAIL: config change was not reloaded once at the prompt' >&2
+    exit 1
+end
+printf '\nfunction autoreload_function_probe; echo updated; end\n' >> (path dirname $FISH_RELOAD_CONFIG)/startup-functions/__ghq_cd_repository.fish
+emit fish_prompt
+functions -q autoreload_function_probe; or begin
+    echo 'FAIL: startup function change was not reloaded' >&2
+    exit 1
+end
+if test "$chosen_path" != (string join : -- $PATH); or test "$EDITOR" != chosen-editor; or test $direnv_init_count -ne 1; or test $git_init_count -ne 1
+    echo 'FAIL: automatic reload changed the running environment' >&2
+    exit 1
+end
+set -l previous_count $reload_count
+cp $FISH_RELOAD_CONFIG $FISH_RELOAD_CONFIG.valid
+printf '\nif\n' >>$FISH_RELOAD_CONFIG
+emit fish_prompt 2>/dev/null
+test $reload_count -eq $previous_count; or exit 1
+mv $FISH_RELOAD_CONFIG.valid $FISH_RELOAD_CONFIG
+emit fish_prompt
+test $reload_count -eq (math $previous_count + 1); or exit 1
+printf 'PASS: prompt reloads changed config and functions, skips unchanged/invalid config, recovers after correction\n'
 FISH
