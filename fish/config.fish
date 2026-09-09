@@ -1,16 +1,6 @@
-set fish_color_command white
+# Environment and tool paths
 
-# environment variables
-#########################################
-
-#set -x LANG ja_JP.UTF-8
 set -x PATH ~/.local/bin ~/dev/bin ~/.bun/bin /usr/local/sbin /usr/local/bin $PATH
-
-# set -x LIBRARY_PATH ~/.nix-profile/lib:$LIBRARY_PATH
-# set -x LD_LIBRARY_PATH ~/.nix-profile/lib:$LD_LIBRARY_PATH
-# set -x C_INCLUDE_PATH ~/.nix-profile/include:$C_INCLUDE_PATH
-# set -x CPLUS_INCLUDE_PATH  ~/.nix-profile/include:$CPLUS_INCLUDE_PATH
-# set -x PKG_CONFIG_PATH ~/.nix-profile/lib/pkgconfig:$PKG_CONFIG_PATH
 
 set -x GPG_TTY (tty)
 
@@ -23,15 +13,6 @@ set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
 set -x GO111MODULE on
 set -x GOBIN ~/.local/bin
 set -x GOPATH ~/dev/
-
-#set -x GHQ_ROOT $dev/src
-#set -x HOMEBREW_CASK_OPTS="--appdir=/Applications --caskroom=/usr/local/Caskroom"
-#set -x CODECLIMATE_REPO_TOKEN=""
-#set -x RIOT_GAMES_API_KEY=""
-
-# if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-#   set -x BROWSER "/home/shishi/dev/src/github.com/shishi/dotfiles/wsl_browser.sh"
-# end
 
 if [ (uname) = Darwin ]
     if type gls &>/dev/null
@@ -67,35 +48,10 @@ if [ (uname) = Darwin ]
     end
 end
 
-if type less &>/dev/null
-    set -x LESS -R
-end
-
 set -x LESS '-q --ignore-case --no-init --long-prompt --raw-control-chars'
-# set -x LESS '-q -N --ignore-case --no-init --long-prompt --raw-control-chars'
 if type lv &>/dev/null
     set -x PAGER 'lv -c'
-    # else
-    #   set -x PAGER 'less -N --ignore-case -no-init --long-prompt --raw-control-chars'
 end
-
-# # mise
-# if type mise &>/dev/null
-#     if status is-interactive
-#         mise activate fish | source
-#     else
-#         mise activate fish --shims | source
-#     end
-# # rbenv
-# else if type ~/.rbenv/bin/rbenv &>/dev/null
-#     set -x PATH ~/.rbenv/bin $PATH
-#     status --is-interactive; and rbenv init - --no-rehash fish | source
-# end
-
-# # ruby
-# if test -d ~/.gem/
-#   set -x PATH (eval "ruby -e 'print Gem.user_dir'")/bin $PATH
-# end
 
 # rust tools / PATH 契約(nix > cargo > システム既定)
 # conf.d(nix.fish → rustup.fish)が cargo > nix の逆順で前方挿入してくるため、
@@ -115,12 +71,6 @@ if test -f ~/.cask/bin/cask
     set -x PATH ~/.cask/bin $PATH
 end
 
-# aqua
-# if type aqua &>/dev/nul1l
-#     set -x AQUA_GLOBAL_CONFIG $AQUA_GLOBAL_CONFIG":"(test -n "$XDG_CONFIG_HOME"; and echo $XDG_CONFIG_HOME; or echo $HOME"/.config")"/aquaproj-aqua/aqua.yaml"
-#     set -x PATH (test -n "$AQUA_ROOT_DIR"; and echo $AQUA_ROOT_DIR; or echo (test -n "$XDG_DATA_HOME"; and echo $XDG_DATA_HOME; or echo $HOME"/.local/share")"/aquaproj-aqua")"/bin" $PATH
-# end
-
 if type bat &>/dev/null
     set -x BAT_THEME zenburn
     set -x BAT_STYLE auto
@@ -137,17 +87,6 @@ if type fdfind &>/dev/null
         sudo ln -fs (which fdfind) /usr/local/bin/fd
     end
 end
-
-# # vagrant in wsl
-# if type vagrant &> /dev/null
-#   if string match -q -- '*microsoft*' (uname -a)
-#     # set -x PATH "$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
-#     set -x VAGRANT_WSL_ENABLE_WINDOWS_ACCESS "1"
-#     # set -x VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH "/mnt/c/Users/shishi/"
-#     # set -x VAGRANT_HOME "/mnt/c/Users/shishi/.vagrant.d"
-#     # set -x VAGRANT_WSL_DISABLE_VAGRANT_HOME "true"
-#   end
-# end
 
 # use buildkit
 if type docker &>/dev/null
@@ -175,9 +114,9 @@ if type git-wt &>/dev/null
     git wt --init fish | source
 end
 
-# settings
-#########################################
+# Interactive appearance and integrations
 
+set fish_color_command white
 set fish_greeting
 
 # cmorrell theme
@@ -188,8 +127,7 @@ if type direnv &>/dev/null
     eval (direnv hook fish)
 end
 
-# alias
-#########################################
+# Command aliases
 
 switch (uname -a)
     case "*MINGW64*"
@@ -199,7 +137,6 @@ switch (uname -a)
         alias docker-compose 'docker-compose.exe'
         alias docker-machine 'docker-machine.exe'
     case "*Darwin*"
-        # alias brew_cask_upgrade 'for c in `brew cask list`; do ! brew cask info $c | grep -qF "Not installed"; or brew cask install $c; done'
 
         # ll
         if type gls &>/dev/null
@@ -221,7 +158,6 @@ switch (uname -a)
 
     case "*Linux*"
         alias ll 'ls -la --color'
-        # alias open 'xdg-open'
 end
 
 # WSL
@@ -235,14 +171,6 @@ if type eza &>/dev/null
     alias ll 'eza -lahg --git --icons --time-style=long-iso'
     alias lt 'eza -T --icons --git-ignore'
 end
-
-# if type bat &>/dev/null
-#     alias bat 'bat --color always'
-# end
-#
-# if type fzf &>/dev/null
-#     alias fzf "fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
-# end
 
 # Windows
 
@@ -263,8 +191,7 @@ if test -e /mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe &>/dev/nul
     alias neovide '/mnt/c/Users/shishi/scoop/apps/neovide/current/neovide.exe --multigrid --wsl'
 end
 
-# abbr
-#########################################
+# Command abbreviations
 
 abbr --add n nvim
 
@@ -321,30 +248,8 @@ else
     abbr --add docker-compose "docker compose"
 end
 
-# function
-#########################################
-
-function ln_setup
-    bash ~/dev/src/github.com/shishi/dotfiles/setup.sh
-end
-
-# Keep Codex in-process so every launch inherits its caller's environment.
-function codex --wraps codex
-    command codex -c 'shell_environment_policy.inherit="all"' $argv
-end
-
-# Keep the tracked Herdr plugin lock in sync after successful mutations.
-function herdr --wraps herdr
-    command herdr $argv
-    set -l herdr_status $status
-
-    if test $herdr_status -eq 0; and test (count $argv) -ge 2; and test "$argv[1]" = plugin; and contains -- "$argv[2]" install uninstall
-        bash ~/.agent-shared/bin/herdr-plugins.sh record
-        return $status
-    end
-
-    return $herdr_status
-end
+# Conditional functions and startup actions
+# Unconditional functions are autoloaded from functions/.
 
 # vime skkeleton
 if [ "$GUAKE_TAB_UUID" ]
@@ -355,148 +260,47 @@ if [ "$GUAKE_TAB_UUID" ]
     exit 0
 end
 
-function su
-    /bin/su --shell=/usr/bin/fish $argv
-end
-
-function ibus_restart
-    ibus-daemon -drx
-end
-
 # ghq
 if type ghq &>/dev/null
-    function __ghq_cd_repository -d "Change local repository directory"
-        ghq list --full-path | fzf | read -l repo_path
-        cd $repo_path
-    end
+    source (status dirname)/startup-functions/__ghq_cd_repository.fish
     alias ghc __ghq_cd_github
 
-    function __ghq_browse_github -d "Browse remote repository on github"
-        ghq list | fzf | read -l repo_path
-        set -l repo_name (string split -m1 "/" $repo_path)[2]
-        # hub browse $repo_name
-        open https://github.com/$repo_name
-    end
+    source (status dirname)/startup-functions/__ghq_browse_github.fish
     alias ghb __ghq_browse_github
 end
 
 # fzf git branch
 if type fzf &>/dev/null
-    function gbf -d "Fuzzy-find and checkout a branch"
-        git branch --all | grep -v HEAD | grep -v "+" | awk '{if ($1 == "*") print $2; else print $1}' | string trim | fzf | xargs git checkout
-    end
-end
-
-# git batch delete branch
-function gbd -d "git batch delete branch"
-    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -d
-end
-
-function gbD -d "git batch delete branch"
-    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -D
+    source (status dirname)/startup-functions/gbf.fish
 end
 
 # git worktree: 一覧から fzf で選んで cd (作成・削除は abbr の gwt / gwtd)
 if type git-wt &>/dev/null; and type fzf &>/dev/null; and type jq &>/dev/null
-    function gw -d "Pick a git worktree with fzf and cd into it"
-        # git-wt の表形式は列区切りが空白なので、連続空白を含むパスを復元できない。
-        # --json なら空白で壊れない (改行を含むパスは git-wt 側が切り詰めるため非対応)
-        # @tsv はパス中の \ やタブをエスケープしてしまうので生の連結で組み立て、
-        # 分割回数を 2 に制限してパス側のタブを保つ
-        set -l line (git-wt --json \
-            | jq -r '.[] | (if .current then "*" else " " end) + "\t" + (.branch // "(detached)") + "\t" + .path' \
-            | fzf --delimiter \t)
-        test -n "$line"; or return
-        set -l dir (string split -m2 -f3 \t -- $line)
-        if test -d "$dir"
-            cd $dir
-        else
-            echo "gw: not a directory: $dir" >&2
-            return 1
-        end
-    end
-end
-
-function docker_run_with_current_user_and_dir
-    docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
+    source (status dirname)/startup-functions/gw.fish
 end
 
 # Arch
 if [ -f /etc/arch-release ]
-    function remove_orphan
-        if type yay &>/dev/null
-            yay -Yc
-        else
-            pacman -Rns (pacman -Qtdq)
-        end
-    end
+    source (status dirname)/startup-functions/remove_orphan.fish
 end
 
 # WSL
 if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-    function cdw
-        cd /mnt/c/Users/shishi
-    end
+    source (status dirname)/startup-functions/cdw.fish
 end
 
 # nix
 ## ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
-    function add_current_gem_path
-        set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
-    end
+    source (status dirname)/startup-functions/add_current_gem_path.fish
     add_current_gem_path
 
     # ruby_switch <version>: 現在のシェルの ruby を nixpkgs の任意バージョンへ切り替える
     # 例: ruby_switch 3.3 / ruby_switch 3_4 / ruby_switch ruby_3_3
-    function ruby_switch --description "switch ruby in current shell via nixpkgs"
-        if test (count $argv) -eq 0
-            echo "Usage: ruby_switch <version>  (e.g. ruby_switch 3.3)"
-            return 1
-        end
-
-        if not type -q nix
-            echo "ruby_switch: nix not found (this function requires nix)" >&2
-            return 1
-        end
-
-        set -l attr $argv[1]
-        string match -q 'ruby*' $attr; or set attr ruby_(string replace -a . _ $attr)
-
-        set -l outs (nix build --no-link --print-out-paths nixpkgs#$attr)
-        if test $status -ne 0; or test -z "$outs[1]"
-            echo "ruby_switch: you do not have version $argv[1] (nixpkgs#$attr not available)" >&2
-            set -l sys (uname -m | string replace arm64 aarch64)-(string lower (uname -s))
-            set -l avail (nix eval --raw nixpkgs#legacyPackages.$sys --apply 'p: builtins.concatStringsSep " " (builtins.filter (n: builtins.match "ruby(_[0-9]+_[0-9]+)?" n != null) (builtins.attrNames p))' 2>/dev/null)
-            test -n "$avail"; and echo "ruby_switch: available: $avail" >&2
-            return 1
-        end
-
-        # 前回の切り替え分(store の ruby と対応する gem bin)を PATH から掃除して重複を防ぐ
-        set -l keep
-        for p in $PATH
-            if string match -q '/nix/store/*-ruby-*/bin' $p
-                continue
-            end
-            if string match -q "$HOME/.local/share/gem/ruby/*/bin" $p
-                continue
-            end
-            set -a keep $p
-        end
-        set -x PATH $outs[1]/bin $keep
-
-        functions -q add_current_gem_path; and add_current_gem_path
-        echo "switched to "(ruby --version)
-    end
+    source (status dirname)/startup-functions/ruby_switch.fish
 end
 
-# source other file
-#########################################
-
-# source ~/.config/fish/functions/github_copilot_cli.fish
-
-# ensure
-#########################################
+# Final PATH priority: Nix before Cargo and inherited paths
 if type nix &>/dev/null
     set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin $PATH
 end
