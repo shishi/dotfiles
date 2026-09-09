@@ -1,117 +1,122 @@
-# Environment and tool paths
+# Environment and tool initialization run once per shell.
+# Reloading keeps runtime overrides, including the Ruby selected in this shell.
+if not set -q __dotfiles_fish_initialized
+    # Environment and tool paths
 
-set -x PATH ~/.local/bin ~/dev/bin ~/.bun/bin /usr/local/sbin /usr/local/bin $PATH
+    set -x PATH ~/.local/bin ~/dev/bin ~/.bun/bin /usr/local/sbin /usr/local/bin $PATH
 
-set -x GPG_TTY (tty)
+    set -x GPG_TTY (tty)
 
-set -x EDITOR nvim
-set -x VISUAL nvim
+    set -x EDITOR nvim
+    set -x VISUAL nvim
 
-# nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
-set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
+    # nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
+    set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
 
-set -x GO111MODULE on
-set -x GOBIN ~/.local/bin
-set -x GOPATH ~/dev/
+    set -x GO111MODULE on
+    set -x GOBIN ~/.local/bin
+    set -x GOPATH ~/dev/
 
-if [ (uname) = Darwin ]
-    if type gls &>/dev/null
-        set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
-        set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+    if [ (uname) = Darwin ]
+        if type gls &>/dev/null
+            set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
+            set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
+        end
+
+        if type gfind &>/dev/null
+            set -x PATH /usr/local/opt/findutils/libexec/gnubin $PATH
+            set -x MANPATH /usr/local/opt/findutils/libexec/gnuman $MANPATH
+        end
+
+        if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
+            set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
+        end
+
+        # nix-darwin
+        if type -d /run/current-system/sw/bin/ &>/dev/null
+            set -x PATH /run/current-system/sw/bin/ $PATH
+        end
+
+        # jetbrains toolbox
+        if type -d "~/Library/Application Support/JetBrains/Toolbox/scripts" &>/dev/null
+            set -x PATH "~/Library/Application Support/JetBrains/Toolbox/scripts" $PATH
+        end
+
+        # orbstack
+        if type orb &>/dev/null
+            set -x PATH ~/.orbstack/bin $PATH
+            # Added by OrbStack: command-line tools and integration
+            # This won't be added again if you remove it.
+            source ~/.orbstack/shell/init2.fish 2>/dev/null || :
+        end
     end
 
-    if type gfind &>/dev/null
-        set -x PATH /usr/local/opt/findutils/libexec/gnubin $PATH
-        set -x MANPATH /usr/local/opt/findutils/libexec/gnuman $MANPATH
+    set -x LESS '-q --ignore-case --no-init --long-prompt --raw-control-chars'
+    if type lv &>/dev/null
+        set -x PAGER 'lv -c'
     end
 
-    if test -f ~/Applications/MacVim.app/Contents/MacOS/Vim
-        set -x PATH ~/Applications/MacVim.app/Contents/MacOS $PATH
+    # rust tools / PATH 契約(nix > cargo > システム既定)
+    # conf.d(nix.fish → rustup.fish)が cargo > nix の逆順で前方挿入してくるため、
+    # 最後に無条件で並べ直す。存在しないディレクトリは無害(非 nix / 非 rust マシン)
+    if type cargo &>/dev/null
+        set -x PATH ~/.cargo/bin $PATH
+        set -x CARGO_NET_GIT_FETCH_WITH_CLI true
     end
 
-    # nix-darwin
-    if type -d /run/current-system/sw/bin/ &>/dev/null
-        set -x PATH /run/current-system/sw/bin/ $PATH
+    # tfenv
+    if test -f ~/.tfenv/bin/tfenv
+        set -x PATH ~/.tfenv/bin $PATH
     end
 
-    # jetbrains toolbox
-    if type -d "~/Library/Application Support/JetBrains/Toolbox/scripts" &>/dev/null
-        set -x PATH "~/Library/Application Support/JetBrains/Toolbox/scripts" $PATH
+    # cask
+    if test -f ~/.cask/bin/cask
+        set -x PATH ~/.cask/bin $PATH
     end
 
-    # orbstack
-    if type orb &>/dev/null
-        set -x PATH ~/.orbstack/bin $PATH
-        # Added by OrbStack: command-line tools and integration
-        # This won't be added again if you remove it.
-        source ~/.orbstack/shell/init2.fish 2>/dev/null || :
+    if type bat &>/dev/null
+        set -x BAT_THEME zenburn
+        set -x BAT_STYLE auto
     end
-end
 
-set -x LESS '-q --ignore-case --no-init --long-prompt --raw-control-chars'
-if type lv &>/dev/null
-    set -x PAGER 'lv -c'
-end
-
-# rust tools / PATH 契約(nix > cargo > システム既定)
-# conf.d(nix.fish → rustup.fish)が cargo > nix の逆順で前方挿入してくるため、
-# 最後に無条件で並べ直す。存在しないディレクトリは無害(非 nix / 非 rust マシン)
-if type cargo &>/dev/null
-    set -x PATH ~/.cargo/bin $PATH
-    set -x CARGO_NET_GIT_FETCH_WITH_CLI true
-end
-
-# tfenv
-if test -f ~/.tfenv/bin/tfenv
-    set -x PATH ~/.tfenv/bin $PATH
-end
-
-# cask
-if test -f ~/.cask/bin/cask
-    set -x PATH ~/.cask/bin $PATH
-end
-
-if type bat &>/dev/null
-    set -x BAT_THEME zenburn
-    set -x BAT_STYLE auto
-end
-
-if type batcat &>/dev/null
-    ln -fs (which batcat) ~/.local/bin/bat
-end
-
-if type fdfind &>/dev/null
-    if test -d ~/.local/bin
-        ln -fs (which fdfind) ~/.local/bin/fd
-    else
-        sudo ln -fs (which fdfind) /usr/local/bin/fd
+    if type batcat &>/dev/null
+        ln -fs (which batcat) ~/.local/bin/bat
     end
-end
 
-# use buildkit
-if type docker &>/dev/null
-    set -x DOCKER_BUILDKIT 1
-end
+    if type fdfind &>/dev/null
+        if test -d ~/.local/bin
+            ln -fs (which fdfind) ~/.local/bin/fd
+        else
+            sudo ln -fs (which fdfind) /usr/local/bin/fd
+        end
+    end
 
-# flyio
-if test -d ~/.fly &>/dev/null
-    set -x FLYCTL_INSTALL ~/.fly
-    set -x PATH $FLYCTL_INSTALL/bin $PATH
-end
+    # use buildkit
+    if type docker &>/dev/null
+        set -x DOCKER_BUILDKIT 1
+    end
 
-# console-ninja
-if test -d ~/.console-ninja &>/dev/null
-    set -x PATH ~/.console-ninja/.bin $PATH
-end
+    # flyio
+    if test -d ~/.fly &>/dev/null
+        set -x FLYCTL_INSTALL ~/.fly
+        set -x PATH $FLYCTL_INSTALL/bin $PATH
+    end
 
-# claude code
-if test -f ~/.claude/local/claude &>/dev/null
-    set -x PATH ~/.claude/local $PATH
-end
+    # console-ninja
+    if test -d ~/.console-ninja &>/dev/null
+        set -x PATH ~/.console-ninja/.bin $PATH
+    end
 
-# git-wt
-if type git-wt &>/dev/null
-    git wt --init fish | source
+    # claude code
+    if test -f ~/.claude/local/claude &>/dev/null
+        set -x PATH ~/.claude/local $PATH
+    end
+
+    # git-wt
+    if type git-wt &>/dev/null
+        git wt --init fish | source
+    end
+
 end
 
 # Interactive appearance and integrations
@@ -123,7 +128,7 @@ set fish_greeting
 set default_user shishi
 
 # direnv
-if type direnv &>/dev/null
+if not set -q __dotfiles_fish_initialized; and type direnv &>/dev/null
     eval (direnv hook fish)
 end
 
@@ -152,7 +157,7 @@ switch (uname -a)
         end
 
         # homebrew
-        if test -f /opt/homebrew/bin/brew
+        if not set -q __dotfiles_fish_initialized; and test -f /opt/homebrew/bin/brew
             eval (/opt/homebrew/bin/brew shellenv)
         end
 
@@ -252,7 +257,7 @@ end
 # Unconditional functions are autoloaded from functions/.
 
 # vime skkeleton
-if [ "$GUAKE_TAB_UUID" ]
+if not set -q __dotfiles_fish_initialized; and test -n "$GUAKE_TAB_UUID"
     then
     nvim -c startinsert /tmp/tmp_input
     cat /tmp/tmp_input | xsel --clipboard --input
@@ -293,7 +298,9 @@ end
 ## ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
     source (status dirname)/startup-functions/add_current_gem_path.fish
-    add_current_gem_path
+    if not set -q __dotfiles_fish_initialized
+        add_current_gem_path
+    end
 
     # ruby_switch <version>: 現在のシェルの ruby を nixpkgs の任意バージョンへ切り替える
     # 例: ruby_switch 3.3 / ruby_switch 3_4 / ruby_switch ruby_3_3
@@ -301,6 +308,9 @@ if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&
 end
 
 # Final PATH priority: Nix before Cargo and inherited paths
-if type nix &>/dev/null
+if not set -q __dotfiles_fish_initialized; and type nix &>/dev/null
     set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin $PATH
 end
+
+# Global, not exported: a newly started fish must initialize independently.
+set -gu __dotfiles_fish_initialized 1
