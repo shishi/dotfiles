@@ -1,19 +1,5 @@
 #!/bin/bash
 
-case "$(uname -s)" in
-MINGW* | MSYS*) export MSYS=winsymlinks:nativestrict ;;
-esac
-
-if [ -d /.jbdevcontainer ]; then
-  XDG_CONFIG_HOME=/.jbdevcontainer/config
-elif [ -z "${XDG_CONFIG_HOME:-}" ]; then
-  XDG_CONFIG_HOME="$HOME/.config"
-fi
-mkdir -p "$XDG_CONFIG_HOME"
-
-DOTDIR="$(cd "$(dirname "$0")" && pwd -P)"
-export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o StrictHostKeyChecking=accept-new}"
-
 link_config_dir() {
   local source_path="$1" target_path="$2"
 
@@ -66,20 +52,41 @@ configure_codex_config_filter() {
     echo "setup.sh: could not configure Codex config filter"
 }
 
-for dir in fish nvim helix; do
+# Environment
+case "$(uname -s)" in
+MINGW* | MSYS*) export MSYS=winsymlinks:nativestrict ;;
+esac
+
+if [ -d /.jbdevcontainer ]; then
+  XDG_CONFIG_HOME=/.jbdevcontainer/config
+elif [ -z "${XDG_CONFIG_HOME:-}" ]; then
+  XDG_CONFIG_HOME="$HOME/.config"
+fi
+mkdir -p "$XDG_CONFIG_HOME"
+
+DOTDIR="$(cd "$(dirname "$0")" && pwd -P)"
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o StrictHostKeyChecking=accept-new}"
+
+# Shells
+link_config_dir "$DOTDIR/fish" "$XDG_CONFIG_HOME/fish"
+
+if [ -L "$XDG_CONFIG_HOME/nushell" ]; then
+  rm "$XDG_CONFIG_HOME/nushell"
+fi
+mkdir -p "$XDG_CONFIG_HOME/nushell"
+ln -sfn "$DOTDIR/nushell/config.nu" "$XDG_CONFIG_HOME/nushell/config.nu"
+ln -sfn "$DOTDIR/nushell/env.nu" "$XDG_CONFIG_HOME/nushell/env.nu"
+
+# Editors
+for dir in nvim helix; do
   link_config_dir "$DOTDIR/$dir" "$XDG_CONFIG_HOME/$dir"
 done
 
-for file in .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
+for file in .ideavimrc .vimrc .gvimrc; do
   ln -sfn "$DOTDIR/$file" "$HOME/$file"
 done
 
 if [ "${REMOTE_CONTAINERS:-}" != true ]; then
-  link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
-  case "$(uname -s)" in
-  Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
-  esac
-
   emacs_dir="$(dirname "$DOTDIR")/emacs"
   if ! git -C "$emacs_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
     git -C "$(dirname "$DOTDIR")" clone git@github.com:shishi/emacs.git ||
@@ -88,6 +95,14 @@ if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   if git -C "$emacs_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
     link_config_dir "$emacs_dir" "$HOME/.emacs.d"
   fi
+fi
+
+# Terminals
+if [ "${REMOTE_CONTAINERS:-}" != true ]; then
+  link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
+  case "$(uname -s)" in
+  Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
+  esac
 fi
 
 case "$(uname -s)" in
@@ -103,15 +118,7 @@ esac
 mkdir -p "$herdr_config_dir"
 ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
 
-# A devcontainer may provide ~/.claude as a mount rather than a link.
-if [ ! -L "$HOME/.claude" ] &&
-  { mountpoint -q "$HOME/.claude" 2>/dev/null ||
-    grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
-  echo "setup.sh: ~/.claude is a mount point; skip"
-else
-  link_agent_home "$DOTDIR/claude" "$HOME/.claude"
-fi
-
+# Git and package tools
 case "$(uname -s)" in
 Darwin)
   ln -sfn "$DOTDIR/.gitconfig.mac" "$HOME/.gitconfig"
@@ -120,6 +127,22 @@ Darwin)
 Linux) ln -sfn "$DOTDIR/.gitconfig.linux" "$HOME/.gitconfig" ;;
 MINGW* | MSYS*) ln -sfn "$DOTDIR/.gitconfig.win" "$HOME/.gitconfig" ;;
 esac
+
+ln -sfn "$DOTDIR/.gitignore.global" "$HOME/.gitignore"
+
+for file in .gemrc .rspec .pryrc .npmrc; do
+  ln -sfn "$DOTDIR/$file" "$HOME/$file"
+done
+
+# Agent homes and shared memory
+# A devcontainer may provide ~/.claude as a mount rather than a link.
+if [ ! -L "$HOME/.claude" ] &&
+  { mountpoint -q "$HOME/.claude" 2>/dev/null ||
+    grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
+  echo "setup.sh: ~/.claude is a mount point; skip"
+else
+  link_agent_home "$DOTDIR/claude" "$HOME/.claude"
+fi
 
 memory_dir="$(bash "$DOTDIR/agent-shared/bin/resolve-memory-dir.sh")" || memory_dir=
 if [ -n "$memory_dir" ]; then
@@ -160,15 +183,7 @@ fi
 bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync ||
   echo "setup.sh: managed skill sync failed"
 
-if [ -L "$XDG_CONFIG_HOME/nushell" ]; then
-  rm "$XDG_CONFIG_HOME/nushell"
-fi
-mkdir -p "$XDG_CONFIG_HOME/nushell"
-ln -sfn "$DOTDIR/nushell/config.nu" "$XDG_CONFIG_HOME/nushell/config.nu"
-ln -sfn "$DOTDIR/nushell/env.nu" "$XDG_CONFIG_HOME/nushell/env.nu"
-
-ln -sfn "$DOTDIR/.gitignore.global" "$HOME/.gitignore"
-
+# Plugins and integrations (after agent homes and shared skills)
 if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   bash "$DOTDIR/claude/install-plugins.sh" ||
     echo "setup.sh: Claude plugin install failed"
