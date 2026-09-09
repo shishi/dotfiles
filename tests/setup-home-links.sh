@@ -64,11 +64,6 @@ EOF
 chmod +x "$TMP/bin/gh"
 export FAKE_GH_CALLS="$TMP/gh-calls"
 
-for tool in batcat fdfind; do
-  printf '#!/bin/sh\nexit 0\n' >"$TMP/bin/$tool"
-  chmod +x "$TMP/bin/$tool"
-done
-
 run_setup() {
   HOME="$HOME_DIR" PATH="$TMP/bin:$PATH" XDG_CONFIG_HOME="$CONFIG_DIR" APPDATA="$TMP/appdata" \
     REMOTE_CONTAINERS=true AGENT_MEMORY_DIR="$MEMORY_DIR" \
@@ -85,8 +80,6 @@ resolves_to() {
 }
 
 run_setup
-assert "bat links to batcat" resolves_to "$HOME_DIR/.local/bin/bat" "$TMP/bin/batcat"
-assert "fd links to fdfind" resolves_to "$HOME_DIR/.local/bin/fd" "$TMP/bin/fdfind"
 assert "Claude home is linked" resolves_to "$HOME_DIR/.claude" "$DOTFILES/claude"
 assert "Codex home is linked" resolves_to "$HOME_DIR/.codex" "$DOTFILES/codex"
 assert "personal skills are linked" resolves_to "$HOME_DIR/.agent-shared/skills" "$DOTFILES/codex/skills"

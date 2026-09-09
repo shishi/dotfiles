@@ -79,6 +79,18 @@ if not set -q __dotfiles_fish_initialized
         set -x BAT_STYLE auto
     end
 
+    if type batcat &>/dev/null
+        ln -fs (which batcat) ~/.local/bin/bat
+    end
+
+    if type fdfind &>/dev/null
+        if test -d ~/.local/bin
+            ln -fs (which fdfind) ~/.local/bin/fd
+        else
+            sudo ln -fs (which fdfind) /usr/local/bin/fd
+        end
+    end
+
     # use buildkit
     if type docker &>/dev/null
         set -x DOCKER_BUILDKIT 1
