@@ -68,6 +68,9 @@ configure_codex_config_filter() {
 
 if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
+  case "$(uname -s)" in
+    Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
+  esac
 
   emacs_dir="$(dirname "$DOTDIR")/emacs"
   if ! git -C "$emacs_dir" rev-parse --verify HEAD >/dev/null 2>&1; then

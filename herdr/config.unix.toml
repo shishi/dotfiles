@@ -3,8 +3,18 @@ onboarding = false
 [experimental]
 kitty_graphics = true
 
+[keys]
+# Inherit other bindings from Herdr defaults.
+prefix = "ctrl+;"
+new_tab = "prefix+t"
+previous_tab = "prefix+["
+next_tab = "prefix+]"
+copy_mode = "prefix+c"
+move_tab_previous = "prefix+shift+left"
+move_tab_next = "prefix+shift+right"
+
 [[keys.command]]
-key = "prefix+t"
+key = "prefix+alt+t"
 type = "popup"
 command = "exec \"${SHELL:-sh}\""
 description = "open scratch terminal"

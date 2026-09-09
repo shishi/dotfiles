@@ -1,0 +1,19 @@
+font-family = UDEV Gothic NF
+font-family = Noto Color Emoji
+font-size = 20
+theme = Afterglow
+background-opacity = 0.9
+window-padding-x = 0
+window-padding-y = 0
+window-width = 160
+window-height = 42
+
+# Keep application keys available; reserve only clipboard and palette actions.
+keybind = clear
+# Copies Ghostty's selection, not Herdr's copy-mode selection.
+keybind = performable:ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+keybind = f12=toggle_command_palette
+
+# Shift + mouse drag selects in Ghostty even when the application captures mice.
+mouse-shift-capture = never
