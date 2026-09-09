@@ -134,6 +134,18 @@ for file in .gemrc .rspec .pryrc .npmrc; do
   ln -sfn "$DOTDIR/$file" "$HOME/$file"
 done
 
+# Distribution package names differ from the commands used in shell settings.
+for tool in batcat fdfind; do
+  if tool_path="$(command -v "$tool")"; then
+    case "$tool" in
+    batcat) tool_alias=bat ;;
+    fdfind) tool_alias=fd ;;
+    esac
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$tool_path" "$HOME/.local/bin/$tool_alias"
+  fi
+done
+
 # Agent homes and shared memory
 # A devcontainer may provide ~/.claude as a mount rather than a link.
 if [ ! -L "$HOME/.claude" ] &&

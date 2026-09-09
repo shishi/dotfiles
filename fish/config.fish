@@ -79,18 +79,6 @@ if not set -q __dotfiles_fish_initialized
         set -x BAT_STYLE auto
     end
 
-    if type batcat &>/dev/null
-        ln -fs (which batcat) ~/.local/bin/bat
-    end
-
-    if type fdfind &>/dev/null
-        if test -d ~/.local/bin
-            ln -fs (which fdfind) ~/.local/bin/fd
-        else
-            sudo ln -fs (which fdfind) /usr/local/bin/fd
-        end
-    end
-
     # use buildkit
     if type docker &>/dev/null
         set -x DOCKER_BUILDKIT 1
@@ -268,7 +256,7 @@ end
 # ghq
 if type ghq &>/dev/null
     source (status dirname)/startup-functions/__ghq_cd_repository.fish
-    alias ghc __ghq_cd_github
+    alias ghc __ghq_cd_repository
 
     source (status dirname)/startup-functions/__ghq_browse_github.fish
     alias ghb __ghq_browse_github

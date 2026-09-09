@@ -10,7 +10,7 @@ HOME="$fixture_dir/home" XDG_CONFIG_HOME="$fixture_dir/home/.config" \
 # Keep optional integrations deterministic and prevent startup filesystem writes.
 function type
     switch $argv[-1]
-        case nix cargo git-wt direnv
+        case nix cargo git-wt direnv ghq fzf
             return 0
         case '*'
             return 1
@@ -25,10 +25,21 @@ end
 function ruby
     echo 3.3.0
 end
+function ghq
+    printf '%s\n' "$HOME"
+end
+function fzf
+    cat
+end
 set -e GUAKE_TAB_UUID
 set -g git_init_count 0
 set -g direnv_init_count 0
 source $FISH_RELOAD_CONFIG
+ghc; or exit 1
+if test "$PWD" != "$HOME"
+    echo 'FAIL: ghc did not enter the selected repository' >&2
+    exit 1
+end
 set -l initial_path (string join : -- $PATH)
 source $FISH_RELOAD_CONFIG
 if test "$initial_path" != (string join : -- $PATH)
