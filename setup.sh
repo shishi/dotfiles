@@ -1,7 +1,7 @@
 #!/bin/bash
 
 case "$(uname -s)" in
-  MINGW* | MSYS*) export MSYS=winsymlinks:nativestrict ;;
+MINGW* | MSYS*) export MSYS=winsymlinks:nativestrict ;;
 esac
 
 if [ -d /.jbdevcontainer ]; then
@@ -49,8 +49,8 @@ link_agent_home() {
     }
     echo "setup.sh: moved $target_path to $backup"
   fi
-  ln -sfn "$source_path" "$target_path" \
-    || echo "setup.sh: could not link $target_path"
+  ln -sfn "$source_path" "$target_path" ||
+    echo "setup.sh: could not link $target_path"
 }
 
 configure_codex_config_filter() {
@@ -60,70 +60,74 @@ configure_codex_config_filter() {
   fi
 
   git -C "$DOTDIR" config --local filter.codex-config.clean \
-    "bash agent-shared/bin/clean-codex-config.sh" \
-    && git -C "$DOTDIR" config --local filter.codex-config.smudge cat \
-    && git -C "$DOTDIR" config --local filter.codex-config.required true \
-    || echo "setup.sh: could not configure Codex config filter"
+    "bash agent-shared/bin/clean-codex-config.sh" &&
+    git -C "$DOTDIR" config --local filter.codex-config.smudge cat &&
+    git -C "$DOTDIR" config --local filter.codex-config.required true ||
+    echo "setup.sh: could not configure Codex config filter"
 }
+
+for dir in fish nvim helix; do
+  link_config_dir "$DOTDIR/$dir" "$XDG_CONFIG_HOME/$dir"
+done
+
+for file in .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
+  ln -sfn "$DOTDIR/$file" "$HOME/$file"
+done
 
 if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
   case "$(uname -s)" in
-    Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
+  Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
   esac
 
   emacs_dir="$(dirname "$DOTDIR")/emacs"
   if ! git -C "$emacs_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
-    git -C "$(dirname "$DOTDIR")" clone git@github.com:shishi/emacs.git \
-      || echo "setup.sh: could not clone emacs; rerun setup.sh"
+    git -C "$(dirname "$DOTDIR")" clone git@github.com:shishi/emacs.git ||
+      echo "setup.sh: could not clone emacs; rerun setup.sh"
   fi
   if git -C "$emacs_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
     link_config_dir "$emacs_dir" "$HOME/.emacs.d"
   fi
 fi
 
-for dir in fish nvim helix; do
-  link_config_dir "$DOTDIR/$dir" "$XDG_CONFIG_HOME/$dir"
-done
-
 case "$(uname -s)" in
-  MINGW* | MSYS*)
-    herdr_config_dir="$(cygpath -u "$APPDATA")/herdr"
-    herdr_config_source="$DOTDIR/herdr/config.windows.toml"
-    ;;
-  *)
-    herdr_config_dir="$XDG_CONFIG_HOME/herdr"
-    herdr_config_source="$DOTDIR/herdr/config.unix.toml"
-    ;;
+MINGW* | MSYS*)
+  herdr_config_dir="$(cygpath -u "$APPDATA")/herdr"
+  herdr_config_source="$DOTDIR/herdr/config.windows.toml"
+  ;;
+*)
+  herdr_config_dir="$XDG_CONFIG_HOME/herdr"
+  herdr_config_source="$DOTDIR/herdr/config.unix.toml"
+  ;;
 esac
 mkdir -p "$herdr_config_dir"
 ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
 
 # A devcontainer may provide ~/.claude as a mount rather than a link.
-if [ ! -L "$HOME/.claude" ] \
-  && { mountpoint -q "$HOME/.claude" 2>/dev/null \
-    || grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
+if [ ! -L "$HOME/.claude" ] &&
+  { mountpoint -q "$HOME/.claude" 2>/dev/null ||
+    grep -qE "[[:space:]]$HOME/\.claude[[:space:]]" /proc/mounts 2>/dev/null; }; then
   echo "setup.sh: ~/.claude is a mount point; skip"
 else
   link_agent_home "$DOTDIR/claude" "$HOME/.claude"
 fi
 
 case "$(uname -s)" in
-  Darwin)
-    ln -sfn "$DOTDIR/.gitconfig.mac" "$HOME/.gitconfig"
-    ln -sfn "$DOTDIR/Brewfile" "$HOME/Brewfile"
-    ;;
-  Linux) ln -sfn "$DOTDIR/.gitconfig.linux" "$HOME/.gitconfig" ;;
-  MINGW* | MSYS*) ln -sfn "$DOTDIR/.gitconfig.win" "$HOME/.gitconfig" ;;
+Darwin)
+  ln -sfn "$DOTDIR/.gitconfig.mac" "$HOME/.gitconfig"
+  ln -sfn "$DOTDIR/Brewfile" "$HOME/Brewfile"
+  ;;
+Linux) ln -sfn "$DOTDIR/.gitconfig.linux" "$HOME/.gitconfig" ;;
+MINGW* | MSYS*) ln -sfn "$DOTDIR/.gitconfig.win" "$HOME/.gitconfig" ;;
 esac
 
 memory_dir="$(bash "$DOTDIR/agent-shared/bin/resolve-memory-dir.sh")" || memory_dir=
 if [ -n "$memory_dir" ]; then
   if [ ! -d "$memory_dir" ]; then
     mkdir -p "$(dirname "$memory_dir")"
-    git clone git@github.com:shishi/agent-memory.git "$memory_dir" 2>/dev/null \
-      || gh repo clone shishi/agent-memory "$memory_dir" 2>/dev/null \
-      || echo "setup.sh: could not clone agent-memory"
+    git clone git@github.com:shishi/agent-memory.git "$memory_dir" 2>/dev/null ||
+      gh repo clone shishi/agent-memory "$memory_dir" 2>/dev/null ||
+      echo "setup.sh: could not clone agent-memory"
   fi
   if git -C "$memory_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
     for target in "$DOTDIR/claude/memory" "$DOTDIR/codex/memory"; do
@@ -153,8 +157,8 @@ if [ -d "$HOME/.agents" ] && [ ! -L "$HOME/.agents" ]; then
 fi
 [ -e "$HOME/.agents" ] || ln -sfn "$HOME/.agent-shared" "$HOME/.agents"
 
-bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync \
-  || echo "setup.sh: managed skill sync failed"
+bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync ||
+  echo "setup.sh: managed skill sync failed"
 
 if [ -L "$XDG_CONFIG_HOME/nushell" ]; then
   rm "$XDG_CONFIG_HOME/nushell"
@@ -163,27 +167,24 @@ mkdir -p "$XDG_CONFIG_HOME/nushell"
 ln -sfn "$DOTDIR/nushell/config.nu" "$XDG_CONFIG_HOME/nushell/config.nu"
 ln -sfn "$DOTDIR/nushell/env.nu" "$XDG_CONFIG_HOME/nushell/env.nu"
 
-for file in .ideavimrc .vimrc .gvimrc .gemrc .rspec .pryrc .npmrc; do
-  ln -sfn "$DOTDIR/$file" "$HOME/$file"
-done
 ln -sfn "$DOTDIR/.gitignore.global" "$HOME/.gitignore"
 
 if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  bash "$DOTDIR/claude/install-plugins.sh" \
-    || echo "setup.sh: Claude plugin install failed"
+  bash "$DOTDIR/claude/install-plugins.sh" ||
+    echo "setup.sh: Claude plugin install failed"
 fi
 
 if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  bash "$DOTDIR/agent-shared/bin/herdr-plugins.sh" restore \
-    || echo "setup.sh: Herdr plugin restore failed"
+  bash "$DOTDIR/agent-shared/bin/herdr-plugins.sh" restore ||
+    echo "setup.sh: Herdr plugin restore failed"
 fi
 
 if command -v herdr >/dev/null 2>&1; then
   herdr_status="$(env -u CLAUDE_CONFIG_DIR -u CODEX_HOME herdr integration status 2>/dev/null)"
   for integration in claude codex; do
     if ! printf '%s\n' "$herdr_status" | grep -q "^${integration}: current"; then
-      env -u CLAUDE_CONFIG_DIR -u CODEX_HOME herdr integration install "$integration" \
-        || echo "setup.sh: Herdr $integration integration install failed"
+      env -u CLAUDE_CONFIG_DIR -u CODEX_HOME herdr integration install "$integration" ||
+        echo "setup.sh: Herdr $integration integration install failed"
     fi
   done
 fi
