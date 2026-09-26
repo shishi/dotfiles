@@ -253,11 +253,45 @@ else
     abbr --add docker-compose "docker compose"
 end
 
-# Conditional functions and startup actions
-# Other unconditional functions are autoloaded from functions/.
+# Functions and startup actions
 
-# Keep gbd and gbD together to avoid case-insensitive filename collisions.
-source (status dirname)/startup-functions/git_branch_delete.fish
+# Keep Codex in-process so every launch inherits its caller's environment.
+function codex --wraps codex
+    command codex -c 'shell_environment_policy.inherit="all"' $argv
+end
+
+# Keep the tracked Herdr plugin lock in sync after successful mutations.
+function herdr --wraps herdr
+    command herdr $argv
+    set -l herdr_status $status
+
+    if test $herdr_status -eq 0; and test (count $argv) -ge 2; and test "$argv[1]" = plugin; and contains -- "$argv[2]" install uninstall
+        bash ~/.agent-shared/bin/herdr-plugins.sh record
+        return $status
+    end
+
+    return $herdr_status
+end
+
+function su
+    /bin/su --shell=/usr/bin/fish $argv
+end
+
+function ibus_restart
+    ibus-daemon -drx
+end
+
+function docker_run_with_current_user_and_dir
+    docker run -it --rm -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u (id -u $USER):(id -g $USER) -v (pwd):/src -w /src -e HOME=/src $argv
+end
+
+function gbd -d "git batch delete branch"
+    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -d
+end
+
+function gbD -d "git batch delete branch"
+    git branch --merged | grep -vE '^\*|main|master' | xargs git branch -D
+end
 
 # vime skkeleton
 if not set -q __dotfiles_fish_initialized; and test -n "$GUAKE_TAB_UUID"
@@ -270,44 +304,118 @@ end
 
 # ghq
 if type ghq &>/dev/null
-    source (status dirname)/startup-functions/__ghq_cd_repository.fish
+    function __ghq_cd_repository -d "Change local repository directory"
+        ghq list --full-path | fzf | read -l repo_path
+        cd $repo_path
+    end
     alias ghc __ghq_cd_repository
 
-    source (status dirname)/startup-functions/__ghq_browse_github.fish
+    function __ghq_browse_github -d "Browse remote repository on github"
+        ghq list | fzf | read -l repo_path
+        set -l repo_name (string split -m1 "/" $repo_path)[2]
+        # hub browse $repo_name
+        open https://github.com/$repo_name
+    end
     alias ghb __ghq_browse_github
 end
 
 # fzf git branch
 if type fzf &>/dev/null
-    source (status dirname)/startup-functions/gbf.fish
+    function gbf -d "Fuzzy-find and checkout a branch"
+        git branch --all | grep -v HEAD | grep -v "+" | awk '{if ($1 == "*") print $2; else print $1}' | string trim | fzf | xargs git checkout
+    end
 end
 
 # git worktree: 一覧から fzf で選んで cd (作成・削除は abbr の gwt / gwtd)
 if type git-wt &>/dev/null; and type fzf &>/dev/null; and type jq &>/dev/null
-    source (status dirname)/startup-functions/gw.fish
+    function gw -d "Pick a git worktree with fzf and cd into it"
+        # git-wt の表形式は列区切りが空白なので、連続空白を含むパスを復元できない。
+        # --json なら空白で壊れない (改行を含むパスは git-wt 側が切り詰めるため非対応)
+        # @tsv はパス中の \ やタブをエスケープしてしまうので生の連結で組み立て、
+        # 分割回数を 2 に制限してパス側のタブを保つ
+        set -l line (git-wt --json \
+            | jq -r '.[] | (if .current then "*" else " " end) + "\t" + (.branch // "(detached)") + "\t" + .path' \
+            | fzf --delimiter \t)
+        test -n "$line"; or return
+        set -l dir (string split -m2 -f3 \t -- $line)
+        if test -d "$dir"
+            cd $dir
+        else
+            echo "gw: not a directory: $dir" >&2
+            return 1
+        end
+    end
 end
 
 # Arch
 if [ -f /etc/arch-release ]
-    source (status dirname)/startup-functions/remove_orphan.fish
+    function remove_orphan
+        if type yay &>/dev/null
+            yay -Yc
+        else
+            pacman -Rns (pacman -Qtdq)
+        end
+    end
 end
 
 # WSL
 if [ (uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ]
-    source (status dirname)/startup-functions/cdw.fish
+    function cdw
+        cd /mnt/c/Users/shishi
+    end
 end
 
 # nix
 ## ruby (mainly for nix now)
 if not type mise >/dev/null 2>&1; and not type ~/.rbenv/bin/rbenv >/dev/null 2>&1
-    source (status dirname)/startup-functions/add_current_gem_path.fish
+    function add_current_gem_path
+        set -x PATH $HOME/.local/share/gem/ruby/(ruby -e "print Gem.ruby_api_version")/bin $PATH
+    end
     if not set -q __dotfiles_fish_initialized
         add_current_gem_path
     end
 
     # ruby_switch <version>: 現在のシェルの ruby を nixpkgs の任意バージョンへ切り替える
     # 例: ruby_switch 3.3 / ruby_switch 3_4 / ruby_switch ruby_3_3
-    source (status dirname)/startup-functions/ruby_switch.fish
+    function ruby_switch --description "switch ruby in current shell via nixpkgs"
+        if test (count $argv) -eq 0
+            echo "Usage: ruby_switch <version>  (e.g. ruby_switch 3.3)"
+            return 1
+        end
+
+        if not type -q nix
+            echo "ruby_switch: nix not found (this function requires nix)" >&2
+            return 1
+        end
+
+        set -l attr $argv[1]
+        string match -q 'ruby*' $attr; or set attr ruby_(string replace -a . _ $attr)
+
+        set -l outs (nix build --no-link --print-out-paths nixpkgs#$attr)
+        if test $status -ne 0; or test -z "$outs[1]"
+            echo "ruby_switch: you do not have version $argv[1] (nixpkgs#$attr not available)" >&2
+            set -l sys (uname -m | string replace arm64 aarch64)-(string lower (uname -s))
+            set -l avail (nix eval --raw nixpkgs#legacyPackages.$sys --apply 'p: builtins.concatStringsSep " " (builtins.filter (n: builtins.match "ruby(_[0-9]+_[0-9]+)?" n != null) (builtins.attrNames p))' 2>/dev/null)
+            test -n "$avail"; and echo "ruby_switch: available: $avail" >&2
+            return 1
+        end
+
+        # 前回の切り替え分(store の ruby と対応する gem bin)を PATH から掃除して重複を防ぐ
+        set -l keep
+        for p in $PATH
+            if string match -q '/nix/store/*-ruby-*/bin' $p
+                continue
+            end
+            if string match -q "$HOME/.local/share/gem/ruby/*/bin" $p
+                continue
+            end
+            set -a keep $p
+        end
+        set -x PATH $outs[1]/bin $keep
+
+        functions -q add_current_gem_path; and add_current_gem_path
+        echo "switched to "(ruby --version)
+    end
 end
 
 # Final PATH priority: Nix before Cargo and inherited paths

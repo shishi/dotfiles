@@ -78,7 +78,7 @@ if not abbr --query autoreload_probe; or test $reload_count -ne (math $previous_
     echo 'FAIL: config change was not reloaded once at the prompt' >&2
     exit 1
 end
-printf '\nfunction autoreload_function_probe; echo updated; end\n' >> (path dirname $FISH_RELOAD_CONFIG)/startup-functions/__ghq_cd_repository.fish
+printf '\nfunction autoreload_function_probe; echo updated; end\n' >>$FISH_RELOAD_CONFIG
 emit fish_prompt
 functions -q autoreload_function_probe; or begin
     echo 'FAIL: startup function change was not reloaded' >&2

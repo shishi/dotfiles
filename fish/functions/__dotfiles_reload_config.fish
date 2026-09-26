@@ -1,6 +1,6 @@
 function __dotfiles_reload_config --on-event fish_prompt
     set -l config_dir (path dirname $__dotfiles_fish_config_path)
-    set -l files $__dotfiles_fish_config_path $config_dir/startup-functions/*.fish $config_dir/functions/__dotfiles_reload_config.fish
+    set -l files $__dotfiles_fish_config_path $config_dir/functions/__dotfiles_reload_config.fish
     # Compare content so multiple saves within the same second are detected.
     set -l checksums (command cksum -- $files)
     or return
