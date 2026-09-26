@@ -254,10 +254,10 @@ else
 end
 
 # Conditional functions and startup actions
-# Unconditional functions are autoloaded from functions/.
+# Other unconditional functions are autoloaded from functions/.
 
-# Load gbD explicitly to avoid a filename collision with gbd on Windows.
-source (status dirname)/startup-functions/gbD.fish
+# Keep gbd and gbD together to avoid case-insensitive filename collisions.
+source (status dirname)/startup-functions/git_branch_delete.fish
 
 # vime skkeleton
 if not set -q __dotfiles_fish_initialized; and test -n "$GUAKE_TAB_UUID"
