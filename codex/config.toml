@@ -108,9 +108,6 @@ trust_level = "trusted"
 [projects."/Users/shigenobu.407"]
 trust_level = "trusted"
 
-[projects."/home/shishi"]
-trust_level = "trusted"
-
 [windows]
 sandbox = "elevated"
 
@@ -139,7 +136,7 @@ MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
 
 [desktop]
-conversationDetailMode = "STEPS_PROSE"
+conversationDetailMode = "STEPS_COMMANDS"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
