@@ -256,6 +256,9 @@ end
 # Conditional functions and startup actions
 # Unconditional functions are autoloaded from functions/.
 
+# Load gbD explicitly to avoid a filename collision with gbd on Windows.
+source (status dirname)/startup-functions/gbD.fish
+
 # vime skkeleton
 if not set -q __dotfiles_fish_initialized; and test -n "$GUAKE_TAB_UUID"
     then
