@@ -102,6 +102,13 @@ if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   link_config_dir "$DOTDIR/wezterm" "$XDG_CONFIG_HOME/wezterm"
   case "$(uname -s)" in
   Darwin | Linux) link_config_dir "$DOTDIR/ghostty" "$XDG_CONFIG_HOME/ghostty" ;;
+  MINGW* | MSYS*)
+    noctty_config_dir="$(cygpath -u "$LOCALAPPDATA")/noctty"
+    [ ! -L "$noctty_config_dir" ] || rm "$noctty_config_dir"
+    mkdir -p "$noctty_config_dir"
+    ln -sfn "$DOTDIR/ghostty/config.windows.ghostty" "$noctty_config_dir/config.ghostty"
+    ln -sfn "$DOTDIR/ghostty/config.shared.ghostty" "$noctty_config_dir/config.shared.ghostty"
+    ;;
   esac
 fi
 
