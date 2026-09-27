@@ -434,9 +434,6 @@ trusted_hash = "sha256:21909995c32fabd82cbd24edb898e0850e5a7ee414f60d711b7544c90
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:stop:0:1']
 trusted_hash = "sha256:7abefd2c302e83e90efa76e5ae4086970b4e86111e56ab89a4d4d7e644f4f7dd"
 
-[computer_use.windows.always_allowed_app_ids]
-"Brave.HVUF753X2QMJ634VLW2GYSGRNI" = true
-
 [memories]
 generate_memories = false
 use_memories = false
