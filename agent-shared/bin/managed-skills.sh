@@ -40,7 +40,7 @@ validate_manifest() {
     /^[[:space:]]*($|#)/ { next }
     NF != 4 { exit 1 }
     $1 !~ /^[a-z0-9][a-z0-9-]*$/ { exit 1 }
-    $2 !~ /^[^\t /]+\/[^\t /]+$/ { exit 1 }
+    $2 !~ /^[^\t \/]+\/[^\t \/]+$/ { exit 1 }
     $3 == "" || $3 ~ /[[:space:]]/ { exit 1 }
     $4 != "claude" && $4 != "codex" && $4 != "claude,codex" { exit 1 }
     seen[$1]++ { exit 1 }
