@@ -117,6 +117,18 @@
         "matcher": "request_user_input"
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session'",
+            "timeout": 3,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
@@ -143,20 +155,17 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "timeout": 10
+            "timeout": 10,
+            "type": "command"
           }
         ]
-      }
-    ],
-    "SessionEnd": [
+      },
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session'",
-            "timeout": 3,
+            "command": "bash '/Users/shigenobu.407/.codex/herdr-agent-state.sh' session",
+            "timeout": 10,
             "type": "command"
           }
         ]
