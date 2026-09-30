@@ -32,9 +32,8 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 ## 前提条件
 
 1. **`~/.codex` が dotfiles の `codex/` を指していること**(`readlink ~/.codex`)。この link で
-   委譲先が `codex/AGENTS.md` の規律(TDD・Git 安全性)を持つ。AGENTS.md は TDD の手順を
-   本文に書いており skill の存在に依存しない。**満たさないマシンでは chore と implement を
-   委譲しない**(規律を持たない委譲先にコードを書かせることになる)。explore は読むだけなので
+   委譲先が `codex/AGENTS.md` の規律(オーバーエンジニアリング禁止・最小検証・Git 安全性)と
+   `codex/skills/` を持つ。**満たさないマシンでは chore と implement を委譲しない**(規律を持たない委譲先にコードを書かせることになる)。explore は読むだけなので
    この前提は不要
 2. `codex` CLI が PATH にある(`command -v codex`)
 3. `claude/settings.json` の `sandbox.excludedCommands` に `codex:*` があること。無いと codex の
