@@ -33,7 +33,7 @@ Codex 側の agent は `~/.codex/agents/spec-scope-reviewer.toml`)、上記入�
 ## 結果処理(単独発動時)
 
 1. 引用検証: 欠陥主張の引用はレビュー対象と、要件未達の引用は要件ソースと照合。
-   不一致は棄却し [A-n] 付きで記録
+   不一致は棄却し [spec-scope-n] 付きで記録
 2. 採否判定(指摘は採用命令ではない。現在の依頼への実益か回避する具体的リスクを
    説明できるものだけ修正し、他は理由付きで棄却)→ 修正 → 入力を再組成して再 dispatch。
    blocker/should ゼロで clean。**再 dispatch は 2 周まで** — 予算到達で残件があれば
@@ -48,5 +48,5 @@ Codex 側の agent は `~/.codex/agents/spec-scope-reviewer.toml`)、上記入�
 ## Spec-scope レビュー結果
 - 反復: <X> 回 / ステータス: ✅ clean | ⚠️ 膠着で停止
 - 要件判定の要約(満たしている/いない/判断できない の件数)
-- 修正した指摘: [A-n] と要約 / 棄却: [A-n] + 理由 / 未対応 note: [A-n]
+- 修正した指摘: [spec-scope-n] と要約 / 棄却: [spec-scope-n] + 理由 / 未対応 note: [spec-scope-n]
 ```

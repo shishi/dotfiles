@@ -96,7 +96,7 @@ spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)で実行す�
 ## spec gate の手順
 
 defect gate の 1–3 と同様(対象は文書 diff + untracked 文書)。その後 adversarial 観点
-1 レーン(エンジンは決定に従う)。findings は修正に入る前に引用検証し(棄却は [V-n]
+1 レーン(エンジンは決定に従う)。findings は修正に入る前に引用検証し(棄却は [adversarial-n]
 付きで記録)、defect gate と同じ採否判定を通す。material findings の fix→re-review は
 **2 周まで** — **各反復で secrets-scan も再実行**。「safe」相当の結論で通過。予算到達で
 残件があれば採否と理由を列挙して停止・報告。**adversarial レーンが結果を返さない場合はエラー処理の
@@ -138,9 +138,9 @@ codex エンジンの試行では codex-review skill が内部で 1 リトライ
 ## Review gate 結果
 - ゲート: defect | spec / エンジン: codex | claude(理由: 週末 / codex 不能)| codex-agent
 - 反復: レーン別 X 回 / ステータス: ✅ 通過 | ⚠️ 未レビュー通過 | ⚠️ 膠着停止
-- 修正した指摘: [ID] と要約
-- 棄却した指摘: [ID] + 理由(引用不一致 等)
-- 未対応 note: [ID]
+- 修正した指摘: [<レーン>-n] と要約
+- 棄却した指摘: [<レーン>-n] + 理由(引用不一致 等)
+- 未対応 note: [<レーン>-n]
 - 省略・代替したレーン: 理由込みで必ず明記(土日の codex 代替は毎回ここに書く)
 ```
 

@@ -22,7 +22,8 @@ Report only material findings you can defend from the actual files. For each fin
 
 ## Output structure
 
-- Number findings [V-1], [V-2], ... sequentially.
+- Number findings [adversarial-1], [adversarial-2], ... sequentially, and start each finding with
+  `[adversarial-n] <one-line title>` so the lane is obvious when results from several lanes are listed together.
 - Every finding must quote the relevant lines from the actual files
   (defect claims anchor at least one quote in the review target;
   supplementary quotes from unchanged code are allowed).

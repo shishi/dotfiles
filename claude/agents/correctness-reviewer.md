@@ -34,7 +34,10 @@ tools: Read, Grep, Glob
 - secrets / PII の混入(secrets レーンが見る)
 - 計測根拠のない性能推測
 
-## 出力形式(1 件ごと、[C-1] から連番)
+## 出力形式(1 件ごと、[correctness-1] から連番)
+
+各指摘の 1 行目は `[correctness-n] <重大度> <ファイル:行>` に固定する(例: `[correctness-1] blocker a.py:2`)。
+レーン名を ID に含めるのは、複数レーンの結果を並べたときにどの観点の指摘か一目で分かるようにするため。
 
 - 重大度: blocker / should / note
 - 場所: ファイル:行
