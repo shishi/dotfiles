@@ -3,7 +3,7 @@ name: codex-delegate
 description: |
   作業を codex CLI へ委譲して Claude Code のトークン消費を抑えるアダプタ。
   探索(read-only)・定型作業・実装を codex exec で実行し、
-  結果は schema で上限を切った JSON 1 通だけ受け取る。CLAUDE.md の判断基準で
+  結果は schema で上限を切った JSON 1 通だけ受け取る。AGENTS.md の判断基準で
   自律発火する、または /codex-delegate で明示発動。レビューは委譲しない
   (review-gate / codex-review の責務)。
 ---
@@ -193,7 +193,7 @@ exit "$rc"
    見る** — 空の差分は「何も書かなかった」とも読めるため、この照合が無いと誤った安心を返す
 4. ignored ファイルへの変更は `--untracked-files=all` に現れない。生成物・キャッシュ・`.env` の
    類が失われて困るリポジトリでは `--ignored` を付けた確認を併用する
-5. CLAUDE.md のレビューゲート条件(5 ファイル以上・新規モジュール・公開 API・infra/config 変更、
+5. AGENTS.md のレビューゲート条件(5 ファイル以上・新規モジュール・公開 API・infra/config 変更、
    および commit 前)で判定して review-gate skill を通す。判定は変更の中身に対して行い、委譲の
    種別では行わない — 広範囲のリネームや横展開は、種別が chore でもゲート条件に該当する。委譲先が
    commit していた場合もゲートは通し、指摘があれば追加 commit を積まず、**委譲を始める前の commit

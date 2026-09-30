@@ -21,7 +21,7 @@ description: |
    (`git status --short --untracked-files=all` で列挙)の本文
 3. **設計 doc**: repo 内 doc(`docs/` 等)の存在を確認し、あれば該当部を含める。
    存在確認をせずにレビューを開始しない
-4. CLAUDE.md(global + project)の該当規約
+4. AGENTS.md / CLAUDE.md(global + project)の該当規約
 
 **実装中の会話内容をプロンプトに書かない**(この観点の存在意義は情報の隔離)。
 

@@ -65,7 +65,7 @@ uncommitted にあれば defect。両方該当して曖昧なら質問する。
    指摘 → 引用を要件ソースと照合。不一致は棄却し ID 付きでレポートに記録
 6. **採否判定**: 指摘は採用命令ではない。現在の依頼へ直接もたらす実益または回避する
    具体的リスクを説明できる blocker/should だけ修正し、説明できない指摘は理由 1 行付きで
-   棄却として記録する(CLAUDE.md の過剰化の停止条件)。採用した修正を適用 → 対象を
+   棄却として記録する(AGENTS.md の過剰化の停止条件)。採用した修正を適用 → 対象を
    再組成して **3 に戻る**(secrets-scan も毎反復再実行。反復中の修正で混入した secrets を
    素通りさせない)。同一箇所への指摘が衝突したら correctness を優先し、spec 側は
    再レビューで確認
@@ -141,4 +141,4 @@ codex エンジンの試行では codex-review skill が内部で 1 リトライ
 - superpowers の per-task レビュー(subagent-driven 実行中)とは共存する。per-task
   レビュー済みでも本 gate は省略しない(高度が違う: per-task = 実装中の早期検出、
   本 gate = 節目の最終防衛線)
-- 記憶 repo(agent-memory)への commit は本 gate の対象外(CLAUDE.md の規定)
+- 記憶 repo(agent-memory)への commit は本 gate の対象外(AGENTS.md の規定)

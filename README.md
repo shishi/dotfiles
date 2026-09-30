@@ -1,5 +1,12 @@
 # dotfiles
 
+## エージェント共通指示
+
+Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに置きます。
+`claude/CLAUDE.md` は `@~/.codex/AGENTS.md` の import 1 行だけで、`~/.codex` の link を
+`setup.sh` が作ることが前提です。Claude Code はユーザーレベルの `AGENTS.md` を直接読まないため、
+この import が必要です。
+
 ## 外部 skill の管理
 
 自作または改変した skill は、従来どおり `claude/skills/` と `codex/skills/` で

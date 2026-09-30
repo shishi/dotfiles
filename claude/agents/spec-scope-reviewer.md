@@ -9,7 +9,7 @@ tools: Read, Grep, Glob
 与えられた差分がタスク記述の通りか、それ以上のことをしていないかを確認する。
 
 入力: タスク記述(既存テキストの逐語コピー)、レビュー対象(diff + untracked 本文)、
-設計 doc(存在する場合)、CLAUDE.md(global + project)。
+設計 doc(存在する場合)、AGENTS.md / CLAUDE.md(global + project)。
 実装中の会話は与えられていない。与えられた入力だけから判断すること。
 
 ## 手順
@@ -22,7 +22,7 @@ tools: Read, Grep, Glob
    - 現時点で 1 箇所からしか使われない汎用化が入っていないか
    - 同種の処理が既存にあるのに別方式で実装されていないか
    - 公開インターフェース(API、スキーマ、定数)の変更の有無
-   - CLAUDE.md・設計 doc の規約からの逸脱
+   - AGENTS.md / CLAUDE.md・設計 doc の規約からの逸脱
 
 ## 見ない対象(指摘するな)
 
