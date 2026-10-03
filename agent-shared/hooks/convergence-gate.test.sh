@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 変更を挟まない同一コマンドの反復を deny し、proceed 宣言後だけ許可する契約を検証する。
+# 同一コマンド反復の警告・宣言による警告抑制と、数量上限が無い契約を検証する。
 set -u
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -21,7 +21,11 @@ codex_patch() { # $1=patch $2=session
     '{hook_event_name:"PreToolUse",tool_name:"apply_patch",session_id:$session,tool_input:{command:$command}}' \
     | bash "$HOOK"
 }
-denied() { grep -q '"permissionDecision": *"deny"' <<<"$1"; }
+warned() {
+  jq -e '.hookSpecificOutput | .hookEventName == "PreToolUse" and
+    (.additionalContext | type == "string" and length > 0) and
+    (has("permissionDecision") | not)' >/dev/null 2>&1 <<<"$1"
+}
 
 # 1. 同一コマンド 2 回までは許可
 o1="$(run 'npm test' s1)"
@@ -32,28 +36,29 @@ else
   ng "first two identical runs pass"
 fi
 
-# 2. 変更を挟まない 3 回目は deny
-out="$(run 'npm test' s1)"
-if denied "$out"; then
-  ok "third identical run without mutation is denied"
+# 2. 変更を挟まない 3 回目以降は有効な additionalContext を出して通す
+o3="$(run 'npm test' s1)"
+o4="$(run 'npm test' s1)"
+if warned "$o3" && warned "$o4" && grep -q '3 回目' <<<"$o3" && grep -q '4 回目' <<<"$o4"; then
+  ok "repeated runs warn without denying and keep counting"
 else
-  ng "third identical run without mutation is denied"
+  ng "repeated runs warn without denying and keep counting"
 fi
 
-# 3. proceed 宣言後は許可
+# 3. proceed 宣言後は警告を抑制
 bash "$HOOK" proceed 'npm test' 'timeout 値を 30s へ変えたので今回は完走するはず' >/dev/null || true
 out="$(run 'npm test' s1)"
 if [ -z "$out" ]; then
-  ok "declared repeat is allowed"
+  ok "declared repeat suppresses warnings"
 else
-  ng "declared repeat is allowed"
+  ng "declared repeat suppresses warnings"
 fi
 
 # 4. Codex の直接 apply_patch がカウンタをリセットする
-run 'npm test' s2 >/dev/null
-run 'npm test' s2 >/dev/null
+run 'npm run build' s2 >/dev/null
+run 'npm run build' s2 >/dev/null
 codex_patch $'*** Begin Patch\n*** Update File: src/a.ts\n-const a=1\n+const a=2\n*** End Patch' s2 >/dev/null
-out="$(run 'npm test' s2)"
+out="$(run 'npm run build' s2)"
 if [ -z "$out" ]; then
   ok "mutation resets the repeat counter"
 else
@@ -61,7 +66,10 @@ else
 fi
 
 # 5. 別セッションのカウンタは独立
-out="$(run 'npm test' s3)"
+run 'ruby test' s3a >/dev/null
+run 'ruby test' s3a >/dev/null
+run 'ruby test' s3a >/dev/null
+out="$(run 'ruby test' s3b)"
 if [ -z "$out" ]; then
   ok "sessions are isolated"
 else
@@ -74,87 +82,67 @@ run 'cargo build' s4 >/dev/null
 bash "$HOOK" proceed 'cargo build' 'lockfile を更新したので依存解決が変わる' >/dev/null || true
 for f in "$CONVERGE_GATE_STATE_DIR"/ok.*; do
   [ -e "$f" ] || continue
-  printf '%s\t%s\n' "$(( $(date +%s) - 100000 ))" "stale" >"$f"
+  printf '%s\t%s\n' "$(( $(date +%s) - 601 ))" "stale" >"$f"
 done
 out="$(run 'cargo build' s4)"
-if denied "$out"; then
-  ok "expired declaration is invalid"
+if warned "$out"; then
+  ok "expired declaration restores warnings"
 else
-  ng "expired declaration is invalid"
+  ng "expired declaration restores warnings"
 fi
 
-# 7. レビュー系 skill は 2 周まで、3 周目は deny(自己解除なし)。
-#    予算は worktree 共有なので session が毎回違っても数える
+# 7. レビューは従来の 2 周上限を超えても許可する
 review() { printf '{"session_id":"%s","tool_input":{"skill":"%s"}}' "$2" "$1" | bash "$HOOK"; }
 o1="$(review review-gate s5a)"
 o2="$(review codex-review s5b)"
 o3="$(review review-gate s5c)"
-if [ -z "$o1" ] && [ -z "$o2" ] && denied "$o3"; then
-  ok "third review round is denied across sessions"
+if [ -z "$o1" ] && [ -z "$o2" ] && [ -z "$o3" ]; then
+  ok "reviews beyond former limit pass across sessions"
 else
-  ng "third review round is denied across sessions"
+  ng "reviews beyond former limit pass across sessions"
 fi
 
-# 8-11. 同一ファイル churn 予算(テストは free=2 に絞って検証)
-export CONVERGE_GATE_CHURN_FREE=2
+# 8. 通常編集も直接 patch も従来の延長込み 20 回上限を超えて通る
 edit() { printf '{"session_id":"s6","tool_input":{"file_path":"/x/app.ts"}}' | bash "$HOOK"; }
-
-# 8. free 枠(2 回)は許可、3 回目は deny(rework を案内)
-e1="$(edit)"; e2="$(edit)"; e3="$(edit)"
-if [ -z "$e1" ] && [ -z "$e2" ] && denied "$e3" && grep -q rework <<<"$e3"; then
-  ok "edits beyond per-file budget are denied with rework guidance"
+all_allowed=1
+for i in {1..21}; do
+  e="$(edit)"
+  p="$(codex_patch $'*** Begin Patch\n*** Update File: src/repeated.ts\n-x\n+y\n*** End Patch' s6)"
+  [ -z "$e" ] && [ -z "$p" ] || all_allowed=0
+done
+if [ "$all_allowed" = 1 ]; then
+  ok "edits and direct patches beyond former limits pass"
 else
-  ng "edits beyond per-file budget are denied with rework guidance"
+  ng "edits and direct patches beyond former limits pass"
 fi
 
-# 9. rework 宣言で +4 され、続きの編集が通る
-bash "$HOOK" rework '/x/app.ts' '原因は import 順と判明、次で並びを修正する' >/dev/null || true
-e="$(edit)"
-if [ -z "$e" ]; then
-  ok "rework declaration extends the per-file budget"
+# 9. 通常編集は全セッションの反復カウンタをリセットする
+run 'go test' s7a >/dev/null
+run 'go test' s7a >/dev/null
+run 'go test' s7b >/dev/null
+run 'go test' s7b >/dev/null
+edit >/dev/null
+o1="$(run 'go test' s7a)"
+o2="$(run 'go test' s7b)"
+if [ -z "$o1" ] && [ -z "$o2" ]; then
+  ok "ordinary edit resets command counters across sessions"
 else
-  ng "rework declaration extends the per-file budget"
+  ng "ordinary edit resets command counters across sessions"
 fi
 
-# 10. 2 回目の rework まで使い切ったら hard deny、3 回目の rework は拒否される
-for i in 1 2 3; do edit >/dev/null; done   # 4..6 消費(allowed=6)
-bash "$HOOK" rework '/x/app.ts' 'タイムアウト値が原因、次で閾値を直す' >/dev/null || true
-for i in 1 2 3 4; do edit >/dev/null; done # 7..10 消費(allowed=10)
-e="$(edit)"
-r3=0; bash "$HOOK" rework '/x/app.ts' '三度目の正直で直るはずだから' >/dev/null 2>&1 || r3=$?
-if denied "$e" && ! grep -q rework <<<"$e" && [ "$r3" != 0 ]; then
-  ok "exhausted rework budget is a hard stop"
+# 10. UserPromptSubmit は反復カウンタと proceed 宣言をリセットする
+run 'cargo build' s8 >/dev/null
+run 'cargo build' s8 >/dev/null
+bash "$HOOK" proceed 'cargo build' '外部の依存解決が進んだので新しい情報を確認する' >/dev/null || true
+printf '{"session_id":"s8","hook_event_name":"UserPromptSubmit","prompt":"続けて"}' | bash "$HOOK" >/dev/null
+o1="$(run 'cargo build' s8)"
+o2="$(run 'cargo build' s8)"
+o3="$(run 'cargo build' s8)"
+if [ -z "$o1" ] && [ -z "$o2" ] && warned "$o3"; then
+  ok "user prompt resets counters and warning suppression"
 else
-  ng "exhausted rework budget is a hard stop"
+  ng "user prompt resets counters and warning suppression"
 fi
-
-# 11. UserPromptSubmit が予算をリセットする
-printf '{"session_id":"s6","hook_event_name":"UserPromptSubmit","prompt":"続けて"}' | bash "$HOOK" >/dev/null
-e="$(edit)"
-if [ -z "$e" ]; then
-  ok "user prompt resets budgets"
-else
-  ng "user prompt resets budgets"
-fi
-unset CONVERGE_GATE_CHURN_FREE
-
-# 12. 前回レビュー以降に実装が進んでいれば新マイルストーンとして数え直す。
-#     進んでいない再レビューは従来どおり止まる(テストでは閾値 3 に絞る)
-export CONVERGE_GATE_MILESTONE_EDITS=3
-review7() { printf '{"session_id":"s7","tool_input":{"skill":"review-gate"}}' | bash "$HOOK"; }
-edit7() { printf '{"session_id":"s7","tool_input":{"file_path":"/x/m%s.ts"}}' "$1" | bash "$HOOK"; }
-review7 >/dev/null
-review7 >/dev/null
-for i in 1 2 3; do edit7 "$i" >/dev/null; done
-r3="$(review7)"
-r4="$(review7)"
-r5="$(review7)"
-if [ -z "$r3" ] && [ -z "$r4" ] && denied "$r5"; then
-  ok "sufficient new work resets review rounds, stalled re-review still stops"
-else
-  ng "sufficient new work resets review rounds, stalled re-review still stops"
-fi
-unset CONVERGE_GATE_MILESTONE_EDITS
 
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = 0 ]

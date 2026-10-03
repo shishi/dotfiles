@@ -72,58 +72,6 @@ marker_count() { # stdin -> マーカー行数
   LC_ALL=C grep -Ec "$marker_re" || true
 }
 
-# justify で通せるのはユーザー指示 1 回あたり test_file_budget ファイルまで。
-# 予算は worktree 単位の共有プール(session をキーにしない)。subagent や
-# codex 単独実行が session を替えても同じ予算に当たり、リセットは
-# convergence-gate が UserPromptSubmit で行う。
-# 宣言を積み増して「テストを増やす→落ちる→また増やす」を永遠に続ける経路を
-# 物理的に塞ぐ。広い正当な作業(複数モジュールへ各 1 テストファイル)は
-# この枠内に収まる想定で、超えたら報告して指示を待つ。
-test_file_budget="${OVERENG_GATE_FILE_BUDGET:-5}"
-# ケース予算はテストブロック(it / test / def test_ 等)の増加数の累計。
-# 1 個ずつ足しても一括で足しても同じ数字に当たる
-test_case_budget="${OVERENG_GATE_CASE_BUDGET:-20}"
-allow_within_budget() { # $1=path $2=マーカー増分。予算内なら exit 0、超過なら deny
-  local f key n delta cf cases
-  prepare_state_dir || exit 0
-  delta="${2:-0}"
-  case "$delta" in "" | *[!0-9]*) delta=0 ;; esac
-  cf="$state_dir/cases"
-  cases=0
-  [ -f "$cf" ] && IFS= read -r cases <"$cf"
-  case "$cases" in "" | *[!0-9]*) cases=0 ;; esac
-  if [ $((cases + delta)) -gt "$test_case_budget" ]; then
-    deny_case_budget "$1"
-  fi
-  f="$state_dir/testbudget"
-  key=$(hash_key "$1")
-  if [ ! -f "$f" ] || ! LC_ALL=C grep -qx "$key" "$f" 2>/dev/null; then
-    n=0
-    [ -f "$f" ] && n=$(wc -l <"$f" | tr -d ' ')
-    if [ "$n" -ge "$test_file_budget" ]; then
-      deny_budget "$1"
-    fi
-    echo "$key" >>"$f"
-  fi
-  echo $((cases + delta)) >"$cf"
-  exit 0
-}
-
-deny_case_budget() { # $1=path
-  jq -n --arg r "[過剰テストゲート] ユーザー指示 1 回あたりのテストケース追加予算(${test_case_budget} ブロック)を使い切った: $1 への追加は通せない。
-エッジケースは「現実に起こりうる / 壊れると高くつく / 明示的にスコープ内」のどれかを満たすものだけに絞り、それでも超えるなら残りの候補を列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
-  exit 0
-}
-
-deny_budget() { # $1=path
-  jq -n --arg r "[過剰テストゲート] ユーザー指示 1 回あたりのテスト追加予算(${test_file_budget} ファイル)を使い切った: $1 は通せない。
-テストを増やす→落ちる→検証をやり直す→また増やす、という反復は、反復のたびに完了条件が遠ざかる規約違反である。
-これ以上のテスト追加が本当に依頼された結果の証明に必要なら、追加したい対象と理由を列挙してユーザーへ報告し、指示を待て。この上限を自己解除する手段は無い。" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
-  exit 0
-}
-
 has_valid_justification() { # $1=path
   local f epoch rest now
   f="$state_dir/$(hash_key "$1")"
@@ -198,7 +146,7 @@ if [ -n "$path" ]; then
   # 中身がまだ無い新規テストファイル(scaffold)も作成時点で捕まえる
   if [ ! -f "$path" ] && is_test_path "$path"; then gate=1; fi
   [ "$gate" = 1 ] || exit 0
-  has_valid_justification "$path" && allow_within_budget "$path" "$((new_n - old_n))"
+  has_valid_justification "$path" && exit 0
   deny "$path"
 fi
 
@@ -226,9 +174,7 @@ if [ -n "$cmd" ]; then
     [ -n "$gate_path" ] || gate_path="apply_patch"
   fi
   [ -n "$gate_path" ] || exit 0
-  delta=$((new_n - old_n))
-  [ "$delta" -ge 0 ] || delta=0
-  has_valid_justification "$gate_path" && allow_within_budget "$gate_path" "$delta"
+  has_valid_justification "$gate_path" && exit 0
   deny "$gate_path"
 fi
 
