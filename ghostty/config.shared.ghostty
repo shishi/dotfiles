@@ -2,7 +2,7 @@ term = xterm-256color
 
 font-family = UDEV Gothic NF
 font-family = Noto Color Emoji
-font-size = 18
+font-size = 22
 theme = Afterglow
 background-opacity = 0.99
 window-padding-x = 0
