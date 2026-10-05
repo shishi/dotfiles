@@ -339,7 +339,7 @@ case "$action" in
 同意・反省・決意表明で応答し直すな。元の依頼に必要な残件は調査・実行・検証してから回答せよ。『まだ』『未確認』と言い換えて終了したり、残件を隠したりするな。停止が必要ならこのターンに根拠を確認し、自分で進められる作業を済ませたうえで具体的な障害と必要なユーザー操作を示せ。ユーザーが求める答えだけを返せ。"
       jq -n --arg reason "$reason" --arg guidance "$guidance" \
         '{decision:"block", reason:($reason + "\n" + $guidance)}'
-    elif [ "$(cat "$state_dir/review.result")" = PASS ]; then
+    elif [ "$(cat "$state_dir/review.result")" = PASS ] || [[ "$verdict" = "PASS: "?* ]]; then
       printf '{}\n'
     else
       jq -n '{decision:"block",reason:"検査失敗: 判定出力が空または形式不正。合格とは扱わず、検査の出力を確認して再試行せよ。"}'
