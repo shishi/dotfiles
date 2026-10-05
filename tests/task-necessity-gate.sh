@@ -28,16 +28,22 @@ while [ "$#" -gt 0 ]; do
 done
 prompt=$(cat)
 case "$prompt" in
+  *evidence-work*)
+    printf 'PASS\n' >"$output"
+    ;;
+  *review-error-work*) exit 2 ;;
+  *review-invalid-work*) printf 'looks good\n' >"$output" ;;
+  *review-empty-work*) : >"$output" ;;
   *'元のユーザー依頼に対して実行したこと、結果、未完了事項を報告していない'*requested-change*'+added guard'*)
     printf 'BLOCK: 追加した guard は依頼にも観測済み障害にも対応していない。\n' >"$output"
     ;;
   *'作業を求める依頼'*report-work*'<assistant-response>'*done*)
     printf 'BLOCK: 実行したことと結果が報告されていない。\n' >"$output"
     ;;
-  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'Androidエミュレーターを再起動'*'<turn-tool-calls>'*'systemctl --user restart android-emulator'*)
+  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'Androidエミュレーターを再起動'*'<tool-evidence>'*'systemctl --user restart android-emulator'*)
     printf 'PASS\n' >"$output"
     ;;
-  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'実行: hookを更新'*'<turn-tool-calls>'*'systemctl --user restart android-emulator'*)
+  *'このターンで実行または試行した、状態を変える操作'*material-report-work*'<assistant-response>'*'実行: hookを更新'*'<tool-evidence>'*'systemctl --user restart android-emulator'*)
     printf 'BLOCK: Androidエミュレーターの再起動が報告されていない。\n' >"$output"
     ;;
   *'ユーザーが求めた観測可能な結果を、変更対象そのものから確認した具体的な証拠'*verify-outcome-work*'<assistant-response>'*'設定を128GBに変更したので完了'*)
@@ -109,6 +115,78 @@ case "$prompt" in
 esac
 EOF
 chmod +x "$TMP/codex"
+
+# justify: Claude/Codex の会話と実行結果が同じ証拠として reviewer に届き、
+# hook の指摘や tool_result がユーザー要件へ混入しないことを検証する。
+for format in claude codex; do
+  transcript="$TMP/$format.jsonl"
+  if [ "$format" = claude ]; then
+    cat >"$transcript" <<'EOF'
+{"type":"user","message":{"content":"original requirement"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"proposed solution"},{"type":"thinking","thinking":"private reasoning"}]}}
+{"type":"user","message":{"content":"evidence-work"}}
+EOF
+  else
+    cat >"$transcript" <<'EOF'
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"injected instructions"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["agents_md.instructions"]}}}
+{"type":"event_msg","payload":{"type":"user_message","message":"original requirement"}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"proposed solution"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"evidence-work"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+{"type":"turn_context","payload":{"turn_id":"evidence"}}
+EOF
+  fi
+  evidence_start=$(jq -n --arg cwd "$TMP" --arg transcript "$transcript" --arg format "$format" \
+    '{session_id:$format,cwd:$cwd,prompt:"evidence-work",transcript_path:$transcript} + (if $format == "codex" then {turn_id:"evidence"} else {} end)')
+  printf '%s' "$evidence_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+  if [ "$format" = claude ]; then
+    cat >>"$transcript" <<'EOF'
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"check-1","name":"Bash","input":{"command":"bash check.sh"}},{"type":"tool_use","id":"check-2","name":"Bash","input":{"command":"bash denied.sh"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"check-2","content":"permission denied","is_error":true},{"type":"tool_result","tool_use_id":"check-1","content":[{"type":"text","text":"PASS=14 FAIL=0"}],"is_error":false}]}}
+{"type":"user","isMeta":true,"message":{"content":"internal feedback"}}
+{"type":"user","message":{"content":"<hook_prompt>internal retry</hook_prompt>"}}
+EOF
+  else
+    cat >>"$transcript" <<'EOF'
+{"type":"response_item","payload":{"type":"function_call","call_id":"check-1","name":"exec_command","arguments":"{\"cmd\":\"bash check.sh\"}"}}
+{"type":"response_item","payload":{"type":"custom_tool_call","call_id":"check-2","name":"functions.exec","input":"bash denied.sh"}}
+{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"check-2","output":"permission denied"}}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"check-1","output":"PASS=14 FAIL=0"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"<hook_prompt>internal retry</hook_prompt>"}}
+EOF
+  fi
+  evidence_stop=$(printf '%s' "$evidence_start" | jq '. + {last_assistant_message:"checked",stop_hook_active:true}')
+  evidence_result=$(printf '%s' "$evidence_stop" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+  evidence_turn=turn
+  [ "$format" != codex ] || evidence_turn=evidence
+  review="$TMP/.git/codex-task-necessity/$format-$evidence_turn/review.prompt"
+  context=$(sed -n '/^<conversation-context>$/,/^<\/conversation-context>$/p' "$review" | sed '1d;$d')
+  evidence=$(sed -n '/^<tool-evidence>$/,/^<\/tool-evidence>$/p' "$review" | sed '1d;$d')
+  if [ -n "$context" ] && [ -n "$evidence" ] &&
+    printf '%s' "$context" | jq -e '[.messages[].text] == ["original requirement","proposed solution","evidence-work"]' >/dev/null &&
+    printf '%s' "$evidence" | jq -e '.calls | length == 2 and (.[0].id == "check-1" and .[0].output == "PASS=14 FAIL=0" and .[0].scope == "current") and (.[1].id == "check-2" and .[1].output == "permission denied")' >/dev/null &&
+    [ "$(printf '%s' "$evidence_result" | jq -r '.decision // ""')" != block ]; then
+    echo "ok: $format conversation and matched tool results reach the reviewer"
+  else
+    echo "NG: $format conversation or tool evidence is missing or contaminated"
+    exit 1
+  fi
+done
+
+# justify: 検査の起動失敗・壊れた応答・空の応答を合格扱いしない。
+for failure in error invalid empty; do
+  failure_start=$(jq -n --arg cwd "$TMP" --arg prompt "review-$failure-work" \
+    '{session_id:"review-failure",cwd:$cwd,prompt:$prompt}')
+  printf '%s' "$failure_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
+  # 前回の PASS が残っていても今回の失敗を合格にしない。
+  printf 'PASS\n' >"$TMP/.git/codex-task-necessity/review-failure-turn/review.result"
+  failure_result=$(printf '%s' "$failure_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+  if printf '%s' "$failure_result" | jq -e '.decision == "block" and (.reason | contains("検査失敗"))' >/dev/null; then
+    echo "ok: reviewer $failure is a check failure, not acceptance"
+  else
+    echo "NG: reviewer $failure was accepted"
+    exit 1
+  fi
+done
 
 start_input=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"turn",cwd:$cwd,prompt:"requested-change"}')
 printf '%s' "$start_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
@@ -381,7 +459,7 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=14 FAIL=0'
+  echo 'PASS=19 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
   echo 'PASS=13 FAIL=1'
