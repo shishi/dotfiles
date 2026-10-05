@@ -34,7 +34,7 @@ case "$prompt" in
   *review-error-work*) exit 2 ;;
   *review-invalid-work*) printf 'looks good\n' >"$output" ;;
   *review-empty-work*) : >"$output" ;;
-  *review-explained-work*) printf 'PASS: 要求と実行結果が一致している。\n' >"$output" ;;
+  *review-explained-work*) printf '%s\n' "${REVIEW_PASS_OUTPUT:-PASS: 要求と実行結果が一致している。}" >"$output" ;;
   *'元のユーザー依頼に対して実行したこと、結果、未完了事項を報告していない'*requested-change*'+added guard'*)
     printf 'BLOCK: 追加した guard は依頼にも観測済み障害にも対応していない。\n' >"$output"
     ;;
@@ -173,16 +173,18 @@ EOF
   fi
 done
 
-# justify: 実運用で返った PASS: 理由 を形式不正として拒否しない。
+# justify: 実運用で返った PASS: 理由 / PASS — 理由 を形式不正として拒否しない。
 explained_start=$(jq -n --arg cwd "$TMP" '{session_id:"explained",cwd:$cwd,prompt:"review-explained-work"}')
 printf '%s' "$explained_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
-explained_result=$(printf '%s' "$explained_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
-if printf '%s' "$explained_result" | jq -e 'type == "object" and length == 0' >/dev/null; then
-  echo 'ok: PASS with an explanation is accepted'
-else
-  echo 'NG: PASS with an explanation was rejected'
-  exit 1
-fi
+for pass_output in 'PASS: 要求と結果が一致' 'PASS — 要求と結果が一致'; do
+  explained_result=$(printf '%s' "$explained_start" | REVIEW_PASS_OUTPUT="$pass_output" CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+  if printf '%s' "$explained_result" | jq -e 'type == "object" and length == 0' >/dev/null; then
+    echo 'ok: PASS with an explanation is accepted'
+  else
+    echo 'NG: PASS with an explanation was rejected'
+    exit 1
+  fi
+done
 
 # justify: 検査の起動失敗・壊れた応答・空の応答を合格扱いしない。
 for failure in error invalid empty; do
@@ -471,7 +473,7 @@ printf '%s' "$ending_cleanup" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" cleanup
 
 if [ ! -e "$ending_state" ]; then
   echo 'ok: session end removes the preserved request state'
-  echo 'PASS=20 FAIL=0'
+  echo 'PASS=21 FAIL=0'
 else
   echo 'NG: session end removes the preserved request state'
   echo 'PASS=13 FAIL=1'

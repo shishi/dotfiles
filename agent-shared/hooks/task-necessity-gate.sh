@@ -297,7 +297,7 @@ case "$action" in
       printf '%s\n' '`<task-owned-diff>` と untracked path は、この親 session と turn が担当した path だけです。shared worktree の他 session の状態を推測して本依頼へ帰属させないでください。担当差分が無い場合も、最終応答は独立して判定してください。'
       printf '%s\n' '依頼対象がターン開始時の repository 外にある場合、`<task-owned-diff>` に差分がないことだけを未実施の根拠にしないでください。`<assistant-response>` に対象の絶対 path や commit があれば、その実物を読み取りで確認して判定してください。確認できなければ BLOCK にしてください。'
       printf '%s\n' 'ターン開始時から存在した差分、今回変更していない既存コード、好みや style は対象外です。追加構造が必要性を満たすなら PASS です。'
-      printf '%s\n' '出力は PASS の1行、または BLOCK の1行に続けて「要求の引用・回答の該当箇所（欠落ならその旨）・証拠の ID または path・具体的な不一致」を書いてください。根拠のない拒否や、新しい作業の提案は禁止です。証拠不足なら未実施と断定せず、足りない証拠と確認対象を明記してください。'
+      printf '%s\n' '出力の先頭語は PASS または BLOCK としてください。根拠を続ける場合は空白・改行・コロンで区切ってください。BLOCK では「要求の引用・回答の該当箇所（欠落ならその旨）・証拠の ID または path・具体的な不一致」を書いてください。根拠のない拒否や、新しい作業の提案は禁止です。証拠不足なら未実施と断定せず、足りない証拠と確認対象を明記してください。'
       printf '\n<user-request>\n%s\n</user-request>\n' "$(cat "$state_dir/prompt")"
       printf '\n<assistant-response>\n%s\n</assistant-response>\n' "$(printf '%s' "$hook_input" | jq -r '.last_assistant_message // ""')"
       printf '\n<conversation-context>\n%s\n</conversation-context>\n' "$conversation_context"
@@ -321,7 +321,7 @@ case "$action" in
     fi
 
     verdict=$(sed -n '1p' "$state_dir/review.result")
-    if [[ "$verdict" = BLOCK || "$verdict" = BLOCK:* || "$verdict" = "BLOCK "* ]]; then
+    if [[ "$verdict" =~ ^BLOCK($|[[:space:]:]) ]]; then
       reason=$(
         {
           printf '%s\n' "${verdict#BLOCK}"
@@ -339,7 +339,7 @@ case "$action" in
 同意・反省・決意表明で応答し直すな。元の依頼に必要な残件は調査・実行・検証してから回答せよ。『まだ』『未確認』と言い換えて終了したり、残件を隠したりするな。停止が必要ならこのターンに根拠を確認し、自分で進められる作業を済ませたうえで具体的な障害と必要なユーザー操作を示せ。ユーザーが求める答えだけを返せ。"
       jq -n --arg reason "$reason" --arg guidance "$guidance" \
         '{decision:"block", reason:($reason + "\n" + $guidance)}'
-    elif [ "$(cat "$state_dir/review.result")" = PASS ] || [[ "$verdict" = "PASS: "?* ]]; then
+    elif [[ "$verdict" =~ ^PASS($|[[:space:]:]) ]]; then
       printf '{}\n'
     else
       jq -n '{decision:"block",reason:"検査失敗: 判定出力が空または形式不正。合格とは扱わず、検査の出力を確認して再試行せよ。"}'
