@@ -311,7 +311,7 @@ case "$action" in
     fi
 
     verdict=$(sed -n '1p' "$state_dir/review.result")
-    if [[ "$verdict" =~ ^BLOCK($|[[:space:]:]) ]]; then
+    if [[ "$verdict" =~ ^BLOCK($|[[:space:]:：]) ]]; then
       reason=$(
         {
           printf '%s\n' "${verdict#BLOCK}"
@@ -324,7 +324,7 @@ case "$action" in
       guidance=$(printf '\n元のユーザー依頼:\n%s' "$original_request")
       jq -n --arg feedback "$feedback_instruction" --arg reason "$reason" --arg guidance "$guidance" \
         '{decision:"block", reason:($feedback + "\n" + $reason + "\n" + $guidance)}'
-    elif [[ "$verdict" =~ ^PASS($|[[:space:]:]) ]]; then
+    elif [[ "$verdict" =~ ^PASS($|[[:space:]:：]) ]]; then
       printf '{}\n'
     else
       jq -n --arg feedback "$feedback_instruction" --rawfile request "$state_dir/prompt" \

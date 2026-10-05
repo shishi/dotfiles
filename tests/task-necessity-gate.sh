@@ -173,10 +173,10 @@ EOF
   fi
 done
 
-# justify: 実運用で返った PASS: 理由 / PASS — 理由 を形式不正として拒否しない。
+# justify: 実運用で返った PASS: 理由 / PASS — 理由 / PASS：理由 を形式不正として拒否しない。
 explained_start=$(jq -n --arg cwd "$TMP" '{session_id:"explained",cwd:$cwd,prompt:"review-explained-work"}')
 printf '%s' "$explained_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" start >/dev/null
-for pass_output in 'PASS: 要求と結果が一致' 'PASS — 要求と結果が一致'; do
+for pass_output in 'PASS: 要求と結果が一致' 'PASS — 要求と結果が一致' 'PASS：要求と結果が一致'; do
   explained_result=$(printf '%s' "$explained_start" | REVIEW_PASS_OUTPUT="$pass_output" CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
   if printf '%s' "$explained_result" | jq -e 'type == "object" and length == 0' >/dev/null; then
     echo 'ok: PASS with an explanation is accepted'
@@ -185,6 +185,15 @@ for pass_output in 'PASS: 要求と結果が一致' 'PASS — 要求と結果が
     exit 1
   fi
 done
+
+# justify: 実際の BLOCK：理由 を形式不正へ置換せず、是正に必要な理由を返す。
+blocked_result=$(printf '%s' "$explained_start" | REVIEW_PASS_OUTPUT='BLOCK：成果物を Git 管理外へ移している' CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
+if printf '%s' "$blocked_result" | jq -e '.decision == "block" and (.reason | contains("成果物を Git 管理外へ移している")) and (.reason | contains("検査失敗") | not)' >/dev/null; then
+  echo 'ok: full-width BLOCK delimiter preserves the rejection reason'
+else
+  echo 'NG: full-width BLOCK delimiter loses the rejection reason'
+  exit 1
+fi
 
 # justify: 検査の起動失敗・壊れた応答・空の応答を合格扱いしない。
 for failure in error invalid empty; do
