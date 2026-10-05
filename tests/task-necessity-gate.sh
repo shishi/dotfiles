@@ -194,7 +194,7 @@ for failure in error invalid empty; do
   # 前回の PASS が残っていても今回の失敗を合格にしない。
   printf 'PASS\n' >"$TMP/.git/codex-task-necessity/review-failure-turn/review.result"
   failure_result=$(printf '%s' "$failure_start" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
-  if printf '%s' "$failure_result" | jq -e '.decision == "block" and (.reason | contains("検査失敗"))' >/dev/null; then
+  if printf '%s' "$failure_result" | jq -e '.decision == "block" and (.reason | contains("検査失敗") and contains("途中報告にも最終回答にも出すな") and contains("元のユーザー依頼:"))' >/dev/null; then
     echo "ok: reviewer $failure is a check failure, not acceptance"
   else
     echo "NG: reviewer $failure was accepted"
@@ -213,6 +213,7 @@ stop_input=$(jq -n --arg cwd "$TMP" '{session_id:"session",turn_id:"turn",cwd:$c
 result=$(printf '%s' "$stop_input" | CODEX_BIN_PATH="$TMP/codex" bash "$HOOK" stop)
 
 if [ "$(printf '%s' "$result" | jq -r '.decision // ""')" = block ] &&
+  printf '%s' "$result" | jq -e '.reason | contains("途中報告にも最終回答にも出すな")' >/dev/null &&
   printf '%s' "$result" | jq -r '.reason // ""' | grep -qF 'hook の指摘への返答を主文にせず、元のユーザー依頼に対して実行したこと、結果、未完了事項を報告'; then
   echo 'ok: unsupported structure blocks Stop'
 else

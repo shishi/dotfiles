@@ -310,13 +310,15 @@ case "$action" in
       printf '\n<current-task-owned-untracked-paths>\n%s\n</current-task-owned-untracked-paths>\n' "$current_untracked"
     } >"$state_dir/review.prompt"
 
+    feedback_instruction='このフィードバックへの受領返答・説明・同意・反省・是正作業の実況を、途中報告にも最終回答にも出すな。内部で採否判断し、必要な修正・検証を行って元のユーザー依頼へ戻れ。ユーザーには元の依頼の結果だけを返せ。実際の障害でユーザーにしかできない操作が必要な場合だけ、その障害と必要な操作を伝えよ。'
     codex_bin=${CODEX_BIN_PATH:-codex}
     : >"$state_dir/review.result"
     if ! "$codex_bin" exec -C "$repo" -s read-only --ignore-user-config \
       --disable hooks --ephemeral -m gpt-5.6-luna -c model_reasoning_effort='"low"' \
       --color never -o "$state_dir/review.result" - \
       <"$state_dir/review.prompt" >/dev/null 2>&1; then
-      jq -n '{decision:"block",reason:"検査失敗: 判定コマンドが失敗した。回答内容の不適合と混同せず、検査の実行環境を確認して再試行せよ。"}'
+      jq -n --arg feedback "$feedback_instruction" --rawfile request "$state_dir/prompt" \
+        '{decision:"block",reason:($feedback + "\n検査失敗: 判定コマンドが失敗した。回答内容の不適合と混同せず、検査の実行環境を確認して再試行せよ。\n\n元のユーザー依頼:\n" + $request)}'
       exit 0
     fi
 
@@ -337,12 +339,13 @@ case "$action" in
       guidance="${guidance}
 
 同意・反省・決意表明で応答し直すな。元の依頼に必要な残件は調査・実行・検証してから回答せよ。『まだ』『未確認』と言い換えて終了したり、残件を隠したりするな。停止が必要ならこのターンに根拠を確認し、自分で進められる作業を済ませたうえで具体的な障害と必要なユーザー操作を示せ。ユーザーが求める答えだけを返せ。"
-      jq -n --arg reason "$reason" --arg guidance "$guidance" \
-        '{decision:"block", reason:($reason + "\n" + $guidance)}'
+      jq -n --arg feedback "$feedback_instruction" --arg reason "$reason" --arg guidance "$guidance" \
+        '{decision:"block", reason:($feedback + "\n" + $reason + "\n" + $guidance)}'
     elif [[ "$verdict" =~ ^PASS($|[[:space:]:]) ]]; then
       printf '{}\n'
     else
-      jq -n '{decision:"block",reason:"検査失敗: 判定出力が空または形式不正。合格とは扱わず、検査の出力を確認して再試行せよ。"}'
+      jq -n --arg feedback "$feedback_instruction" --rawfile request "$state_dir/prompt" \
+        '{decision:"block",reason:($feedback + "\n検査失敗: 判定出力が空または形式不正。合格とは扱わず、検査の出力を確認して再試行せよ。\n\n元のユーザー依頼:\n" + $request)}'
     fi
     ;;
 
