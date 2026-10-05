@@ -75,7 +75,6 @@ case "$action" in
     printf '%s' "$submitted_prompt" >"$state_dir/prompt"
     git -C "$repo" diff --no-ext-diff --binary HEAD -- . >"$state_dir/initial.diff"
     git -C "$repo" ls-files --others --exclude-standard | sort >"$state_dir/initial.untracked"
-    printf '0\n' >"$state_dir/blocks"
     : >"$state_dir/paths"
     printf '{}\n'
     ;;
@@ -141,20 +140,12 @@ case "$action" in
   stop)
     [ -f "$state_dir/head" ] && [ -f "$state_dir/prompt" ] &&
       [ -f "$state_dir/initial.diff" ] && [ -f "$state_dir/initial.untracked" ] &&
-      [ -f "$state_dir/blocks" ] && [ -f "$state_dir/paths" ] || {
+      [ -f "$state_dir/paths" ] || {
       printf '{}\n'
       exit 0
     }
     # 他の Stop hook がこの応答を差し戻す可能性があるため、自分が PASS しても
     # 元依頼は次の実 user prompt まで保持する。
-    preserve_state=true
-    finish_stop() {
-      local status=$?
-      trap - EXIT
-      [ "$preserve_state" = true ] || cleanup
-      exit "$status"
-    }
-    trap finish_stop EXIT
     trap cleanup HUP INT TERM
 
     start_head=$(cat "$state_dir/head")
@@ -230,9 +221,11 @@ case "$action" in
       printf '%s\n' '現在の具体的な問題を直接解決しない test、guard、helper、abstraction、layer、設定、negative probe、error branch が本ターンで追加されていれば BLOCK にしてください。'
       printf '%s\n' '不要構造と未実施作業の判定は、実際に行った作業と `<task-owned-diff>` / 担当 untracked path にだけ適用してください。`<assistant-response>` 内の提案・選択肢・今後の候補は実装差分ではありません。ユーザー依頼に関連し、実施済みと偽っていない正当な提案を、未実施または不要構造を理由に BLOCK せず、削除・撤回・実装を要求しないでください。提案を求める依頼では、その提案が依頼に答えているかを判定してください。'
       printf '%s\n' '明示された要件または実際に観測された失敗との直接の対応を根拠にし、将来の可能性、理論上の完全性、一般的な best practice、review 指摘だけを根拠にしないでください。'
-      printf '%s\n' '提案の保護は、依頼済みの作業を提案へ言い換えて未実施のまま終了する免除ではありません。修正・実行を求める依頼や作業への訂正に対し、実行できる作業を残して反省・謝罪・決意表明・改善案だけを返す、または実行の再指示を求める応答は BLOCK にしてください。求められていない反省文も BLOCK にし、反省の言い換えではなく依頼済みの作業を実行・検証して結果を報告させてください。説明・提案だけを求める依頼には実装を要求せず、明示的な停止指示や実際の権限・外部障害による停止は尊重してください。'
+      printf '%s\n' 'ユーザーが求める答え以外の出力は BLOCK にしてください。同意だけ、反省・謝罪だけ、決意表明だけの応答や、求められていない反省文は返させないでください。説明・提案を求める依頼にはその答えを返させ、不要な実装は要求しないでください。提案の保護は、依頼済みの作業を提案へ言い換えて未実施のまま終了する免除ではありません。'
+      printf '%s\n' '依頼に答えるために必要な調査・実行・検証が残っているのに、「まだ」「未確認」「未完了」「必要なら続ける」などと報告してターンを終える応答は BLOCK にしてください。表現や単語の有無ではなく、依頼された結果に必要な残件があるかで判定してください。残件を隠したり、完了と書き換えたりするのではなく、エージェント自身で調査・実行・検証してから回答させてください。'
+      printf '%s\n' '停止を認めるのは、ユーザーの明示的な停止指示、実際の権限上の禁止、またはこのターンに実行した確認で判明した外部障害・ユーザーにしかできない操作や判断がある場合です。過去の失敗や未調査を根拠に停止させず、可能な確認と独立して進められる作業を済ませてから、具体的な障害と必要なユーザー操作だけを依頼への答えとして報告させてください。'
       printf '%s\n' 'また、system/developer policy による実際の禁止や観測済みの外部エラーがないのに、明示された可逆・スコープ内の作業を未実施のまま停止しようとしていれば BLOCK にしてください。workflow、skill、確認不足という説明自体は未実施の根拠になりません。'
-      printf '%s\n' '作業の完了や修正済みを報告するなら、ユーザーが求めた観測可能な結果を、変更対象そのものから確認した具体的な証拠が `<assistant-response>` に必要です。実行時の効果が依頼なら、設定値、diff、build、コマンド成功だけで完了とせず、実際の実行状態を確認させてください。確認できていなければ未完了と報告させ、エージェントが確認できることをユーザーへ確認依頼していれば BLOCK にしてください。'
+      printf '%s\n' '作業の完了や修正済みを報告するなら、ユーザーが求めた観測可能な結果を、変更対象そのものから確認した具体的な証拠が `<assistant-response>` に必要です。実行時の効果が依頼なら、設定値、diff、build、コマンド成功だけで完了とせず、実際の実行状態を確認させてください。確認が残っているなら BLOCK にして確認を実行させ、エージェントが確認できることをユーザーへ確認依頼している場合も BLOCK にしてください。停止を認める条件に該当する場合だけ、確認できなかった結果と具体的な障害を報告させてください。'
       printf '%s\n' '`<assistant-response>` が製品、機能、パッケージ、配布物、URL、resource の存在・可用性・導入可能性・互換性・対応状況を事実として述べる、またはそれらを根拠に推奨する場合、利用可能な tool、repository、実ファイル、コマンド結果、一次資料で直接確認した証拠を要求してください。確認証拠が無ければ、未確認と明示していても推奨には使わせず BLOCK にしてください。「作成できる」「理論上可能」を「既に存在する」「利用できる」と混同した応答も BLOCK にしてください。'
       printf '%s\n' '既存の状態や resource を作り直すまたは置き換える作業では、利用可能な設定や実物から変更前の利用者向け挙動を確認し、ユーザーが変更した要件以外を維持した具体的な証拠を求めてください。既存設定を読めるのに既定値で上書きしたり、従来挙動の維持を確認していなければ BLOCK にしてください。'
       printf '%s\n' '安全策、backup、rollback、退避を作業の根拠や成果にするなら、実際に必要な状態を戻せること、使う経路、対象、復元結果の具体的な確認を求めてください。戻せないデータの保存、利用経路のない退避、復元を確認していない保険で完了を補強していれば BLOCK にしてください。'
@@ -267,17 +260,6 @@ case "$action" in
 
     verdict=$(sed -n '1p' "$state_dir/review.result")
     if [[ "$verdict" = BLOCK* ]]; then
-      blocks=$(cat "$state_dir/blocks")
-      case "$blocks" in ''|*[!0-9]*) blocks=3 ;; esac
-      if [ "$blocks" -ge 3 ]; then
-        # Stop hook が依頼者になって無限に会話を占有しない。3 回の内部是正で収束しない
-        # 場合は state を掃除し、最後の応答をユーザーへ返す。
-        preserve_state=false
-        printf '{}\n'
-        exit 0
-      fi
-      blocks=$((blocks + 1))
-      printf '%s\n' "$blocks" >"$state_dir/blocks"
       reason=$(
         {
           printf '%s\n' "${verdict#BLOCK}"
@@ -290,11 +272,9 @@ case "$action" in
       guidance=$(printf '%s\n\n元のユーザー依頼:\n%s' \
         'これは内部の是正指示であり、ユーザーへの回答対象ではない。ユーザーだけが依頼者であり、hook はその依頼への適合を検査する手段にすぎない。各指摘を採否判定し、依頼された結果への必要性を宣言できる実装構造は残し、宣言できないものだけ削除せよ。応答内の正当な提案・選択肢・今後の候補は実装差分ではないため、削除・撤回・実装要求の対象にするな。そのうえで、hook の指摘への返答を主文にせず、元のユーザー依頼に対して実行したこと、結果、未完了事項を報告せよ。未完了事項の解消にユーザーにしか実行できない操作または判断が必要なら、その具体的な行動も省略せず報告せよ。エージェント自身で実行できる作業はユーザーへ要求するな。' \
         "$original_request")
-      if [ "$blocks" -eq 3 ]; then
-        guidance="${guidance}
+      guidance="${guidance}
 
-これは最後の内部再試行である。hook への説明は書かず、ユーザーへ実行したこと、結果、未完了事項と、必要な場合はユーザーにしかできない具体的な行動を直接返答せよ。"
-      fi
+同意・反省・決意表明で応答し直すな。元の依頼に必要な残件は調査・実行・検証してから回答せよ。『まだ』『未確認』と言い換えて終了したり、残件を隠したりするな。停止が必要ならこのターンに根拠を確認し、自分で進められる作業を済ませたうえで具体的な障害と必要なユーザー操作を示せ。ユーザーが求める答えだけを返せ。"
       jq -n --arg reason "$reason" --arg guidance "$guidance" \
         '{decision:"block", reason:($reason + "\n" + $guidance)}'
     else

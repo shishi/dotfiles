@@ -364,10 +364,11 @@ for active in false true true true; do
   fi
 done
 
-if [ "$never_blocks" -eq 3 ] && [ ! -e "$never_state" ]; then
-  echo 'ok: repeated reviewer failures stop after three corrections'
+if [ "$never_blocks" -eq 4 ] && [ -f "$never_state/prompt" ] &&
+  [ "$(cat "$never_state/prompt")" = never-pass-work ]; then
+  echo 'ok: rejected responses never bypass review after repeated corrections'
 else
-  echo "NG: repeated reviewer failures stop after three corrections (blocks=$never_blocks)"
+  echo "NG: rejected responses bypassed review (blocks=$never_blocks)"
   echo 'PASS=4 FAIL=1'
   exit 1
 fi
