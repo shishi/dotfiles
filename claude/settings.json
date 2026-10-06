@@ -331,16 +331,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash '/Users/shigenobu.407/.claude/hooks/herdr-agent-state.sh' session",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
