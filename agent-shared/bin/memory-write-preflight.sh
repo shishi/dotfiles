@@ -3,10 +3,12 @@
 # 前提検証 / pull --rebase / 再検証) を 1 回の Bash 呼び出しにまとめ、tool call
 # 往復を減らす。
 #
-# usage: memory-write-preflight.sh <memory-link-path>
+# usage: memory-write-preflight.sh <memory-link-path> [--read-sync]
+# --read-sync は起動時の同期。fetch を 3 秒で打ち切り、fast-forward 後に lock を解放する。
 #   <memory-link-path> は agent home 側の link (~/.claude/memory or ~/.codex/memory)。
 # 正本の解決は resolve-memory-dir.sh に委ね、同じ env 契約 (AGENT_MEMORY_DIR など) に従う。
-# exit contract: 成功は exit 0 + stdout に opaque lock handle 1 行、lock は保持したまま。
+# exit contract: 通常の成功は exit 0 + stdout に opaque lock handle 1 行、lock は保持したまま。
+#   --read-sync の成功は exit 0 + stdout 空、lock は解放済み。
 #   失敗は非 0 + stdout 空。ここで取得した lock は解放して返す (解放失敗は stderr に
 #   警告し、lock は手動 recovery に委ねる)。他プロセスの lock には触らない。
 set -u
@@ -25,6 +27,7 @@ finish_preflight() {
   if [ "$preflight_owns_lock" = true ] && [ -n "${handle:-}" ]; then
     if ! bash "$BIN_DIR/memory-write-lock.sh" release "$handle"; then
       warn "write lock could not be released; manual recovery is required"
+      status=1
     fi
   fi
   exit "$status"
@@ -66,8 +69,15 @@ verify_repo_state() {
 }
 
 link="${1:-}"
-if [ -z "$link" ] || [ "$#" -ne 1 ]; then
-  warn "usage: memory-write-preflight.sh <memory-link-path>"
+read_sync=false
+if [ "$#" -eq 2 ] && [ "$2" = --read-sync ]; then
+  read_sync=true
+elif [ "$#" -ne 1 ]; then
+  warn "usage: memory-write-preflight.sh <memory-link-path> [--read-sync]"
+  exit 2
+fi
+if [ -z "$link" ]; then
+  warn "memory link is required"
   exit 2
 fi
 
@@ -105,6 +115,43 @@ fi
 # 手順 3-4: lock を保持したまま前提を検証し、pull --rebase 後に再検証する。
 # git の進捗出力は stdout 1 行 (handle) の契約を守るため stderr へ流す。
 verify_repo_state "$memory_repo" pre || exit 1
+if [ "$read_sync" = true ]; then
+  # Python は検索にも必要。POSIX と Windows の双方で transport の子孫も終了する。
+  # fetch の 3 秒と終了処理の余裕を、既存 hook の 10 秒以内に収める。
+  py_bin=$(command -v python3 || command -v python) || exit 1
+  "$py_bin" - "$memory_repo" <<'PY' || exit 1
+import os
+import signal
+import subprocess
+import sys
+
+process = subprocess.Popen(
+    ["git", "-C", sys.argv[1], "fetch", "--quiet", "origin",
+     "refs/heads/main:refs/remotes/origin/main"],
+    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"},
+    start_new_session=os.name != "nt")
+try:
+    status = process.wait(timeout=3)
+except subprocess.TimeoutExpired:
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    else:
+        os.killpg(process.pid, signal.SIGKILL)
+    process.wait(timeout=1)
+    print("memory read sync: fetch timed out", file=sys.stderr)
+    sys.exit(1)
+if status:
+    print("memory read sync: fetch failed", file=sys.stderr)
+sys.exit(status)
+PY
+  verify_repo_state "$memory_repo" pre || exit 1
+  git -C "$memory_repo" merge --ff-only --no-edit origin/main >&2 || exit 1
+  verify_repo_state "$memory_repo" post || exit 1
+  # EXIT trap が所有する lock だけを解放する。handle は呼び出し側へ移譲しない。
+  exit 0
+fi
 git -C "$memory_repo" pull --rebase >&2 \
   || { warn "git pull --rebase failed"; exit 1; }
 verify_repo_state "$memory_repo" post || exit 1

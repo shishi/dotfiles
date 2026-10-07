@@ -36,6 +36,16 @@ is_num() { # $1 が空でない十進数か(外部コマンドの出力を算術
   case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
 }
 
+sync_note=""
+if [ "$mode" != lookup ]; then
+  sync_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/memory-write-preflight.sh"
+  if bash "$sync_helper" "$MEMORY_DIR" --read-sync >/dev/null 2>&1; then
+    sync_note="記憶の同期: origin/main と同期済み"
+  else
+    sync_note="⚠ 記憶は未同期(通信失敗・時間切れ・書き込み中・Git 状態など)。以下はローカルの確定済み記憶。別端末の最新変更が必要なら同期状態を確認すること"
+  fi
+fi
+
 # --- git-state aware 読み取りの準備 ---
 # MEMORY.md の存在確認より先に Git の健全性を検査する(編集途中で MEMORY.md が
 # 消えている dirty repo を無言スキップに落とさない)。健全なら main commit を一度だけ
@@ -319,6 +329,7 @@ fi
 
 echo "<personal-memory>"
 echo "個人永続記憶。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
+[ -n "$sync_note" ] && echo "$sync_note"
 if [ -n "$project_present" ]; then
   echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
 elif [ -n "$degraded" ]; then

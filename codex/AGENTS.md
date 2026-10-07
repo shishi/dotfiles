@@ -57,8 +57,9 @@ Claude Code でも Codex でも review-gate skill に従う(レーン構成は�
 
 記憶は private repo agent-memory。`~/.claude/memory/` と `~/.codex/memory/` は同じ正本への link で、正本は `bash ~/.agent-shared/bin/resolve-memory-dir.sh` が解決する(`AGENT_MEMORY_DIR`、`GHQ_ROOT`、global `ghq.root` の順。通常 `~/dev/src/github.com/shishi/agent-memory`)。Claude の auto memory と Codex native Memories は無効で、agent-memory だけが正本。
 
-- セッション開始時に hook が索引・`CORE.md`・現プロジェクト記憶を `<personal-memory>` として注入する。ブロックが無ければ注入不調を報告し、`<personal-memory-warning>` の復旧手順に従う。警告も無ければ `git -C <agent home>/memory show main:MEMORY.md` と `main:CORE.md` を読む。
+- セッション開始時に hook が同期を試み、索引・`CORE.md`・現プロジェクト記憶を `<personal-memory>` として注入する。未同期の表示があれば別端末の最新変更を反映したとは扱わない。ブロックが無ければ注入不調を報告し、`<personal-memory-warning>` の復旧手順に従う。警告も無ければ `git -C <agent home>/memory show main:MEMORY.md` と `main:CORE.md` を読む。
 - 各入力の作業前に UserPromptSubmit hook が確定済み記憶を語句検索し、上位の本文を取得する。`[記憶検索]` が無ければ、先に `bash ~/.agent-shared/hooks/inject-memory.sh <agent home>/memory lookup '対象・操作・制約の検索語'` を実行して結果を読む。取得失敗のまま作業しない。該当なしは参照不要の証明ではない。索引に関連項目がある、対象や操作が途中で変わった、未取得候補が必要な場合は追加検索・本文取得を行う。同じ版の既読本文は再読しない。
+- 記憶の確実な参照をコンテキスト節約より優先する。節の取得は全文の既読を意味しない。候補や適用条件が曖昧なら、対象の追加検索または確定済みの全文取得で確認する。
 - `⚠ 記憶 repo` で始まる行は degraded 注入(別セッションの書き込み中、または worktree が dirty)。内容は最後の commit 時点で信頼してよいが、worktree を直接読まず `git -C <memory link> show main:<path>` で読む。lock が 10 分以上残存している警告は放置せず、元の作業より先に capturing-memory skill の復旧手順で調査する。`⚠ 未 push` は degraded ではなく、注入内容をそのまま使える。
 - 日常 capture: タスク完了前に記憶候補を監査し、明示された価値観・判断原則・好み・訂正、コードや Git 履歴から復元できないプロジェクト知識、再利用する環境知識があれば capturing-memory skill で保存する。ユーザーに毎回「記憶して」と言わせない。範囲(その場限り / プロジェクト固有 / 全体)を判定できなければ確認し、一時的な例外で広い方針を上書きしない。
 - 書き込みと整理は capturing-memory / memory-consolidate skill と、同期後 HEAD の `CONVENTIONS.md` に従う。preflight / finish helper が lock・pull・commit・push・release を担い、lock・handle・retirement をユーザー確認なしで削除しない。

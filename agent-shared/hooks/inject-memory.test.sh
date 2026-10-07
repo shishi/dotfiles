@@ -126,5 +126,92 @@ for config in claude/settings.json codex/hooks.json; do
   fi
 done
 
+# Meaningful approval queries retain the word that acknowledgement-only prompts omit.
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認の手順')
+if printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+  ok "approval remains searchable in a substantive request"
+else
+  ng "approval remains searchable in a substantive request"
+fi
+
+# Fixed relevance set: a second lookup must not promote an incidental fourth hit.
+for name in a b c; do
+  printf '# LookupTarget\nPRIMARY_%s\n' "$name" >"$MEMORY_DIR/$name.md"
+done
+printf '# Other topic\nLookupTarget INCIDENTAL_FOURTH\n' >"$MEMORY_DIR/z.md"
+git -C "$MEMORY_DIR" add a.md b.md c.md z.md
+git -C "$MEMORY_DIR" commit -qm ranking-fixture
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"ranking",prompt:"LookupTarget"}')
+output=$(lookup)
+output=$(lookup)
+if ! printf '%s' "$output" | grep -q INCIDENTAL_FOURTH && printf '%s' "$output" | grep -q '既読'; then
+  ok "already read candidates do not refill slots with weaker matches"
+else
+  ng "already read candidates do not refill slots with weaker matches"
+fi
+
+printf '# LookupTarget\nCURRENT_PROJECT\n' >"$MEMORY_DIR/projects/github.com-shishi-dotfiles.md"
+git -C "$MEMORY_DIR" add projects
+git -C "$MEMORY_DIR" commit -qm project-ranking
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"project-ranking",prompt:"LookupTarget"}')
+output=$(lookup)
+if printf '%s' "$output" | grep -q CURRENT_PROJECT; then
+  ok "current project ranks ahead of equivalent general matches"
+else
+  ng "current project ranks ahead of equivalent general matches"
+fi
+
+cat >"$MEMORY_DIR/sections.md" <<'EOF'
+---
+retrieval: sections
+description: QuartzDB and AmberDB storage reference
+---
+# Storage reference
+GLOBAL_CONDITION: only on the test platform.
+## QuartzDB
+QUARTZ_BODY
+### Restore
+RESTORE_CONDITION
+## AmberDB
+AMBER_BODY
+EOF
+git -C "$MEMORY_DIR" add sections.md
+git -C "$MEMORY_DIR" commit -qm section-fixture
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"sections",prompt:"QuartzDB"}')
+output=$(lookup)
+if printf '%s' "$output" | grep -q QUARTZ_BODY && printf '%s' "$output" | grep -q GLOBAL_CONDITION \
+  && printf '%s' "$output" | grep -q RESTORE_CONDITION && ! printf '%s' "$output" | grep -q AMBER_BODY; then
+  ok "section lookup retains the preamble and complete nested conditions"
+else
+  ng "section lookup retains the preamble and complete nested conditions"
+fi
+sed 's/AMBER_BODY/AMBER_CHANGED/' "$MEMORY_DIR/sections.md" >"$TMP/sections"
+cp "$TMP/sections" "$MEMORY_DIR/sections.md"
+git -C "$MEMORY_DIR" add sections.md
+git -C "$MEMORY_DIR" commit -qm unrelated-section-change
+output=$(lookup)
+if ! printf '%s' "$output" | grep -q QUARTZ_BODY; then
+  ok "unrelated section updates do not repeat the read section"
+else
+  ng "unrelated section updates do not repeat the read section"
+fi
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"sections",prompt:"AmberDB"}')
+output=$(lookup)
+if printf '%s' "$output" | grep -q AMBER_CHANGED && printf '%s' "$output" | grep -q GLOBAL_CONDITION; then
+  ok "another section is still unread and includes shared conditions"
+else
+  ng "another section is still unread and includes shared conditions"
+fi
+printf '\npassword = %s\n' "$secret_value" >>"$MEMORY_DIR/sections.md"
+git -C "$MEMORY_DIR" add sections.md
+git -C "$MEMORY_DIR" commit -qm hidden-section-secret
+lookup_status=0
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup QuartzDB 2>/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && ! printf '%s' "$output" | grep -q QUARTZ_BODY; then
+  ok "secret scan covers the whole source even outside selected sections"
+else
+  ng "secret scan covers the whole source even outside selected sections"
+fi
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
