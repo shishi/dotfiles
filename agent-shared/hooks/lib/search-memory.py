@@ -64,7 +64,7 @@ def main():
     for word in words:
         if re.fullmatch(r"[一-龯]{3,}", word):
             terms.update(word[i:i + 2] for i in range(len(word) - 1))
-    terms -= {"する", "今回", "確認", "作業", "実行", "ユーザー", "アタシ", "the", "and", "for", "is", "to", "of", "in"}
+    terms -= {"する", "今回", "確認", "作業", "実行", "承認", "再開", "ユーザー", "アタシ", "the", "and", "for", "is", "to", "of", "in"}
     patterns = {term: re.compile(r"\b" + re.escape(term) + r"\b" if re.fullmatch(r"[a-z]{2}", term)
                                  else re.escape(term)) for term in terms}
 

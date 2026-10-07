@@ -67,10 +67,16 @@ fi
 
 # 検索の fixture は秘密情報を含まない確定済み snapshot に戻す。
 git -C "$MEMORY_DIR" show HEAD^:MEMORY.md >"$MEMORY_DIR/MEMORY.md"
-printf '# SpectralDB\n検索取得_SENTINEL\n' >"$MEMORY_DIR/spectraldb.md"
+printf '# SpectralDB\n検索取得_SENTINEL\n承認後に再開する。\n' >"$MEMORY_DIR/spectraldb.md"
 git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md
 git -C "$MEMORY_DIR" commit -qm lookup-fixture
 mkdir -p "$TMP/home"
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認した。再開せよ')
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext' | grep -q '0件一致、本文取得0件'; then
+  ok "approval and resume alone do not retrieve unrelated memory"
+else
+  ng "approval and resume alone do not retrieve unrelated memory"
+fi
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の設定を調べる",hook_event_name:"UserPromptSubmit"}')
 # Windows Python の既定文字コードでも UTF-8 の hook JSON を読めることを含める。
 lookup() { printf '%s' "$lookup_payload" | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
