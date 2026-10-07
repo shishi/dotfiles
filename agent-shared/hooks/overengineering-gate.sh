@@ -84,15 +84,9 @@ has_valid_justification() { # $1=path
 
 deny() { # $1=path
   local rule
-  rule="[過剰テストゲート] テストコードの追加を検出: $1
-テストは検証手段であって成果物ではない。依頼された挙動を証明する最小のテストだけ追加する。
-- 仮定上の edge case は「現実に起こりうる / 壊れると高くつく / 明示的にスコープ内」のいずれも無ければテストにしない
-- レビュー指摘・coverage・網羅感は、それ自体では追加の理由にならない
-- 新しいテスト基盤を作るより既存テストの修正・再利用を優先する
-- 停止条件: 元の失敗を再現した / 修正がその再現を通った / 直接関係する既存テストが通った / 未確認の具体的リスクが無い — 揃ったら追加をやめる
-この追加が依頼された結果の証明に必要なら、次を実行してから同じ書き込みを再実行せよ(path は一字一句このまま):
+  rule="[過剰テストゲート] $1 の必要性宣言がないか期限切れ。追加前に test-red-first の手順で宣言する:
 bash ~/.agent-shared/hooks/overengineering-gate.sh justify '$1' '<依頼された挙動とこのテストの対応を 1 行>'
-宣言は $((ttl_seconds / 60)) 分間そのファイルに有効。別経路(heredoc 等)でこのゲートを迂回する書き込みは規約違反である。"
+有効期間は $((ttl_seconds / 60)) 分。path は上記と同じ表記を使う。"
   jq -n --arg r "$rule" \
     '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
   exit 0

@@ -46,25 +46,6 @@
             "type": "command"
           },
           {
-            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
-            "statusMessage": "収束ゲート確認中...",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh track",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh track'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/doc-no-narrative.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/doc-no-narrative.sh'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
             "command": "bash ~/.agent-shared/hooks/gh-body-file-guard.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/gh-body-file-guard.sh'",
             "statusMessage": "gh の本文受け渡しを確認中...",
@@ -77,56 +58,14 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh track",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh track'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
             "command": "bash ~/.agent-shared/hooks/overengineering-gate.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/overengineering-gate.sh'",
             "statusMessage": "過剰テストゲート確認中...",
             "timeout": 10,
             "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
-            "statusMessage": "収束ゲート確認中...",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/doc-no-narrative.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/doc-no-narrative.sh'",
-            "timeout": 10,
-            "type": "command"
           }
         ],
         "matcher": "apply_patch|Write|Edit"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/verify-before-asking.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/verify-before-asking.sh'",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "request_user_input"
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh cleanup-session'",
-            "timeout": 3,
-            "type": "command"
-          }
-        ]
       }
     ],
     "SessionStart": [
@@ -162,26 +101,6 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh stop",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh stop'",
-            "statusMessage": "依頼と差分の必要性を確認中...",
-            "timeout": 120,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/response-rules-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/response-rules-gate.sh'",
-            "statusMessage": "応答の文体ルールを確認中...",
-            "timeout": 120,
-            "type": "command"
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -200,24 +119,6 @@
           {
             "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh --record-approval",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/control-loss-guard.sh --record-approval'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/enforce-continuation.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/enforce-continuation.sh'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/task-necessity-gate.sh start",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-necessity-gate.sh start'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/convergence-gate.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/convergence-gate.sh'",
             "timeout": 10,
             "type": "command"
           }

@@ -18,6 +18,8 @@ description: Use when writing or revising prose for human readers in any languag
 - システムの動作説明は能動態で書く(「保存されます」→「保存します」)
 - 結論・要点を先に書き、補足・例外は後に置く
 - 仕様にない挙動を推測で補わない。不明点は不明と書くか確認する
+- 外部へ投稿する前に宛先・本文・実行環境を確認し、投稿後に同じ対象の実物と照合する。
+  readback の取得通知だけでは本文の一致を確認したことにならない。コメントは親本文と区別する
 
 ## 対象読者と書いてよい情報(全言語)
 
@@ -51,6 +53,7 @@ description: Use when writing or revising prose for human readers in any languag
 issue へ、経緯は commit log へ、正本ファイルにある値は複製せず参照にする。
 
 - **意思決定文書**: WHY(なぜ選んだか)と WHY NOT(なぜ他案を退けたか)を書く。現在形の要件と事実で書き、「本改訂では」のような経緯は書かない(経緯は commit log へ)
+- **運用手順**: 回避策を足す前に構造で解消できるかを確認する。経緯を省いても動作前提・既知の制限・事実と推定の区別は残す
 - **コミットメッセージ**: git-commit skill に従う(WHY 重視の body)
 - **エラーメッセージ**: 原因と次の行動を 1 文ずつ
 
