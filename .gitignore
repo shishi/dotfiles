@@ -3,6 +3,7 @@
 
 # Claude Code
 # マシンローカルの Claude Code 設定。追跡すると片方のマシンの許可が全マシンへ配られる。
+/.claude/worktrees
 /.claude/settings.local.json
 /claude/*
 !/claude/CLAUDE.md
@@ -21,6 +22,7 @@
 !/claude/skills/**
 
 # Codex
+/.codex/worktrees
 /codex/*
 !/codex/AGENTS.md
 !/codex/config.toml
