@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# SessionStart hook: 個人永続記憶(グローバル索引 + プロジェクト記憶)を注入する。
-# どんな失敗でも exit 0 でセッション起動を阻害しない(異常は警告テキストで伝える)。
-# usage: inject-memory.sh [MEMORY_DIR]   省略時: ~/.claude/memory
+# SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は語句検索した本文を注入する。
+# 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
+# usage: inject-memory.sh [MEMORY_DIR] [lookup [検索語...]]
 set -u
 
 MEMORY_DIR="${1:-${HOME}/.claude/memory}"
+mode="${2:-startup}"
+# UserPromptSubmit は検索失敗を握りつぶして作業開始しない。SessionStart は従来どおり。
+if [ "$mode" = lookup ]; then
+  trap 'echo "記憶の検索・取得が未完了のため、この入力での作業は開始していません。" >&2; exit 2' EXIT
+fi
 
 # 壊れた link: ディレクトリエントリ自体は存在するのに先が解決できない。
 # POSIX symlink は -L で判定できるが、Windows junction は git-bash の -L で
@@ -169,7 +174,12 @@ case "$index_probe_status" in
     ;;
 esac
 
-input=$(cat 2>/dev/null || true)
+if [ "$#" -ge 3 ] && [ "$mode" = lookup ]; then
+  shift 2
+  input=$(jq -n --arg prompt "$*" '{prompt:$prompt}')
+else
+  input=$(cat 2>/dev/null || true)
+fi
 cwd=""
 if command -v jq >/dev/null 2>&1; then
   cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null | tr -d '\r')
@@ -261,9 +271,9 @@ case "$project_probe_status" in
     ;;
 esac
 
+secret_pattern="(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
 scan_content() { # $1=content; 0=secret candidate, 1=clean, other=scan error
-  printf '%s\n' "$1" | LC_ALL=C grep -Eiq -- \
-    "(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
+  printf '%s\n' "$1" | LC_ALL=C grep -Eiq -- "$secret_pattern"
 }
 
 scan_path() { # $1=repo relative path $2=content; warning を出したら 0、clean なら 1
@@ -290,6 +300,21 @@ if [ -n "$core_present" ]; then
 fi
 if [ -n "$project_present" ]; then
   scan_path "$project_path" "$project_content" && exit 0
+fi
+
+lookup_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/search-memory.py"
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+if [ "$mode" = lookup ]; then
+  [ -n "$py_bin" ] || exit 2
+  if printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" lookup "$project_path" "$secret_pattern"; then
+    trap - EXIT
+    exit 0
+  fi
+  exit 2
+fi
+# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。
+if [ -n "$py_bin" ]; then
+  printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
 fi
 
 echo "<personal-memory>"

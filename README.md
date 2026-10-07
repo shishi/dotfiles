@@ -7,6 +7,28 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 `setup.sh` が作ることが前提です。Claude Code はユーザーレベルの `AGENTS.md` を直接読まないため、
 この import が必要です。
 
+## 個人記憶の参照
+
+記憶本文は private repo `agent-memory` に置き、両エージェントの `memory/` から参照します。
+セッション開始時は索引・共通方針・現在のプロジェクト記憶を読み込みます。
+各ユーザー入力の前に hook が最新の確定済み記憶を検索し、上位の本文を渡します。
+新しい記憶は commit 後から自動で検索対象になります。Python 3 と既存の Git・jq が必要です。
+
+自動取得は1入力につき最大3ファイル・本文合計16,000文字です。同じコンテキストで
+同じ版を繰り返し渡さず、再開・圧縮時は取得履歴をリセットします。検索は語句一致なので、
+関連情報をすべて取得する保証はありません。上限で取得しなかった候補はパスを示します。
+追加検索は対象・操作・制約の語で絞ります。手動検索は既読抑制せず本文を返します。
+
+```bash
+bash ~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory lookup 'gh sandbox'
+```
+
+Claude では引数の `~/.codex/memory` を `~/.claude/memory` に置き換えます。
+検索に失敗すると hook は入力をブロックします。`[記憶検索]` が届かない経路では、
+共通指示に従って作業前に上のコマンドを実行します。
+Codex の新規・定義変更した hook は、[/hooks で内容を確認して信頼](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
+するまでスキップされます。通常設定の trust を自動で書き換えることはしません。
+
 ## 外部 skill の管理
 
 自作または改変した skill は、従来どおり `claude/skills/` と `codex/skills/` で

@@ -123,6 +123,17 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory lookup",
+            "timeout": 10,
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory lookup'",
+            "additionalContextLimit": 30000
+          }
+        ]
       }
     ]
   }

@@ -304,6 +304,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory lookup",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

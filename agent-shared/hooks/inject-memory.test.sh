@@ -65,5 +65,60 @@ else
   ng "secret candidate withholds its value and the whole memory payload"
 fi
 
+# 検索の fixture は秘密情報を含まない確定済み snapshot に戻す。
+git -C "$MEMORY_DIR" show HEAD^:MEMORY.md >"$MEMORY_DIR/MEMORY.md"
+printf '# SpectralDB\n検索取得_SENTINEL\n' >"$MEMORY_DIR/spectraldb.md"
+git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md
+git -C "$MEMORY_DIR" commit -qm lookup-fixture
+mkdir -p "$TMP/home"
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の設定を調べる",hook_event_name:"UserPromptSubmit"}')
+# Windows Python の既定文字コードでも UTF-8 の hook JSON を読めることを含める。
+lookup() { printf '%s' "$lookup_payload" | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
+output=$(lookup)
+if printf '%s' "$output" | jq -er '.hookSpecificOutput | select(.hookEventName=="UserPromptSubmit") | .additionalContext' | grep -q 検索取得_SENTINEL; then
+  ok "user input searches and retrieves a committed memory without a model read"
+else
+  ng "user input searches and retrieves a committed memory without a model read"
+fi
+output=$(lookup)
+if printf '%s' "$output" | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+  ok "the same memory version is not injected twice in one context"
+else
+  ng "the same memory version is not injected twice in one context"
+fi
+printf '# SpectralDB\n新規記憶_SENTINEL\n' >"$MEMORY_DIR/new-topic.md"
+git -C "$MEMORY_DIR" add new-topic.md
+git -C "$MEMORY_DIR" commit -qm new-memory
+output=$(lookup)
+if printf '%s' "$output" | grep -q 新規記憶_SENTINEL; then
+  ok "newly committed memory is found without changing hook rules"
+else
+  ng "newly committed memory is found without changing hook rules"
+fi
+printf '%s' "$lookup_payload" | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" >/dev/null
+output=$(lookup)
+if printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+  ok "a new context resets retrieved-memory tracking"
+else
+  ng "a new context resets retrieved-memory tracking"
+fi
+printf '\npassword = %s\n' "$secret_value" >>"$MEMORY_DIR/new-topic.md"
+git -C "$MEMORY_DIR" add new-topic.md
+git -C "$MEMORY_DIR" commit -qm lookup-secret
+lookup_status=0
+output=$(lookup 2>/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && ! printf '%s' "$output" | grep -qF "$secret_value"; then
+  ok "lookup fails before task execution without emitting secret candidates"
+else
+  ng "lookup fails before task execution without emitting secret candidates"
+fi
+for config in claude/settings.json codex/hooks.json; do
+  if jq -e '[.hooks.UserPromptSubmit[].hooks[] | select(.command | contains("inject-memory.sh") and endswith(" lookup"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null; then
+    ok "$config performs lookup on every user input"
+  else
+    ng "$config performs lookup on every user input"
+  fi
+done
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
