@@ -58,16 +58,23 @@ subagent が結果を返さないときの差し替え先として使う。前�
    ```bash
    codex exec --dangerously-bypass-approvals-and-sandbox - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
+   Git repo 外で実行する場合は、上のコマンドに `--skip-git-repo-check` を付ける。
 4. 実行後に一時ファイルを削除する
 
 ### codex 前置き(観点コアの前に置く)
 
+全モードで、Git 外の issue・文書などが対象なら、投稿・更新予定の全文を前置きに含める。
+更新時は取得した変更前の本文も添える。これらも secrets-scan 済みの本文を渡す。
+親の会話や一時ファイルの存在だけで、CLI が対象を取得できるとは扱わない。
+
 ```text
 Task under review: <変更の短い説明(あればタスク記述の逐語引用)>
 Focus: <呼び出し側指定の焦点。無ければ the entire change>
-Inspect the changes yourself: run `git status --short --untracked-files=all` and
-`git diff HEAD`, and read the full content of untracked files. The review target is
-the combination of that diff and those untracked files.
+If the working directory is a Git repository, run `git status --short --untracked-files=all`
+and `git diff HEAD`, and read the full content of untracked files. The review target is
+that diff, those untracked files, and any non-Git artifacts supplied below.
+Do not treat an empty Git diff or the absence of a Git repository as an empty review target.
+Non-Git artifacts: <対象があれば変更後の全文と、更新時は変更前の本文。なければ none>
 The perspective definition follows. Follow its 出力形式 and 制約 exactly.
 ---
 ```

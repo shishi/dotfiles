@@ -1,11 +1,12 @@
 ---
 name: review-gate
 description: |
-  レビューゲートの司令塔。key milestones — spec/PRD/plan の作成・更新直後
-  (spec gate)、major 実装ステップ後(>=5 files / 新規モジュール / 公開 API /
-  infra・config 変更)、および git commit / PR / merge / release の前
-  (defect gate)— に、secrets / 仕様・スコープ / 正しさ(または adversarial)の
-  各レーンを編成し、予算内(最大 2 周)で反復する。Claude Code では土日(JST)に
+  コード・設定・文書・issue などの作成・変更で、リスクに関わらず原則発動する
+  レビューゲート。仕様・計画・設計の作成・更新直後、実装・文書の完成時、
+  issue の投稿・更新前、commit / PR / merge / release 前に使う。
+  省略は小規模で誤りが混入しない確信度が非常に高く、明らかに不要な場合だけ。
+  secrets / 仕様・スコープ / 正しさ(または adversarial)の各レーンを編成し、
+  全対象の確認と残件解消まで追跡する。Claude Code では土日(JST)に
   codex エンジンを Claude subagent に差し替え、Codex では全レーンを新規 agent で回す。
   キーワード: レビューゲート, review gate, レビューして, commit 前レビュー。
 ---
@@ -20,8 +21,10 @@ Codex 新規 agent)を分離した多レーンレビューゲート。Claude Cod
 
 ## 起動と照合の基準
 
-独立レビューの要否は AGENTS.md の具体的リスクで決める。下のマイルストーン表だけを
-理由に、小規模な局所修正や文書の移動へ独立レビューを追加しない。
+AGENTS.md に従い、コード・設定・文書・issue などの作成・変更で原則発動する。
+具体的リスクの存在は発動の前提にしない。省略できるのは、小規模で、間違いが混入しない
+確信度が非常に高く、明らかにレビューを必要としない場合だけ。
+文書だけ・設定一つ・低リスクという理由だけでは省略せず、判断に迷う場合は発動する。
 
 起動したレビューには、元の依頼と後続の訂正を両方渡す。訂正箇所だけ直して元の成果物を
 失っていないか照合する。文書の読者・用途・公開可否・Git 管理は
@@ -33,19 +36,23 @@ Codex 新規 agent)を分離した多レーンレビューゲート。Claude Cod
 | ゲート | トリガー | レーン |
 |---|---|---|
 | spec gate | spec/PRD/plan/設計 doc の作成・更新直後 | 0: secrets → adversarial |
-| defect gate | major 実装後(>=5 files / 新規モジュール / 公開 API / infra・config 変更)、commit / PR / merge / release 前 | 0: secrets → 1: spec-scope + 2: correctness(並行) |
+| defect gate | 実装・設定変更・一般文書の完成時、issue の投稿・更新前、主要な実装ステップ後、commit / PR / merge / release 前 | 0: secrets → 1: spec-scope + 2: correctness(並行) |
 
-`/review-gate` 引数なしの場合: 直前に spec/plan を書いていたら spec、コード変更が
-uncommitted にあれば defect。両方該当して曖昧なら質問する。
+仕様・計画・設計を扱う文書・issue は spec gate、その他の成果物は defect gate で扱う。
+外部へ投稿・更新する本文は、送信前にレビューする。
+`/review-gate` 引数なしでもこの区別で選ぶ。対象が両方にまたがり曖昧なら質問する。
 
 ## レビュー対象の組成(gate が一元管理)
 
 レビュー対象 = `git diff HEAD` + 全 untracked ファイルの本文
-(`git status --short --untracked-files=all` で列挙)。新規モジュールは untracked が
-本体になるため、diff だけでは系統的に見落とす。
+(`git status --short --untracked-files=all` で列挙) + Git 外で作成・変更する成果物の本文。
+issue や外部文書は投稿・更新予定の全文を含め、更新なら取得した変更前の本文も添える。
+Git 差分が空でも、これらの成果物があれば「レビュー対象なし」にしない。
+新規モジュールは untracked が本体になるため、diff だけでは系統的に見落とす。
 - 新規 agent エンジン(Claude subagent / Codex 新規 agent)には組成済み本文をプロンプトで
   渡す(reviewer agent は書き込みも Bash も持たない)
-- codex CLI エンジンには前置きで同じ組成を自分で行わせる(codex-review skill が行う)
+- codex CLI エンジンには Git 差分と untracked の取得を指示し、Git 外の成果物の本文は
+  codex-review skill の全モード共通の追加入力として前置きに渡す
 
 ## エンジン決定
 
@@ -74,9 +81,11 @@ spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)で実行す�
 1. 対象確認: 組成したレビュー対象が空なら「レビュー対象なし」で終了
 2. エンジン決定(上記。Claude Code では曜日判定を含む)
 3. レーン0: secrets-scan skill → 検出ゼロまで fix→re-scan(先行・直列。secrets 入りの
-   内容を外部 API に送る前に検出する)
+   内容を外部 API に送る前に検出する)。Git 外の成果物もローカルの一時ファイルへ保存し、
+   同 skill の per-file 検査に含める。Git repo がない場合は成果物のファイルを直接検査する
 4. レーン1: spec-scope-reviewer(新規 agent)とレーン2: correctness(決定エンジン)を
    並行 dispatch(各 1 パス。反復はレーン内で回さない)
+   - 文書・issue では、要件との一致に加え、事実・参照先・手順・記述間の整合性を確認する
    - レーン1 の入力組成は spec-scope-review skill の「入力組成」節の規則に従う
      (タスク記述は既存テキストの逐語コピーに限る。無ければ停止してユーザーに求める)
 5. 引用検証: 欠陥主張の指摘 → 少なくとも 1 つの引用がレビュー対象に存在すること
@@ -104,7 +113,8 @@ spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)で実行す�
 
 ## spec gate の手順
 
-defect gate の 1–3 と同様(対象は文書 diff + untracked 文書)。その後 adversarial 観点
+defect gate の 1–3 と同様(対象は文書 diff + untracked 文書 + Git 外の仕様・計画・設計本文)。
+その後 adversarial 観点
 1 レーン(エンジンは決定に従う)。findings は修正に入る前に引用検証し(棄却は [adversarial-n]
 付きで記録)、defect gate と同じ採否判定を通す。material findings の fix→re-review は
 **2 周まで** — **各反復で secrets-scan も再実行**。「safe」相当の結論で通過。予算到達で
