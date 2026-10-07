@@ -1,6 +1,6 @@
 personality = "friendly"
 model = "gpt-6-astra"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "high"
 default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
@@ -328,13 +328,13 @@ trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da14206072
 trusted_hash = "sha256:88dea05f1c464014ea291ed9702d5856c0b4ba8ee107697d9f8dc6fafd0191a6"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:4"]
-trusted_hash = "sha256:5164396c9f7b77fdd1abf43dd6e6957a5faf5ae61925052c233853baed48b9d8"
+trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:5"]
 trusted_hash = "sha256:97df317579e8fc1c6ed573e98ac22fd960c3f71949cf3c8045c44becb04ec57b"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:1:0"]
-trusted_hash = "sha256:ffd0817ff4eb69f9e65d6a138ac4c69481b95aab7d69ebd9970e45e22030e13f"
+trusted_hash = "sha256:6050d73b3d78687dbaeb3155196bdaf099827c12651ac95cd3c0a714fefeb7e5"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:1:1"]
 trusted_hash = "sha256:6050d73b3d78687dbaeb3155196bdaf099827c12651ac95cd3c0a714fefeb7e5"
@@ -465,7 +465,7 @@ trusted_hash = "sha256:8682faddfb4e064cee114d42cdae996cfc8a4341bad5572a4580e9886
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:stop:0:1"]
 trusted_hash = "sha256:6902f7014609945653a7b827487ef76bf9f9cf6c45142cf6d5d5cb81d639d99b"
 
-[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:1:0"]
+[hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:1:0"]
 trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
 
 [memories]
