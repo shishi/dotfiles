@@ -72,10 +72,10 @@ git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md
 git -C "$MEMORY_DIR" commit -qm lookup-fixture
 mkdir -p "$TMP/home"
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認した。再開せよ')
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]") and contains("質問形の指摘でも再指示を待たない") and contains("既に承認された範囲") and contains("説明のみ・変更禁止・承認待ち"))' | grep -q '0件一致、本文取得0件'; then
-  ok "zero matches still inject the correction rule without unrelated memory"
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する") and contains("質問形の指摘でも再指示を待たない") and contains("既に承認された範囲") and contains("説明のみ・変更禁止・承認待ち"))' | grep -q '0件一致、本文取得0件'; then
+  ok "zero matches still inject execution order and correction rules"
 else
-  ng "zero matches still inject the correction rule without unrelated memory"
+  ng "zero matches still inject execution order and correction rules"
 fi
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の設定を調べる",hook_event_name:"UserPromptSubmit"}')
 # Windows Python の既定文字コードでも UTF-8 の hook JSON を読めることを含める。
@@ -87,10 +87,10 @@ else
   ng "user input searches and retrieves a committed memory without a model read"
 fi
 output=$(lookup)
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]"))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
-  ok "the correction rule repeats even when already-read memory is omitted"
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する"))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+  ok "execution order repeats even when already-read memory is omitted"
 else
-  ng "the correction rule repeats even when already-read memory is omitted"
+  ng "execution order repeats even when already-read memory is omitted"
 fi
 printf '# SpectralDB\n新規記憶_SENTINEL\n' >"$MEMORY_DIR/new-topic.md"
 git -C "$MEMORY_DIR" add new-topic.md
