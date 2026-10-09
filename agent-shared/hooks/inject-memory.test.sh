@@ -73,7 +73,7 @@ git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md capture.md
 git -C "$MEMORY_DIR" commit -qm lookup-fixture
 mkdir -p "$TMP/home"
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認した。再開せよ')
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する") and contains("質問形の指摘でも再指示を待たない") and contains("既に承認された範囲") and contains("説明のみ・変更禁止・承認待ち"))' | grep -q '0件一致、本文取得0件'; then
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する") and contains("質問形の指摘でも再指示を待たない") and contains("既に承認された範囲") and contains("説明のみ・変更禁止・承認待ち"))' | grep -q '0件一致、本文取得0件'; then
   ok "zero matches still inject execution order and correction rules"
 else
   ng "zero matches still inject execution order and correction rules"
@@ -94,11 +94,32 @@ else
   ng "user input searches and retrieves a committed memory without a model read"
 fi
 output=$(lookup)
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する"))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する"))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
   ok "execution order repeats even when already-read memory is omitted"
 else
   ng "execution order repeats even when already-read memory is omitted"
 fi
+
+# Index-only vocabulary routes to the right document; incidental prose stays a candidate.
+printf '\n- [記憶システム](context.md) — 索引と本文の読み込み\n' >>"$MEMORY_DIR/MEMORY.md"
+printf '# Context support\nINDEX_ROUTE_BODY\n' >"$MEMORY_DIR/context.md"
+printf '# Other project プロジェクト記憶\n## 削除\n記憶を整理し索引を確認した。\nINCIDENTAL_MEMORY_BODY\n' >"$MEMORY_DIR/other-project.md"
+git -C "$MEMORY_DIR" add MEMORY.md context.md other-project.md
+git -C "$MEMORY_DIR" commit -qm index-routing
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-routing",prompt:"記憶を整理して不要なものを削除し、索引をつける"}')
+output=$(lookup)
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | contains("INDEX_ROUTE_BODY") and contains("other-project.md") and (contains("INCIDENTAL_MEMORY_BODY") | not)' >/dev/null; then
+  ok "index cues retrieve relevant memory without injecting incidental body matches"
+else
+  ng "index cues retrieve relevant memory without injecting incidental body matches"
+fi
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '記憶を整理して索引をつける')
+if printf '%s' "$output" | grep -q INCIDENTAL_MEMORY_BODY; then
+  ok "explicit lookup can still retrieve body-only candidates"
+else
+  ng "explicit lookup can still retrieve body-only candidates"
+fi
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の問題に対応するため設定を調べる",hook_event_name:"UserPromptSubmit"}')
 printf '# SpectralDB\n新規記憶_SENTINEL\n' >"$MEMORY_DIR/new-topic.md"
 git -C "$MEMORY_DIR" add new-topic.md
 git -C "$MEMORY_DIR" commit -qm new-memory
