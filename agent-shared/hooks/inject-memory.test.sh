@@ -78,7 +78,7 @@ if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | selec
 else
   ng "zero matches still inject execution order and correction rules"
 fi
-output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '論点をそらすな、問題をふやすなというるーるをつくれ。あとおまえのこんてきすとがちいさすぎてすぐ圧縮する。対応をかんがえろ')
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '論点をそらさず、問題を増やさないルールを作る。コンテキストがすぐ圧縮されるので、対応を考える。')
 if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | contains("0件一致、本文取得0件") and (contains("無関係_SENTINEL") | not)' >/dev/null; then
   ok "generic problem and response words do not retrieve unrelated memory"
 else
