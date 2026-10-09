@@ -73,10 +73,10 @@ git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md capture.md
 git -C "$MEMORY_DIR" commit -qm lookup-fixture
 mkdir -p "$TMP/home"
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認した。再開せよ')
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する") and contains("質問形の指摘でも再指示を待たない") and contains("既に承認された範囲") and contains("説明のみ・変更禁止・承認待ち"))' | grep -q '0件一致、本文取得0件'; then
-  ok "zero matches still inject execution order and correction rules"
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[記憶検索]") and (contains("[作業継続]") | not))' | grep -q '0件一致、本文取得0件'; then
+  ok "zero matches still inject the index without task policy"
 else
-  ng "zero matches still inject execution order and correction rules"
+  ng "zero matches still inject the index without task policy"
 fi
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '論点をそらさず、問題を増やさないルールを作る。コンテキストがすぐ圧縮されるので、対応を考える。')
 if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | contains("0件一致、本文取得0件") and (contains("無関係_SENTINEL") | not)' >/dev/null; then
@@ -94,10 +94,10 @@ else
   ng "user input searches and retrieves a committed memory without a model read"
 fi
 output=$(lookup)
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[作業継続]") and contains("調査→実行→検証→後片付け") and contains("表現・理由を問わず") and contains("利用可能なツールで根拠を取得する"))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
-  ok "execution order repeats even when already-read memory is omitted"
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[記憶検索]") and (contains("[作業継続]") | not))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
+  ok "index repeats even when already-read memory is omitted"
 else
-  ng "execution order repeats even when already-read memory is omitted"
+  ng "index repeats even when already-read memory is omitted"
 fi
 
 # Index-only vocabulary routes to the right document; incidental prose stays a candidate.

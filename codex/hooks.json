@@ -144,6 +144,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-policy.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-policy.sh'",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
