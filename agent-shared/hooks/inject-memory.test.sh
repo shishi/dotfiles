@@ -68,7 +68,8 @@ fi
 # 検索の fixture は秘密情報を含まない確定済み snapshot に戻す。
 git -C "$MEMORY_DIR" show HEAD^:MEMORY.md >"$MEMORY_DIR/MEMORY.md"
 printf '# SpectralDB\n検索取得_SENTINEL\n承認後に再開する。\n' >"$MEMORY_DIR/spectraldb.md"
-git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md
+printf '# Capture hardware\n映像の問題に対応する。\n無関係_SENTINEL\n' >"$MEMORY_DIR/capture.md"
+git -C "$MEMORY_DIR" add MEMORY.md spectraldb.md capture.md
 git -C "$MEMORY_DIR" commit -qm lookup-fixture
 mkdir -p "$TMP/home"
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認した。再開せよ')
@@ -77,11 +78,17 @@ if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | selec
 else
   ng "zero matches still inject execution order and correction rules"
 fi
-lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の設定を調べる",hook_event_name:"UserPromptSubmit"}')
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '論点をそらすな、問題をふやすなというるーるをつくれ。あとおまえのこんてきすとがちいさすぎてすぐ圧縮する。対応をかんがえろ')
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | contains("0件一致、本文取得0件") and (contains("無関係_SENTINEL") | not)' >/dev/null; then
+  ok "generic problem and response words do not retrieve unrelated memory"
+else
+  ng "generic problem and response words do not retrieve unrelated memory"
+fi
+lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の問題に対応するため設定を調べる",hook_event_name:"UserPromptSubmit"}')
 # Windows Python の既定文字コードでも UTF-8 の hook JSON を読めることを含める。
 lookup() { printf '%s' "$lookup_payload" | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
 output=$(lookup)
-if printf '%s' "$output" | jq -er '.hookSpecificOutput | select(.hookEventName=="UserPromptSubmit") | .additionalContext' | grep -q 検索取得_SENTINEL; then
+if printf '%s' "$output" | jq -er '.hookSpecificOutput | select(.hookEventName=="UserPromptSubmit") | .additionalContext | select(contains("無関係_SENTINEL") | not)' | grep -q 検索取得_SENTINEL; then
   ok "user input searches and retrieves a committed memory without a model read"
 else
   ng "user input searches and retrieves a committed memory without a model read"

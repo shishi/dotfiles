@@ -1,6 +1,9 @@
 personality = "friendly"
 model = "gpt-6-astra"
 model_reasoning_effort = "high"
+# gpt-6-astra の実験的な拡張枠。圧縮後の処理と出力に余裕を残す。
+model_context_window = 872000
+model_auto_compact_token_limit = 750000
 default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
