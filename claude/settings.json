@@ -313,6 +313,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/wording-policy.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
