@@ -125,6 +125,9 @@ esac
 mkdir -p "$herdr_config_dir"
 ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
 
+mkdir -p "$XDG_CONFIG_HOME/hunk"
+ln -sfn "$DOTDIR/hunk/config.toml" "$XDG_CONFIG_HOME/hunk/config.toml"
+
 # Git and package tools
 case "$(uname -s)" in
 Darwin)
