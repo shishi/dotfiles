@@ -14,6 +14,13 @@ notify = ["/Applications/ChatGPT.app/notify", "turn-ended"]
 [features]
 hooks = true
 
+[tui]
+status_line = ["model-with-reasoning"]
+
+[tui.model_availability_nux]
+"gpt-6.1-sol" = 4
+gpt-6-astra = 3
+
 [shell_environment_policy.set]
 MCP_TOOL_TIMEOUT = "120000"
 NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "machine-hash"
@@ -52,6 +59,9 @@ model = "gpt-5.6-sol"
 [features]
 hooks = true
 
+[tui]
+status_line = ["model-with-reasoning"]
+
 [shell_environment_policy.set]
 MCP_TOOL_TIMEOUT = "120000"
 
@@ -73,3 +83,24 @@ else
   diff -u "$TMP/expected.toml" "$TMP/actual.toml"
   exit 1
 fi
+
+# Exercise git add, including a later counter update mixed with a real setting.
+mkdir -p "$TMP/repo/codex"
+git -C "$TMP/repo" init -q
+printf 'codex/config.toml filter=codex-config\n' >"$TMP/repo/.gitattributes"
+git -C "$TMP/repo" config filter.codex-config.clean "bash '$CLEANER'"
+git -C "$TMP/repo" config filter.codex-config.smudge cat
+git -C "$TMP/repo" config filter.codex-config.required true
+cp "$TMP/input.toml" "$TMP/repo/codex/config.toml"
+git -C "$TMP/repo" add codex/config.toml
+git -C "$TMP/repo" show :codex/config.toml >"$TMP/staged.toml"
+cmp "$TMP/expected.toml" "$TMP/staged.toml"
+cmp "$TMP/input.toml" "$TMP/repo/codex/config.toml"
+sed -e 's/"gpt-6.1-sol" = 4/"gpt-6.1-sol" = 5/' -e 's/model = "gpt-5.6-sol"/model = "gpt-6-astra"/' "$TMP/input.toml" >"$TMP/updated.toml"
+sed 's/model = "gpt-5.6-sol"/model = "gpt-6-astra"/' "$TMP/expected.toml" >"$TMP/updated-expected.toml"
+cp "$TMP/updated.toml" "$TMP/repo/codex/config.toml"
+git -C "$TMP/repo" add codex/config.toml
+git -C "$TMP/repo" show :codex/config.toml >"$TMP/staged.toml"
+cmp "$TMP/updated-expected.toml" "$TMP/staged.toml"
+cmp "$TMP/updated.toml" "$TMP/repo/codex/config.toml"
+echo "ok: git add excludes counters, stages settings, and preserves local state"
