@@ -1540,6 +1540,8 @@ later(function()
     completion = { enabled = false },
   })
   vim.keymap.set({ 'i', 'c', 't' }, '<C-j>', '<Plug>(skkelua-enable)')
+  -- Also accept the Ctrl-Enter code delivered for Ctrl-J by the terminal path.
+  vim.keymap.set({ 'i', 'c', 't' }, '<C-CR>', '<Plug>(skkelua-enable)')
 end)
 
 -- later(function()

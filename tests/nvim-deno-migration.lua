@@ -13,6 +13,17 @@ local function check()
     assert(not vim.tbl_contains(retired, plugin.name), plugin.name .. ' is still enabled')
   end
 
+  for _, key in ipairs({ '<C-CR>', '<C-j>' }) do
+    vim.cmd.enew()
+    -- Deliver typed input after InsertEnter mappings have been installed.
+    vim.defer_fn(function()
+      vim.fn.feedkeys(vim.keycode(key .. 'ka<Esc>'), 't')
+    end, 50)
+    vim.fn.feedkeys('i', 'tx!')
+    assert(vim.api.nvim_get_current_line() == 'か', key .. ' must enable kana input')
+    vim.bo.modified = false
+  end
+
   vim.cmd.enew()
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'start', '日本語', 'end' })
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
