@@ -91,9 +91,8 @@ vim.opt.clipboard = 'unnamedplus'
 
 local utils = require('utils')
 
-if vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('SSH_CONNECTION') ~= vim.NIL then
-  vim.g.clipboard = 'osc52'
-elseif utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
+local remote = vim.fn.getenv('SSH_TTY') ~= vim.NIL or vim.fn.getenv('SSH_CONNECTION') ~= vim.NIL
+if not remote and utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32yank.exe') then
   vim.g.clipboard = {
     name = 'win32yank_wsl',
     copy = {
@@ -106,25 +105,22 @@ elseif utils.file_exists('/mnt/c/Users/shishi/scoop/apps/win32yank/current/win32
     },
     cache_enable = 1,
   }
-elseif vim.fn.getenv('USER') == 'app' then
-  local function paste()
-    return {
-      vim.fn.split(vim.fn.getreg(''), '\n'),
-      vim.fn.getregtype(''),
-    }
+elseif remote or vim.fn.getenv('USER') == 'app' then
+  -- OSC 52 reads may receive no reply through a multiplexer. Keep local
+  -- register contents for p/P; use the terminal's paste for external text.
+  local clipboard = { name = 'OSC 52 copy / local paste', copy = {}, paste = {} }
+  for _, reg in ipairs({ '+', '*' }) do
+    local contents = { {}, 'v' }
+    local copy = require('vim.ui.clipboard.osc52').copy(reg)
+    clipboard.copy[reg] = function(lines, regtype)
+      contents = { lines, regtype }
+      copy(lines)
+    end
+    clipboard.paste[reg] = function()
+      return contents
+    end
   end
-
-  vim.g.clipboard = {
-    name = 'OSC 52',
-    copy = {
-      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
-    },
-    paste = {
-      ['+'] = paste,
-      ['*'] = paste,
-    },
-  }
+  vim.g.clipboard = clipboard
 end
 
 vim.opt.modeline = true
