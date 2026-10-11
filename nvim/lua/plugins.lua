@@ -434,6 +434,35 @@ later(function()
   }
   -- @format:on
 
+  -- Use the same dictionary as /, :K, and Telescope instead of the bundled one.
+  local engine = require('luamigemo')
+  local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
+  local migemo = engine.get(dictionary)
+  local function migemo_matcher(smart_case)
+    local cached_query, regex
+    return function(line, query, init)
+      local initial = query:sub(1, 1)
+      local ignore_case = smart_case and initial == initial:lower()
+      local needle = ignore_case and query:lower() or query
+      if not line:find('[^%w%p%s]') then
+        local text = ignore_case and line:lower() or line
+        local first, last = text:find(needle, init, true)
+        return first and { first - 1, last } or nil
+      end
+      if query ~= cached_query then
+        local pattern = needle:gsub('([^ ]*)( *)', function(word, spaces)
+          return (word ~= '' and migemo:query(word, engine.RXOP_VIM) or '') .. string.rep([[\%(\s\|　\)]], #spaces)
+        end)
+        regex = vim.regex([[\m]] .. (ignore_case and [[\c]] or [[\C]]) .. pattern)
+        cached_query = query
+      end
+      local first, last = regex:match_str(line:sub(init))
+      return first and { first + init - 1, last + init - 1 } or nil
+    end
+  end
+  local window_matcher = migemo_matcher(true)
+  local inline_matcher = migemo_matcher(false)
+
   -- incremental search
   -- if the initial query is uppercase,
   -- then the search is case-sensitive.
@@ -441,7 +470,7 @@ later(function()
   -- hints appear on the left of the matches if possible.
   vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
     ---@diagnostic disable-next-line
-    return require('jab').jab_win()
+    return require('jab').jab_win({ matcher = window_matcher })
   end, { expr = true })
 
   -- f-motions
@@ -449,19 +478,19 @@ later(function()
   -- hints appear exactly on the matches.
   vim.keymap.set({ 'n', 'x', 'o' }, 'f', function()
     ---@diagnostic disable-next-line
-    return require('jab').f()
+    return require('jab').f({ matcher = inline_matcher })
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 'F', function()
     ---@diagnostic disable-next-line
-    return require('jab').F()
+    return require('jab').F({ matcher = inline_matcher })
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 't', function()
     ---@diagnostic disable-next-line
-    return require('jab').t()
+    return require('jab').t({ matcher = inline_matcher })
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 'T', function()
     ---@diagnostic disable-next-line
-    return require('jab').T()
+    return require('jab').T({ matcher = inline_matcher })
   end, { expr = true })
 end)
 
