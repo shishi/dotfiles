@@ -1,2 +1,7 @@
 command = nu.exe
+# Clear defaults before loading shared and platform bindings.
+keybind = clear
 config-file = config.shared.ghostty
+
+# Preserve Ctrl-J across Windows console input translation.
+keybind = ctrl+j=csi:106;5u

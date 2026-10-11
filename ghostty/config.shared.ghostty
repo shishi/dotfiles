@@ -11,8 +11,6 @@ window-width = 170
 window-height = 48
 window-show-tab-bar = auto
 
-# Keep application keys available except clipboard, font size, and palette actions.
-keybind = clear
 # Copies Ghostty's selection, not Herdr's copy-mode selection.
 keybind = performable:ctrl+shift+c=copy_to_clipboard
 keybind = ctrl+shift+v=paste_from_clipboard
