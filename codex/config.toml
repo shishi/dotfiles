@@ -466,6 +466,12 @@ trusted_hash = "sha256:6902f7014609945653a7b827487ef76bf9f9cf6c45142cf6d5d5cb81d
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:1:0"]
 trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
 
+[hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:2:0"]
+trusted_hash = "sha256:9dc280d9240054109100eaa681868fa293fc7536cd10754fb2e9c166e148ce90"
+
+[hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:3:0"]
+trusted_hash = "sha256:234a1aa95efbea1d51f364f99931059420db2fd343ea03c6831f8977d3dab5f6"
+
 [memories]
 generate_memories = false
 use_memories = false
