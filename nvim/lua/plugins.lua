@@ -369,8 +369,7 @@ later(function()
       local query = vim.fn.matchstr(vim.fn.getcmdline(), romaji_pattern)
       if query ~= '' then
         local engine = require('luamigemo')
-        local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
-        return '<C-u>\\m' .. engine.get(dictionary):query(query, engine.RXOP_VIM) .. '<CR>'
+        return '<C-u>\\m' .. engine.query(query, engine.RXOP_VIM) .. '<CR>'
       end
     end
     return '<CR>'
@@ -400,10 +399,13 @@ later(function()
     },
   })
 
+  -- jab・/・:K・Telescope が使う標準インスタンスの辞書を差し替える。
+  local engine = require('luamigemo')
+  local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
+  engine.get():set_dict(require('luamigemo.compact_dictionary').load(dictionary))
+
   vim.api.nvim_create_user_command('K', function(opts)
-    local engine = require('luamigemo')
-    local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
-    vim.fn.setreg('/', '\\m' .. engine.get(dictionary):query(opts.args, engine.RXOP_VIM))
+    vim.fn.setreg('/', '\\m' .. engine.query(opts.args, engine.RXOP_VIM))
     vim.cmd('normal! n')
   end, { nargs = '+' })
 end)
@@ -434,64 +436,6 @@ later(function()
   }
   -- @format:on
 
-  -- jab でも /・:K・Telescope と同じ辞書で「nihongo」から「日本語」を探す。
-  local engine = require('luamigemo')
-  local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
-  local migemo = engine.get(dictionary)
-
-  -- jab が各行に対して呼び出す検索関数を作る。
-  local function create_jab_matcher(case_mode)
-    local cached_query, cached_regex
-
-    -- start_byte は Lua の文字列 API に合わせた 1 始まり。
-    local function find_match(line, query, start_byte)
-      local first_letter = query:sub(1, 1)
-      local ignore_case = case_mode == 'smart' and first_letter == first_letter:lower()
-      local search_text = ignore_case and query:lower() or query
-
-      -- ASCII の行は jab 標準と同じ文字列検索。記号もそのまま探す。
-      local is_ascii_line = not line:find('[^%w%p%s]')
-      if is_ascii_line then
-        local search_line = ignore_case and line:lower() or line
-        local first_byte, last_byte = search_line:find(search_text, start_byte, true)
-        if not first_byte then
-          return nil
-        end
-        -- jab の戻り値は 0 始まりの開始位置と、終端の次のバイト位置。
-        return { first_byte - 1, last_byte }
-      end
-
-      -- 日本語などを含む行では、検索語を辞書で展開した正規表現で探す。
-      -- 同じ検索語で複数行を調べる間は、正規表現を再利用する。
-      if query ~= cached_query then
-        local pattern = search_text:gsub('([^ ]*)( *)', function(word, spaces)
-          local word_pattern = ''
-          if word ~= '' then
-            word_pattern = migemo:query(word, engine.RXOP_VIM)
-          end
-          -- 入力した空白の個数を保ち、半角・全角のどちらにも一致させる。
-          local space_pattern = string.rep([[\%(\s\|　\)]], #spaces)
-          return word_pattern .. space_pattern
-        end)
-        local case_flag = ignore_case and [[\c]] or [[\C]]
-        cached_regex = vim.regex([[\m]] .. case_flag .. pattern)
-        cached_query = query
-      end
-
-      local match_start, match_end = cached_regex:match_str(line:sub(start_byte))
-      if not match_start then
-        return nil
-      end
-      -- 切り出した文字列内の位置を、元の行のバイト位置へ戻して jab に渡す。
-      local line_offset = start_byte - 1
-      return { match_start + line_offset, match_end + line_offset }
-    end
-
-    return find_match
-  end
-  local window_matcher = create_jab_matcher('smart')
-  local inline_matcher = create_jab_matcher('sensitive')
-
   -- incremental search
   -- if the initial query is uppercase,
   -- then the search is case-sensitive.
@@ -499,7 +443,7 @@ later(function()
   -- hints appear on the left of the matches if possible.
   vim.keymap.set({ 'n', 'x', 'o' }, 's', function()
     ---@diagnostic disable-next-line
-    return require('jab').jab_win({ matcher = window_matcher })
+    return require('jab').jab_win()
   end, { expr = true })
 
   -- f-motions
@@ -507,19 +451,19 @@ later(function()
   -- hints appear exactly on the matches.
   vim.keymap.set({ 'n', 'x', 'o' }, 'f', function()
     ---@diagnostic disable-next-line
-    return require('jab').f({ matcher = inline_matcher })
+    return require('jab').f()
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 'F', function()
     ---@diagnostic disable-next-line
-    return require('jab').F({ matcher = inline_matcher })
+    return require('jab').F()
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 't', function()
     ---@diagnostic disable-next-line
-    return require('jab').t({ matcher = inline_matcher })
+    return require('jab').t()
   end, { expr = true })
   vim.keymap.set({ 'n', 'x', 'o' }, 'T', function()
     ---@diagnostic disable-next-line
-    return require('jab').T({ matcher = inline_matcher })
+    return require('jab').T()
   end, { expr = true })
 end)
 

@@ -25,11 +25,6 @@ local function check()
   vim.cmd.enew()
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'start', '日本語', 'end' })
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
-  vim.fn.maparg('s', 'n', false, true).callback()
-  local jab = require('jab')
-  jab.jab(vim.tbl_extend('force', jab.cache.opts_general, { str = 'nihongo', label = 'q' }))
-  assert(vim.api.nvim_win_get_cursor(0)[1] == 2, 'jab must find 日本語 with the shared Migemo dictionary')
-  vim.api.nvim_win_set_cursor(0, { 1, 0 })
   vim.cmd('K nihongo')
   assert(vim.api.nvim_win_get_cursor(0)[1] == 2, ':K must find 日本語')
   vim.api.nvim_win_set_cursor(0, { 3, 0 })
@@ -69,6 +64,13 @@ local function check()
     mode = vim.fn.mode(),
   }))
   require('telescope.actions').close(prompt)
+
+  -- Other search entry points must not reset jab's dictionary.
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  vim.fn.maparg('s', 'n', false, true).callback()
+  local jab = require('jab')
+  jab.jab(vim.tbl_extend('force', jab.cache.opts_general, { str = 'nihongo', label = 'q' }))
+  assert(vim.api.nvim_win_get_cursor(0)[1] == 2, 'jab must find 日本語 with the shared Migemo dictionary')
 
   local samples = {
     json = '{"x":1}',
