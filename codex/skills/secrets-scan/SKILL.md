@@ -2,14 +2,15 @@
 name: secrets-scan
 description: |
   gitleaks で uncommitted の変更(worktree vs HEAD の全変更 + untracked)から
-  secrets/PII を決定的に検出する。review-gate のレーン0 として呼ばれる、
+  設定済みパターンに一致する secrets を検出する。review-gate のレーン0 として呼ばれる、
   または /secrets-scan で明示発動。検出ゼロが通過条件。
 ---
 
 # Secrets scan (gitleaks)
 
-uncommitted の内容を commit・外部 API 送信の前に検査する。LLM ではなく決定的ツールで行う
-(見逃しを確率的にしないため)。
+uncommitted の内容を commit・外部 API 送信の前に、gitleaks の検出規則で検査する。
+検出ゼロは公開適否の証明ではない。個人マシン名・私的なパス・作業メモなど、読者と用途に
+合わない情報の混入は writing-prose に従って選別し、spec-scope レーンでも確認する。
 
 ## カバレッジ(この範囲を満たさない省略形を使わない)
 
