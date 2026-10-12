@@ -4,7 +4,7 @@ description: |
   作業を codex CLI へ委譲して Claude Code のトークン消費を抑えるアダプタ。
   探索(read-only)・定型作業・実装を codex exec で実行し、
   結果は schema で上限を切った JSON 1 通だけ受け取る。AGENTS.md の判断基準で
-  自律発火する、または /codex-delegate で明示発動。レビューは委譲しない
+  最上位の Claude から自律発火する、または /codex-delegate で明示発動。受託側からの再委譲には使わない。レビューは委譲しない
   (review-gate / codex-review の責務)。
 ---
 
@@ -30,6 +30,10 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 検査されない。ガードを通ったことは、その変更が妥当であることを意味しない。
 
 ## 前提条件
+
+委譲判断はユーザーの依頼を受けた最上位の司令塔が行う。他のエージェントから担当作業を
+受託した Claude は、この skill を起動しない。担当作業を実行して返し、別 CLI が必要なら
+取得済みの根拠と必要な変更を司令塔へ返す。同じツール内の子を使う場合も、この立場を引き継ぐ。
 
 1. **`~/.codex` が dotfiles の `codex/` を指していること**(`readlink ~/.codex`)。この link で
    委譲先が `codex/AGENTS.md` の規律(オーバーエンジニアリング禁止・最小検証・Git 安全性)と
@@ -79,6 +83,15 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 
 ## 手順
 
+### モデルと推論量を選ぶ
+
+AGENTS.md の仕事内容による選択基準を使う。定型作業は `gpt-6-luna` / `high`、通常の
+実装・調査は `gpt-6.1-sol` / `medium`(複雑なら `high`)、広い影響を伴う難しい作業は
+`gpt-6-astra` / `high` を初期値にする。委譲種別だけで固定せず、検証対象のモデルが
+指定されている場合はそのモデルを維持する。選んだ値を手順 3 の `DELEGATE_MODEL` と
+`DELEGATE_EFFORT` に入れる。`agents.default_subagent_model` は子の既定値なので、
+新しく起動する `codex exec` 本体のモデル指定の代わりにはならない。
+
 **プロンプトはシェルを経由させない。** そのため呼び出しを 2 回に分け、間に Write ツールを挟む。
 
 ### 1. 作業ディレクトリを作る
@@ -101,12 +114,13 @@ Write ツールで書けば経路ごと存在しない。
 
 1. **タスク** — explore なら答えるべき問い、chore / implement なら変更の内容と受け入れ条件
 2. **範囲** — 見るべきファイル・ディレクトリを具体名で挙げる
-3. **規律の無効化** — 下記の 2 行を逐語で入れる
+3. **受託側の役割** — 下記の 3 行を逐語で入れる
 4. **出力** — 最終メッセージは指定された JSON schema に適合する JSON だけにすること
 
-規律の無効化はこの 2 行をそのまま入れる:
+受託側の役割はこの 3 行をそのまま入れる:
 
 ```text
+You are a delegated worker called by Claude Code. Do not delegate to another CLI, including Claude Code. Pass this restriction to any in-process subagents and return findings to the delegating coordinator if a different CLI is needed.
 Do not run an independent review with a new agent. The delegating side reviews afterwards.
 Do not commit, stash, or create branches. Leave all changes in the working tree.
 ```
@@ -129,7 +143,10 @@ trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対�
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
 MODE=read-only          # 委譲種別に応じて read-only か workspace-write
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
-codex exec -s "$MODE" \
+DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
+DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
+codex exec -s "$MODE" --model "$DELEGATE_MODEL" \
+  --config "model_reasoning_effort=$DELEGATE_EFFORT" \
   --config approval_policy=never \
   --config features.memories=false \
   --config memories.generate_memories=false \

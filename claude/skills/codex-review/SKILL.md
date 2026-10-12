@@ -29,6 +29,9 @@ subagent が結果を返さないときの差し替え先として使う。前�
 
 ## Prerequisites
 
+CLI をまたぐレビューの起動は最上位の司令塔が行う。受託側は別 CLI へ再委譲せず、
+担当するレビュー結果、またはレビューの編成に必要な成果と検証結果を司令塔へ返す。
+
 1. `codex` CLI が PATH にある(`which codex` → 0)。無ければこの skill は適用不可
    (review-gate 経由なら gate がエンジンを Claude に差し替える)
 2. Codex が認証済み(`401 Unauthorized` を返さない)
@@ -51,12 +54,12 @@ subagent が結果を返さないときの差し替え先として使う。前�
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
    失敗しうるため使わない)。**既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
-   codex exec -s read-only --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   codex exec -s read-only --model gpt-6-astra --config model_reasoning_effort=high --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
    **sandbox が機能しないホストに限り**、下記の bypass 形を使う(判定と理由は Prerequisites 4 と
    「bypass フラグを使う理由」節):
    ```bash
-   codex exec --dangerously-bypass-approvals-and-sandbox - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   codex exec --dangerously-bypass-approvals-and-sandbox --model gpt-6-astra --config model_reasoning_effort=high - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
    Git repo 外で実行する場合は、上のコマンドに `--skip-git-repo-check` を付ける。
 4. 実行後に一時ファイルを削除する
@@ -68,6 +71,7 @@ subagent が結果を返さないときの差し替え先として使う。前�
 親の会話や一時ファイルの存在だけで、CLI が対象を取得できるとは扱わない。
 
 ```text
+You are a delegated reviewer called by Claude Code. Do not delegate to another CLI, including Claude Code. Pass this restriction to any in-process subagents and return findings to the delegating coordinator.
 Task under review: <変更の短い説明(あればタスク記述の逐語引用)>
 Focus: <呼び出し側指定の焦点。無ければ the entire change>
 If the working directory is a Git repository, run `git status --short --untracked-files=all`

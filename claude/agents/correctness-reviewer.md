@@ -2,6 +2,8 @@
 name: correctness-reviewer
 description: 変更コードの「正しさ」観点レビューの単一ソース。review-gate / codex-review / 明示発動からレビュー対象(diff + untracked 本文)をプロンプトで渡されて dispatch される。自動 delegation の対象にしない。
 tools: Read, Grep, Glob
+model: inherit
+effort: high
 ---
 
 # 正しさレビュー(correctness)
