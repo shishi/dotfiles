@@ -6,17 +6,17 @@ description: |
   issue の投稿・更新前、commit / PR / merge / release 前に使う。
   省略は小規模で誤りが混入しない確信度が非常に高く、明らかに不要な場合だけ。
   secrets / 仕様・スコープ / 正しさ(または adversarial)の各レーンを編成し、
-  全対象の確認と残件解消まで追跡する。Claude Code では土日(JST)に
-  codex エンジンを Claude subagent に差し替え、Codex では全レーンを新規 agent で回す。
+  全対象の確認と残件解消まで追跡する。正しさ・設計は利用可能なら他方の CLI に渡し、
+  仕様・スコープは司令塔側の新規 agent で確認する。曜日では制限しない。
   キーワード: レビューゲート, review gate, レビューして, commit 前レビュー。
 ---
 
 # Review gate(司令塔)
 
 観点(~/.claude/agents/*-reviewer.md が単一ソース。Codex では同名の
-~/.codex/agents/*-reviewer.toml が同じ本文を持ち、tests/reviewer-agents-sync.sh がドリフトを検出する)とエンジン(codex CLI / Claude subagent /
+~/.codex/agents/*-reviewer.toml が同じ本文を持ち、tests/reviewer-agents-sync.sh がドリフトを検出する)とエンジン(Codex CLI / Claude CLI / Claude subagent /
 Codex 新規 agent)を分離した多レーンレビューゲート。Claude Code と Codex の両方で同じ
-レーン構成・反復・通過条件を使い、分岐(実行環境・曜日・エンジン・レーン編成・反復)は
+レーン構成・反復・通過条件を使い、分岐(実行環境・エンジン・レーン編成・反復)は
 この skill だけが持つ。
 
 ## 起動と照合の基準
@@ -58,39 +58,43 @@ Git 差分が空でも、これらの成果物があれば「レビュー対象�
   渡す(reviewer agent は書き込みも Bash も持たない)
 - codex CLI エンジンには Git 差分と untracked の取得を指示し、Git 外の成果物の本文は
   codex-review skill の全モード共通の追加入力として前置きに渡す
+- Claude CLI エンジンには組成済みの全レビュー対象と必要な周辺文脈を渡す。
+  `claude-review` は Bash を許可しないため、CLI 内で Git 差分を組成させない
 - 差分だけで要件を判定できない場合は、成果物の本文・現在状態・検証の実行結果も添える。
   会話で渡す調査結果や文書も成果物として渡す。実装者の判断過程や自己評価は証拠に含めない。
 
 ## エンジン決定
 
-**Codex で動作中**: 全観点レーンを Codex の新規 agent(`~/.codex/agents/` の
-spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)で実行する。codex-review skill と
-曜日判定は使わない。secrets は常時 gitleaks。以下の曜日・codex CLI の分岐は Claude Code だけのもの。
+仕様・スコープは元の依頼との照合、正しさ・設計は実装や前提への反証を担当する。
+後者を他方のモデルへ渡すのは、作成側と共通する見落としを補うためである。
+モデルが違うだけで検出率が上がるとは扱わず、指摘は実物の引用・再現条件で採否を決める。
+他レーンの結論や作成側の自己評価を先に渡さず、要件・対象・検証結果から独立に判断させる。
 
-**Claude Code で動作中**:
+| 司令塔 | spec-scope の既定 | correctness / adversarial の優先エンジン | 外部 CLI が利用不能の場合 |
+|---|---|---|---|
+| Claude Code | Claude の新規観点 agent | Codex CLI(`codex-review`、Astra / high) | Claude の新規観点 agent |
+| Codex | Codex の新規観点 agent | Claude CLI(`claude-review`、Fable / high。ユーザー指定・利用可能モデルに応じ Opus / high) | Codex の新規観点 agent |
 
-- codex エンジンのレーン(correctness / adversarial)= **codex**(平日・CLI 健在)/
-  **Claude subagent**(土日 or codex 不能)
-- 曜日判定: `TZ=Asia/Tokyo date +%u` で 6 or 7 → 土日(ホストのローカル TZ に依存させない)
-- spec-scope の既定は Claude subagent、secrets は常時 gitleaks(曜日無関係)
-- **3 観点いずれも codex へ差し替えられる**(codex-review skill が correctness / adversarial /
-  spec-scope の各モードを持つ)。spec-scope を codex で走らせる場合、前置きに足す入力は
-  codex-review skill の「spec-scope モードで前置きに足す入力」に従う — タスク記述の逐語コピーが
-  無ければ差し替えは成立しない
+- 曜日による利用制限は両方とも設けない。secrets は常時 gitleaks。
+- CLI の存在だけで利用可能と判定せず、認証・モデル利用可否・権限・結果の受領まで確認する。
+  見つからない CLI や確認された利用不能は上表の代替へ進み、起動後の障害は下のエスカレーションに従う。
+- どの観点も同じ観点のままエンジンを差し替えられる。spec-scope には、どのエンジンでも
+  `spec-scope-review` の入力組成に従う逐語のタスク記述が必要。入力不足をエンジン変更で解消した扱いにしない。
 - 新規 agent エンジンでの実行 = 対応する観点 agent
-  (spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)を Claude Code では Task tool、
+  (spec-scope-reviewer / correctness-reviewer / adversarial-reviewer)を Claude Code では Agent tool、
   Codex では spawn agent で dispatch し、組成済みレビュー対象と focus をプロンプトで渡す(1 パス)
-- codex エンジンでの実行 = codex-review skill に観点名・focus を渡して 1 パス実行
-  (secrets-scan 先行は下記手順に含まれる)
+- 外部 CLI は最上位の司令塔が直接起動する。Codex CLI は `codex-review`、Claude CLI は
+  `claude-review` に観点名・組成済み入力・focus を渡して 1 パス実行する。
+  受託 reviewer はレビューを返すだけで、別 CLI へ再委譲もゲートの再起動もしない。
 
 ## defect gate の手順
 
 1. 対象確認: 組成したレビュー対象が空なら「レビュー対象なし」で終了
-2. エンジン決定(上記。Claude Code では曜日判定を含む)
+2. エンジン決定(上記)
 3. レーン0: secrets-scan skill → 検出ゼロまで fix→re-scan(先行・直列。secrets 入りの
    内容を外部 API に送る前に検出する)。Git 外の成果物もローカルの一時ファイルへ保存し、
    同 skill の per-file 検査に含める。Git repo がない場合は成果物のファイルを直接検査する
-4. レーン1: spec-scope-reviewer(新規 agent)とレーン2: correctness(決定エンジン)を
+4. レーン1: spec-scope とレーン2: correctness を、それぞれ決定したエンジンで
    並行 dispatch(各 1 パス。反復はレーン内で回さない)
    - 文書・issue では、要件との一致に加え、事実・参照先・手順・記述間の整合性を確認する
    - レーン1 の入力組成は spec-scope-review skill の「入力組成」節の規則に従う
@@ -129,7 +133,7 @@ secrets-scan と関連箇所の再レビューを行う。全対象のレビュ�
 
 | 障害 | 対処 |
 |---|---|
-| 観点レーン(spec-scope / correctness / adversarial)が結果を返さない — subagent の死亡・無応答・完了しても結果が届かない、codex の 401 / hang / timeout | 下記のエスカレーションで回復を試みる。結果なしでは通過しない |
+| 観点レーン(spec-scope / correctness / adversarial)が結果を返さない — subagent の死亡・無応答・完了しても結果が届かない、CLI の認証・モデル・権限エラー / hang / timeout | 下記のエスカレーションで回復を試みる。結果なしでは通過しない |
 | gitleaks 不在・導入不能 | 停止してユーザーへ報告(素通り禁止)。**下記のエスカレーションは観点レーン限定で、secrets レーンには適用しない** — 検査なしで通すと public repo へ secrets が入る経路が無検査になる |
 | タスク記述が無い/曖昧 | 別の既存逐語ソースを探す or ユーザーに確認。新規書き起こしで代用しない |
 | diff 巨大(>10 ファイルかつ互いに独立) | focus で範囲を分けて複数回。同一パターンの繰り返しなら分割不要 |
@@ -145,11 +149,12 @@ secrets-scan と関連箇所の再レビューを行う。全対象のレビュ�
 2. 失敗原因を確認し、一過性の障害など再試行の根拠があれば新しく dispatch する。
    実行中の agent は観測タイムアウトだけで失敗とせず、同じ handle の状態を確認する。
    新しい試行を受理した場合は最大 5 分待つ
-3. もう一方のエンジンへ差し替えて新しく dispatch し、受理から最大 5 分待つ。観点は
-   `~/.claude/agents/*-reviewer.md` が単一ソースなので、エンジンを替えても観点は変わらない。
+3. 未実行の代替エンジンへ差し替えて新しく dispatch し、受理から最大 5 分待つ。外部 CLI の
+   障害なら司令塔側の新規観点 agent を使い、native agent の障害なら利用可能な他方の CLI を使う。
+   差し替えも最上位の司令塔が行い、受託 reviewer に別 CLI を起動させない。
+   観点は `~/.claude/agents/*-reviewer.md` が単一ソースなので、エンジンを替えても観点は変わらない。
    **差し替えに必要な入力を組めないレーンはこの段階を飛ばす**(spec-scope をタスク記述の
-   逐語コピー無しで走らせることはできない)。Codex にはエンジンが 1 つしか無いので、この段階は
-   常に飛ばす
+   逐語コピー無しで走らせることはできない)。利用不能・失敗済みのエンジンへ戻って往復しない
 4. それでも結果が無ければ、そのレーンは未レビューのまま保持し、ゲートは未通過とする。
    依存しない作業を済ませ、試行結果と再開に必要な条件を報告する。独立レビューが必要な
    レーンを自己レビューで代替せず、必要な結果が揃うまで通過を宣言しない。
@@ -161,13 +166,13 @@ codex エンジンの試行では codex-review skill が内部で 1 リトライ
 
 ```
 ## Review gate 結果
-- ゲート: defect | spec / エンジン: codex | claude(理由: 週末 / codex 不能)| codex-agent
+- ゲート: defect | spec / エンジン(レーン別): codex-cli | claude-cli | codex-agent | claude-agent
 - 反復: レーン別 X 回 / ステータス: ✅ 通過 | ⚠️ 未通過(未完了)
 - 全対象・全要件の確認結果と根拠 / 未確認・判定不能・未レビューの対象
 - 修正した指摘: [<レーン>-n] と要約
 - 棄却した指摘: [<レーン>-n] + 理由(引用不一致 等)
 - 未対応 note: [<レーン>-n]
-- 省略・代替したレーン: 理由込みで必ず明記(土日の codex 代替は毎回ここに書く)
+- 省略・代替したレーン: 利用不能・起動失敗などの理由と、実際に使ったエンジン・モデルを明記
 ```
 
 ## 他のレビュー機構との関係
