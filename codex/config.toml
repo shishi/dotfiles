@@ -12,6 +12,12 @@ approvals_reviewer = "auto_review"
 # 設定は下の [features] と末尾の [memories] の 2 箇所。
 service_tier = "default"
 
+[agents]
+enabled = true
+# 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。以下は未指定時の既定値。
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "medium"
+
 [browser_use.default_origin_policy]
 access = "allow"
 
