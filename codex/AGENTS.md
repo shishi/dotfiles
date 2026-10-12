@@ -11,8 +11,7 @@
 
 # リポジトリ別の個人方針
 
-- `StudistCorporation/teachme_web_duvel` とその worktree でのローカル作業は、Nix devShell とタスク専用 git worktree を基本とする。既存のタスク用 worktree は再利用し、新規は `.worktrees/<name>` に作る。
-- ちょっとした調査や微量の修正は例外で、既存の checkout・環境で進めてよい。その範囲を超えたら原則に戻る。読解・編集だけなら Nix の起動も不要。
+- `StudistCorporation/teachme_web_duvel` の新規のタスク用 git worktree は `.worktrees/<name>` に作る。
 - この repo の Ruby/Rails/yarn は原則として Nix devShell で実行し、外からは `nix develop --impure -c <command>` を使う。準備は repo の `doc/setup/nix.md` に従う。repo 内の Docker 前提の指示よりこの個人方針を優先し、Docker は必要な構成の確認や Nix が利用できない場合など、具体的な理由があるときに使う。
 - この方針は個人の dotfiles で管理する。対象 repo の追跡ファイルやローカル指示ファイルには転記しない。
 
