@@ -369,8 +369,7 @@ later(function()
       local query = vim.fn.matchstr(vim.fn.getcmdline(), romaji_pattern)
       if query ~= '' then
         local engine = require('luamigemo')
-        local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
-        return '<C-u>\\m' .. engine.get(dictionary):query(query, engine.RXOP_VIM) .. '<CR>'
+        return '<C-u>\\m' .. engine.query(query, engine.RXOP_VIM) .. '<CR>'
       end
     end
     return '<CR>'
@@ -393,21 +392,22 @@ end)
 -- end)
 
 later(function()
-  vim.api.nvim_create_user_command('K', function(opts)
-    local engine = require('luamigemo')
-    local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
-    vim.fn.setreg('/', '\\m' .. engine.get(dictionary):query(opts.args, engine.RXOP_VIM))
-    vim.cmd('normal! n')
-  end, { nargs = '+' })
-end)
-
-later(function()
   add({
     source = 'delphinus/luamigemo',
     depends = {
       { source = 'oguna/migemo-compact-dict-latest', name = 'migemo-dict' },
     },
   })
+
+  -- jab・/・:K・Telescope が使う標準インスタンスの辞書を差し替える。
+  local engine = require('luamigemo')
+  local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
+  engine.get():set_dict(require('luamigemo.compact_dictionary').load(dictionary))
+
+  vim.api.nvim_create_user_command('K', function(opts)
+    vim.fn.setreg('/', '\\m' .. engine.query(opts.args, engine.RXOP_VIM))
+    vim.cmd('normal! n')
+  end, { nargs = '+' })
 end)
 
 later(function()
@@ -1537,7 +1537,13 @@ later(function()
     eggLikeNewline = true,
     showCandidatesCount = 1,
     setUndoPoint = true,
-    completion = { enabled = false },
+    indicator = {
+      enabled = true,
+    },
+    completion = {
+      enabled = true,
+      insertOnSelect = true,
+    },
   })
   vim.keymap.set({ 'i', 'c', 't' }, '<C-j>', '<Plug>(skkelua-enable)')
 end)

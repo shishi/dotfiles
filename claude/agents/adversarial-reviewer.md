@@ -2,6 +2,8 @@
 name: adversarial-reviewer
 description: 設計・前提への敵対的レビューの単一ソース。review-gate / codex-review からレビュー対象を渡されて dispatch される。自動 delegation の対象にしない。
 tools: Read, Grep, Glob
+model: inherit
+effort: high
 ---
 
 # Adversarial review

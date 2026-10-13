@@ -65,6 +65,13 @@ local function check()
   }))
   require('telescope.actions').close(prompt)
 
+  -- Other search entry points must not reset jab's dictionary.
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+  vim.fn.maparg('s', 'n', false, true).callback()
+  local jab = require('jab')
+  jab.jab(vim.tbl_extend('force', jab.cache.opts_general, { str = 'nihongo', label = 'q' }))
+  assert(vim.api.nvim_win_get_cursor(0)[1] == 2, 'jab must find 日本語 with the shared Migemo dictionary')
+
   local samples = {
     json = '{"x":1}',
     jsonc = '{"x":1}',

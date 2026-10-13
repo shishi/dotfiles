@@ -12,6 +12,30 @@ approvals_reviewer = "auto_review"
 # 設定は下の [features] と末尾の [memories] の 2 箇所。
 service_tier = "default"
 
+[auto_review]
+extra_policy = """
+## ユーザーが承認した CLI 間の作業委譲とレビュー
+
+ユーザーは、作業を依頼し外部 AI サービスへの提供権限を持つリポジトリについて、
+Claude Code と Codex の相互委譲・レビューを事前承認している。
+送信先は、既存アカウントで利用する Anthropic と OpenAI の公式サービス。
+対象情報は当該作業に必要なコード・差分・仕様・検証結果、および CLI が読み込む
+共通指示と当該作業に関連する個人記憶に限る。公開・非公開の別だけでは拒否しない。
+
+この承認範囲と実際の依頼・対象・接続先・入力内容を照合する。
+承認要求には入力ファイルと対象範囲、接続先の確認結果、秘密情報検査結果を含める。
+認証情報をプロンプトへ含めること、無関係な私的情報の送信、未承認の第三者サービス・
+接続先上書き、第三者の制約に反する送信は承認範囲に含まない。
+この補足は既定の拒否規則、組織の制約、sandbox、hook、秘密情報検査を解除しない。
+CLI 名やこの補足だけを根拠に、個々の操作を無条件で許可しない。
+"""
+
+[agents]
+enabled = true
+# 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。以下は未指定時の既定値。
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "medium"
+
 [browser_use.default_origin_policy]
 access = "allow"
 
@@ -141,6 +165,7 @@ git-pull-request-merge-method = "merge"
 git-worktree-root = ".worktrees"
 keepRemoteControlAwakeWhilePluggedIn = true
 "browser-family-enabled:brave" = true
+open-link-in-target-preference = "external-browser"
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -526,10 +551,19 @@ trusted_hash = "sha256:6902f7014609945653a7b827487ef76bf9f9cf6c45142cf6d5d5cb81d
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:1:0"]
 trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
 
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:1:0"]
+trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
+
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:2:0"]
 trusted_hash = "sha256:9dc280d9240054109100eaa681868fa293fc7536cd10754fb2e9c166e148ce90"
 
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:3:0"]
+trusted_hash = "sha256:234a1aa95efbea1d51f364f99931059420db2fd343ea03c6831f8977d3dab5f6"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:2:0"]
+trusted_hash = "sha256:9dc280d9240054109100eaa681868fa293fc7536cd10754fb2e9c166e148ce90"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:3:0"]
 trusted_hash = "sha256:234a1aa95efbea1d51f364f99931059420db2fd343ea03c6831f8977d3dab5f6"
 
 [memories]
