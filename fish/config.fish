@@ -293,7 +293,7 @@ function gbD -d "git batch delete branch"
     git branch --merged | grep -vE '^\*|main|master' | xargs git branch -D
 end
 
-# vime skkeleton
+# vime skkelua
 if not set -q __dotfiles_fish_initialized; and test -n "$GUAKE_TAB_UUID"
     then
     nvim -c startinsert /tmp/tmp_input

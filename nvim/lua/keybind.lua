@@ -102,5 +102,5 @@ vim.keymap.set('t', 'fj', [[<C-\><C-n>]])
 -- vim.keymap.set('n', '<Plug>(esc)<ESC>', [[<Plug>(esc)<ESC> i<ESC>]], { remap = true, desc = 'back to terminal' })
 -- vim.keymap.set('n', 'Vt', '<cmd>Vt<CR>', { desc = 'vertical terminal' })
 
--- input process for cant input area correctly with skkleton like claude code
+-- input process for cant input area correctly with skkelua like claude code
 vim.keymap.set({ 'n', 't', 'i' }, '<A-i>', "<Cmd>call feedkeys(input(''), 'n')<CR>")

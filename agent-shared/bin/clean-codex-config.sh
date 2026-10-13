@@ -12,7 +12,7 @@ function emit(line) {
   last_was_blank = 0
 }
 
-/^[[:space:]]*\[(marketplaces\.openai-bundled|marketplaces\.openai-primary-runtime|mcp_servers\.node_repl(\..*)?|mcp_servers\.cua_repl)\][[:space:]]*$/ {
+/^[[:space:]]*\[(tui\.model_availability_nux|marketplaces\.openai-bundled|marketplaces\.openai-primary-runtime|mcp_servers\.node_repl(\..*)?|mcp_servers\.cua_repl)\][[:space:]]*$/ {
   skip_table = 1
   next
 }

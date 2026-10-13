@@ -12,6 +12,7 @@
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "1",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "1",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_INTERLEAVED_THINKING": "1",
@@ -135,6 +136,8 @@
       "Bash(git pull:*)",
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
+      "Bash(codex exec -s read-only:*)",
+      "Bash(codex exec -s workspace-write:*)",
       "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
       "Bash(git push:*)",
       "Bash(git -C ~/.claude/memory:*)"
@@ -310,6 +313,24 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory lookup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/wording-policy.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-policy.sh",
             "timeout": 10
           }
         ]

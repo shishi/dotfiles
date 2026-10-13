@@ -4,7 +4,7 @@ description: |
   作業を codex CLI へ委譲して Claude Code のトークン消費を抑えるアダプタ。
   探索(read-only)・定型作業・実装を codex exec で実行し、
   結果は schema で上限を切った JSON 1 通だけ受け取る。AGENTS.md の判断基準で
-  自律発火する、または /codex-delegate で明示発動。レビューは委譲しない
+  最上位の Claude から自律発火する、または /codex-delegate で明示発動。受託側からの再委譲には使わない。レビューは委譲しない
   (review-gate / codex-review の責務)。
 ---
 
@@ -30,6 +30,10 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 検査されない。ガードを通ったことは、その変更が妥当であることを意味しない。
 
 ## 前提条件
+
+委譲判断はユーザーの依頼を受けた最上位の司令塔が行う。他のエージェントから担当作業を
+受託した Claude は、この skill を起動しない。担当作業を実行して返し、別 CLI が必要なら
+取得済みの根拠と必要な変更を司令塔へ返す。同じツール内の子を使う場合も、この立場を引き継ぐ。
 
 1. **`~/.codex` が dotfiles の `codex/` を指していること**(`readlink ~/.codex`)。この link で
    委譲先が `codex/AGENTS.md` の規律(オーバーエンジニアリング禁止・最小検証・Git 安全性)と
@@ -79,6 +83,21 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 
 ## 手順
 
+### モデルと推論量を選ぶ
+
+AGENTS.md の仕事内容による選択基準を使う。定型作業は `gpt-6-luna` / `high`、通常の
+実装・調査は `gpt-6.1-sol` / `medium`(複雑なら `high`)、広い影響を伴う難しい作業は
+`gpt-6-astra` / `high` を初期値にする。委譲種別だけで固定せず、検証対象のモデルが
+指定されている場合はそのモデルを維持する。選んだ値を手順 3 の `DELEGATE_MODEL` と
+`DELEGATE_EFFORT` に入れる。`agents.default_subagent_model` は子の既定値なので、
+新しく起動する `codex exec` 本体のモデル指定の代わりにはならない。
+
+選んだモデルが利用不能なら、司令塔が AGENTS.md の許容候補を試す。サービス全体の
+認証・権限・利用枠の問題ではモデルを巡回しない。Codex の許容候補を使えなければ
+Claude 内の子も候補にし、委譲の負担に見合わないか候補が使えなければ、司令塔自身が
+担当作業と検証を引き取る。失敗した試行の変更がある場合は、先に差分と進捗を
+確認し、完了部分を失ったり同じ操作を重ねたりしない。
+
 **プロンプトはシェルを経由させない。** そのため呼び出しを 2 回に分け、間に Write ツールを挟む。
 
 ### 1. 作業ディレクトリを作る
@@ -101,12 +120,13 @@ Write ツールで書けば経路ごと存在しない。
 
 1. **タスク** — explore なら答えるべき問い、chore / implement なら変更の内容と受け入れ条件
 2. **範囲** — 見るべきファイル・ディレクトリを具体名で挙げる
-3. **規律の無効化** — 下記の 2 行を逐語で入れる
+3. **受託側の役割** — 下記の 3 行を逐語で入れる
 4. **出力** — 最終メッセージは指定された JSON schema に適合する JSON だけにすること
 
-規律の無効化はこの 2 行をそのまま入れる:
+受託側の役割はこの 3 行をそのまま入れる:
 
 ```text
+You are a delegated worker called by Claude Code. Do not delegate to another CLI, including Claude Code. Pass this restriction to any in-process subagents and return findings to the delegating coordinator if a different CLI is needed.
 Do not run an independent review with a new agent. The delegating side reviews afterwards.
 Do not commit, stash, or create branches. Leave all changes in the working tree.
 ```
@@ -119,6 +139,10 @@ Do not commit, stash, or create branches. Leave all changes in the working tree.
 
 ### 3. 走査・実行・結果の取り出し・後始末
 
+以下は explore の例。chore / implement はコマンド先頭の `-s read-only` を
+`-s workspace-write` へ直接置き換える。`codex exec` 行の許可 prefix に一致させるため、
+この値は変数にしない。準備・記録など同じブロック内の別コマンドの許可は、それぞれ判定される。
+
 ```sh
 WORK=/tmp/xxxxxxxx   # 1 回目が返したパス
 case "${WORK##*/}" in (codex-delegate-??????) ;; (*) exit 96 ;; esac  # 1 回目が作った形でなければ触らない
@@ -127,9 +151,13 @@ gitleaks dir "$WORK/prompt.md" --no-banner || exit 98   # 検出あり・実行�
 mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、または目印を作れない
 trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対象
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
-MODE=read-only          # 委譲種別に応じて read-only か workspace-write
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
-codex exec -s "$MODE" \
+DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
+DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
+ROLE=explore             # explore / chore / implement
+STARTED_AT=$(date +%s)
+codex exec -s read-only --model "$DELEGATE_MODEL" \
+  --config "model_reasoning_effort=$DELEGATE_EFFORT" \
   --config approval_policy=never \
   --config features.memories=false \
   --config memories.generate_memories=false \
@@ -137,14 +165,20 @@ codex exec -s "$MODE" \
   --config "sandbox_workspace_write.network_access=$NET" \
   --config 'sandbox_workspace_write.writable_roots=[]' \
   --output-schema "$WORK/schema.json" \
+  --json \
   -o "$WORK/out.json" \
-  - < "$WORK/prompt.md" > "$WORK/run.log" 2>&1
+  - < "$WORK/prompt.md" > "$WORK/events.jsonl" 2> "$WORK/run.log"
 rc=$?
+FINISHED_AT=$(date +%s)
+TASK_STATUS=$(jq -r '.status // "unknown"' "$WORK/out.json" 2>/dev/null) || TASK_STATUS=unknown
+RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/events.jsonl" "$TASK_STATUS" "$FINISHED_AT") || { trap - EXIT; echo "記録保存失敗。結果は $WORK に保全" >&2; exit 95; }
+printf 'Run record: %s\n' "$RUN_RECORD" >&2
 if [ "$rc" -eq 0 ] && [ -s "$WORK/out.json" ]; then
   cat "$WORK/out.json"
   exit 0
 fi
 tail -c 4000 "$WORK/run.log"
+tail -c 4000 "$WORK/events.jsonl"
 [ "$rc" -ne 0 ] || rc=97   # 終了コードは 0 だが JSON が返っていない
 exit "$rc"
 ```
@@ -164,13 +198,16 @@ exit "$rc"
 | コード | 意味 | 対処 |
 |---|---|---|
 | 0 | 成功。stdout が `out.json` の全文 | `status` と `summary` を読む |
+| 95 | 実績記録の保存に失敗。作業結果とログは保全 | 出力済みの場所から記録だけを回復し、委譲を再実行しない |
 | 96 | 作業ディレクトリの取り違え(名前の形が違う、`prompt.md` が無い、既に委譲を起動済み、目印を作れない) | 1 回目が返したパスを貼り直す。起動済みなら 1 からやり直す。`mkdir` のエラー文が出ていればそれが原因 |
 | 97 | codex は正常終了したが JSON を返さなかった | この呼び出しの stdout に出ているログ末尾で切り分け、再委譲する |
 | 98 | gitleaks で停止(検出あり、または gitleaks が動かない) | 検出をゼロにして 3 を再実行する(作業ディレクトリは残っている) |
 | 143 | Bash の timeout に達して SIGTERM で終了した | 結果は残っていない。新しい作業ディレクトリで 1 からやり直す。長い委譲は background で流す |
 
-その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、ログ末尾(最大 4,000
-バイト)が stdout に出る。
+その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、stderr とイベントの
+末尾を各最大 4,000 バイト返す。`--json` はイベント側だけを変え、`-o` の結果 JSON は維持する。
+記録は司令塔が private state へ書ける経路で実行し、委譲先の書込許可は広げない。
+実績記録のパスはレビューまで保持し、検証結果と採用指摘を追記する。
 
 ## 結果の受け取り
 
@@ -226,7 +263,7 @@ background task へ移され、走り続けて完了通知が届く)。委譲は
   あるかどうかで見る
 - 止める必要があるときは、その background task を停止する。停止は codex とその子プロセスまで届く
 - **受け取れるのは foreground と同じ範囲だけである。** background task の出力に載るのは、成功なら
-  JSON 全文、失敗ならログ末尾の 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
+  JSON 全文、失敗なら stderr とイベントの末尾各 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
   (正常終了で作業ディレクトリごと消える)。background にしたことで得られる情報が増えるわけではない
 - 既定の timeout は `BASH_DEFAULT_TIMEOUT_MS` の 5 分、指定できる上限は `BASH_MAX_TIMEOUT_MS` の
   20 分(いずれも `claude/settings.json` で定める)。foreground で流すなら、この時間内に終わる大きさに
@@ -235,6 +272,9 @@ background task へ移され、走り続けて完了通知が届く)。委譲は
   壊れない
 
 ## 外部へ送られる範囲
+
+AGENTS.md の「相互委譲の事前承認」に従い、OpenAI の公式サービスへの対象範囲内の送信は
+事前承認済みとする。承認要求には具体的な入力・追加取得範囲、接続先の確認結果と検査結果を示す。
 
 組み立てた `prompt.md` を gitleaks で走査し、検出ゼロを確認してから codex を起動する。プロンプトを
 走査対象にするのは、それが Claude の書いた内容を外部へ渡す唯一の経路だからである。secrets-scan
@@ -276,9 +316,10 @@ sandbox の内側かどうかは `echo "$TMPDIR"` で分かる — sandbox 内�
 
 ### 認証・利用枠の失敗
 
-ログ末尾に現れる。メッセージは認証方式によって異なる。interactive command は実行できないため、
-ユーザーに `! codex login` を依頼する。枠切れは委譲そのものが使えないことを意味するため、Claude
-側で引き取る。
+ログ末尾を読み、モデル単位の利用枠不足か、認証・サービス全体の問題かを区別する。
+モデル単位なら許容候補で再実行し、共通の問題なら上の代替手順で Claude 内の子か司令塔へ移す。
+代替で要件を満たせるなら完遂し、元の CLI の再認証を待たない。本人へ依頼するのは、
+代替でも満たせない認証・権限が作業の完了に必要な場合だけとする。
 
 ### 96 で止まる
 

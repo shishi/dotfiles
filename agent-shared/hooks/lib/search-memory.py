@@ -98,19 +98,26 @@ def main():
     for word in words:
         if re.fullmatch(r"[一-龯]{3,}", word):
             terms.update(word[i:i + 2] for i in range(len(word) - 1))
-    terms -= {"する", "今回", "確認", "作業", "実行", "ユーザー", "アタシ", "the", "and", "for", "is", "to", "of", "in"}
+    terms -= {"する", "今回", "確認", "作業", "実行", "問題", "対応", "ユーザー", "アタシ", "the", "and", "for", "is", "to", "of", "in"}
     patterns = {term: re.compile(r"\b" + re.escape(term) + r"\b" if re.fullmatch(r"[a-z]{2}", term)
                                  else re.escape(term)) for term in terms}
 
+    index_content = git(repo, "show", f"{snapshot}:MEMORY.md")
+    index_entries = {
+        path: f"{title} {cue}"
+        for title, path, cue in re.findall(r"^- \[([^\]]+)\]\(([^)]+)\)\s*—\s*(.*)$",
+                                         index_content, re.MULTILINE)
+    }
     documents = []
     for path in git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines():
         if not path.endswith(".md") or path in {"MEMORY.md", "CONVENTIONS.md"}:
             continue
         body = git(repo, "show", f"{snapshot}:{path}")
-        headings = re.findall(r"^#{1,6} .+", body, re.MULTILINE)
+        headings = [heading.replace("プロジェクト記憶", "")
+                    for heading in re.findall(r"^#{1,6} .+", body, re.MULTILINE)]
         description = re.search(r"^description: (.+)", body, re.MULTILINE)
         subject = " ".join([path, *(heading for heading in headings if heading.startswith("# ")),
-                            description[1] if description else ""]).casefold()
+                            description[1] if description else "", index_entries.get(path, "")]).casefold()
         metadata = " ".join([subject, *headings]).casefold()
         text = body.casefold()
         matches = {term for term, pattern in patterns.items() if pattern.search(text) or pattern.search(metadata)}
@@ -129,13 +136,19 @@ def main():
                                     -sum(bool(patterns[term].search(doc[4])) for term in doc[3]),
                                     -sum(bool(patterns[term].search(doc[2])) for term in doc[3]),
                                     -len(doc[3]), -score(doc), doc[0]))
+    # Body-only matches remain discoverable, but do not inject unrelated project histories.
+    # Explicit lookup is the escape from automatic selection, without weakening secret checks.
+    topic_terms = terms - {"整理", "削除", "追加", "更新", "修正", "改修", "ロード"}
+    candidates = [doc for doc in documents if event.get("memory_lookup_manual") or
+                  any(patterns[term].search(doc[2]) for term in doc[3] & topic_terms)]
+    body_only = [doc[0] for doc in documents if doc not in candidates]
     selected = []
     known = []
-    deferred = [doc[0] for doc in documents[MAX_DOCUMENTS:]]
+    deferred = [doc[0] for doc in candidates[MAX_DOCUMENTS:]]
     size = 0
     deliveries = []
     # Choose the relevance set before subtracting already-read content.
-    for path, body, *_ in documents[:MAX_DOCUMENTS]:
+    for path, body, *_ in candidates[:MAX_DOCUMENTS]:
         if seen.get(path) == hashlib.sha256(body.encode()).hexdigest():
             known.append(path)
             continue
@@ -171,17 +184,18 @@ def main():
         if result.returncode != 1:
             raise ValueError(f"秘密情報の可能性または検査失敗: {path}。本文は出力していません")
 
-    # 作業規則は検索結果や既読判定によらず、各入力の処理前に毎回渡す。
-    lines = ["[作業継続] 実行を依頼された成果物に元の要件の未達・逸脱が判明したら、質問形の指摘でも再指示を待たない。"
-             "事実への回答は途中経過として伝え、同じターンで既に承認された範囲の修正・検証・依頼済みの反映まで続ける。"
-             "完了報告済みの成果物も対象とし、回答だけで終了しない。ユーザーが説明のみ・変更禁止・承認待ちを指定した場合はその指定を守る。",
-             f"[記憶検索] 確定済み記憶の語句検索: {len(documents)}件一致、本文取得{len(selected)}件。",
+    lines = [f"[記憶検索] 確定済み記憶の語句検索: {len(documents)}件一致、本文取得{len(selected)}件。",
              "記憶は advisory。現在のユーザー指示と AGENTS.md を優先する。語句一致なので関連記憶の網羅を意味しない。"]
+    lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>",
+                  "索引から依頼の対象・操作・制約に合う記憶を確認する。自動取得なし・既読は参照不要を意味しない。",
+                  f"必要な本文は git -C {shlex.quote(repo)} show {snapshot}:<索引の相対パス> で取得する。"])
     if known:
         lines.append("既読の同一版: " + ", ".join(known))
     if deferred:
         lines.append(f"自動取得上限（{MAX_DOCUMENTS}件・本文計{MAX_BODY_CHARS}文字）による未取得: " + ", ".join(deferred))
         lines.append(f"必要な本文は git -C {shlex.quote(repo)} show {snapshot}:<上記の相対パス> で追加取得する。検索語を絞っての再検索も可能。")
+    if body_only:
+        lines.append("本文のみ一致（自動取得なし。索引で関連性を判断）: " + ", ".join(body_only))
     for path, _, excerpt, label in selected:
         lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, excerpt, "</retrieved-memory>"])
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",

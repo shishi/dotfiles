@@ -22,12 +22,12 @@ Manage Architecture Decision Records (ADRs) throughout their lifecycle: read exi
 4. Note if the ADR is active, deprecated, or superseded
 
 ### Write Mode
-**Trigger**: "we should use", "let's go with", "I've decided to", trade-off discussions
+**Trigger**: A requested architectural decision record, or a project decision that the repository's documentation policy requires recording. A conversational choice or agent execution plan alone does not require an ADR.
 
 1. Check for existing ADRs on the topic (may need to supersede)
-2. Gather information through clarifying questions
-3. Draft ADR using `template.md`
-4. Save and commit (amend later if needed)
+2. Establish the project decision and intended readers from the request and existing evidence
+3. Draft ADR using `template.md` and writing-prose's content and publication rules. Keep private environment knowledge in private memory and agent working notes outside Git
+4. Save the requested project record in the established ADR location; commit only within the authorized workflow
 
 ### ADR-Aligned Development Mode
 **Trigger**: Implementing features, making architectural changes, deviating from existing patterns

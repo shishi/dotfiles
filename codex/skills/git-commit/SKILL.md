@@ -27,7 +27,9 @@ git log --oneline -10      # style reference
 - **Message philosophy (t-wada)**: code describes HOW, tests describe WHAT,
   commit log describes **WHY**, code comments describe WHY NOT. The body
   explains reasoning and motivation — what problem, why now, why this
-  approach over alternatives — not a restatement of the diff.
+  approach over alternatives — not a restatement of the diff. Apply writing-prose's
+  publication rules to the message: include reader-relevant reasons, not private
+  machine identifiers, local paths, or agent working notes moved out of documents.
 - Subject: imperative mood, under 50 characters.
 - One logical unit per commit. Use `git add -p <file>` when a file mixes
   unrelated changes, and split into multiple commits, one at a time.

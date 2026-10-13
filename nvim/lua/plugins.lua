@@ -197,11 +197,11 @@ now(function()
 end)
 
 -- later ----------------------------------------------------------------
-later(function()
-  add({
-    source = 'vim-denops/denops.vim',
-  })
-end)
+-- later(function()
+--   add({
+--     source = 'vim-denops/denops.vim',
+--   })
+-- end)
 
 later(function()
   require('mini.pairs').setup({
@@ -340,45 +340,74 @@ end)
 --   end, { desc = 'Toggle Flash Search' })
 -- end)
 
-later(function()
-  add({
-    source = 'lambdalisue/kensaku.vim',
-    depends = {
-      'vim-denops/denops.vim',
-    },
-  })
-end)
+-- later(function()
+--   add({
+--     source = 'lambdalisue/kensaku.vim',
+--     depends = {
+--       'vim-denops/denops.vim',
+--     },
+--   })
+-- end)
+
+-- later(function()
+--   add({
+--     source = 'lambdalisue/vim-kensaku-search',
+--     depends = {
+--       'lambdalisue/kensaku.vim',
+--     },
+--   })
+--
+--   vim.keymap.set('c', '<CR>', [[<Plug>(kensaku-search-replace)<CR>]])
+-- end)
 
 later(function()
-  add({
-    source = 'lambdalisue/vim-kensaku-search',
-    depends = {
-      'lambdalisue/kensaku.vim',
-    },
-  })
-
-  vim.keymap.set('c', '<CR>', [[<Plug>(kensaku-search-replace)<CR>]])
+  -- Preserve the romaji-only trigger used by vim-kensaku-search.
+  local romaji_pattern =
+    [[\c^\%(\\\a\)\=\zs\(\(\(\([bdfghjklmnpstrzwx]\)\4\=\)\=y\=\([ei]\|[aou]h\=\)\)\|\%(ss\=\|dd\=\)\=h[aiuo]\|cc\=h[aio]\|tt\=su\|n\|-\)\+$]]
+  vim.keymap.set('c', '<CR>', function()
+    if vim.fn.getcmdtype() == '/' or vim.fn.getcmdtype() == '?' then
+      local query = vim.fn.matchstr(vim.fn.getcmdline(), romaji_pattern)
+      if query ~= '' then
+        local engine = require('luamigemo')
+        return '<C-u>\\m' .. engine.query(query, engine.RXOP_VIM) .. '<CR>'
+      end
+    end
+    return '<CR>'
+  end, { expr = true })
 end)
 
-later(function()
-  add({
-    source = 'lambdalisue/vim-kensaku-command',
-    depends = {
-      'lambdalisue/kensaku.vim',
-    },
-    -- みげも
-    -- 検索
-  })
-
-  vim.api.nvim_create_user_command('K', function(opts)
-    vim.cmd('Kensaku ' .. opts.args)
-  end, { nargs = '*' })
-end)
+-- later(function()
+--   add({
+--     source = 'lambdalisue/vim-kensaku-command',
+--     depends = {
+--       'lambdalisue/kensaku.vim',
+--     },
+--     -- みげも
+--     -- 検索
+--   })
+--
+--   vim.api.nvim_create_user_command('K', function(opts)
+--     vim.cmd('Kensaku ' .. opts.args)
+--   end, { nargs = '*' })
+-- end)
 
 later(function()
   add({
     source = 'delphinus/luamigemo',
+    depends = {
+      { source = 'oguna/migemo-compact-dict-latest', name = 'migemo-dict' },
+    },
   })
+
+  -- jab・/・:K・Telescope が使う標準インスタンスの辞書を差し替える。
+  local engine = require('luamigemo')
+  local dictionary = assert(vim.api.nvim_get_runtime_file('migemo-compact-dict', false)[1])
+  engine.get():set_dict(require('luamigemo.compact_dictionary').load(dictionary))
+
+  vim.api.nvim_create_user_command('K', function(opts)
+    vim.fn.setreg('/', '\\m' .. engine.query(opts.args, engine.RXOP_VIM))
+    vim.cmd('normal! n')
+  end, { nargs = '+' })
 end)
 
 later(function()
@@ -386,7 +415,7 @@ later(function()
     source = 'atusy/jab.nvim',
     depends = {
       'delphinus/luamigemo',
-      'lambdalisue/kensaku.vim',
+      -- 'lambdalisue/kensaku.vim',
     },
   })
 
@@ -408,7 +437,7 @@ later(function()
   -- @format:on
 
   -- incremental search
-  -- if vim-kensaku is available and initial query is uppercase,
+  -- if the initial query is uppercase,
   -- then the search is case-sensitive.
   -- Otherwise, the search is case-insensitive.
   -- hints appear on the left of the matches if possible.
@@ -751,16 +780,16 @@ later(function()
   end, { desc = 'Open Neogit commit' })
 end)
 
-later(function()
-  add({
-    source = 'lambdalisue/vim-gin',
-    depends = { 'vim-denops/denops.vim' },
-  })
-
-  -- vim.api.nvim_create_user_command('Gs', function()
-  --   vim.cmd('GinStatus')
-  -- end, { desc = 'GinStatus' })
-end)
+-- later(function()
+--   add({
+--     source = 'lambdalisue/vim-gin',
+--     depends = { 'vim-denops/denops.vim' },
+--   })
+--
+--   -- vim.api.nvim_create_user_command('Gs', function()
+--   --   vim.cmd('GinStatus')
+--   -- end, { desc = 'GinStatus' })
+-- end)
 
 later(function()
   require('mini.diff').setup()
@@ -1111,21 +1140,22 @@ later(function()
     depends = { 'nvim-telescope/telescope.nvim' },
   })
 
-  add({
-    source = 'Allianaab2m/telescope-kensaku.nvim',
-    depends = {
-      'nvim-lua/plenary.nvim',
-      'lambdalisue/kensaku.vim',
-      'nvim-telescope/telescope.nvim',
-    },
-  })
+  -- add({
+  --   source = 'Allianaab2m/telescope-kensaku.nvim',
+  --   depends = {
+  --     'nvim-lua/plenary.nvim',
+  --     -- 'lambdalisue/kensaku.vim',
+  --     'nvim-telescope/telescope.nvim',
+  --   },
+  -- })
 
   local open_with_trouble = require('trouble.sources.telescope').open
   --- @diagnostic disable-next-line: unused-local
   local add_to_trouble = require('trouble.sources.telescope').add
   local lga_actions = require('telescope-live-grep-args.actions')
 
-  require('telescope').load_extension('kensaku') -- :Telescope kensaku
+  -- require('telescope').load_extension('kensaku') -- :Telescope kensaku
+  require('telescope').load_extension('migemo')
 
   -- 既定は.gitignore / .ignoreを尊重する。ignoreに載っているものを歩かないのが目的で、
   -- 複数worktreeのあるリポジトリで他のworktreeを避けたい場合もこの経路に乗せる。
@@ -1358,8 +1388,11 @@ later(function()
   end, {
     desc = 'telescope buffers',
   })
-  vim.keymap.set('n', '<C-g>', '<CMD>Telescope kensaku<CR>', {
-    desc = 'telescope kensaku',
+  -- vim.keymap.set('n', '<C-g>', '<CMD>Telescope kensaku<CR>', {
+  --   desc = 'telescope kensaku',
+  -- })
+  vim.keymap.set('n', '<C-g>', '<CMD>Telescope migemo<CR>', {
+    desc = 'telescope migemo',
   })
   vim.keymap.set('n', '<C-k>a', function()
     -- require('telescope.builtin').live_grep()
@@ -1465,39 +1498,66 @@ end)
 -- end)
 --
 -- inputs ----------------------------------------------------------------
+-- later(function()
+--   add({
+--     source = 'vim-skk/skkeleton',
+--     depends = {
+--       'vim-denops/denops.vim',
+--     },
+--   })
+--
+--   vim.fn['skkeleton#config']({
+--     globalDictionaries = {
+--       vim.fn.stdpath('config') .. '/skk/SKK-JISYO.L',
+--       vim.fn.stdpath('config') .. '/skk/SKK-JISYO.emoji.utf8',
+--       vim.fn.stdpath('config') .. '/skk/skk-x-emoji.txt',
+--     },
+--     sources = { 'skk_dictionary', 'google_japanese_input' },
+--     -- sources = { 'skk_server' },
+--     eggLikeNewline = true,
+--     showCandidatesCount = 1,
+--   })
+--
+--   vim.keymap.set({ 'i', 'c', 't' }, [[<C-j>]], [[<Plug>(skkeleton-enable)]], { noremap = false })
+-- end)
+
 later(function()
   add({
-    source = 'vim-skk/skkeleton',
+    source = 'kjuq/skkelua.nvim',
     depends = {
-      'vim-denops/denops.vim',
+      { source = 'skk-dev/dict', name = 'skkelua-dict' },
     },
   })
-
-  vim.fn['skkeleton#config']({
+  require('skkelua').config({
     globalDictionaries = {
-      vim.fn.stdpath('config') .. '/skk/SKK-JISYO.L',
-      vim.fn.stdpath('config') .. '/skk/SKK-JISYO.emoji.utf8',
-      vim.fn.stdpath('config') .. '/skk/skk-x-emoji.txt',
+      assert(vim.api.nvim_get_runtime_file('SKK-JISYO.L', false)[1]),
     },
+    -- Google conversion uses curl; completion uses the local dictionaries.
     sources = { 'skk_dictionary', 'google_japanese_input' },
-    -- sources = { 'skk_server' },
     eggLikeNewline = true,
     showCandidatesCount = 1,
-  })
-
-  vim.keymap.set({ 'i', 'c', 't' }, [[<C-j>]], [[<Plug>(skkeleton-enable)]], { noremap = false })
-end)
-
-later(function()
-  add({
-    source = 'delphinus/skkeleton_indicator.nvim',
-    depends = {
-      'vim-skk/skkeleton',
+    setUndoPoint = true,
+    indicator = {
+      enabled = true,
+    },
+    completion = {
+      enabled = true,
+      insertOnSelect = true,
     },
   })
-
-  require('skkeleton_indicator').setup({})
+  vim.keymap.set({ 'i', 'c', 't' }, '<C-j>', '<Plug>(skkelua-enable)')
 end)
+
+-- later(function()
+--   add({
+--     source = 'delphinus/skkeleton_indicator.nvim',
+--     depends = {
+--       'vim-skk/skkeleton',
+--     },
+--   })
+--
+--   require('skkeleton_indicator').setup({})
+-- end)
 
 -- completion ----------------------------------------------------------------
 later(function()
@@ -1547,7 +1607,7 @@ later(function()
       'hrsh7th/cmp-path',
       'hrsh7th/cmp-cmdline',
       'f3fora/cmp-spell',
-      'uga-rosa/cmp-skkeleton',
+      -- 'uga-rosa/cmp-skkeleton',
       'L3MON4D3/LuaSnip',
       'saadparwaiz1/cmp_luasnip',
       'rafamadriz/friendly-snippets',
@@ -1558,6 +1618,7 @@ later(function()
   })
 
   local cmp = require('cmp')
+  cmp.register_source('skkelua', require('cmp_skkelua').new())
   local lspkind = require('lspkind')
   cmp.setup({
     snippet = {
@@ -1666,7 +1727,8 @@ later(function()
       { name = 'buffer' },
       { name = 'path' },
 
-      { name = 'skkeleton' },
+      -- { name = 'skkeleton' },
+      { name = 'skkelua' },
       {
         name = 'spell',
         option = {
@@ -2012,19 +2074,32 @@ later(function()
       -- その他のファイルはsetup時の設定でフォーマット
       return {}
     end,
-    formatters = {
-      yaml = {
-        append_args = { '--single-quote' },
-      },
-    },
+    -- formatters = {
+    --   yaml = {
+    --     append_args = { '--single-quote' },
+    --   },
+    -- },
     formatters_by_ft = {
       go = { 'gofmt', 'goimports' },
-      json = { 'deno_fmt' },
-      jsonc = { 'deno_fmt' },
+      -- json = { 'deno_fmt' },
+      -- jsonc = { 'deno_fmt' },
+      json = { 'prettier' },
+      jsonc = { 'prettier' },
       lua = { 'stylua' },
       ruby = { 'rubocop' },
       sh = { 'shfmt' },
-      yaml = { 'deno_fmt' },
+      -- yaml = { 'deno_fmt' },
+      yaml = { 'prettier' },
+      javascript = { 'prettier' },
+      javascriptreact = { 'prettier' },
+      typescript = { 'prettier' },
+      typescriptreact = { 'prettier' },
+      vue = { 'prettier' },
+      css = { 'prettier' },
+      scss = { 'prettier' },
+      less = { 'prettier' },
+      html = { 'prettier' },
+      markdown = { 'prettier' },
       fish = { 'fish_indent' },
     },
   })

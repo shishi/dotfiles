@@ -1,6 +1,7 @@
 # MADR Template
 
-Use this structure for all ADRs:
+Use this structure for project ADRs. Include only fields relevant to the decision's readers;
+use roles for participants and omit private identities, private consultation links, and session notes.
 
 ```markdown
 # [Short Title of Solved Problem and Solution]

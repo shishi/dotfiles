@@ -29,6 +29,13 @@ subagent が結果を返さないときの差し替え先として使う。前�
 
 ## Prerequisites
 
+送信の許可と承認要求の組成は AGENTS.md の「相互委譲の事前承認」に従う。
+OpenAI の公式サービスへの対象範囲内の送信は事前承認済み。プロンプトと、CLI が追加取得する
+共通指示・関連記憶・対象ファイル・コマンド出力を含めて範囲を確認する。
+
+CLI をまたぐレビューの起動は最上位の司令塔が行う。受託側は別 CLI へ再委譲せず、
+担当するレビュー結果、またはレビューの編成に必要な成果と検証結果を司令塔へ返す。
+
 1. `codex` CLI が PATH にある(`which codex` → 0)。無ければこの skill は適用不可
    (review-gate 経由なら gate がエンジンを Claude に差し替える)
 2. Codex が認証済み(`401 Unauthorized` を返さない)
@@ -49,17 +56,37 @@ subagent が結果を返さないときの差し替え先として使う。前�
    (例: `${TMPDIR:-/tmp}/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
-   失敗しうるため使わない)。**既定はこの形** — レビューは読むだけなので `read-only` で足りる:
+   失敗しうるため使わない)。モデルは呼び出し側が AGENTS.md と `review-gate` の許容候補から選ぶ。
+   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` を
+   `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
+   `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
+   この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
+   以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
+   **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
-   codex exec -s read-only --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   REVIEW_MODEL=gpt-6-astra
+   REVIEW_EFFORT=high
+   PERSPECTIVE=correctness
+   STARTED_AT=$(date +%s)
+   codex exec -s read-only --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
+   rc=$?
+   FINISHED_AT=$(date +%s)
+   RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
+   printf 'Run record: %s\n' "$RUN_RECORD" >&2
+   [ "$rc" -eq 0 ] && [ -s "$REVIEW_OUTPUT" ] || { tail -c 4000 "$REVIEW_LOG"; tail -c 4000 "$REVIEW_EVENTS"; exit 97; }
+   cat "$REVIEW_OUTPUT"
    ```
-   **sandbox が機能しないホストに限り**、下記の bypass 形を使う(判定と理由は Prerequisites 4 と
+   **sandbox が機能しないホストに限り**、上の codex コマンドだけ下記へ置き換える(判定と理由は Prerequisites 4 と
    「bypass フラグを使う理由」節):
    ```bash
-   codex exec --dangerously-bypass-approvals-and-sandbox - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   codex exec --dangerously-bypass-approvals-and-sandbox --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
    ```
    Git repo 外で実行する場合は、上のコマンドに `--skip-git-repo-check` を付ける。
-4. 実行後に一時ファイルを削除する
+   `--json` のイベントと `-o` の最終レビュー本文を分離し、既存の本文受領を維持します。
+   記録は AGENTS.md の private state 書込経路を使います。保存失敗なら結果を保全して
+   記録だけを回復します。CLI 成功はレビュー合格ではなく、本文を gate が判定します。
+4. 本文と実績記録を保全してから、自分が作った一時ファイルを削除する。
+   `RUN_RECORD` は採否と実検証の結果を追記するまで保持する。
 
 ### codex 前置き(観点コアの前に置く)
 
@@ -68,6 +95,7 @@ subagent が結果を返さないときの差し替え先として使う。前�
 親の会話や一時ファイルの存在だけで、CLI が対象を取得できるとは扱わない。
 
 ```text
+You are a delegated reviewer called by Claude Code. Do not delegate to another CLI, including Claude Code. Pass this restriction to any in-process subagents and return findings to the delegating coordinator.
 Task under review: <変更の短い説明(あればタスク記述の逐語引用)>
 Focus: <呼び出し側指定の焦点。無ければ the entire change>
 If the working directory is a Git repository, run `git status --short --untracked-files=all`
@@ -147,22 +175,22 @@ diff が巨大(目安: >10 ファイルかつ互いに独立な変更)なら、�
 "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)"
 ```
 
-### `401 Unauthorized` または接続 hang
+### 認証・接続・利用枠の失敗
 
-OpenAI auth token が期限切れ。interactive command は実行できないため user に
-`! codex login` を依頼し、完了後にこの skill を再開する。
+エラー本文と実行状態で、モデル単位の利用不能かサービス共通の障害かを切り分ける。
+認証・通信・権限エラーをモデル変更で直ると扱わない。利用可能なモデルや司令塔自身で
+要件を満たせるなら、その経路でレビューを完遂し、元の CLI の再認証を待たない。
+受託側から再委譲せず、司令塔へ原因を返す。
 
 ### Codex 出力が空のまま数分動かない
 
-`ps -ef | grep codex` で CPU 0% なら、ほぼ確実に認証問題か API レート制限。
-上の `401` セクションを参照。
+実行 handle とログを確認する。CPU 使用率や観測 timeout だけで認証切れ・失敗と断定しない。
 
 ### codex exec 自体の失敗(timeout / API 障害)
 
-1. 実行状態と原因を確認し、再試行の根拠がある場合だけ 1 回リトライする。
-   大きさが原因なら全対象を Focus で分割し、すべての結果を回収する
-2. 再失敗 → review-gate 経由ならエンジンを Claude に差し替え(gate の責務)。
-   単独発動なら失敗として報告する
+adapter 内では再試行しない。結果と原因を返し、司令塔が `review-gate` のモデル変更・
+代替エンジン・最終的な自己代替の順で判断する。単独発動時も同じ手順を使う。
+大きさが原因なら全対象を Focus で分割できるが、必要な対象を除外しない。
 
 ## Final report(単独発動時)
 

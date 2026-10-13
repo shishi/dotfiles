@@ -13,7 +13,7 @@ Check in order:
 4. `doc/architecture/decisions/`
 5. `adr/`
 6. `ADR/`
-7. **Fallback**: create `docs/ADR/`
+7. **Fallback**: for an authorized project ADR, create `docs/ADR/`. Read-only discovery and agent working notes do not create an ADR directory.
 
 ### 2. Detect Naming Convention
 
@@ -106,7 +106,7 @@ When implementation is complete, update ADR status:
 
 ```bash
 # Edit the ADR to change status from "proposed" to "accepted"
-# Add implementation date and any lessons learned
+# Record decision-relevant consequences for project readers, not session notes
 
 git add docs/ADR/20250115-use-jwt-auth.md
 git commit -m "docs(adr): mark JWT auth decision as accepted
