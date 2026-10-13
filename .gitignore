@@ -26,6 +26,7 @@
 /codex/*
 !/codex/AGENTS.md
 !/codex/config.toml
+!/codex/auto-review-template.LICENSE
 !/codex/hooks.json
 !/codex/agents/
 !/codex/agents/**
