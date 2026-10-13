@@ -52,7 +52,10 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    (例: `${TMPDIR:-/tmp}/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
-   失敗しうるため使わない)。**既定はこの形** — レビューは読むだけなので `read-only` で足りる:
+   失敗しうるため使わない)。モデルは呼び出し側が AGENTS.md と `review-gate` の許容候補から選ぶ。
+   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `--model` を
+   `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
+   **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
    codex exec -s read-only --model gpt-6-astra --config model_reasoning_effort=high --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
    ```
@@ -151,22 +154,22 @@ diff が巨大(目安: >10 ファイルかつ互いに独立な変更)なら、�
 "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)"
 ```
 
-### `401 Unauthorized` または接続 hang
+### 認証・接続・利用枠の失敗
 
-OpenAI auth token が期限切れ。interactive command は実行できないため user に
-`! codex login` を依頼し、完了後にこの skill を再開する。
+エラー本文と実行状態で、モデル単位の利用不能かサービス共通の障害かを切り分ける。
+認証・通信・権限エラーをモデル変更で直ると扱わない。利用可能なモデルや司令塔自身で
+要件を満たせるなら、その経路でレビューを完遂し、元の CLI の再認証を待たない。
+受託側から再委譲せず、司令塔へ原因を返す。
 
 ### Codex 出力が空のまま数分動かない
 
-`ps -ef | grep codex` で CPU 0% なら、ほぼ確実に認証問題か API レート制限。
-上の `401` セクションを参照。
+実行 handle とログを確認する。CPU 使用率や観測 timeout だけで認証切れ・失敗と断定しない。
 
 ### codex exec 自体の失敗(timeout / API 障害)
 
-1. 実行状態と原因を確認し、再試行の根拠がある場合だけ 1 回リトライする。
-   大きさが原因なら全対象を Focus で分割し、すべての結果を回収する
-2. 再失敗 → review-gate 経由ならエンジンを Claude に差し替え(gate の責務)。
-   単独発動なら失敗として報告する
+adapter 内では再試行しない。結果と原因を返し、司令塔が `review-gate` のモデル変更・
+代替エンジン・最終的な自己代替の順で判断する。単独発動時も同じ手順を使う。
+大きさが原因なら全対象を Focus で分割できるが、必要な対象を除外しない。
 
 ## Final report(単独発動時)
 
