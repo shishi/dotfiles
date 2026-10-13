@@ -1,10 +1,10 @@
 """parse-push.py の解釈テスト。dir / remote / src / dst を突き合わせる。"""
 
-import os
+from pathlib import Path
 import subprocess
 import sys
 
-PARSER = os.path.expanduser("~/.claude/hooks/lib/parse-push.py")
+PARSER = Path(__file__).with_name("parse-push.py")
 
 # (説明, 呼び出し, 期待する dir, remote, src, dst)
 CASES = [
@@ -23,8 +23,8 @@ CASES = [
 def main():
     failed = 0
     for label, call, *expected in CASES:
-        out = subprocess.run(["python3", PARSER], input=call, capture_output=True,
-                             text=True, timeout=30).stdout
+        out = subprocess.run([sys.executable, str(PARSER)], input=call, capture_output=True,
+                             text=True, timeout=30, check=True).stdout
         actual = out.split("\n")[:4]
         ok = actual == expected
         failed += 0 if ok else 1

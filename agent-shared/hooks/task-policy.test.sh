@@ -8,9 +8,7 @@ trap 'rm -rf "$test_home"' EXIT
 
 output=$(HOME="$test_home" bash "$HOOK_DIR/task-policy.sh" </dev/null)
 printf '%s\n' "$output" | grep -q '^<task-policy>$'
-printf '%s\n' "$output" | grep -q '問題をそらさない。論点を広げない。'
-printf '%s\n' "$output" | grep -q '中断しない。人間に聞いて作業を返さない。'
-printf '%s\n' "$output" | grep -q '全対象を調べきり'
+printf '%s\n' "$output" | grep -q '^</task-policy>$'
 echo 'ok: task policy is available without memory or prompt input'
 
 for config in claude/settings.json codex/hooks.json; do

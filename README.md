@@ -7,10 +7,29 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 `setup.sh` が作ることが前提です。Claude Code はユーザーレベルの `AGENTS.md` を直接読まないため、
 この import が必要です。
 
-毎入力の行動規則は `agent-shared/hooks/task-policy.sh`、表現規則は `wording-policy.sh` に置き、
-両エージェントの `UserPromptSubmit` から渡します。作業規則は記憶の導入・検索結果に依存しません。
-Codex では hook の出力が developer context に入り、`AGENTS.md` の user 指示より上位です。
-システム指示や権限制約を上書きするものではありません。
+情報は重要度ではなく、使うタイミングと役割で配置します。
+
+| 内容 | 正本と読込のタイミング |
+|---|---|
+| 全作業に共通する判断・応答・権限の規則 | `codex/AGENTS.md`。両エージェントで常時参照 |
+| イベント処理と機械的な実行前ガード | `agent-shared/hooks/`。登録したイベントで実行 |
+| 特定作業の手順・検証方法 | 各 `skills/<name>/SKILL.md`。該当作業で読む |
+| 個人の価値観・環境の観測・プロジェクト制約 | private の `agent-memory`。索引から関連本文を取得 |
+
+`task-policy.sh` と `wording-policy.sh` は両エージェントの `UserPromptSubmit` で短い要点を
+渡します。詳細規則を hook に重複定義しません。自然言語の注入と、実行を拒否するガードは
+別の役割です。skill や記憶を読んでも、新しい権限や依頼範囲は生まれません。
+
+レビューは `review-gate`、全件調査は `investigation-discipline`、必要なテストの作成は
+`test-red-first` に集約します。作業全体へ固定の承認段階・反復回数を課す superpowers は、
+Claude では plugin 本体、Codex では配布中の各 skill を名前で無効にします。
+Codex の remote plugin はインストールを維持し、更新で skill が追加された場合は対象を見直します。
+委譲を重複制御する Claude Herdr plugin も無効にし、自作の手順を使います。
+Herdr の明示操作は `herdr`、Claude からの委譲は `codex-delegate` が担当します。
+
+GitHub 投稿は `github-writing`、Scoop manifest の更新は `scoop-manifest`、Windows の GPU
+調査は `windows-gpu-diagnostics` で扱います。再利用する手順を記憶へ重複保存せず、
+端末固有の制約や観測値だけを private 記憶に残します。
 
 ## 個人記憶の参照
 

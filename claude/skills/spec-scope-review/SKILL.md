@@ -33,7 +33,8 @@ description: |
 ## 実行
 
 `spec-scope-reviewer` agent を新規に dispatch し(Claude Code は Task tool、Codex は spawn agent。
-Codex 側の agent は `~/.codex/agents/spec-scope-reviewer.toml`)、上記入力をプロンプトで渡す。
+Codex 側の agent は `~/.codex/agents/spec-scope-reviewer.toml`)、上記入力を渡す。
+大きな入力を組成済みファイルで渡す場合は、review-gate と同様に利用可能な読取手段を指定し、全本文の読了を確認する。
 
 ## 結果処理(単独発動時)
 

@@ -205,13 +205,73 @@ enabled = true
 enabled = true
 
 [plugins."superpowers@openai-api-curated"]
-enabled = true
+enabled = false
 
 [plugins."codex-security@openai-api-curated"]
 enabled = true
 
 [plugins."sites@openai-bundled"]
 enabled = true
+
+[[skills.config]]
+name = "superpowers:brainstorming"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:diagnosing-superpowers"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:dispatching-parallel-agents"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:executing-plans"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:finishing-a-development-branch"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:receiving-code-review"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:requesting-code-review"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:subagent-driven-development"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:systematic-debugging"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:test-driven-development"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:using-git-worktrees"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:using-superpowers"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:verification-before-completion"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:writing-plans"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:writing-skills"
+enabled = false
 
 [hooks.state]
 
