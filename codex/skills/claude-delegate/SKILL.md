@@ -10,6 +10,10 @@ description: Codex の最上位司令塔から Claude Code へ探索・定型変
 
 ## 担当と権限
 
+送信の許可と承認要求の組成は AGENTS.md の「相互委譲の事前承認」に従います。
+Anthropic の公式サービスへの対象範囲内の送信は事前承認済みです。プロンプトだけでなく、
+CLI が読む共通指示・関連記憶・対象ファイル・コマンド出力も送信範囲として扱います。
+
 最上位の Codex だけが起動します。AGENTS.md の担当選択とモデル代替規則に従い、
 必要なツール・既存文脈・引継ぎ量・レビュー余力で選びます。工程名だけで往復させません。
 通常は Sonnet / medium、複雑な調査・実装は Opus / medium〜high、
@@ -31,7 +35,7 @@ description: Codex の最上位司令塔から Claude Code へ探索・定型変
   維持し、必要な許可は司令塔が扱います。`--bare` や権限 bypass は使いません。
 - `--allowedTools` は既存許可への追加です。既存の広い許可を狭める OS の隔離境界とは
   扱いません。書込時は下の `--disallowedTools` で通常の Git 書込・push コマンドも拒否し、
-  共有設定の allow をそのまま適用しません。コマンド形式の照合は間接実行全体を隔離する
+  再委譲用の `codex` 呼出しも拒否します。共有設定の allow をそのまま適用しません。コマンド形式の照合は間接実行全体を隔離する
   仕組みではないため、既存 hook と役割指示・実物照合も維持します。
 - Agent と MCP は既定で渡しません。同じ CLI 内の子が必要なら司令塔が明示許可し、
   受託中・別 CLI 再委譲禁止をその子にも引き継がせます。
@@ -85,7 +89,7 @@ chore / implement は `ROLE` を変更し、上の Claude コマンドのツー�
 `Edit` のパス許可は Write にも適用されます。Bash 不要ならツールと許可から外します。
 
 ```sh
-claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob,Edit,Write,Bash --allowedTools 'Edit(./src/**)' 'Bash(python3 verify.py)' --disallowedTools 'Bash(git commit:*)' 'Bash(git push:*)' 'Bash(git stash:*)' 'Bash(git checkout:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(git rebase:*)' 'Bash(git pull:*)' 'Bash(git cherry-pick:*)' 'Bash(git branch:*)' --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
+claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob,Edit,Write,Bash --allowedTools 'Edit(./src/**)' 'Bash(python3 verify.py)' --disallowedTools 'Bash(codex:*)' 'Bash(git commit:*)' 'Bash(git push:*)' 'Bash(git stash:*)' 'Bash(git checkout:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(git rebase:*)' 'Bash(git pull:*)' 'Bash(git cherry-pick:*)' 'Bash(git branch:*)' --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
 ```
 
 - 正常終了と JSON 受領は作業完了の証明ではありません。`status`、`blockers`、検証結果を

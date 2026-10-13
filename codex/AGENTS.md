@@ -60,6 +60,13 @@ Claude Code でも Codex でも review-gate skill に従う。仕様・スコー
 
 # CLI をまたぐ委譲の境界
 
+## 相互委譲の事前承認
+
+- ユーザーは、作業を依頼し外部提供権限を持つ公開・非公開リポジトリについて、Claude Code と Codex の相互委譲・レビューを事前承認している。既存アカウントで利用する Anthropic・OpenAI の公式サービスへ、その作業に必要なコード・差分・仕様・検証結果、CLI が読み込む共通指示と関連記憶を送信できる。同じ範囲の送信承認を毎回求めない。
+- 起動前に認証方式・provider と接続先上書きの有無を確認する。承認要求には、この事前承認、対象 repo と担当範囲、入力ファイル、CLI が追加取得する指示・関連記憶・ファイル・コマンド出力の範囲、送信先の確認結果、秘密情報検査結果を示す。認証情報そのものは出力しない。接続先や範囲が変わった場合は承認範囲と照合し直す。
+- Claude は `claude auth status --json` の `loggedIn`・`authMethod`・`apiProvider` と、環境変数・読み込む settings の `env` にある `ANTHROPIC_BASE_URL`・`CLAUDE_CODE_USE_BEDROCK`・`CLAUDE_CODE_USE_VERTEX`・`CLAUDE_CODE_USE_FOUNDRY` を確認する。Codex は `codex login status` の結果から認証方式だけを抽出し、app-server の `config/read` で `model_provider`・選択された `model_providers` の `base_url`、環境変数の `OPENAI_BASE_URL` を確認する。profile・CLI 引数による上書きも含む実効値を使い、認証方式と接続先ホストだけを報告する。API キーを含み得るログイン状態の生出力、アカウント情報全体、環境変数全体を出力しない。
+- この承認は、認証情報のプロンプト混入、無関係な私的情報、未承認の第三者サービスや接続先上書き、第三者の制約に反する送信を含まない。書込・コマンド・受託側ネットワークの権限は担当範囲に応じて別に定め、既存の sandbox・hook・deny・秘密情報検査・再委譲禁止を維持する。
+
 ## 作業の割当と利用枠
 
 - 通常は Codex を司令塔にし、Claude で開始した仕事は Claude が司令塔を続ける。調査・変更・検証を一まとまりの担当に渡し、工程名だけで往復させない。短い操作は親が処理する。委譲は必要なツール・権限、既存文脈、引継ぎと統合の負担、同種作業の実績、レビュー余力で選ぶ。

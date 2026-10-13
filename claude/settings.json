@@ -136,6 +136,8 @@
       "Bash(git pull:*)",
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
+      "Bash(codex exec -s read-only:*)",
+      "Bash(codex exec -s workspace-write:*)",
       "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
       "Bash(git push:*)",
       "Bash(git -C ~/.claude/memory:*)"

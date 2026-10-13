@@ -139,6 +139,10 @@ Do not commit, stash, or create branches. Leave all changes in the working tree.
 
 ### 3. 走査・実行・結果の取り出し・後始末
 
+以下は explore の例。chore / implement はコマンド先頭の `-s read-only` を
+`-s workspace-write` へ直接置き換える。`codex exec` 行の許可 prefix に一致させるため、
+この値は変数にしない。準備・記録など同じブロック内の別コマンドの許可は、それぞれ判定される。
+
 ```sh
 WORK=/tmp/xxxxxxxx   # 1 回目が返したパス
 case "${WORK##*/}" in (codex-delegate-??????) ;; (*) exit 96 ;; esac  # 1 回目が作った形でなければ触らない
@@ -147,13 +151,12 @@ gitleaks dir "$WORK/prompt.md" --no-banner || exit 98   # 検出あり・実行�
 mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、または目印を作れない
 trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対象
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
-MODE=read-only          # 委譲種別に応じて read-only か workspace-write
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
 DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
 DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
 ROLE=explore             # explore / chore / implement
 STARTED_AT=$(date +%s)
-codex exec -s "$MODE" --model "$DELEGATE_MODEL" \
+codex exec -s read-only --model "$DELEGATE_MODEL" \
   --config "model_reasoning_effort=$DELEGATE_EFFORT" \
   --config approval_policy=never \
   --config features.memories=false \
@@ -269,6 +272,9 @@ background task へ移され、走り続けて完了通知が届く)。委譲は
   壊れない
 
 ## 外部へ送られる範囲
+
+AGENTS.md の「相互委譲の事前承認」に従い、OpenAI の公式サービスへの対象範囲内の送信は
+事前承認済みとする。承認要求には具体的な入力・追加取得範囲、接続先の確認結果と検査結果を示す。
 
 組み立てた `prompt.md` を gitleaks で走査し、検出ゼロを確認してから codex を起動する。プロンプトを
 走査対象にするのは、それが Claude の書いた内容を外部へ渡す唯一の経路だからである。secrets-scan
