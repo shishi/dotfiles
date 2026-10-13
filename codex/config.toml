@@ -143,6 +143,7 @@ git-pull-request-merge-method = "merge"
 git-worktree-root = ".worktrees"
 keepRemoteControlAwakeWhilePluggedIn = true
 "browser-family-enabled:brave" = true
+open-link-in-target-preference = "external-browser"
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -466,6 +467,9 @@ trusted_hash = "sha256:8682faddfb4e064cee114d42cdae996cfc8a4341bad5572a4580e9886
 trusted_hash = "sha256:6902f7014609945653a7b827487ef76bf9f9cf6c45142cf6d5d5cb81d639d99b"
 
 [hooks.state."/home/shishi/.codex/hooks.json:user_prompt_submit:1:0"]
+trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
+
+[hooks.state."/Users/shigenobu.407/.codex/hooks.json:user_prompt_submit:1:0"]
 trusted_hash = "sha256:1c58ab0c04deb6eae051d91ec6752f0b1f8b5b929dd7ad337e06ab556ed2fcb9"
 
 [memories]
