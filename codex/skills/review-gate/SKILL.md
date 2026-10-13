@@ -7,8 +7,8 @@ description: |
   利用者の操作や結果を変える実装では、着手時から受入準備にも使う。
   省略は小規模で誤りが混入しない確信度が非常に高く、明らかに不要な場合だけ。
   secrets / 仕様・スコープ / 正しさ(または adversarial)の各レーンを編成し、
-  全対象の確認と残件解消まで追跡する。正しさ・設計は利用可能なら他方の CLI に渡し、
-  仕様・スコープは司令塔側の新規 agent で確認する。曜日では制限しない。
+  全対象の確認と残件解消まで追跡する。正しさ・設計は同系統と他方の CLI で確認し、
+  仕様・スコープは司令塔側の新規 agent が担う。利用不能時は依頼の必須条件と代替規則に従う。
   キーワード: レビューゲート, review gate, レビューして, commit 前レビュー。
 ---
 
@@ -99,8 +99,8 @@ AGENTS.md に従い、コード・設定・文書・issue などの作成・変�
 
 | ゲート | トリガー | レーン |
 |---|---|---|
-| spec gate | spec/PRD/plan/設計 doc の作成・更新直後 | 0: secrets → adversarial |
-| defect gate | 実装・設定変更・一般文書の完成時、issue の投稿・更新前、主要な実装ステップ後、commit / PR / merge / release 前 | 0: secrets → 1: spec-scope + 2: correctness(並行) |
+| spec gate | spec/PRD/plan/設計 doc の作成・更新直後 | 0: secrets → 同系統と他系統の adversarial(並行) |
+| defect gate | 実装・設定変更・一般文書の完成時、issue の投稿・更新前、主要な実装ステップ後、commit / PR / merge / release 前 | 0: secrets → 1: spec-scope + 2: 同系統 correctness + 3: 他系統 correctness(並行) |
 
 仕様・計画・設計を扱う文書・issue は spec gate、その他の成果物は defect gate で扱う。
 外部へ投稿・更新する本文は、送信前にレビューする。
@@ -127,19 +127,26 @@ Git 差分が空でも、これらの成果物があれば「レビュー対象�
 ## エンジン決定
 
 仕様・スコープは元の依頼との照合、正しさ・設計は実装や前提への反証を担当する。
-後者を他方のモデルへ渡すのは、作成側と共通する見落としを補うためである。
+後者は同系統の新規 reviewer に加え、他方のモデルにも同じ対象を渡す。
 モデルが違うだけで検出率が上がるとは扱わず、指摘は実物の引用・再現条件で採否を決める。
 他レーンの結論や作成側の自己評価を先に渡さず、要件・対象・検証結果から独立に判断させる。
 
-| 司令塔 | spec-scope の既定 | correctness / adversarial の優先エンジン | 外部 CLI が利用不能の場合 |
+| 司令塔 | spec-scope | 同系統 correctness / adversarial | 他系統 correctness / adversarial |
 |---|---|---|---|
-| Claude Code | Claude の新規観点 agent | Codex CLI(`codex-review`、Astra / high) | Claude の新規観点 agent |
-| Codex | Codex の新規観点 agent | Claude CLI(`claude-review`、Fable / high。ユーザー指定・利用可能モデルに応じ Opus / high) | Codex の新規観点 agent |
+| Claude Code | Claude の新規観点 agent | 司令塔と同じモデルの新規観点 agent / high | Codex CLI(`codex-review`、Astra / high) |
+| Codex | Codex の新規観点 agent | 司令塔と同じモデルの新規観点 agent / high | Claude CLI(`claude-review`、Fable / high。ユーザー指定なら Opus / high) |
 
 - 曜日による利用制限は両方とも設けない。secrets は常時 gitleaks。
+- 同系統の確認も実装した会話の自己点検とは別に行う。両系統に同じ原要求・既存保証・
+  対象本文・検証結果を渡し、初回は相手の結論を渡さない。観点を別々に分担しただけでは
+  同じ対象の二系統レビューと数えない。対象の基準 commit と全差分・新規本文を固定する。
 - CLI の存在だけで利用可能と判定せず、認証・モデル利用可否・権限・結果の受領まで確認する。
   モデル単位の利用不能は AGENTS.md の許容候補で代替する。CLI やサービス全体が利用不能なら
-  同じ原因のモデルを試し続けず上表の代替へ進む。起動後の障害も下の代替手順で扱う。
+  同じ原因のモデルを試し続けず下の代替手順へ進む。起動後の障害も同じ手順で扱う。
+- 個別の依頼が両系統・同一モデル・独立性を必須とする場合、欠けた結果を別系統や自己点検で
+  満たしたことにしない。その条件の指定が無い場合は AGENTS.md の許容候補と自己代替規則を使い、
+  失った独立性と実際のモデルを報告する。枠切れでも依存しない実装・検証は進めてよいが、
+  必須のレビューが揃うまで通過・マージ可能とは扱わない。
 - どの観点も同じ観点のままエンジンを差し替えられる。spec-scope には、どのエンジンでも
   `spec-scope-review` の入力組成に従う逐語のタスク記述が必要。入力不足をエンジン変更で解消した扱いにしない。
 - 新規 agent エンジンでの実行 = 対応する観点 agent
@@ -157,7 +164,7 @@ Git 差分が空でも、これらの成果物があれば「レビュー対象�
 3. レーン0: secrets-scan skill → 検出ゼロまで fix→re-scan(先行・直列。secrets 入りの
    内容を外部 API に送る前に検出する)。Git 外の成果物もローカルの一時ファイルへ保存し、
    同 skill の per-file 検査に含める。Git repo がない場合は成果物のファイルを直接検査する
-4. レーン1: spec-scope とレーン2: correctness を、それぞれ決定したエンジンで
+4. レーン1: spec-scope、レーン2: 同系統 correctness、レーン3: 他系統 correctness を
    並行 dispatch(各 1 パス。反復はレーン内で回さない)
    - 文書・issue では、要件との一致に加え、事実・参照先・手順・記述間の整合性を確認する
    - レーン1 の入力組成は spec-scope-review skill の「入力組成」節の規則に従う
@@ -174,10 +181,14 @@ Git 差分が空でも、これらの成果物があれば「レビュー対象�
    再レビューで確認
    - 再レビューに固定の総量上限を設けない。修正・新しい証拠・原因仮説に基づいて進め、
      反復の収束は AGENTS.md に従う。回数到達で必要な修正や確認を打ち切らない。
-7. **通過条件**: 下の手順に従う自己代替も含め、必要な全レーン・全対象の確認結果があり、採用した blocker/should が
+7. **通過条件**: 個別の必須条件を維持したうえで、下の手順による代替も含め必要な全レーン・全対象の確認結果があり、採用した blocker/should が
    すべて解消し、全要件が証拠付きで満たされていること。未レビュー・未確認・判定不能は
    1 件でも残れば通過しない。棄却した指摘には根拠を残す。note は元の依頼の未達を含まない
    任意改善に限る。通過後に変更した場合は 3 から再実行し、変更の影響を受ける観点を再確認する。
+   修正後は最終対象に対する両系統の確認を揃える。影響が無い確認結果は対象の同一性と根拠を
+   確認して再利用できる。CLI の実績記録には、実検証後の `verification` と採用指摘数の
+   `adopted_findings`、手戻りの `rework_count`、取得した枠の観測を下の手順で追記する。
+   CLI の正常終了をレビュー合格と読み替えない。
 8. 判定不能は不足する元の要件・実物・検証結果を取得して再判定する。判断過程の書き起こしで
    代用しない。自力で解消できる間は作業を続ける。権限・外部障害・本人の判断、または
    AGENTS.md の収束規約で止まる場合は、依存しない作業を済ませ、残件・試したこと・
@@ -187,14 +198,37 @@ Git 差分が空でも、これらの成果物があれば「レビュー対象�
 
 defect gate の 1–3 と同様(対象は文書 diff + untracked 文書 + Git 外の仕様・計画・設計本文)。
 ただし実装前の受入は、条件・根拠・検証可能性の準備を確認する。まだない実装の実操作・
-計測証拠を要求せず、実装後の受入まで完了した扱いにもしない。その後 adversarial 観点
-1 レーン(エンジンは決定に従う)。findings は修正に入る前に引用検証し(棄却は [adversarial-n]
+計測証拠を要求せず、実装後の受入まで完了した扱いにもしない。その後 adversarial 観点を
+同系統と他系統で並行実行する。findings は修正に入る前に引用検証し(棄却は [adversarial-n]
 付きで記録)、defect gate と同じ採否判定・収束規約を適用する。必要な修正後は
 secrets-scan と関連箇所の再レビューを行う。全対象のレビュー結果が「safe」相当で、
 主エージェントが元の全要件との照合を完了した場合だけ通過する。
 結果が届かない場合は下記の代替手順を行い、未レビューのまま通過させない。
 
 ## エラー処理
+
+### 実績への追記
+
+各 adapter が返した `RUN_RECORD` を司令塔が更新する。`verification` は実検証の
+`passed` / `failed` / 未確認の null、`adopted_findings` は採用した指摘数、
+`rework_count` はその担当の受入・レビュー後に修正を戻した回数とする。
+未確認の件数を 0 と書かない。追加の修正・再レビュー実行も各 adapter で別記録を残す。
+
+割当前後に取得した枠は `QUOTA_OBSERVATIONS` という一時 JSON ファイルへ組成する。
+形は `{"codex":{"before":null,"after":null},"claude":null}` とし、取得できた箇所だけ
+helper の観測時刻・status・ウィンドウ・リセット日時を含む結果で置き換える。
+Claude は正式に受領した値と観測時刻がある場合だけ同じ before / after 構造へ入れる。
+観測が一方だけならもう一方は null のままにし、追加取得のためだけにモデルを呼ばない。
+これを `rate_limits` に保存し、単一仕事の正確な消費へ換算しない。
+
+次は数値と判定を確認済みの場合の追記例。変数を実結果で設定し、記録と同じ許可経路で
+実行する。未確認値は JSON の null を渡す。元の数値 metadata は保持する。
+
+```sh
+RECORD_UPDATE=$(mktemp "${RUN_RECORD}.XXXXXX") || exit 1
+jq -c --slurpfile quota "$QUOTA_OBSERVATIONS" --argjson verification "$VERIFICATION_JSON" --argjson adopted "$ADOPTED_FINDINGS" --argjson rework "$REWORK_COUNT" '.verification = $verification | .adopted_findings = $adopted | .rework_count = $rework | .rate_limits = $quota[0]' "$RUN_RECORD" > "$RECORD_UPDATE" || { rm -f "$RECORD_UPDATE"; exit 1; }
+mv "$RECORD_UPDATE" "$RUN_RECORD"
+```
 
 | 障害 | 対処 |
 |---|---|

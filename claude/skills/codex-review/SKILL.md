@@ -53,19 +53,36 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
    失敗しうるため使わない)。モデルは呼び出し側が AGENTS.md と `review-gate` の許容候補から選ぶ。
-   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `--model` を
+   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` を
    `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
+   `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
+   この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
+   以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
    **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
-   codex exec -s read-only --model gpt-6-astra --config model_reasoning_effort=high --config approval_policy=never - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   REVIEW_MODEL=gpt-6-astra
+   REVIEW_EFFORT=high
+   PERSPECTIVE=correctness
+   STARTED_AT=$(date +%s)
+   codex exec -s read-only --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
+   rc=$?
+   FINISHED_AT=$(date +%s)
+   RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
+   printf 'Run record: %s\n' "$RUN_RECORD" >&2
+   [ "$rc" -eq 0 ] && [ -s "$REVIEW_OUTPUT" ] || { tail -c 4000 "$REVIEW_LOG"; tail -c 4000 "$REVIEW_EVENTS"; exit 97; }
+   cat "$REVIEW_OUTPUT"
    ```
-   **sandbox が機能しないホストに限り**、下記の bypass 形を使う(判定と理由は Prerequisites 4 と
+   **sandbox が機能しないホストに限り**、上の codex コマンドだけ下記へ置き換える(判定と理由は Prerequisites 4 と
    「bypass フラグを使う理由」節):
    ```bash
-   codex exec --dangerously-bypass-approvals-and-sandbox --model gpt-6-astra --config model_reasoning_effort=high - < "${TMPDIR:-/tmp}/codex-review-prompt.md"
+   codex exec --dangerously-bypass-approvals-and-sandbox --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
    ```
    Git repo 外で実行する場合は、上のコマンドに `--skip-git-repo-check` を付ける。
-4. 実行後に一時ファイルを削除する
+   `--json` のイベントと `-o` の最終レビュー本文を分離し、既存の本文受領を維持します。
+   記録は AGENTS.md の private state 書込経路を使います。保存失敗なら結果を保全して
+   記録だけを回復します。CLI 成功はレビュー合格ではなく、本文を gate が判定します。
+4. 本文と実績記録を保全してから、自分が作った一時ファイルを削除する。
+   `RUN_RECORD` は採否と実検証の結果を追記するまで保持する。
 
 ### codex 前置き(観点コアの前に置く)
 

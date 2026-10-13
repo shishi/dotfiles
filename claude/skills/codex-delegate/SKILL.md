@@ -151,6 +151,8 @@ MODE=read-only          # 委譲種別に応じて read-only か workspace-write
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
 DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
 DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
+ROLE=explore             # explore / chore / implement
+STARTED_AT=$(date +%s)
 codex exec -s "$MODE" --model "$DELEGATE_MODEL" \
   --config "model_reasoning_effort=$DELEGATE_EFFORT" \
   --config approval_policy=never \
@@ -160,14 +162,20 @@ codex exec -s "$MODE" --model "$DELEGATE_MODEL" \
   --config "sandbox_workspace_write.network_access=$NET" \
   --config 'sandbox_workspace_write.writable_roots=[]' \
   --output-schema "$WORK/schema.json" \
+  --json \
   -o "$WORK/out.json" \
-  - < "$WORK/prompt.md" > "$WORK/run.log" 2>&1
+  - < "$WORK/prompt.md" > "$WORK/events.jsonl" 2> "$WORK/run.log"
 rc=$?
+FINISHED_AT=$(date +%s)
+TASK_STATUS=$(jq -r '.status // "unknown"' "$WORK/out.json" 2>/dev/null) || TASK_STATUS=unknown
+RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/events.jsonl" "$TASK_STATUS" "$FINISHED_AT") || { trap - EXIT; echo "記録保存失敗。結果は $WORK に保全" >&2; exit 95; }
+printf 'Run record: %s\n' "$RUN_RECORD" >&2
 if [ "$rc" -eq 0 ] && [ -s "$WORK/out.json" ]; then
   cat "$WORK/out.json"
   exit 0
 fi
 tail -c 4000 "$WORK/run.log"
+tail -c 4000 "$WORK/events.jsonl"
 [ "$rc" -ne 0 ] || rc=97   # 終了コードは 0 だが JSON が返っていない
 exit "$rc"
 ```
@@ -187,13 +195,16 @@ exit "$rc"
 | コード | 意味 | 対処 |
 |---|---|---|
 | 0 | 成功。stdout が `out.json` の全文 | `status` と `summary` を読む |
+| 95 | 実績記録の保存に失敗。作業結果とログは保全 | 出力済みの場所から記録だけを回復し、委譲を再実行しない |
 | 96 | 作業ディレクトリの取り違え(名前の形が違う、`prompt.md` が無い、既に委譲を起動済み、目印を作れない) | 1 回目が返したパスを貼り直す。起動済みなら 1 からやり直す。`mkdir` のエラー文が出ていればそれが原因 |
 | 97 | codex は正常終了したが JSON を返さなかった | この呼び出しの stdout に出ているログ末尾で切り分け、再委譲する |
 | 98 | gitleaks で停止(検出あり、または gitleaks が動かない) | 検出をゼロにして 3 を再実行する(作業ディレクトリは残っている) |
 | 143 | Bash の timeout に達して SIGTERM で終了した | 結果は残っていない。新しい作業ディレクトリで 1 からやり直す。長い委譲は background で流す |
 
-その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、ログ末尾(最大 4,000
-バイト)が stdout に出る。
+その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、stderr とイベントの
+末尾を各最大 4,000 バイト返す。`--json` はイベント側だけを変え、`-o` の結果 JSON は維持する。
+記録は司令塔が private state へ書ける経路で実行し、委譲先の書込許可は広げない。
+実績記録のパスはレビューまで保持し、検証結果と採用指摘を追記する。
 
 ## 結果の受け取り
 
@@ -249,7 +260,7 @@ background task へ移され、走り続けて完了通知が届く)。委譲は
   あるかどうかで見る
 - 止める必要があるときは、その background task を停止する。停止は codex とその子プロセスまで届く
 - **受け取れるのは foreground と同じ範囲だけである。** background task の出力に載るのは、成功なら
-  JSON 全文、失敗ならログ末尾の 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
+  JSON 全文、失敗なら stderr とイベントの末尾各 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
   (正常終了で作業ディレクトリごと消える)。background にしたことで得られる情報が増えるわけではない
 - 既定の timeout は `BASH_DEFAULT_TIMEOUT_MS` の 5 分、指定できる上限は `BASH_MAX_TIMEOUT_MS` の
   20 分(いずれも `claude/settings.json` で定める)。foreground で流すなら、この時間内に終わる大きさに

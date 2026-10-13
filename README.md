@@ -12,6 +12,29 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 Codex では hook の出力が developer context に入り、`AGENTS.md` の user 指示より上位です。
 システム指示や権限制約を上書きするものではありません。
 
+## エージェント間の委譲とレビュー
+
+別のモデルの調査・実装や独立した確認が必要なとき、最上位の司令塔が CLI をまたいで
+担当を割り当てます。同じ CLI 内の子エージェントも使い、短い操作は司令塔が処理します。
+調査・変更・検証を一まとまりで渡し、受託側から別 CLI へ送り返しません。
+
+| 呼出元 | 探索・定型変更・実装 | 独立レビュー |
+|---|---|---|
+| Claude Code | [codex-delegate](claude/skills/codex-delegate/SKILL.md) | [codex-review](claude/skills/codex-review/SKILL.md) |
+| Codex | [claude-delegate](codex/skills/claude-delegate/SKILL.md) | [claude-review](codex/skills/claude-review/SKILL.md) |
+
+通常の CLI 直接起動に加えて、これらの skill が担当範囲・権限・構造化結果・実物の照合を
+定めます。自動選択のほか、Claude Code では `/codex-delegate`、Codex では
+`$claude-delegate` のように明示できます。レビュー観点・必要な結果・代替条件は
+[review-gate](codex/skills/review-gate/SKILL.md) が管理します。
+
+両 CLI の認証と、CLI 自身の通信・状態保存を許可した実行環境が必要です。
+委譲時の秘密情報検査に gitleaks、結果処理に jq、Codex の枠取得に Python 3 を使います。
+skill と共通 helper は既存の `setup.sh` のリンクから配備されます。
+CLI の実績は `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` の JSONL に保存します。
+応答本文を含めず、取得できた使用量と実検証結果を担当選択に使います。
+利用枠の取得失敗は不明として扱い、呼出回数を残量に換算しません。
+
 ## 個人記憶の参照
 
 記憶本文は private repo `agent-memory` に置き、両エージェントの `memory/` から参照します。
