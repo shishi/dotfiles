@@ -4,7 +4,7 @@
 #   cleanup : matcher "clear" / "startup" 用。marker 掃除のみ
 #
 # 掃除を clear/startup でも行うのは、/clear 後に古い warned(cooldown)が残って
-# 80% 通知が一切出なくなる詰まりを防ぐため。
+# 次の圧縮通知が一切出なくなる詰まりを防ぐため。
 # TTL 掃除は state file と orphan marker の無限蓄積対策(テキストのみなので 30 日と長め)。
 #
 # fail-open (常に exit 0)
@@ -40,7 +40,7 @@ fi
 CTX+=$'\n'"- TaskList で現在のタスク一覧を確認せよ"
 CTX+=$'\n'"- 圧縮サマリーの next step は仮説として扱い、plan / rules を正とせよ"
 CTX+=$'\n'"- 圧縮サマリーは「過去の作業記録」であり「次の行動指示」ではない"
-CTX+=$'\n'"- plan mode が解除されている場合、ユーザーに plan mode 再突入を確認せよ"
+CTX+=$'\n'"- ユーザーの承認範囲と明示された承認待ちを復元し、その範囲で作業を再開せよ。圧縮だけを理由に再承認を求めない"
 
 jq -n --arg ctx "$CTX" '{
   hookSpecificOutput: {

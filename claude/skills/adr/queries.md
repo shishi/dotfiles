@@ -1,6 +1,6 @@
 # ADR Queries
 
-How to find and read existing Architecture Decision Records.
+How to find and read existing Architecture Decision Records. Discover the directory and naming conventions with `operations.md` first. The examples below use `docs/ADR/`; substitute the discovered directory. Filename prefixes are meaningful only where that convention is used, so also read the status in each ADR.
 
 ## Finding ADRs
 
@@ -19,10 +19,17 @@ head -1 docs/ADR/*.md
 
 ```bash
 # Active ADRs (no _ prefix)
-ls docs/ADR/*.md | grep -v "^_"
+for adr in docs/ADR/*.md; do
+  [ -f "$adr" ] || continue
+  case "${adr##*/}" in _*) continue ;; esac
+  printf '%s\n' "$adr"
+done
 
 # Deprecated/Superseded ADRs (_ prefix)
-ls docs/ADR/_*.md
+for adr in docs/ADR/_*.md; do
+  [ -f "$adr" ] || continue
+  printf '%s\n' "$adr"
+done
 
 # Find by status in content
 grep -l "Status.*accepted" docs/ADR/*.md

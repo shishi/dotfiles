@@ -12,7 +12,7 @@ BEHAVIOR = What inputs are ACCEPTED
          + What errors are RAISED (and when)
 ```
 
-**If tests pass before and after, it was structural. If they fail, you changed behavior.**
+Passing tests before and after provides evidence only for the behavior those tests cover. Classify the change by comparing the diff with the actual caller contract above. A test failure requires investigation; it does not by itself prove that behavior changed.
 
 ## Structural vs Behavioral Changes
 

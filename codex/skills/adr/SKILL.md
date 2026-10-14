@@ -34,7 +34,7 @@ Manage Architecture Decision Records (ADRs) throughout their lifecycle: read exi
 
 1. **Before implementation**: Check for relevant ADRs
 2. **During implementation**: Reference ADR in commits
-3. **On completion**: Update ADR status (proposed → accepted)
+3. **On completion**: Check the project's acceptance criteria. Change proposed → accepted only when the decision has been approved under that process; implementation completion alone does not imply acceptance.
 4. **On deviation**: Create superseding ADR, deprecate old one with `_` prefix
 
 ## Quality Checklist
@@ -54,7 +54,7 @@ Before finalizing an ADR:
 - **Vague consequences**: Be specific about trade-offs
 - **Missing "why"**: The ADR should answer "why this, why now"
 - **Orphan ADRs**: Link to related ADRs when relevant
-- **Stale ADRs**: Update status when implemented or superseded
+- **Stale ADRs**: Update status when the project's acceptance or supersession criteria are met
 - **Undocumented deviation**: If you deviate from an ADR, create a new one
 
 ## Reference

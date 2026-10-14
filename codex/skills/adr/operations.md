@@ -58,7 +58,7 @@ See docs/ADR/20250115-134032-use-oauth2.md for rationale.
 
 | Transition | Action |
 |------------|--------|
-| proposed → accepted | Update status in file (implementation complete) |
+| proposed → accepted | Update status after approval under the project's decision process |
 | → deprecated | Update status + **rename with `_` prefix** |
 | → superseded by ADR-XXXX | Update status + **rename with `_` prefix** |
 
@@ -102,7 +102,7 @@ server-side with RS256 signatures per the security decision.
 
 ### On Completion
 
-When implementation is complete, update ADR status:
+When implementation is complete, check the project's decision process. Update proposed → accepted only if its acceptance criteria are met and the decision is approved. The following example assumes that approval:
 
 ```bash
 # Edit the ADR to change status from "proposed" to "accepted"
@@ -111,8 +111,8 @@ When implementation is complete, update ADR status:
 git add docs/ADR/20250115-use-jwt-auth.md
 git commit -m "docs(adr): mark JWT auth decision as accepted
 
-Implementation complete in auth/ module. Token rotation
-added as enhancement beyond original scope."
+The decision is approved under the project's acceptance process.
+The auth/ implementation follows the accepted decision."
 ```
 
 ### On Deviation

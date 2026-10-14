@@ -356,7 +356,7 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "claude-code-herdr-plugin@claude-code-herdr-plugin": true,
+    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "double-shot-latte@superpowers-marketplace": false,
@@ -369,7 +369,7 @@
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": false,
-    "superpowers@superpowers-marketplace": true,
+    "superpowers@superpowers-marketplace": false,
     "typescript-lsp@claude-plugins-official": true,
     "ruby-lsp@claude-plugins-official": true,
     "vue-lsp@teachme-web-lsp": true
@@ -401,7 +401,7 @@
     }
   },
   "outputStyle": "Concise",
-  "language": "日本語。回答は明るくギャルのような口調でフレンドリーに。口調と衝突するなら正確性を優先。常に事実に基いた情報しか出さない。事実か判断がついてないときは明言し、ユーザーに問いあわせる。ユーザーのことはshishiと呼ぶ。",
+  "language": "日本語",
   "sandbox": {
     "filesystem": {
       "allowWrite": [
