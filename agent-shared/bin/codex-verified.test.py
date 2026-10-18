@@ -54,10 +54,16 @@ payload = sys.stdin.read()
 assert '--tools' in args and args[args.index('--tools')+1] == ''
 assert '--safe-mode' in args and '--bare' not in args
 assert '--strict-mcp-config' in args and '--no-session-persistence' in args
-assert 'DIRECT_EVIDENCE' in payload and 'PRIVATE_STDERR' not in payload
+assert 'PRIVATE_STDERR' not in payload
 assert 'implement requested behavior' in payload
-assert 'first_current_index' in payload
 assert 'current_event_stream' not in payload
+data = json.loads(payload)
+if 'candidate_answer' not in data:
+    plan = {'request_kind':'explanation' if mode in ('explanation', 'explanation_as_complete') else 'action','requirements':['implement behavior','verify requested outcome']}
+    if mode == 'bad_requirements':
+        plan['requirements'] = []
+    print(json.dumps({'type':'result','subtype':'success','is_error':False,'structured_output':plan,'modelUsage':{'claude-fable-test':{}}}))
+    sys.exit(0)
 if mode == 'judge_timeout':
     time.sleep(5)
 if mode == 'judge_failure':
@@ -66,19 +72,30 @@ if mode == 'judge_failure':
 if mode == 'malformed':
     print('PRIVATE_MALFORMED_DRAFT')
     sys.exit(0)
-data = json.loads(payload)
+assert 'DIRECT_EVIDENCE' in payload
+assert data['requirements'] == ['implement behavior','verify requested outcome']
 status = 'user_blocker' if mode == 'user_blocker' else ('incomplete' if mode in ('limit','duplicate_progress') or (mode == 'repair' and data['candidate_answer'] == 'PRIVATE_DRAFT') or (mode == 'progress_reset' and data['attempt'] < 4) or (mode == 'file_edit' and data['attempt'] < 3) else 'complete')
-verdict = {'status':status,'reason':'observed execution','evidence_indices':[0], 'remaining_work':['run missing verification'] if status == 'incomplete' else [], 'progress':False, 'progress_indices':[]}
-if mode == 'progress_reset' and data['attempt'] == 3:
-    verdict['progress'] = True
-    verdict['progress_indices'] = [data['first_current_index']]
-if mode in ('file_edit','duplicate_progress') and status == 'incomplete':
-    verdict['progress'] = True
-    verdict['progress_indices'] = [data['first_current_index'] + (1 if mode == 'file_edit' else 0)]
+verdict = {'status':status,'reason':'observed execution','remaining_work':['run missing verification'] if status == 'incomplete' else [], 'requirements':[{'requirement_index':i,'status':'supported','reason':'directly verified','evidence_indices':[0]} for i in range(2)]}
+if status == 'incomplete':
+    verdict['requirements'][1]['status'] = 'unproven'
 if mode == 'user_blocker':
     verdict['remaining_work'] = ['user must authenticate']
+    verdict['requirements'][1]['status'] = 'user_blocker'
 if mode == 'bad_evidence':
-    verdict['evidence_indices'] = [99]
+    verdict['requirements'][0]['evidence_indices'] = [99]
+if mode == 'missing_requirement':
+    verdict['requirements'].pop()
+if mode == 'unsupported_complete':
+    verdict['requirements'][1]['status'] = 'unproven'
+if mode == 'duplicate_requirement':
+    verdict['requirements'][1]['requirement_index'] = 0
+if mode == 'empty_evidence':
+    verdict['requirements'][1]['evidence_indices'] = []
+if mode in ('explanation', 'action_as_explanation'):
+    verdict['status'] = 'explanation'
+if mode in ('explanation', 'explanation_as_complete'):
+    for check in verdict['requirements']:
+        check['evidence_indices'] = []
 print(json.dumps({'type':'result','subtype':'success','is_error':False,'structured_output':verdict,'modelUsage':{'claude-fable-test':{}}}))
 '''
 
@@ -153,34 +170,36 @@ class VerifiedOutput(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.env['CODEX_VERIFIED_EXEC_TIMEOUT']='1'
                 self.env['CODEX_VERIFIED_JUDGE_TIMEOUT']='1'
+                before = len(self.calls('codex')) if (self.root/'calls').exists() else 0
+                self.assert_private_failure(self.run_wrapper(mode))
+                runs = [args for args in self.calls('codex')[before:] if 'exec' in args]
+                self.assertEqual(len(runs), 1)
+
+    def test_only_one_repair_even_with_new_file_edits(self):
+        for mode in ('limit', 'file_edit'):
+            with self.subTest(mode=mode):
+                before = len(self.calls('codex')) if (self.root/'calls').exists() else 0
+                self.assert_private_failure(self.run_wrapper(mode))
+                runs=[args for args in self.calls('codex')[before:] if 'exec' in args]
+                self.assertEqual(len(runs),2)
+                self.assertIn('resume', runs[1])
+                for args in runs:
+                    self.assertIn('--approve-for-me',args)
+                    self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
+
+    def test_every_original_requirement_must_be_proven(self):
+        for mode in ('missing_requirement', 'unsupported_complete', 'duplicate_requirement', 'empty_evidence', 'action_as_explanation', 'explanation_as_complete'):
+            with self.subTest(mode=mode):
                 self.assert_private_failure(self.run_wrapper(mode))
 
-    def test_three_attempts_without_progress_stop(self):
-        self.assert_private_failure(self.run_wrapper('limit'))
-        runs=[args for args in self.calls('codex') if 'exec' in args]
-        self.assertEqual(len(runs),3)
+    def test_invalid_requirements_stop_before_execution(self):
+        self.assert_private_failure(self.run_wrapper('bad_requirements'))
+        self.assertFalse(any('exec' in args for args in self.calls('codex')))
 
-    def test_new_execution_progress_resets_stale_attempt_counter(self):
-        result=self.run_wrapper('progress_reset')
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(result.stdout,'VERIFIED_FINAL\n')
-        runs=[args for args in self.calls('codex') if 'exec' in args]
-        self.assertEqual(len(runs),4)
-        for args in runs:
-            self.assertIn('--approve-for-me',args)
-            self.assertNotIn('--sandbox',args)
-            self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',args)
-
-    def test_repeated_file_edits_continue_until_verified(self):
-        result=self.run_wrapper('file_edit')
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(result.stdout,'VERIFIED_FINAL\n')
-        self.assertEqual((self.root/'result.txt').read_text(),'3')
-
-    def test_duplicate_progress_counts_as_stale_without_immediate_abort(self):
-        self.assert_private_failure(self.run_wrapper('duplicate_progress'))
-        runs=[args for args in self.calls('codex') if 'exec' in args]
-        self.assertEqual(len(runs),4)
+    def test_explanation_request_can_publish_without_execution_citations(self):
+        result = self.run_wrapper('explanation')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, 'VERIFIED_FINAL\n')
 
     def test_genuine_user_blocker_can_include_user_remaining_action(self):
         result=self.run_wrapper('user_blocker')
