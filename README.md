@@ -54,6 +54,20 @@ CLI の実績は `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` の JSONL �
 応答本文を含めず、取得できた使用量と実検証結果を担当選択に使います。
 利用枠の取得失敗は不明として扱い、呼出回数を残量に換算しません。
 
+## 検査後に回答を表示する CLI
+
+`codex-verified.sh` は Codex の作業出力と回答草稿を保持し、Claude が依頼・実行証拠・
+回答を照合した後に、検査を通った回答だけを表示します。未達なら同じ Codex セッションで
+作業を続けます。検査失敗時には草稿を表示しません。
+
+```sh
+bash ~/.agent-shared/bin/codex-verified.sh '実行する依頼'
+```
+
+Codex と Claude Code の既存のサブスクリプション認証、gitleaks、jq、Python 3.11 以降が必要です。
+既存の実行ガードと承認を維持します。この入口は非対話 CLI 用で、標準 Desktop 画面や
+通常の対話 CLI の表示を置き換えません。
+
 ## 個人記憶の参照
 
 記憶本文は private repo `agent-memory` に置き、両エージェントの `memory/` から参照します。
