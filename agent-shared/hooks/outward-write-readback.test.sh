@@ -18,7 +18,7 @@ PASS=0
 FAIL=0
 
 observe() {
-  jq -n --arg cmd "$1" '{tool_input:{command:$cmd},tool_response:{stdout:"https://github.com/example/repo/pull/1"}}' |
+  jq -n --arg cmd "$1" --arg key "${2:-command}" '{tool_input:{($key):$cmd},tool_response:{stdout:"https://github.com/example/repo/pull/1"}}' |
     bash "$HOOK" | jq -r '.hookSpecificOutput.additionalContext'
 }
 check() {
@@ -31,6 +31,8 @@ check() {
 
 out=$(observe 'gh pr edit 1 --body-file -')
 check '本文を取得しても本文自身は注入しない' "$out" '本文を取得した'
+out=$(observe 'gh pr edit 1 --body-file -' cmd)
+check 'native cmd 入力でも取得処理へ到達する' "$out" '本文を取得した'
 READBACK_BODY=''
 out=$(observe 'gh pr edit 1 --body-file -')
 check '空の本文も取得成功として扱う' "$out" '本文を取得した'

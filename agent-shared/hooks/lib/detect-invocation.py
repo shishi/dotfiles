@@ -13,7 +13,7 @@
 その前にヒアドキュメント本文を取り除く。本文はコマンドではないうえ、改行を区切りに変えると
 本文の各行が起動に見えてしまうため。
 
-stdin から hook の JSON を読み、tool_input.command を対象にする。
+stdin から hook の JSON を読み、tool_input.command または tool_input.cmd を対象にする。
 クォートが閉じていない等で解析できない場合は EPARSE 行で伝える
 (呼び出し側が保守的に倒せるようにするため、無音にはしない)。
 """
@@ -85,7 +85,8 @@ def invocations(command, names):
 def main():
     names = set(sys.argv[1:])
     try:
-        command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+        tool_input = json.load(sys.stdin).get("tool_input", {})
+        command = tool_input.get("command") or tool_input.get("cmd", "")
     except Exception:
         return 0
 

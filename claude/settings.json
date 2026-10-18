@@ -180,12 +180,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh",
-            "timeout": 10,
-            "statusMessage": "git push ガード確認中..."
-          },
-          {
-            "type": "command",
             "command": "bash ~/.agent-shared/hooks/reboot-guard.sh",
             "timeout": 10,
             "statusMessage": "OS 再起動の明示許可を確認中..."
@@ -278,11 +272,6 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/userpromptsubmit-compact-reminder.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/git-push-guard.sh --record-approval",
             "timeout": 10
           },
           {
