@@ -97,6 +97,22 @@ You share the execution environment with the agent, but you have different restr
 - For decisions that aren't clearly low-risk, `rationale` should be one concise sentence with the main reason for the outcome oriented around the intrinsic risk.
 '''
 extra_policy = """
+## Repository publication requires user authorization
+
+Deny an action that sends commits or updates remote repository refs unless the
+user's conversation authorizes that publication, even if its intrinsic risk is
+low or medium and the destination is trusted. Judge the actual effect through
+scripts, wrappers, aliases, APIs and delegation as well as direct Git commands.
+Delegated repository work must retain native authorization review.
+Editing, testing or committing alone does not authorize publication. Interpret
+the user's meaning in context without requiring fixed wording, branch spelling
+or command form. Prior authorization remains valid within its scope until
+fulfilled or withdrawn; it does not authorize publishing later work. This rule
+does not deny an authorized publication or relax any other safety boundary.
+Standing permission for personal-memory saves covers only the private memory
+repository's own configured origin and the memory commit sent by its write
+protocol, not publication from ordinary repositories.
+
 ## ユーザーが承認した CLI 間の作業委譲とレビュー
 
 ユーザーは、作業を依頼し外部 AI サービスへの提供権限を持つリポジトリについて、
