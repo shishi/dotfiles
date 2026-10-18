@@ -465,7 +465,7 @@ trusted_hash = "sha256:322e29cecf9c90e851a166aedb63d1564325d7fac9b4df6cc08725810
 trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da1420607277e01c2"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:3"]
-trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
+trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
 
 [hooks.state."/home/shishi/.codex/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:46b87f5e0e8386d5ae7ba87248a14354a423e6e0a5a232950a6941fa78946a1f"
@@ -480,7 +480,7 @@ trusted_hash = "sha256:3279e78514cab7ae582b7e12fa3499a491f6516885522fb05e48a10cd
 trusted_hash = "sha256:b84f1092c5f5a64ad83c5ff60224907eeec4ea010d73b3c52bc0adefdc12f159"
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:pre_tool_use:0:3"]
-trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
+trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
 
 [hooks.state."/Users/shigenobu.407/.codex/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:46b87f5e0e8386d5ae7ba87248a14354a423e6e0a5a232950a6941fa78946a1f"
@@ -666,7 +666,7 @@ trusted_hash = "sha256:3279e78514cab7ae582b7e12fa3499a491f6516885522fb05e48a10cd
 trusted_hash = "sha256:b84f1092c5f5a64ad83c5ff60224907eeec4ea010d73b3c52bc0adefdc12f159"
 
 [hooks.state."/home/shishi/dev/src/github.com/shishi/dotfiles/codex/hooks.json:pre_tool_use:0:3"]
-trusted_hash = "sha256:d002eb0dbe87d32f47b91ebd85c2552da2f030f5539e1b5bf565b20664eb247c"
+trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
 
 [hooks.state."/home/shishi/dev/src/github.com/shishi/dotfiles/codex/hooks.json:pre_tool_use:0:4"]
 trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
