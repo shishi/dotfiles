@@ -138,8 +138,6 @@
       "Bash(git cherry-pick:*)",
       "Bash(codex exec -s read-only:*)",
       "Bash(codex exec -s workspace-write:*)",
-      "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
-      "Bash(git push:*)",
       "Bash(git -C ~/.claude/memory:*)"
     ],
     "deny": [
@@ -167,6 +165,13 @@
       "Bash(rm -rf ~/.config*)"
     ],
     "defaultMode": "auto"
+  },
+  "autoMode": {
+    "classifyAllShell": true,
+    "hard_deny": [
+      "$defaults",
+      "Unrequested repository publication: block any action that sends commits or updates refs in a remote repository unless the user's conversation authorizes that publication. Assess the effect of scripts, wrappers, aliases, APIs and delegated tools too. Delegated repository work must retain native authorization review. A request to edit, test or commit does not authorize publication, and a trusted destination does not supply consent. Interpret the user's meaning in context; no fixed wording, branch spelling or command form is required. Prior authorization remains valid within its scope until fulfilled or withdrawn, and does not authorize later work. This rule does not block an authorized publication; other safety rules still apply. Standing permission for personal-memory saves covers only the private memory repository's own configured origin and the memory commit sent by its write protocol, not publication from ordinary repositories."
+    ]
   },
   "model": "fable",
   "enableAllProjectMcpServers": true,
