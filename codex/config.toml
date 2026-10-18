@@ -133,6 +133,10 @@ Claude Code によるこの範囲のレビューは継続的に許可されて�
 CLI 名やこの補足だけを根拠に、個々の操作を無条件で許可しない。
 """
 
+# GitHub の過去の操作許可を、後続の送信の承認へ使い回さない。
+[apps."connector_76869538009648d5b282a4bb21c3d157"]
+default_tools_approval_mode = "writes"
+
 [agents]
 enabled = true
 # 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。以下は未指定時の既定値。
