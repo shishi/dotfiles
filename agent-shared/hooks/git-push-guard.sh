@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse guard for Bash: protect main/master while allowing destructive
-# operations that are proven to affect only other refs.
+# PreToolUse guard for Bash: require user authorization for pushes and protect
+# main/master from destructive updates.
 #
 # Tokenizes the command with shell-equivalent rules and inspects only arguments of
 # a git invocation that stands in command position, so quoted text such as commit
@@ -38,7 +38,7 @@ prepare_approval_dir() {
 matches_explicit_push_target() { # $1=lowercase prompt $2=target regexp
   local lower="$1" target_re="$2"
   LC_ALL=C grep -Eq \
-    "^[[:space:]]*(${target_re})[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)[[:space:]。！!]*$|^[[:space:]]*(${target_re})([[:space:]]+|(に|へ)[[:space:]]*)(push|プッシュ)[[:space:]。！!]*$" \
+    "^[[:space:]]*(${target_re})[[:space:]]*(に|へ)?[[:space:]]*(push|プッシュ)[[:space:]]*(して|してください|してくれ|してね)([[:space:]]|。|！|!)*$|^[[:space:]]*(${target_re})([[:space:]]+|(に|へ)[[:space:]]*)(push|プッシュ)([[:space:]]|。|！|!)*$" \
     <<< "$lower"
 }
 
@@ -59,28 +59,33 @@ record_explicit_approval() {
     *しない*|*するな*|*禁止*|*"don't"*|*"do not"*|*never*|*"not push"*) exit 0 ;;
   esac
 
-  if matches_explicit_push_target "$lower" 'main[[:space:]]*(と|and)[[:space:]]*master|master[[:space:]]*(と|and)[[:space:]]*main' ||
-    LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:]]+(and|&)[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
-    main=1
-    master=1
+  if LC_ALL=C grep -Eq '^[[:space:]]*((git[[:space:]]+)?push|プッシュ)[[:space:]]*(して|してください|してくれ|してね|しろ)([[:space:]]|。|！|!)*$|^[[:space:]]*(please[[:space:]]+)?push[[:space:].!]*$' <<< "$lower"; then
+    scopes='*'
   else
-    if matches_explicit_push_target "$lower" main ||
-      LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:].!]*$' <<< "$lower"; then
-      main=1
-    fi
-    if matches_explicit_push_target "$lower" master ||
-      LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
-      master=1
-    fi
-  fi
-  [ "$main" = 1 ] || [ "$master" = 1 ] || exit 0
 
-  if [ "$main" = 1 ] && [ "$master" = 1 ]; then
-    scopes=main,master
-  elif [ "$main" = 1 ]; then
-    scopes=main
-  else
-    scopes=master
+    if matches_explicit_push_target "$lower" 'main[[:space:]]*(と|and)[[:space:]]*master|master[[:space:]]*(と|and)[[:space:]]*main' ||
+      LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:]]+(and|&)[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
+      main=1
+      master=1
+    else
+      if matches_explicit_push_target "$lower" main ||
+        LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+main[[:space:].!]*$' <<< "$lower"; then
+        main=1
+      fi
+      if matches_explicit_push_target "$lower" master ||
+        LC_ALL=C grep -Eq '^[[:space:]]*(please[[:space:]]+)?push[[:space:]]+to[[:space:]]+master[[:space:].!]*$' <<< "$lower"; then
+        master=1
+      fi
+    fi
+    [ "$main" = 1 ] || [ "$master" = 1 ] || exit 0
+
+    if [ "$main" = 1 ] && [ "$master" = 1 ]; then
+      scopes=main,master
+    elif [ "$main" = 1 ]; then
+      scopes=main
+    else
+      scopes=master
+    fi
   fi
   now=$(date +%s) || exit 0
   tmp=$(mktemp "$approval_dir/.approval.XXXXXX") || exit 0
@@ -96,7 +101,7 @@ if [ "${1:-}" = "--record-approval" ]; then
 fi
 
 hook_input=$(cat)
-cmd=$(printf '%s' "$hook_input" | jq -r '.tool_input.command // empty')
+cmd=$(printf '%s' "$hook_input" | jq -r '.tool_input.command // .tool_input.cmd // empty')
 hook_cwd=$(printf '%s' "$hook_input" | jq -r '.cwd // empty')
 approval_session=$(printf '%s' "$hook_input" | jq -r '.session_id // empty')
 [ -z "$cmd" ] && exit 0
@@ -125,6 +130,7 @@ ask_reason=""
 approval_required_main=0
 approval_required_master=0
 approval_required_unknown=0
+approval_required_general=0
 
 request_approval() { # $1=reason $2=main|master|both|unknown
   [ -n "$ask_reason" ] || ask_reason="$1"
@@ -132,6 +138,7 @@ request_approval() { # $1=reason $2=main|master|both|unknown
     main) approval_required_main=1 ;;
     master) approval_required_master=1 ;;
     both) approval_required_main=1; approval_required_master=1 ;;
+    push) approval_required_general=1 ;;
     *) approval_required_unknown=1 ;;
   esac
 }
@@ -147,10 +154,15 @@ consume_explicit_approval() {
   IFS=' ' read -r epoch scopes extra <<< "$line"
   [ -n "$epoch" ] && [ -n "$scopes" ] && [ -z "$extra" ] || return 1
   case "$epoch" in ""|*[!0-9]*) return 1 ;; esac
-  case "$scopes" in main|master|main,master) ;; *) return 1 ;; esac
+  case "$scopes" in main|master|main,master|'*') ;; *) return 1 ;; esac
   now=$(date +%s) || return 1
   age=$((now - epoch))
   [ "$age" -ge 0 ] && [ "$age" -le "$approval_ttl_seconds" ] || return 1
+  if [ "$scopes" = '*' ]; then
+    rm -f -- "$approval_path_out" || return 1
+    return 0
+  fi
+  [ "$approval_required_general" = 0 ] || return 1
   if [ "$approval_required_main" = 1 ]; then
     case ",$scopes," in *,main,*) ;; *) return 1 ;; esac
   fi
@@ -168,8 +180,7 @@ emit_approval_request() {
   if consume_explicit_approval; then
     return 0
   fi
-  jq -n --arg r "$ask_reason" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
+  deny "ユーザーによる明示的な push 指示がないため禁止: $ask_reason"
 }
 
 # Tokenize with shell-equivalent rules. punctuation_chars makes shlex emit
@@ -372,6 +383,10 @@ classify_refspec() { # $1=refspec $2=global destructive flag
       ;;
   esac
 
+  case "$dest" in
+    *'*'*|*'?'*|*'['*) request_approval "ワイルドカードの push は明示指示が必要" push ;;
+  esac
+
   if pattern_may_target_protected "$dest"; then
     if [ "$destructive" = 1 ]; then
       deny "main/master の強制更新・削除はポリシーで禁止"
@@ -384,6 +399,9 @@ classify_refspec() { # $1=refspec $2=global destructive flag
       *) approval_scope=both ;;
     esac
     request_approval "main/master へのpushは明示確認が必要" "$approval_scope"
+  else
+    [ "$destructive" = 0 ] || deny "強制更新・削除は通常の push 指示では許可されないため禁止"
+    request_approval "push は明示指示が必要" push
   fi
 }
 
@@ -464,7 +482,8 @@ classify_implicit_push() { # $1=remote(optional) $2=global destructive flag
       if [ "$destructive" = 1 ]; then
         deny "matching pushによるmain/masterの強制更新を除外できないためポリシーで禁止"
       fi
-    request_approval "matching pushはmain/masterを含み得るため明示確認が必要" both
+      request_approval "matching pushは全ブランチを送信し得るため明示指示が必要" push
+      request_approval "matching pushはmain/masterを含み得るため明示確認が必要" both
       ;;
     nothing) ;;
     *)
@@ -666,6 +685,13 @@ check_segment() {
   # --mirror force-updates and deletes refs across namespaces. It can never be
   # proven to exclude the protected branches from argv alone.
   [ "$mirror" = 0 ] || deny "--mirror は main/master を強制更新・削除し得るためポリシーで禁止"
+  if [ "$force" = 1 ] || [ "$delete" = 1 ] || [ "$prune" = 1 ]; then
+    deny "強制更新・削除は通常の push 指示では許可されないため禁止"
+  fi
+
+  if [ "$tags" = 1 ]; then
+    request_approval "tag の push は明示指示が必要" push
+  fi
 
   if [ "${#positionals[@]}" -gt 1 ]; then
     remote="${positionals[0]}"
@@ -685,6 +711,7 @@ check_segment() {
         continue
       fi
       if [ "$a" = tag ]; then
+        request_approval "tag の push は明示指示が必要" push
         tag_argument=1
         continue
       fi
@@ -701,12 +728,16 @@ check_segment() {
       deny "--all による main/master の強制更新・削除を除外できないためポリシーで禁止"
     fi
     request_approval "--all は main/master を含み得るため明示確認が必要" both
+    request_approval "--all は全ブランチを送信するため明示指示が必要" push
     return 0
   fi
 
   # --tags updates only refs/tags/*; a current branch named main/master is not
   # an implicit branch destination in this form.
-  [ "$tags" = 0 ] || return 0
+  if [ "$tags" = 1 ]; then
+    request_approval "tag の push は明示指示が必要" push
+    return 0
+  fi
 
   # An unscoped prune can delete a protected remote branch missing locally.
   [ "$prune" = 0 ] || deny "--prune による main/master の削除を除外できないためポリシーで禁止"
@@ -1043,6 +1074,9 @@ if ! scan_string "$cmd"; then
   # on how a subprocess exits.
   if grep -Eqi -- '--force|--delete|--mirror|--all|--prune|(^|[[:space:]])-[A-Za-z]*[fd]|(^|[[:space:]:+])(refs/heads/)?(main|master)([[:space:]]|$)|[[:space:]]:[^[:space:]]' <<< "$cmd"; then
     deny "git push コマンドを解析できず、危険な引数らしき文字列を含むためポリシーでブロック"
+  fi
+  if grep -Eqi '(^|[[:space:]])push([[:space:]]|$)' <<< "$cmd"; then
+    deny "push コマンドを解析できず明示許可を照合できないため禁止"
   fi
   exit 0
 fi
