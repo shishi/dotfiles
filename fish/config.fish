@@ -18,6 +18,11 @@ if not set -q __dotfiles_fish_initialized
     set -x GOPATH ~/dev/
 
     if [ (uname) = Darwin ]
+        # Codex の内蔵プラグインが ~/.codex のリンク先を同じホームとして扱えるようにする。
+        if not set -q CODEX_HOME; and test -d "$HOME/.codex"
+            set -gx CODEX_HOME (path resolve "$HOME/.codex")
+        end
+
         if type gls &>/dev/null
             set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
             set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
