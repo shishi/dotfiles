@@ -272,6 +272,8 @@ git-worktree-root = ".worktrees"
 keepRemoteControlAwakeWhilePluggedIn = true
 "browser-family-enabled:brave" = true
 open-link-in-target-preference = "external-browser"
+default-workspace-full-view = true
+composerPlainTextMode = true
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -571,7 +573,7 @@ trusted_hash = "sha256:ac8a5c0d75af3efcfc23d9ec4744396e65f056c3abbf7a768d2fe1426
 trusted_hash = "sha256:3611a433040131f5ee87c4b4af5470e87ef891d5a5f020ee16b898de39447985"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:4']
-trusted_hash = "sha256:72f5e3c480d85fb091591075dd7c63fc3260cabbf255c1f4495cd0571d31370f"
+trusted_hash = "sha256:fd0e84cf09d8f0d50a859f959a407422bd0bd82ae3ebbd6838a9403da52a4ad1"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:5']
 trusted_hash = "sha256:fb30f276cf6f34bc5e11339ebdd9fbd99735b204fe57cb2ef1ff920596c362ce"
@@ -583,7 +585,7 @@ trusted_hash = "sha256:ab71e29896563d9d9e0da90a31a0c249baab5fc801f4ab53e0f65943f
 trusted_hash = "sha256:fd0e84cf09d8f0d50a859f959a407422bd0bd82ae3ebbd6838a9403da52a4ad1"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:1:0']
-trusted_hash = "sha256:56cd5569f27f53b0db763390be46a678c9652fe8eb90ef658ea4d96d8d7807ae"
+trusted_hash = "sha256:eeae30faa5c7d4d4adcca14eeef1df6e2be9ece3b1cf315013ed9dc09d45a756"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:1:1']
 trusted_hash = "sha256:eeae30faa5c7d4d4adcca14eeef1df6e2be9ece3b1cf315013ed9dc09d45a756"
@@ -737,3 +739,11 @@ extends = ":workspace"
 [notice]
 hide_rate_limit_model_nudge = true
 
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:2:0']
+trusted_hash = "sha256:14a170135637297214ea06283496c4a8f7c88c2672c052d401df99b4e336e967"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:3:0']
+trusted_hash = "sha256:50acf1fcb8b89d70710a13f004847e397055f3101c35a728c1488e41e3ea7892"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:1:0']
+trusted_hash = "sha256:d8db0a182f4e219a44804ea0414f0853188f4202883a531a421db57dfbc566db"
