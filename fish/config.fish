@@ -13,16 +13,28 @@ if not set -q __dotfiles_fish_initialized
     # nh(nix-config)の対象 flake。引数なし `nh home switch` など用。非 nix マシンでは無害
     set -x NH_FLAKE ~/dev/src/github.com/shishi/nix-config
 
+    # ghq 配下の dotfiles を使い、~/.codex のリンク状態には依存しない。
+    if not set -q CODEX_HOME
+        set -l codex_ghq_root "$GHQ_ROOT"
+        if test -z "$codex_ghq_root"
+            set -l codex_ghq_roots (git config --global --type=path --get-all ghq.root 2>/dev/null)
+            set codex_ghq_root "$codex_ghq_roots[1]"
+        end
+        if test -z "$codex_ghq_root"
+            set codex_ghq_root "$HOME/dev/src"
+        end
+        set codex_ghq_root (string replace -r '^~($|/)' "$HOME/" -- "$codex_ghq_root")
+        set -l codex_dotfiles_home "$codex_ghq_root/github.com/shishi/dotfiles/codex"
+        if test -d "$codex_dotfiles_home"
+            set -gx CODEX_HOME (path resolve "$codex_dotfiles_home")
+        end
+    end
+
     set -x GO111MODULE on
     set -x GOBIN ~/.local/bin
     set -x GOPATH ~/dev/
 
     if [ (uname) = Darwin ]
-        # Codex の内蔵プラグインが ~/.codex のリンク先を同じホームとして扱えるようにする。
-        if not set -q CODEX_HOME; and test -d "$HOME/.codex"
-            set -gx CODEX_HOME (path resolve "$HOME/.codex")
-        end
-
         if type gls &>/dev/null
             set -x PATH /usr/local/opt/coreutils/libexec/gnubin $PATH
             set -x MANPATH /usr/local/opt/coreutils/libexec/gnuman $MANPATH
