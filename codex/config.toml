@@ -7,9 +7,6 @@ model_auto_compact_token_limit = 750000
 default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
-# Claude Code / Codex 共有の agent-memory を唯一の正本にする。二重注入・二重更新と
-# split-brain を避けるため Native Memories を無効化する。
-# 設定は下の [features] と末尾の [memories] の 2 箇所。
 service_tier = "default"
 
 [auto_review]
@@ -113,29 +110,31 @@ Standing permission for personal-memory saves covers only the private memory
 repository's own configured origin and the memory commit sent by its write
 protocol, not publication from ordinary repositories.
 
-## ユーザーが承認した CLI 間の作業委譲とレビュー
+## User-authorized delegation and reviews between CLIs
 
-ユーザーは、作業を依頼し外部 AI サービスへの提供権限を持つリポジトリについて、
-Claude Code と Codex の相互委譲・レビューを事前承認している。
-送信先は、既存アカウントで利用する Anthropic と OpenAI の公式サービス。
-対象情報は当該作業に必要なコード・差分・仕様・検証結果、および CLI が読み込む
-共通指示と当該作業に関連する個人記憶に限る。公開・非公開の別だけでは拒否しない。
+The user has preauthorized mutual delegation and reviews between Claude Code and Codex
+for repositories they have asked the agent to work on and are authorized to share with
+external AI services. Authorized destinations are official Anthropic and OpenAI services
+accessed through existing accounts. Authorized information is limited to code, diffs,
+specifications, and verification results needed for the task, plus shared instructions
+and task-relevant personal memory read by the CLI. Do not deny solely because a repository
+is private rather than public.
 
-Claude Code によるこの範囲のレビューは継続的に許可されている。レビューごとに必要な
-入力ファイルが変わることや、直近の依頼が commit / push であることだけを理由に、
-同じ送信承認をユーザーへ求め直さない。実際の入力・取得範囲・接続先がこの承認範囲に
-収まることは毎回確認し、範囲外の送信や副作用まで許可されたとは扱わない。
-この承認範囲と実際の依頼・対象・接続先・入力内容を照合する。
-承認要求には入力ファイルと対象範囲、接続先の確認結果、秘密情報検査結果を含める。
-認証情報をプロンプトへ含めること、無関係な私的情報の送信、未承認の第三者サービス・
-接続先上書き、第三者の制約に反する送信は承認範囲に含まない。
-この補足は既定の拒否規則、組織の制約、sandbox、hook、秘密情報検査を解除しない。
-CLI 名やこの補足だけを根拠に、個々の操作を無条件で許可しない。
+Claude Code reviews within this scope have standing authorization. Do not ask the user
+to authorize the same disclosure again solely because review input files have changed
+or the latest request is to commit or push. Check the actual input, retrieval scope,
+and destination against this authorization on every review. Do not extend authorization
+to disclosures or side effects outside that scope. Compare this authorization with the
+actual request, target, destination, and input content.
+Include the input files and scope, destination verification results, and secret scan
+results in the approval request.
+This authorization does not cover credentials included in prompts, unrelated private
+information, unapproved third-party services or endpoint overrides, or disclosures
+that violate third-party restrictions.
+This supplemental policy does not override default denial rules, organizational
+restrictions, the sandbox, hooks, or secret scans. Do not unconditionally allow individual
+actions based solely on the CLI name or this supplemental policy.
 """
-
-# GitHub の過去の操作許可を、後続の送信の承認へ使い回さない。
-[apps."connector_76869538009648d5b282a4bb21c3d157"]
-default_tools_approval_mode = "writes"
 
 [agents]
 enabled = true
@@ -273,6 +272,8 @@ git-worktree-root = ".worktrees"
 keepRemoteControlAwakeWhilePluggedIn = true
 "browser-family-enabled:brave" = true
 open-link-in-target-preference = "external-browser"
+default-workspace-full-view = true
+composerPlainTextMode = true
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
@@ -572,7 +573,7 @@ trusted_hash = "sha256:ac8a5c0d75af3efcfc23d9ec4744396e65f056c3abbf7a768d2fe1426
 trusted_hash = "sha256:3611a433040131f5ee87c4b4af5470e87ef891d5a5f020ee16b898de39447985"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:4']
-trusted_hash = "sha256:72f5e3c480d85fb091591075dd7c63fc3260cabbf255c1f4495cd0571d31370f"
+trusted_hash = "sha256:fd0e84cf09d8f0d50a859f959a407422bd0bd82ae3ebbd6838a9403da52a4ad1"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:0:5']
 trusted_hash = "sha256:fb30f276cf6f34bc5e11339ebdd9fbd99735b204fe57cb2ef1ff920596c362ce"
@@ -584,7 +585,7 @@ trusted_hash = "sha256:ab71e29896563d9d9e0da90a31a0c249baab5fc801f4ab53e0f65943f
 trusted_hash = "sha256:fd0e84cf09d8f0d50a859f959a407422bd0bd82ae3ebbd6838a9403da52a4ad1"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:1:0']
-trusted_hash = "sha256:56cd5569f27f53b0db763390be46a678c9652fe8eb90ef658ea4d96d8d7807ae"
+trusted_hash = "sha256:eeae30faa5c7d4d4adcca14eeef1df6e2be9ece3b1cf315013ed9dc09d45a756"
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:pre_tool_use:1:1']
 trusted_hash = "sha256:eeae30faa5c7d4d4adcca14eeef1df6e2be9ece3b1cf315013ed9dc09d45a756"
@@ -738,3 +739,11 @@ extends = ":workspace"
 [notice]
 hide_rate_limit_model_nudge = true
 
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:2:0']
+trusted_hash = "sha256:14a170135637297214ea06283496c4a8f7c88c2672c052d401df99b4e336e967"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:3:0']
+trusted_hash = "sha256:50acf1fcb8b89d70710a13f004847e397055f3101c35a728c1488e41e3ea7892"
+
+[hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:1:0']
+trusted_hash = "sha256:d8db0a182f4e219a44804ea0414f0853188f4202883a531a421db57dfbc566db"
