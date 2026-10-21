@@ -65,7 +65,7 @@ hook はイベント処理・実行前ガード・短いリマインダー、ski
 ### 作業の割当と利用枠
 
 - 通常は Codex を司令塔にし、Claude で開始した仕事は Claude が司令塔を続ける。調査・変更・検証を一まとまりの担当に渡し、工程名だけで往復させない。短い操作は親が処理する。委譲は必要なツール・権限、既存文脈、引継ぎと統合の負担、同種作業の実績、レビュー余力で選ぶ。
-- Claude からの一般作業は `codex-delegate`、Codex からは `claude-delegate` を使う。レビューは `codex-review` / `claude-review` と `review-gate` に分け、受託側で追加の独立レビューを重ねない。同一ファイルの writer は一人とし、並列書込は worktree を分けて統合後に検証する。
+- Claude から Codex への一般作業の委譲は `codex-delegate`、Codex から Claude へは `claude-delegate` を使う。レビューは `codex-review` / `claude-review` と `review-gate` に分け、受託側で追加の独立レビューを重ねない。同一ファイルの writer は一人とし、並列書込は worktree を分けて統合後に検証する。
 - 新しい委譲の前に、未完了仕事の必須レビューへ使う枠を残す。取得できる枠は `python3 ~/.agent-shared/bin/codex-usage.py` の観測時刻・各ウィンドウ・リセット日時を使う。Claude は取得できた公式制限イベントや使用状況だけを用い、Team の残量を status line や呼出回数から断定しない。取得不能は不明とし、保留レビューを先に処理して任意の追加委譲を絞る。実績が無い段階で固定比率や成功率ルーターを作らない。
 - 枠取得 helper は認証通信が必要で、Claude の `codex:*` 除外は Python 内の子に適用されない。Claude の Bash sandbox が妨げる場合は、その helper 呼出しに限り `dangerouslyDisableSandbox: true` を通常の承認経路で要求する。Codex では当該コマンドに `require_escalated` を使う。拒否された操作は迂回せず、恒久的な Python 全体の除外は追加しない。枠取得をモデルへの委譲と混同しない。
 - CLI の実行結果は各 adapter から `agent-run-record.sh` で `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` に記録する。司令塔がこの場所へ書ける経路を使い、Claude では当該記録呼出しだけ上記の Bash 承認経路、Codex では当該コマンドの昇格を使う。prompt・応答本文は履歴へコピーしない。検証成否・採用指摘数・手戻り回数と、割当前後に取得した枠の観測を review-gate の手順で追記する。観測時刻と provider を保持し、未取得値は null のままにする。トークン数・API 換算額・契約の残量を同一視せず、他セッションでも変わる枠の差分を一仕事の消費と断定しない。
@@ -129,7 +129,7 @@ hook はイベント処理・実行前ガード・短いリマインダー、ski
 
 ### 委譲先の選択
 
-最上位の Claude は、explore(read-only: 所在探索・原因調査・読解)、chore(workspace-write: 定型修正・テスト追加)、implement(feature / bugfix)では `codex-delegate` を優先する。上の循環禁止に従い、受託側の Claude はこの優先規則を使って Codex へ再委譲しない。Claude 固有のツールが必要な作業や Codex が利用できない場合は、Claude 内の子を候補にする。
+最上位の Claude は、Claude 内の子と `codex-delegate` を、上の「作業の割当と利用枠」と同じ基準で選ぶ。explore(所在探索・原因調査・読解)、chore(定型修正・テスト追加)、implement(feature / bugfix)という種別だけで Codex を優先しない。必要なツール・権限、既存文脈、引継ぎと統合の負担、同種作業の実績、レビュー余力から担当を決める。上の循環禁止に従い、受託側の Claude は Codex へ再委譲しない。
 
 - `codex-delegate` では委譲しない: 設計判断とユーザーとの対話が要る作業、レビュー(review-gate / codex-review skill の責務)、記憶 repo への書き込み。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しない。
 - タスクごとに決める: ネットワークを開けるか(既定は遮断)、`workspace-write` を今の worktree に流してよいか(codex の上書きは差分に現れないため、未コミット変更と範囲が重なるなら先に commit する)。
