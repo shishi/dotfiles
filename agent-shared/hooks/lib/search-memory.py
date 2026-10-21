@@ -108,9 +108,12 @@ def main():
         for title, path, cue in re.findall(r"^- \[([^\]]+)\]\(([^)]+)\)\s*—\s*(.*)$",
                                          index_content, re.MULTILINE)
     }
+    manual = event.get("memory_lookup_manual", False)
+    paths = git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines()
+    exact_path = prompt if manual and prompt in paths and prompt.endswith(".md") else None
     documents = []
-    for path in git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines():
-        if not path.endswith(".md") or path in {"MEMORY.md", "CONVENTIONS.md"}:
+    for path in [exact_path] if exact_path else paths:
+        if not path.endswith(".md") or (not exact_path and path in {"MEMORY.md", "CONVENTIONS.md"}):
             continue
         body = git(repo, "show", f"{snapshot}:{path}")
         headings = [heading.replace("プロジェクト記憶", "")
@@ -121,7 +124,7 @@ def main():
         metadata = " ".join([subject, *headings]).casefold()
         text = body.casefold()
         matches = {term for term, pattern in patterns.items() if pattern.search(text) or pattern.search(metadata)}
-        if matches:
+        if matches or path == exact_path:
             documents.append((path, body, metadata, matches, subject))
     frequency = {term: sum(term in doc[3] for doc in documents) for term in terms}
 
@@ -136,28 +139,28 @@ def main():
                                     -sum(bool(patterns[term].search(doc[4])) for term in doc[3]),
                                     -sum(bool(patterns[term].search(doc[2])) for term in doc[3]),
                                     -len(doc[3]), -score(doc), doc[0]))
-    # Body-only matches remain discoverable, but do not inject unrelated project histories.
-    # Explicit lookup is the escape from automatic selection, without weakening secret checks.
-    topic_terms = terms - {"整理", "削除", "追加", "更新", "修正", "改修", "ロード"}
-    candidates = [doc for doc in documents if event.get("memory_lookup_manual") or
-                  any(patterns[term].search(doc[2]) for term in doc[3] & topic_terms)]
-    body_only = [doc[0] for doc in documents if doc not in candidates]
+    candidates = documents
+    if exact_path:
+        candidates = [doc for doc in documents if doc[0] == exact_path]
     selected = []
     known = []
-    deferred = [doc[0] for doc in candidates[MAX_DOCUMENTS:]]
+    deferred = [doc[0] for doc in candidates[MAX_DOCUMENTS:]] if manual else []
     size = 0
     deliveries = []
     # Choose the relevance set before subtracting already-read content.
-    for path, body, *_ in candidates[:MAX_DOCUMENTS]:
+    for path, body, *_ in candidates[:MAX_DOCUMENTS] if manual else documents:
         if seen.get(path) == hashlib.sha256(body.encode()).hexdigest():
             known.append(path)
+            continue
+        if not manual:
+            deferred.append(path)
             continue
         preamble, parts = sections(body)
         matching = [(index, part) for index, part in enumerate(parts)
                     if any(pattern.search(part.casefold()) for pattern in patterns.values())]
         # A document-level match or shared-condition query needs the whole document.
         shared_text = re.sub(r"\A---\r?\n.*?\r?\n---\r?\n", "", preamble, count=1, flags=re.DOTALL)
-        if matching and not any(pattern.search(shared_text.casefold()) for pattern in patterns.values()):
+        if not exact_path and matching and not any(pattern.search(shared_text.casefold()) for pattern in patterns.values()):
             unread = [(index, part) for index, part in matching
                       if seen.get(f"{path}#section-{index}") != hashlib.sha256((preamble + part).encode()).hexdigest()]
             if not unread:
@@ -186,16 +189,26 @@ def main():
 
     lines = [f"[記憶検索] 確定済み記憶の語句検索: {len(documents)}件一致、本文取得{len(selected)}件。",
              "記憶は advisory。現在のユーザー指示と AGENTS.md を優先する。語句一致なので関連記憶の網羅を意味しない。"]
-    lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>",
+    if exact_path:
+        lines.append(f"取得元の確定 commit: {snapshot}")
+    else:
+        lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>",
                   "索引から依頼の対象・操作・制約に合う記憶を確認する。自動取得なし・既読は参照不要を意味しない。",
                   f"必要な本文は git -C {shlex.quote(repo)} show {snapshot}:<索引の相対パス> で取得する。"])
     if known:
         lines.append("既読の同一版: " + ", ".join(known))
     if deferred:
-        lines.append(f"自動取得上限（{MAX_DOCUMENTS}件・本文計{MAX_BODY_CHARS}文字）による未取得: " + ", ".join(deferred))
-        lines.append(f"必要な本文は git -C {shlex.quote(repo)} show {snapshot}:<上記の相対パス> で追加取得する。検索語を絞っての再検索も可能。")
-    if body_only:
-        lines.append("本文のみ一致（自動取得なし。索引で関連性を判断）: " + ", ".join(body_only))
+        if manual:
+            lines.append(f"取得上限（{MAX_DOCUMENTS}件・本文計{MAX_BODY_CHARS}文字）による未取得: " + ", ".join(deferred))
+            lines.append(f"全文が必要なら git -C {shlex.quote(repo)} show {snapshot}:<対象の相対パス> で取得する。")
+        else:
+            lines.append("語句検索の候補（この hook では本文を注入しない、関連性は未判定）: " + ", ".join(deferred))
+    if not manual:
+        lines.extend(["本文の自動注入は行わない。候補だけに限定せず索引から意味で選び、必要な未読本文を取得してから判断する。",
+                      "既読は注入済みの記録で、理解・適用を確認した記録ではない。",
+                      "手動 lookup や git show の読了はこの一覧へ自動反映しない。同版の読了は会話内の取得結果でも確認する。",
+                      f"検査付きの全文取得: bash {shlex.quote(str(Path(__file__).resolve().parent.parent / 'inject-memory.sh'))} {shlex.quote(repo)} lookup '<索引で選んだ相対パス>'。",
+                      f"検索語を渡す手動 lookup も利用できる。パス指定は語句の順位によらず対象を選ぶ。本文計{MAX_BODY_CHARS}文字の上限を超える場合は commit を指定した git show を使う。"])
     for path, _, excerpt, label in selected:
         lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, excerpt, "</retrieved-memory>"])
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",

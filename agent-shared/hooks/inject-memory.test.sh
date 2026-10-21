@@ -87,11 +87,19 @@ fi
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の問題に対応するため設定を調べる",hook_event_name:"UserPromptSubmit"}')
 # Windows Python の既定文字コードでも UTF-8 の hook JSON を読めることを含める。
 lookup() { printf '%s' "$lookup_payload" | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
+automatic_output=$(printf '%s' "$lookup_payload" | jq '.session_id += "-automatic"' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup)
+if printf '%s' "$automatic_output" | jq -e '.hookSpecificOutput.additionalContext | contains("spectraldb.md") and (contains("検索取得_SENTINEL") | not) and (contains("本文未取得") | not)' >/dev/null; then
+  ok "automatic lookup offers candidates without injecting unselected bodies"
+else
+  ng "automatic lookup offers candidates without injecting unselected bodies"
+fi
+# Explicit retrieval still exercises delivery tracking, ranking, sections and scanning.
+lookup() { printf '%s' "$lookup_payload" | jq '.memory_lookup_manual = true' | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
 output=$(lookup)
 if printf '%s' "$output" | jq -er '.hookSpecificOutput | select(.hookEventName=="UserPromptSubmit") | .additionalContext | select(contains("無関係_SENTINEL") | not)' | grep -q 検索取得_SENTINEL; then
-  ok "user input searches and retrieves a committed memory without a model read"
+  ok "an explicit query retrieves committed memory without unrelated body matches"
 else
-  ng "user input searches and retrieves a committed memory without a model read"
+  ng "an explicit query retrieves committed memory without unrelated body matches"
 fi
 output=$(lookup)
 if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | select(contains("INDEX_SENTINEL") and startswith("[記憶検索]") and (contains("[作業継続]") | not))' | grep -q '既読' && ! printf '%s' "$output" | grep -q 検索取得_SENTINEL; then
@@ -107,17 +115,32 @@ printf '# Other project プロジェクト記憶\n## 削除\n記憶を整理し�
 git -C "$MEMORY_DIR" add MEMORY.md context.md other-project.md
 git -C "$MEMORY_DIR" commit -qm index-routing
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-routing",prompt:"記憶を整理して不要なものを削除し、索引をつける"}')
-output=$(lookup)
-if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | contains("INDEX_ROUTE_BODY") and contains("other-project.md") and (contains("INCIDENTAL_MEMORY_BODY") | not)' >/dev/null; then
-  ok "index cues retrieve relevant memory without injecting incidental body matches"
+output=$(printf '%s' "$lookup_payload" | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup)
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext | (split("\n") | map(select(startswith("語句検索の候補"))) | join("\n") | contains("context.md") and contains("other-project.md")) and (contains("INDEX_ROUTE_BODY") | not) and (contains("INCIDENTAL_MEMORY_BODY") | not)' >/dev/null; then
+  ok "index cues expose candidates without committing to incidental body matches"
 else
-  ng "index cues retrieve relevant memory without injecting incidental body matches"
+  ng "index cues expose candidates without committing to incidental body matches"
 fi
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '記憶を整理して索引をつける')
 if printf '%s' "$output" | grep -q INCIDENTAL_MEMORY_BODY; then
   ok "explicit lookup can still retrieve body-only candidates"
 else
   ng "explicit lookup can still retrieve body-only candidates"
+fi
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup MEMORY.md)
+if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("INDEX_SENTINEL") and contains("<retrieved-memory path=\"MEMORY.md\">")' >/dev/null; then
+  ok "an explicitly selected index is retrieved rather than silently excluded"
+else
+  ng "an explicitly selected index is retrieved rather than silently excluded"
+fi
+printf '# Memory conventions\nCONVENTIONS_BODY\n' >"$MEMORY_DIR/CONVENTIONS.md"
+git -C "$MEMORY_DIR" add CONVENTIONS.md
+git -C "$MEMORY_DIR" commit -qm conventions-fixture
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup CONVENTIONS.md)
+if printf '%s' "$output" | grep -q CONVENTIONS_BODY; then
+  ok "an explicitly selected protocol is retrieved in full"
+else
+  ng "an explicitly selected protocol is retrieved in full"
 fi
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"lookup-test",prompt:"SpectralDB の問題に対応するため設定を調べる",hook_event_name:"UserPromptSubmit"}')
 printf '# SpectralDB\n新規記憶_SENTINEL\n' >"$MEMORY_DIR/new-topic.md"
@@ -229,6 +252,13 @@ if printf '%s' "$output" | grep -q AMBER_CHANGED && printf '%s' "$output" | grep
   ok "another section is still unread and includes shared conditions"
 else
   ng "another section is still unread and includes shared conditions"
+fi
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup sections.md)
+if printf '%s' "$output" | grep -q QUARTZ_BODY && printf '%s' "$output" | grep -q AMBER_CHANGED \
+  && ! printf '%s' "$output" | grep -q '<personal-memory-index>'; then
+  ok "an exact path retrieves the complete source without repeating the index"
+else
+  ng "an exact path retrieves the complete source without repeating the index"
 fi
 printf '\npassword = %s\n' "$secret_value" >>"$MEMORY_DIR/sections.md"
 git -C "$MEMORY_DIR" add sections.md
