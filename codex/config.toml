@@ -258,6 +258,7 @@ MCP_TOOL_TIMEOUT = "120000"
 
 [desktop]
 conversationDetailMode = "STEPS_COMMANDS"
+notifications-sound = "none"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
