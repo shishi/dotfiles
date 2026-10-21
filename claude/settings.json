@@ -175,9 +175,6 @@
   },
   "model": "fable",
   "enableAllProjectMcpServers": true,
-  "skillOverrides": {
-    "logging": "off"
-  },
   "hooks": {
     "PreToolUse": [
       {
