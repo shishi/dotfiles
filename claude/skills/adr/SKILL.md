@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Manage Architecture Decision Records and ADR-aligned development. Use when user says "we should use", "let's go with", asks "why did we choose X?", implements a feature that may have an ADR, updates ADR status, or needs to check alignment with existing decisions.
+description: 既存 ADR の理由・制約を調べる、意思決定の記録を作成・更新する、関連 ADR に沿って実装・レビューする場合に使います。会話上の選択やエージェントの作業計画だけでは ADR を新設しません。
 ---
 
 # INSTRUCTIONS
@@ -8,7 +8,7 @@ description: Manage Architecture Decision Records and ADR-aligned development. U
 Manage Architecture Decision Records (ADRs) throughout their lifecycle: read existing decisions, write new ones, and ensure development aligns with documented decisions.
 
 - **Template**: See `template.md` for the MADR structure (status, context, drivers, options, consequences)
-- **Operations**: See `operations.md` for directory discovery, naming conventions, commit integration, deprecation (`_` prefix), and ADR-aligned development workflow
+- **Operations**: See `operations.md` for directory discovery, naming conventions, commit integration, deprecation/supersession status, and ADR-aligned development workflow
 - **Queries**: See `queries.md` for finding ADRs by topic, status, or relationship
 
 ## Modes
@@ -35,7 +35,7 @@ Manage Architecture Decision Records (ADRs) throughout their lifecycle: read exi
 1. **Before implementation**: Check for relevant ADRs
 2. **During implementation**: Reference ADR in commits
 3. **On completion**: Check the project's acceptance criteria. Change proposed → accepted only when the decision has been approved under that process; implementation completion alone does not imply acceptance.
-4. **On deviation**: Create superseding ADR, deprecate old one with `_` prefix
+4. **On deviation**: Create superseding ADR, mark the old record as superseded using the repository's convention
 
 ## Quality Checklist
 

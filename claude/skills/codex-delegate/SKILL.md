@@ -1,11 +1,9 @@
 ---
 name: codex-delegate
 description: |
-  Claude Code の最上位司令塔から Codex CLI へ探索・定型変更・実装を委譲するアダプタ。
-  探索(read-only)・定型作業・実装を codex exec で実行し、
-  結果は schema で上限を切った JSON 1 通だけ受け取る。AGENTS.md の判断基準で
-  最上位の Claude から自律発火する、または /codex-delegate で明示発動。受託側からの再委譲には使わない。レビューは委譲しない
-  (review-gate / codex-review の責務)。
+  最上位の Claude Code から Codex CLI へ探索・定型変更・実装を委譲するときに使う。
+  担当範囲と受入条件を渡し、JSON で結果を受け取る。受託側からの再委譲には使わない。
+  独立レビューは codex-review / review-gate を使う。
 ---
 
 # Codex Delegate
@@ -121,7 +119,8 @@ Write ツールで書けば経路ごと存在しない。
 プロンプトに必ず入れる 4 つ:
 
 1. **タスク** — explore なら答えるべき問い、chore / implement なら変更の内容と受け入れ条件
-2. **範囲** — 見るべきファイル・ディレクトリを具体名で挙げる
+2. **範囲** — 担当ファイル・維持する保証・基準 commit・受入コマンド・期限を具体化する。
+   起動前の HEAD、stash、未コミット変更を確認し、他者変更を戻さないことを伝える
 3. **受託側の役割** — 下記の 3 行を逐語で入れる
 4. **出力** — 最終メッセージは指定された JSON schema に適合する JSON だけにすること
 
@@ -133,13 +132,17 @@ Do not run an independent review with a new agent. The delegating side reviews a
 Do not commit, stash, or create branches. Leave all changes in the working tree.
 ```
 
+検証コマンドと実結果は `findings` へ含めさせる。必要な作業や検証が残れば `partial` / `blocked`
+とし、ツールの終了だけで `done` としない。schema の容量に証拠が収まらない場合は担当範囲を
+分割し、根拠を捨てない。
+
 `~/.codex/AGENTS.md` は codex に独立レビューを求めるが、レビューは委譲した側が委譲後に行う。
 内側で走らせると二重になり、委譲 1 本の所要時間と OpenAI 枠の消費が増える。commit を禁じるのは、
 レビューゲートが commit の前に走るため、委譲先が commit すると Claude が差分を見る前に変更が
 確定するからである。無効化が効かなかった場合は差分を見る手順で気づく — commit されていれば
 `git log`、stash されていれば「変更が無いのに `changed_files` が非空」という食い違いに現れる。
 
-### 3. 走査・実行・結果の取り出し・後始末
+### 3. 走査・実行・結果の取り出し
 
 以下は explore の例。chore / implement はコマンド先頭の `-s read-only` を
 `-s workspace-write` へ直接置き換える。`codex exec` 行の許可 prefix に一致させるため、
@@ -151,7 +154,6 @@ case "${WORK##*/}" in (codex-delegate-??????) ;; (*) exit 96 ;; esac  # 1 回目
 [ -s "$WORK/prompt.md" ] || exit 96   # パスの貼り間違い、または Write がまだ
 gitleaks dir "$WORK/prompt.md" --no-banner || exit 98   # 検出あり・実行不能とも委譲しない
 mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、または目印を作れない
-trap 'rm -rf "$WORK"' EXIT            # ここから先だけが後始末の対象
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
 DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
@@ -173,9 +175,10 @@ codex exec -s read-only --model "$DELEGATE_MODEL" \
 rc=$?
 FINISHED_AT=$(date +%s)
 TASK_STATUS=$(jq -r '.status // "unknown"' "$WORK/out.json" 2>/dev/null) || TASK_STATUS=unknown
-RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/events.jsonl" "$TASK_STATUS" "$FINISHED_AT") || { trap - EXIT; echo "記録保存失敗。結果は $WORK に保全" >&2; exit 95; }
+RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/events.jsonl" "$TASK_STATUS" "$FINISHED_AT") || { echo "記録保存失敗。結果は $WORK に保全" >&2; exit 95; }
 printf 'Run record: %s\n' "$RUN_RECORD" >&2
-if [ "$rc" -eq 0 ] && [ -s "$WORK/out.json" ]; then
+printf 'Run artifacts: %s\n' "$WORK" >&2
+if [ "$rc" -eq 0 ] && [ -s "$WORK/out.json" ] && jq -e 'type == "object" and (.status == "done" or .status == "partial" or .status == "blocked")' "$WORK/out.json" >/dev/null; then
   cat "$WORK/out.json"
   exit 0
 fi
@@ -199,12 +202,12 @@ exit "$rc"
 
 | コード | 意味 | 対処 |
 |---|---|---|
-| 0 | 成功。stdout が `out.json` の全文 | `status` と `summary` を読む |
+| 0 | JSON を受領。作業完了は未判定 | `status`、検証結果と実物を照合 |
 | 95 | 実績記録の保存に失敗。作業結果とログは保全 | 出力済みの場所から記録だけを回復し、委譲を再実行しない |
-| 96 | 作業ディレクトリの取り違え(名前の形が違う、`prompt.md` が無い、既に委譲を起動済み、目印を作れない) | 1 回目が返したパスを貼り直す。起動済みなら 1 からやり直す。`mkdir` のエラー文が出ていればそれが原因 |
-| 97 | codex は正常終了したが JSON を返さなかった | この呼び出しの stdout に出ているログ末尾で切り分け、再委譲する |
+| 96 | パス・入力・起動目印の確認で停止 | 既存の実行 handle、`run.claim` とエラーを確認。起動済みなら新規実行しない |
+| 97 | codex は正常終了したが利用可能な JSON がない | 保全したログ・イベント・残った変更を調べ、司令塔が引取りや再試行を判断 |
 | 98 | gitleaks で停止(検出あり、または gitleaks が動かない) | 検出をゼロにして 3 を再実行する(作業ディレクトリは残っている) |
-| 143 | Bash の timeout に達して SIGTERM で終了した | 結果は残っていない。新しい作業ディレクトリで 1 からやり直す。長い委譲は background で流す |
+| 143 | SIGTERM で終了した | timeout 等の原因と旧実行の停止、途中の変更・結果を確認してから引取りを判断 |
 
 その他の非ゼロは codex 自身の失敗(認証・利用枠・schema 不一致)で、stderr とイベントの
 末尾を各最大 4,000 バイト返す。`--json` はイベント側だけを変え、`-o` の結果 JSON は維持する。
@@ -219,59 +222,45 @@ exit "$rc"
 見たいときは `out.json` を `wc -c` で測る。これは context 増分の上限であって、委譲が消費する
 トークン全体の上限ではない。
 
-1. `out.json` の `status` と `summary` を読む。`done` 以外なら `blockers` を見て、再委譲するか
-   Claude 側で引き取るかを決める
+1. `out.json` の `status` と `summary` を読む。終了コード 0 は JSON 受領であり、作業完了の証明ではない。
+   イベントの失敗や hook・権限の拒否があれば、代替操作の証拠または未完了理由を確認する。
+   取得できる実モデルの metadata と指定値を照合し、取得できなければ実モデル未確認とする。
+   `done` 以外なら `blockers` と残った作業を見て、司令塔が引取りや再試行を判断する
 2. **`status` と `blockers` の整合は Claude が検査する。** schema では強制していない(構造化出力が
    JSON Schema の条件分岐 `if` / `then` を受理するかを確認していない)。`done` なのに `blockers` が
-   非空、あるいは `done` 以外で空なら、結果を判断に使わない — `workspace-write` なら差分を見て
-   Claude 側で引き取り、`read-only` なら再委譲する
-3. `workspace-write` で実行した場合、`git status --short --untracked-files=all` と `git diff` で
-   何が変わったかを見る。Claude 自身が書いたコードを見るときと同じ判断をする。**差分が空なのに
+   非空、あるいは `done` 以外で空なら、不整合を未解決として保持し、実物と検証結果から
+   司令塔が残件を確かめる。JSON を取り直すためだけに同じ作業を再実行しない
+3. `workspace-write` で実行した場合、開始時の HEAD・stash と現在値、
+   `git status --short --untracked-files=all`、`git diff HEAD` を照合する。
+   `changed_files` との不一致、対象外変更、他者変更の消失を確認する。**差分が空なのに
    `changed_files` が非空なら、commit か stash を疑って `git log --stat -3` と `git stash list` を
    見る** — 空の差分は「何も書かなかった」とも読めるため、この照合が無いと誤った安心を返す
 4. ignored ファイルへの変更は `--untracked-files=all` に現れない。生成物・キャッシュ・`.env` の
    類が失われて困るリポジトリでは `--ignored` を付けた確認を併用する
 5. AGENTS.md と review-gate skill に従い、委譲した成果物も原則としてゲートを通す。
-   省略は AGENTS.md の条件をすべて満たす場合だけとし、委譲の種別では判断しない。委譲先が
-   commit していた場合もゲートは通し、指摘があれば追加 commit を積まず、**委譲を始める前の commit
-   まで `git reset --soft <その SHA>` で戻して**から修正する(分からなければ `git reflog` で確認する)。
-   引数を省いた `git reset --soft` は HEAD を対象にするため何も戻らず、委譲先が作った commit の数は
-   分からないので `HEAD^` も当てにならない。**戻した内容は staged のまま残る**ため、以降の確認は
-   `git status` と `git diff --cached` で行う(`git diff` だけでは staged 分が見えず、変更が消えたと
-   読める)
+   省略は AGENTS.md の条件をすべて満たす場合だけとし、委譲の種別では判断しない。
+   委譲先が commit / stash / branch 変更をしていたら、その状態と成果を保全し、開始 commit
+   からの変更全体を確認する。自動で reset や履歴の書換えをせず、既存の承認範囲で修正・統合する。
+   履歴変更が必要なら AGENTS.md の明示承認条件に従う。explore でも対象が不変か確認する
+6. 結果・ログ・検証と実績記録を保全し、レビューに必要な証拠を回収してから、自分が作った
+   `WORK` だけを削除する。失敗や記録保存失敗の切り分けが残る間は削除しない
 
 ## 長時間の委譲
 
-**Bash の timeout は委譲を殺す。** timeout に達した委譲は SIGTERM で終了し(終了コード 143)、codex が
-起動した子プロセスまで終わる。`out.json` は書かれていないので**結果は残らない**。timeout は
-「foreground で待つ時間」ではなく、その委譲の期限である。
+長い委譲は起動元の timeout と background 実行の仕様を確認し、必要なら最初から background
+で始める。実行 handle と `WORK` を保持し、同じ実行を追跡する。観測の timeout だけでは
+CLI の終了・最終 JSON の欠落・子プロセスの停止を断定しない。
 
-これは sandbox 外を走るコマンドの挙動で、sandbox 内のコマンドとは逆である(sandbox 内では timeout で
-background task へ移され、走り続けて完了通知が届く)。委譲は `codex:*` が `sandbox.excludedCommands` に
-あるため必ず sandbox 外を通り、殺される側になる。
-
-**したがって長い委譲は timeout に任せず、最初から background で始める。** background で起動した委譲は
-完走し、JSON は task の出力ファイルに載り、完了時に通知が届く。
-
-- **timeout で死んだ委譲はやり直しになる。** 作業ディレクトリは残る(SIGTERM では `trap` が発火しない)
-  が、`run.claim` があるので同じパスでは 96 になる。1 からやり直す。プロンプトを流用したいときは、
-  新しい作業ディレクトリへ Write し直す
-- **background で流した委譲は生き続ける。** そのため `workspace-write` を background で流すと、
-  多重 writer を機構としては防げない。**書き込みが走っている間に次の委譲を始めないことは Claude が
-  守る規律になる。** 開始前に、未完了の委譲 background task が無いことを確認する
-- **プロセスの残存をコマンドで確かめない。** Claude Code の Bash sandbox 内では `pgrep` も `ps` も
-  `operation not permitted` で失敗しながら終了コード 0 を返すため、外部のプロセス一覧に問い合わせる
-  形の確認はすべて「該当なし」と答える。走っている委譲の有無は、未完了の background task が
-  あるかどうかで見る
-- 止める必要があるときは、その background task を停止する。停止は codex とその子プロセスまで届く
-- **受け取れるのは foreground と同じ範囲だけである。** background task の出力に載るのは、成功なら
-  JSON 全文、失敗なら stderr とイベントの末尾各 4,000 バイトで、`run.log` の全文はどちらの経路でも残らない
-  (正常終了で作業ディレクトリごと消える)。background にしたことで得られる情報が増えるわけではない
-- 既定の timeout は `BASH_DEFAULT_TIMEOUT_MS` の 5 分、指定できる上限は `BASH_MAX_TIMEOUT_MS` の
-  20 分(いずれも `claude/settings.json` で定める)。foreground で流すなら、この時間内に終わる大きさに
-  分ける。委譲を分ける基準は差分の大きさでもあり、1 回でレビューできる範囲に収める
-- `read-only` の explore は background で流してよい。書き込まないため、同時に複数走っても worktree は
-  壊れない
+- `workspace-write` の writer が動いている間は、同じ範囲へ次の writer を起動しない。
+  停止が必要ならその task の停止手段を使い、停止結果と途中の変更を確認する。
+- プロセス一覧を取得できない環境では、空の出力を停止の証拠にせず、実行 handle の状態を確認する。
+  旧 writer の停止が確認できない間は、同じ範囲への引取り書込みも始めない。
+- SIGTERM 等で終了した場合も `WORK` の最終 JSON・途中のログ・イベントを調べる。
+  143 は終了理由の一つであり、成果がないことや再実行してよいことを意味しない。
+- 再試行は失敗原因と外部状態・新情報を確認し、AGENTS.md の許容候補・再試行規則に従って
+  司令塔が判断する。adapter が自動で再起動しない。完了部分を保全し、同じ操作を重ねない。
+- background 実行でも出力先は同じ。結果の受領・実物照合・証拠の回収を終えるまでログを残す。
+  レビュー可能な範囲と実行期限を基準に分割し、必要な対象や検証を捨てない。
 
 ## 外部へ送られる範囲
 
@@ -312,9 +301,10 @@ sandbox の内側かどうかは `echo "$TMPDIR"` で分かる — sandbox 内�
 
 ### `Operation not permitted` で codex が起動しない
 
-`claude/settings.json` の `sandbox.excludedCommands` に `codex:*` が無い。追加する(既存項目は
-`git:*` / `gh:*` の形式)。`codex` と書くと exact マッチになり、引数付きの呼び出しには無言で
-効かない。
+実行経路、sandbox、hook の拒否を区別し、既存設定の実効値とログを確認する。
+`sandbox.excludedCommands` の不足を原因候補にできるが、エラーだけで除外追加を指示しない。
+deny・sandbox を無断で弱めず、許可範囲内の経路か Claude 内の子・司令塔への引取りを選ぶ。
+追加権限が必要な場合だけ、原因と最小限の権限を示して通常の承認経路へ戻す。
 
 ### 認証・利用枠の失敗
 
@@ -325,5 +315,9 @@ sandbox の内側かどうかは `echo "$TMPDIR"` で分かる — sandbox 内�
 
 ### 96 で止まる
 
-1 回目が返したパスを貼れているか、そのディレクトリで既に委譲を起動していないか(`run.claim` の
-有無)を見る。停止で残ったディレクトリは使い回せない。1 からやり直す。
+1 回目が返したパス、入力の存在、`run.claim` の有無と実行 handle を確認する。
+目印があるだけでは実行中・停止済みのどちらとも断定しない。既存の結果と writer の停止を
+確認して司令塔が再試行を選んだ場合だけ、新しい作業ディレクトリを用意する。
+
+CLI の入出力は [OpenAI の非対話実行](https://learn.chatgpt.com/docs/non-interactive-mode)
+および使用中の `codex exec --help` で確認する。

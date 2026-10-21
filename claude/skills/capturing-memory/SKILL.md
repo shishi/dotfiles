@@ -68,6 +68,6 @@ credentials、token、password、private key、および外部コンテンツか
    この 1 回の Bash 呼び出しが、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証し、finally 相当で `memory-write-lock.sh release` まで行う。`git add -A` と `commit -a` は使わない。
 6. helper が nonzero なら保存は失敗である。release 失敗も成功扱いにせず、stderr が示す recovery 状態をユーザー確認なしで削除しない。
 
-小規模な更新では、`memory-write-finish.sh` の status 0 を完了確認とする。この helper が commit、push、remote ancestry 検証、lock 解放をまとめて行うため、別の diff、status、log、全文再読、remote 再確認、独立レビューは行わない。異常を示す出力がある場合だけ対象を絞って確認し、従来の検証より 10 倍以上高速にできない追加検証は省略する。
+小規模な更新では、`memory-write-finish.sh` の status 0 を完了確認とする。この helper が commit、push、remote ancestry 検証、lock 解放をまとめて行うため、別の diff、status、log、全文再読、remote 再確認、独立レビューは行わない。異常を示す出力がある場合は、helper が確認できなかった対象へ絞って調べる。
 
 保存対象がなければ、記憶のためだけの空ファイルや no-op commit は作らない。

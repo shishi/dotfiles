@@ -1,6 +1,6 @@
 ---
 name: memory-consolidate
-description: Use when the user says 「記憶の整理」「dream」, after large refactors that invalidate stored knowledge, or roughly every 20-30 sessions when memory files accumulate duplicates, contradictions, or stale references.
+description: 記憶の整理・dream を依頼された場合や、記憶に重複・矛盾・古い参照、skill に移せる作業手順を見つけたときに再編します。単一の新事実の保存は capturing-memory を使います。
 ---
 
 # memory-consolidate(個人記憶の整理)
