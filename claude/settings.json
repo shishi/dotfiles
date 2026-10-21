@@ -331,6 +331,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-completion.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
