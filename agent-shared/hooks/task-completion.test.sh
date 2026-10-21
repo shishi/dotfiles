@@ -21,7 +21,11 @@ for payload in '{}' '{"hook_event_name":"Stop","stop_hook_active":"false"}' '{"h
 done
 echo 'ok: malformed and unrelated events are reported as errors'
 
-for config in claude/settings.json codex/hooks.json; do
+for config in claude/settings.json; do
   jq -e '[.hooks.Stop[].hooks[] | select(.command == "bash ~/.agent-shared/hooks/task-completion.sh" and .type == "command" and (.async != true))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null
   echo "ok: $config registers one synchronous Stop check"
 done
+
+jq -e '[.hooks.Stop[]?.hooks[]? | select(.command == "bash ~/.agent-shared/hooks/task-completion.sh")] | length == 0' "$HOOK_DIR/../../codex/hooks.json" >/dev/null
+jq -e '[.hooks.UserPromptSubmit[].hooks[] | select(.command == "bash ~/.agent-shared/hooks/task-policy.sh" and .type == "command")] | length == 1' "$HOOK_DIR/../../codex/hooks.json" >/dev/null
+echo 'ok: Codex receives completion instructions before responding without a Stop continuation'

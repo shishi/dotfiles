@@ -123,18 +123,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/task-completion.sh",
-            "timeout": 10,
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-completion.sh'"
-          }
-        ]
-      }
     ]
   }
 }
