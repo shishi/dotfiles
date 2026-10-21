@@ -421,9 +421,12 @@ handle_release_signal() {
   exit "$release_pending_signal"
 }
 
-release() {
+validated_repo=""
+validated_token=""
+
+validate_handle() {
   local handle="$1" repo token expected_prefix state_root state_root_physical handle_parent
-  local release_status=0
+  local lock owner recorded_token
 
   if [ -z "$handle" ] || contains_newline "$handle" \
     || [ ! -d "$handle" ] || [ -L "$handle" ] \
@@ -477,6 +480,38 @@ release() {
     return 1
   fi
 
+  lock="$repo/.git/memory-write.lock"
+  owner="$lock/owner-$token"
+  if retirement_exists "$repo" \
+    || [ ! -d "$lock" ] || [ -L "$lock" ] \
+    || state_has_other_entries "$lock" "$owner" \
+    || [ ! -d "$owner" ] || [ -L "$owner" ] \
+    || [ "$(stat_mode "$owner")" != 700 ] \
+    || state_has_other_entries "$owner" "$owner/value" \
+    || ! recorded_token="$(read_state_line "$owner/value")" \
+    || [ "$recorded_token" != "$token" ]; then
+    warn "handle does not own the active lock"
+    return 1
+  fi
+  validated_repo="$repo"
+  validated_token="$token"
+}
+
+verify() {
+  validate_handle "$1" || return 1
+  [ "$validated_repo" = "$2" ] || {
+    warn "handle belongs to a different repository"
+    return 1
+  }
+}
+
+release() {
+  local handle="$1" repo token state_root release_status=0
+
+  validate_handle "$handle" || return 1
+  repo="$validated_repo"
+  token="$validated_token"
+  state_root="$repo/.git/memory-write-state"
   trap 'handle_release_signal 129' HUP
   trap 'handle_release_signal 130' INT
   trap 'handle_release_signal 143' TERM
@@ -500,8 +535,12 @@ release() {
 }
 
 main() {
+  if [ "$#" -eq 3 ] && [ "$1" = verify ]; then
+    verify "$2" "$3"
+    return $?
+  fi
   if [ "$#" -ne 2 ]; then
-    warn "usage: acquire <canonical-repo> | release <opaque-handle>"
+    warn "usage: acquire <canonical-repo> | release <opaque-handle> | verify <opaque-handle> <canonical-repo>"
     return 2
   fi
   case "$1" in
