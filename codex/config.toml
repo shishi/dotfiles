@@ -257,7 +257,6 @@ MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
 
 [desktop]
-notifications-sound = "none"
 conversationDetailMode = "STEPS_COMMANDS"
 notifications-sound = "none"
 ambient-suggestions-enabled = true
