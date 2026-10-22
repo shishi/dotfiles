@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索した本文を注入する。
+# SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索候補を渡す。
 # 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
 # usage: inject-memory.sh [MEMORY_DIR] [lookup [検索語...]]
 set -u

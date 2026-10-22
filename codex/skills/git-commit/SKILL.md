@@ -1,6 +1,6 @@
 ---
 name: git-commit
-description: "Stage meaningful diffs and create Conventional Commits with WHY-focused messages"
+description: "承認された変更を意味のある単位で stage・commit し、変更理由を示す Conventional Commit を作成します。commit の依頼や作業の区切りで使い、push の許可は含みません。"
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git restore:*), Bash(git show:*)
 ---
 
@@ -20,6 +20,9 @@ git log --oneline -10      # style reference
 ```
 
 ## Rules beyond what the Conventional Commits spec says
+
+- Write the exact commit message with the file editing tool, read it back, and pass it with
+  `git commit -F` and that file's absolute path. Do not embed multiline prose in shell code.
 
 - **Breaking changes**: only `feat!:` / `fix!:` may carry `!`. If a
   refactor/style/docs/chore changed behavior, it is misclassified —

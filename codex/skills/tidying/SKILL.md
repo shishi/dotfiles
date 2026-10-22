@@ -1,6 +1,6 @@
 ---
 name: tidying
-description: Guide structural code improvements using Kent Beck's Tidy First methodology. Use when seeing messy code, before making behavioral changes, after completing features, or discussing when to clean up code.
+description: 構造の改善を依頼された場合や、現在の変更を妨げる具体的な構造問題を整理するときに使います。通常の実装・修正のたびに別のリファクタリングを追加しません。
 ---
 
 # INSTRUCTIONS

@@ -214,14 +214,4 @@ if command -v herdr >/dev/null 2>&1; then
   done
 fi
 
-if command -v hunk >/dev/null 2>&1; then
-  hunk_review_skill="$(hunk skill path hunk-review 2>/dev/null)" || hunk_review_skill=
-  if [ -f "$hunk_review_skill" ]; then
-    for skill_home in "$HOME/.claude/skills" "$HOME/.agent-shared/skills"; do
-      mkdir -p "$skill_home/hunk-review"
-      ln -sfn "$hunk_review_skill" "$skill_home/hunk-review/SKILL.md"
-    done
-  fi
-fi
-
 echo "please reload shell"

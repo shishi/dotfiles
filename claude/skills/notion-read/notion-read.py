@@ -24,7 +24,7 @@ def token():
     t = os.environ.get("NOTION_TOKEN")
     if t:
         return t.strip()
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.dirname(os.path.realpath(__file__))
     candidates = [
         os.path.expanduser("~/.notion_env"),
         os.path.normpath(os.path.join(script_dir, "..", "..", "..", ".notion_env")),
@@ -112,6 +112,13 @@ def walk(block_id, depth, state):
             payload = b.get(t, {})
             if t == "child_page":
                 txt = f"[child_page: {payload.get('title', '')}] id={b['id']}"
+            elif t == "child_database":
+                txt = f"[child_database: {payload.get('title', '')}] id={b['id']}"
+            elif t == "table_row":
+                txt = " | ".join(
+                    "".join(x.get("plain_text", "") for x in cell)
+                    for cell in payload.get("cells", [])
+                )
             elif t == "code":
                 txt = "```\n" + rich_text(payload) + "\n```"
             else:
@@ -119,9 +126,13 @@ def walk(block_id, depth, state):
             if txt:
                 print("  " * depth + PREFIX.get(t, "") + txt)
                 state["n"] += 1
-            if b.get("has_children") and t != "child_page" and depth < state["max_depth"]:
-                if not walk(b["id"], depth + 1, state):
-                    return False
+            if b.get("has_children") and t not in ("child_page", "child_database"):
+                if depth < state["max_depth"]:
+                    if not walk(b["id"], depth + 1, state):
+                        return False
+                else:
+                    print(f"...(--max-depth {state['max_depth']} で子ブロック未取得: {b['id']})",
+                          file=sys.stderr)
         if not d.get("has_more"):
             return True
         cursor = d.get("next_cursor")
@@ -178,17 +189,25 @@ def query_database(db_id, state):
 
 
 def search(query):
-    d = request("/search", {"query": query, "page_size": 20})
-    for r in d.get("results", []):
-        title = ""
-        if r["object"] == "page":
-            for p in r.get("properties", {}).values():
-                if p.get("type") == "title" and p.get("title"):
-                    title = "".join(x.get("plain_text", "") for x in p["title"])
-                    break
-        elif r["object"] == "database":
-            title = "".join(x.get("plain_text", "") for x in r.get("title", []))
-        print(f"{r['id']}\t[{r['object']}]\t{title}")
+    cursor = None
+    while True:
+        payload = {"query": query, "page_size": 20}
+        if cursor:
+            payload["start_cursor"] = cursor
+        d = request("/search", payload)
+        for r in d.get("results", []):
+            title = ""
+            if r["object"] == "page":
+                for p in r.get("properties", {}).values():
+                    if p.get("type") == "title" and p.get("title"):
+                        title = "".join(x.get("plain_text", "") for x in p["title"])
+                        break
+            elif r["object"] == "database":
+                title = "".join(x.get("plain_text", "") for x in r.get("title", []))
+            print(f"{r['id']}\t[{r['object']}]\t{title}")
+        if not d.get("has_more"):
+            return
+        cursor = d["next_cursor"]
 
 
 def main():

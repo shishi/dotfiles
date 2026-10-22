@@ -1,11 +1,13 @@
 ---
 name: logging
-description: Guide logging practices based on Dave Cheney's minimalist philosophy. Use when adding log.Info/Debug/Error/Warn/Fatal calls, reviewing logging code, handling errors with log+return pattern, discussing log levels, or designing error handling strategies.
+description: Ruby/Rails の logger や Go の log 等でログを追加・レビューし、重複記録、例外の伝播、ログレベル、障害の記録境界を設計するときに使います。ログを読むだけの原因調査には適用しません。
 ---
 
 # INSTRUCTIONS
 
 Apply Dave Cheney's logging philosophy: simplify ruthlessly, handle errors properly, and log only what matters.
+
+Before changing levels or removing logs, inspect the framework conventions, alerts, audit requirements, and the boundary that consumes each error. Preserve required operational signals. The level simplifications below are choices for application-owned logging, not permission to reclassify framework or monitoring contracts.
 
 ## Core Principles
 

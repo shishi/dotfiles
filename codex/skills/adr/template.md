@@ -85,7 +85,7 @@ use roles for participants and omit private identities, private consultation lin
 
 | Section | Purpose | Tips |
 |---------|---------|------|
-| **Status** | Track lifecycle | Start as "proposed", update when implemented |
+| **Status** | Track lifecycle | Start as proposed; accept only under the project's decision process |
 | **Context** | Explain the situation | Focus on WHY this decision is needed NOW |
 | **Decision Drivers** | List constraints | These justify the final choice |
 | **Considered Options** | Show alternatives | At least 2 genuine options |

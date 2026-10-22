@@ -49,25 +49,27 @@ credentials、token、password、private key、および外部コンテンツか
 
 ## 不健全状態の復旧
 
-`<personal-memory>` に 10 分以上残存した write lock の警告がある場合は、参考情報として放置せず、記憶の書き込み有無にかかわらず元の作業より先に調査する。正本、経過時間、worktree、handle・lock・retirement の個数と構造を確認する。現在の workflow が取得して保持中の handle なら、書き込みを継続するときは解放せず通常の `memory-write-finish.sh` まで完遂する。中断・放棄するときだけ `memory-write-lock.sh release` へ渡し、その後は記憶を変更しない。再開時は preflight から lock を取り直す。
+`<personal-memory>` に 10 分以上残存した write lock の警告がある場合は、参考情報として放置せず、記憶の書き込み有無にかかわらず元の作業より先に調査する。正本、経過時間、worktree、handle・lock・retirement の個数と構造を確認する。現在の workflow が取得して保持中の handle なら、書き込みを継続するときは解放せず通常の `memory-write-finish.sh` まで完遂する。中断・放棄するときだけ `memory-write-lock.sh release` へ渡し、その後は記憶を変更しない。再開時は新しい確定版から patch を準備し、`--patch` で保存する。
 
 所有者不明の handle は、構造と token の一致だけでは writer の停止を証明できないため、発見した handle を使って自動 release しない。確認できた状態をユーザーへ報告して復旧判断を求め、解消されるまで記憶を使う作業を停止する。dirty、複数 handle、retirement、検証・release 失敗でも raw delete せず、同様に未解決状態として扱う。
 
 ## 書き込み
 
 1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
-2. `bash ~/.agent-shared/bin/memory-write-preflight.sh ~/.claude/memory` を実行する。status 0 の stdout 1 行だけを opaque lock handle として保持する。
-3. lock を保持したまま、同期後の HEAD から `CONVENTIONS.md` を読み、その保存基準と日常書き込みプロトコルに従う。
+2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` と更新対象を読み、保存基準・形式・ブランチ制約を確認する。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集する。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
+3. patch の対象と差分を確認する。技術的知識には適用環境と再確認条件を保ち、重要な訂正の根拠が必要なら元発言や検証結果への参照を残す。会話全文や一時的な経緯は複製しない。
 4. 既存トピックを優先して更新する。タイトル・`description` には検索に使う対象名と操作を簡潔に入れる。共通方針は CORE、プロジェクト制約は該当 project、技術知識は該当 topic へ置き、索引には本文や手順を複製しない。
-5. 編集後は次の形式で `memory-write-finish.sh` を実行する。
+5. 次の形式で `memory-write-finish.sh` を実行する。
 
    ```bash
-   bash ~/.agent-shared/bin/memory-write-finish.sh ~/.claude/memory "$memory_lock_handle" "memory: <WHY>" MEMORY.md <編集した path>...
+   bash ~/.agent-shared/bin/memory-write-finish.sh --patch ~/.claude/memory "$memory_base_commit" "$memory_patch_file" "memory: <WHY>" <変更する相対パス>...
    ```
 
-   この 1 回の Bash 呼び出しが、編集したファイルだけを path 指定で stage、commit、push、remote ancestry 検証し、finally 相当で `memory-write-lock.sh release` まで行う。`git add -A` と `commit -a` は使わない。
-6. helper が nonzero なら保存は失敗である。release 失敗も成功扱いにせず、stderr が示す recovery 状態をユーザー確認なしで削除しない。
+   この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了するので、新しい確定版を読み、patch を作り直す。`git add -A` と `commit -a` は使わない。
+6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と正本の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準から作り直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で正本を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
 
-小規模な更新では、`memory-write-finish.sh` の status 0 を完了確認とする。この helper が commit、push、remote ancestry 検証、lock 解放をまとめて行うため、別の diff、status、log、全文再読、remote 再確認、独立レビューは行わない。異常を示す出力がある場合だけ対象を絞って確認し、従来の検証より 10 倍以上高速にできない追加検証は省略する。
+既に旧方式の handle を保持している場合は、従来の finish または明示的な release で終了する。新しい保存では先に preflight を単独実行しない。強制終了や電源断は trap で解放できないため、所有者不明の残留 lock を時間だけで削除しない。
+
+小規模な更新では、`memory-write-finish.sh` の status 0 を完了確認とする。この helper が commit、push、remote ancestry 検証、lock 解放をまとめて行うため、別の diff、status、log、全文再読、remote 再確認、独立レビューは行わない。異常を示す出力がある場合は、helper が確認できなかった対象へ絞って調べる。
 
 保存対象がなければ、記憶のためだけの空ファイルや no-op commit は作らない。

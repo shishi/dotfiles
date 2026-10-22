@@ -1,102 +1,37 @@
 ---
 name: missing-tools
-description: Resolves missing CLI tools. Use when a command is unavailable, a shell reports command not found, or a tool must be run without installing it globally.
+description: command not found や実行ツール・言語サーバーの不足を、プロジェクトの devShell / direnv から解決し、必要な CLI を一時実行するときに使います。
 ---
 
-# Missing Tools
+# 実行ツールの不足を解決する
 
-Use this workflow when a command is unavailable in the current shell.
+PATH にないことと、プロジェクトに用意されていないことを分けます。
+既存の Nix → Docker → その他という環境優先順位に従い、用意された環境を先に使います。
 
-## Priority Order
+## プロジェクトの環境
 
-On Windows, if `command -v nix` finds nothing, steps 2–4 cannot succeed. Try step 1
-only if `direnv` exists; go to "Windows without nix" below only when direnv is absent
-or step 1 cannot resolve the command (`direnv exec . sh -c 'command -v <command>'`
-finds nothing). A non-zero exit from the tool itself means the tool ran — that is not
-a missing tool.
+1. repo のセットアップ手順、flake / shell 定義、`.envrc` と CI を確認します。
+   `nix develop -c` や許可済みの `direnv exec .` で、そのプロジェクトのコマンドを実行します。
+2. 非対話シェル・WSL・LSP の PATH 継承が関係する場合は、
+   [devShell のプロセス環境](references/devshell.md) を読みます。
+   direnv がない・自動読込がないという理由だけで、別の版を取得しません。
+3. プロジェクト環境では提供されていない独立 CLI が必要なら、
+   comma、対象を指定した `nix run`、`nix shell --command` の順に一時実行を検討します。
+   repo が供給する版との互換性を確認します。
 
-1. Try the current project's direnv environment:
+コマンド自身の非ゼロ終了は、コマンドの不在ではありません。
+実行ファイル、版、終了コードとエラーを照合します。
+言語処理系の global installer や `curl | sh` を不足解決の既定にしません。
 
-   ```sh
-   direnv exec . <command>
-   ```
+## Nix を使えない Windows
 
-2. Use [comma](https://github.com/nix-community/comma) for tools from nixpkgs:
+プロジェクトの既存環境で解決しない場合は、CLI が提供する一時 runner があれば使います。
+既存の許可範囲にある通常のアプリ導入が必要なら Scoop を優先し、利用できなければ winget を検討します。
+これは永続的な変更です。machine scope・UAC・再起動の必要性も操作前に確認します。
+詳細な導入・更新・結果照合は `windows-package-maintenance` を使います。
+manifest 自体の修正は `scoop-manifest` の担当です。
 
-   ```sh
-   , <command>
-   ```
-
-3. Use `nix run` when a specific nixpkgs package is needed:
-
-   ```sh
-   nix run nixpkgs#<package> -- <args>
-   ```
-
-4. Use `nix shell` as the last resort:
-
-   ```sh
-   nix shell nixpkgs#<package> --command <command>
-   ```
-
-## Windows without nix
-
-A Windows machine where neither nix nor direnv provides the tool has no general
-run-without-install mechanism. If the tool ships via npm or PyPI and `npx` / `uvx`
-is available, prefer an ephemeral run (`npx <package>`, `uvx <package>`) — those are
-runners, not global installers. Otherwise install with an OS package manager:
-
-1. Prefer scoop (per-user, no elevation; shims land in `~/scoop/shims`, which is
-   already on PATH, so the tool resolves in the current shell; already-installed
-   returns exit 0, unlike winget):
-
-   ```sh
-   scoop install <package>
-   ```
-
-2. If scoop is unavailable, use winget:
-
-   ```sh
-   winget install --id <PackageId> -e --accept-package-agreements --accept-source-agreements
-   ```
-
-This is a persistent install, and a deliberate exception to the no-global-install rule
-below: that rule exists to keep tool provisioning inside the reproducible project
-environment (nix/direnv), and on a Windows machine without nix that layer does not
-exist — neither scoop nor winget offers ephemeral execution. scoop comes first because
-its per-user install keeps the footprint smallest. Language-specific global installers
-(`npm i -g` etc.) remain forbidden on Windows too.
-
-winget caveats (measured on Windows 11):
-
-- A non-zero exit code is not evidence of failure: "already installed" returns
-  non-zero, and some non-zero exits still installed successfully. Verify by resolving
-  the command (`command -v <tool>`). If it does not resolve, that is still not proof
-  of failure — PATH edits are not visible to the current session — so check the
-  Uninstall registry (`...\CurrentVersion\Uninstall\*` under HKLM, HKLM\WOW6432Node,
-  HKCU) and `Get-AppxPackage` (MSIX/msstore packages show up there rather than in
-  that registry) before concluding the install failed, and tell the user the tool may
-  only resolve after a new session.
-- `-e` (exact match) is case-sensitive in the `--id`; a one-letter mismatch fails with
-  no distinct error. "No package found" can mean a wrong ID or a `--scope` mismatch —
-  confirm the ID with `winget search <name> --accept-source-agreements` first.
-- Machine-scope packages raise a UAC prompt — tell the user before running.
-- Run winget only from an interactive desktop session — launched from a service or
-  task-scheduler context it hangs ("Timeout creating winget window").
-
-## Notes
-
-- Never resolve a missing command with a language-specific global installer, on any
-  platform: `npm install -g`, `npm i -g`, `pnpm add -g`, `yarn global add`, `bun add -g`,
-  `uv tool install`, and the like.
-- The only sanctioned persistent-install path is "Windows without nix" above. Everywhere
-  else, never install missing tools persistently (`brew install` included) — run them
-  ephemerally via steps 1–4. A non-Windows machine without nix is a provisioning gap to
-  raise with the user, not a license to install.
-- Prefer `direnv exec .` first because project-local dev shells often already provide the right tool version and environment variables.
-- Comma automatically finds and runs the nixpkgs package containing the requested command.
-- Use fish for shell wrapping in this dotfiles environment:
-
-  ```sh
-  fish -c '<command>'
-  ```
+新規の shell で PATH が変わる場合は、導入した実ファイルと新旧プロセスを分けて確認します。
+既存の package manager・導入実体・レジストリを調べずに再インストールしません。
+非 Windows で Nix もプロジェクトの環境も使えない場合は、利用可能な一時実行経路を調べます。
+必要な環境・権限がないと確認できた場合だけ、その不足と再開条件を示します。
