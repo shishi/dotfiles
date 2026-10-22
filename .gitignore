@@ -39,9 +39,7 @@
 /codex/skills/.system/
 
 # ツール自身が生成する skill の link
-/claude/skills/hunk-review/
 /claude/skills/terminal-browser
-/codex/skills/hunk-review/
 /codex/skills/terminal-browser
 
 # 言語処理系が生成する一時ファイル

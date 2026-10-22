@@ -25,14 +25,10 @@ description: GitHub の issue・PR・コメント・レビュー本文の投稿�
 
 `gh api -f body=@-` は禁止です。`-f` はリテラル文字列なので、本文を `@-` に置き換えます。`-F` は別の型変換規則です。本文を含む複雑な payload には JSON と `--input` を使います。[gh api の仕様](https://cli.github.com/manual/gh_api)
 
-## pending review にコメントを追加する場合
+## pending review を扱う場合
 
-- 認証ユーザーの pending review を先に取得します。PR ごとの pending review は 1 人 1 本です。既存 review があると、新規 review 作成や REST の単発 review comment が 422 になる場合があります。
-- 既存 pending への追加は GraphQL `addPullRequestReviewThread` の `pullRequestReviewId` を指定します。review の `node_id` とコメントの ID を混同しません。
-- `path`、`line`、`side` を現在の PR diff と照合します。単行は `startLine` / `startSide` を変数ごと省略します。複数行だけ両方を指定します。
-- suggestion は適用先が diff にある場合に使います。diff 外の修正は本文で位置と変更案を説明します。
-- 本文差し替えには `updatePullRequestReviewComment`、削除には `deletePullRequestReviewComment` とコメント ID を使います。削除も依頼の範囲内に限ります。
-- submit は公開操作です。ユーザーが未送信の review を保持している場合、追加依頼だけで submit しません。明示された送信承認があるときだけ `submitPullRequestReview` を実行します。レビュー一覧・コメント一覧は必要な全ページを取得します。
+- 作成・追加・修正・submit の操作前に、[pending review と suggestion](references/pending-review.md) を読みます。
+  API の入力と適用行、既存の未送信レビュー、投稿範囲をそこで照合します。
 
 各 mutation の入力は [GitHub の PR GraphQL 仕様](https://docs.github.com/en/graphql/reference/pulls) で確認します。
 

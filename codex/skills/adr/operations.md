@@ -33,7 +33,7 @@ Examine existing files to match the project's style:
 | Active | `20250115-134032-use-postgresql.md` | Top of listing |
 | Deprecated/Superseded | `_20250115-134032-use-postgresql.md` | Bottom of listing |
 
-The `_` prefix visually separates inactive ADRs while preserving history.
+Follow the repository's existing status and filename convention. Use the `_` prefix only when that repository already uses it; otherwise keep the filename and update status/links.
 
 ### 4. Detect Next Number
 
@@ -59,10 +59,10 @@ See docs/ADR/20250115-134032-use-oauth2.md for rationale.
 | Transition | Action |
 |------------|--------|
 | proposed → accepted | Update status after approval under the project's decision process |
-| → deprecated | Update status + **rename with `_` prefix** |
-| → superseded by ADR-XXXX | Update status + **rename with `_` prefix** |
+| → deprecated | Update status and supersession links; rename only if the repository requires it |
+| → superseded by ADR-XXXX | Update status and supersession links; rename only if the repository requires it |
 
-### Rename Command
+### Rename Command (only for repositories using the prefix)
 
 ```bash
 # Deprecating an ADR
@@ -121,11 +121,11 @@ If implementation must deviate from an existing ADR:
 
 1. **Create new ADR** explaining the new decision
 2. **Reference the old ADR** in "supersedes" field
-3. **Deprecate old ADR** with `_` prefix
+3. **Deprecate old ADR** using the repository's existing status/filename convention
 4. **Commit both changes** together
 
 ```bash
-# Create new ADR, then deprecate old one
+# Example for repositories using the underscore prefix
 git mv docs/ADR/20250115-use-rest-api.md \
        docs/ADR/_20250115-use-rest-api.md
 git add docs/ADR/20250620-use-graphql.md
