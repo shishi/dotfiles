@@ -21,16 +21,15 @@
 
 $env.PROMPT_COMMAND = {|| 
     let git_branch = (
-        do --ignore-errors { git symbolic-ref --short HEAD } 
-        | complete 
-        | get stdout 
+        do --ignore-errors { git symbolic-ref --short HEAD | complete | get stdout }
+        | default ''
         | str trim
     )
     
     # 現在のディレクトリ（相対パス表示）
-    let path = match (do --ignore-errors { $env.PWD | path relative-to $nu.home-path }) {
+    let path = match (do --ignore-errors { $env.PWD | path relative-to $nu.home-dir }) {
         null => $env.PWD
-        '' => '~ '
+        '' => '~'
         $relative_pwd => ([~ $relative_pwd] | path join)
     }
     
@@ -40,9 +39,8 @@ $env.PROMPT_COMMAND = {||
     } else {
         # Gitのステータスをチェック
         let is_dirty = (
-            do --ignore-errors { git status --porcelain } 
-            | complete 
-            | get stdout 
+            do --ignore-errors { git status --porcelain | complete | get stdout }
+            | default ''
             | str trim
             | is-not-empty
         )
