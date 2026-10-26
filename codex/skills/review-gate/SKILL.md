@@ -5,7 +5,9 @@ description: 仕様・実装・設定・文書の独立レビューと、挙動�
 
 # 独立レビューの実行
 
-発動・省略条件、変更の採否、全範囲の完遂は AGENTS.md に従います。この skill は入力組成、レーン編成、エンジン選択、結果の回収と通過判定を担います。
+主手順は `superpowers:requesting-code-review`、`superpowers:receiving-code-review`、`superpowers:verification-before-completion` です。レビューを始める前に必要な上流本文と [superpowers-local](../superpowers-local/SKILL.md) を読みます。同じ版の既読本文は再読しません。独立レビュー・指摘の検証・証拠による完了判断をその手順で実行し、この skill は対象組成・担当編成・利用者受入・通過判定を補います。
+
+発動・省略条件、変更の採否、全範囲の完遂は AGENTS.md に従います。上流が reviewer を要求したときも以下の編成を使い、別の reviewer を追加しません。上流の一般的な reviewer template への置換で、元の要件・固有の観点を落としません。
 
 観点の正本は `~/.claude/agents/*-reviewer.md` です。Codex では同名の `~/.codex/agents/*-reviewer.toml` が同じ本文を持ち、`tests/reviewer-agents-sync.sh` で同期を検査します。
 

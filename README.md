@@ -20,10 +20,13 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 渡します。詳細規則を hook に重複定義しません。自然言語の注入と、実行を拒否するガードは
 別の役割です。skill や記憶を読んでも、新しい権限や依頼範囲は生まれません。
 
-レビューは `review-gate`、全件調査は `investigation-discipline`、必要なテストの作成は
-`test-red-first` に集約します。作業全体へ固定の承認段階・反復回数を課す superpowers は、
-Claude では plugin 本体、Codex では配布中の各 skill を名前で無効にします。
-Codex の remote plugin はインストールを維持し、更新で skill が追加された場合は対象を見直します。
+設計・計画・実行・調査・テスト・レビューは、両エージェントで有効な superpowers を使います。
+[superpowers-local](codex/skills/superpowers-local/SKILL.md) が、共通指示と既存 skill が求める
+承認・委譲・検証・完了条件の差分を定めます。上流の配布物は編集せず、plugin 管理機能で更新します。
+レビューは `review-gate`、原因調査は `investigation-discipline`、テスト作成は `test-red-first` が
+固有要求を補います。独立レビュー、指摘の検証、完了前の証拠確認を維持し、同じ工程を重ねません。
+Claude は marketplace の本体を有効にし、Codex は現行 remote 版を使います。
+旧 `openai-api-curated` 版の無効設定は、古い配布物を併用しないために残します。
 委譲を重複制御する Claude Herdr plugin も無効にし、自作の手順を使います。
 Herdr の明示操作は `herdr`、Claude からの委譲は `codex-delegate` が担当します。
 
