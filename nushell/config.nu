@@ -41,7 +41,7 @@ def --wrapped herdr [...args] {
         $args.1 in ['install' 'uninstall']
     ) {
         let recorder = 'bash ~/.agent-shared/bin/herdr-plugins.sh record'
-        let windows_runner = ($nu.home-path | path join '.agent-shared/bin/invoke-git-bash-hook.ps1')
+        let windows_runner = ($nu.home-dir | path join '.agent-shared/bin/invoke-git-bash-hook.ps1')
         if ((which powershell.exe | is-not-empty) and ($windows_runner | path exists)) {
             ^powershell.exe -NoProfile -ExecutionPolicy Bypass -File $windows_runner $recorder
         } else {

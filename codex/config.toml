@@ -260,8 +260,8 @@ MAX_MCP_OUTPUT_TOKENS = "50000"
 MCP_TOOL_TIMEOUT = "120000"
 
 [desktop]
-notifications-sound = "none"
 conversationDetailMode = "STEPS_COMMANDS"
+notifications-sound = "none"
 ambient-suggestions-enabled = true
 followUpQueueMode = "steer"
 runCodexInWindowsSubsystemForLinux = false
@@ -503,7 +503,7 @@ trusted_hash = "sha256:53cad90b0d7d318947db2e88e1813350bc754445f470c56db0c9de132
 trusted_hash = "sha256:322e29cecf9c90e851a166aedb63d1564325d7fac9b4df6cc0872581088b5b09"
 
 [hooks.state."/home/shishi/.codex/hooks.json:stop:0:0"]
-trusted_hash = "sha256:0e25a7447f2a285f90cd49a3c321baea0cdc93775835f47da1420607277e01c2"
+trusted_hash = "sha256:2f9522a7ccdfaf0dd825bb76cb836ab7571f8bd01be03ca2b56c2f58ff7ca350"
 
 [hooks.state."/home/shishi/.codex/hooks.json:pre_tool_use:0:3"]
 trusted_hash = "sha256:923924d5b722d2bacec591f5f6d13d84d1df095dc9402a2c7cff1ba96725b06a"
@@ -818,3 +818,6 @@ trusted_hash = "sha256:50acf1fcb8b89d70710a13f004847e397055f3101c35a728c1488e41e
 
 [hooks.state.'C:\Users\shishi\.codex\hooks.json:user_prompt_submit:1:0']
 trusted_hash = "sha256:d8db0a182f4e219a44804ea0414f0853188f4202883a531a421db57dfbc566db"
+
+[hooks.state."/home/shishi/dev/src/github.com/shishi/dotfiles/codex/hooks.json:stop:0:0"]
+trusted_hash = "sha256:2f9522a7ccdfaf0dd825bb76cb836ab7571f8bd01be03ca2b56c2f58ff7ca350"
