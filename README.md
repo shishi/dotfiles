@@ -27,6 +27,13 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 固有要求を補います。独立レビュー、指摘の検証、完了前の証拠確認を維持し、同じ工程を重ねません。
 Claude は marketplace の本体を有効にし、Codex は現行 remote 版を使います。
 旧 `openai-api-curated` 版の無効設定は、古い配布物を併用しないために残します。
+plugin の更新は起動時の標準機能を使います。Claude は `FORCE_AUTOUPDATE_PLUGINS` と各 marketplace の
+`autoUpdate` を有効にし、CLI 本体の自動更新や不要な通信の抑止は維持します。
+Claude の更新は対話セッションの最初の入力後、最大10分の待ち時間を挟んで実行されます。
+Codex は app-server 起動時に Git marketplace と remote plugin を更新します。
+通常の shell wrapper は `--no-daemon` を渡すため、CLI 起動ごとにこの処理が走ります。
+更新はバックグラウンドで行われ、取得した版は次の起動や再読込で適用される場合があります。
+失敗した場合は既存の配布物で作業を続け、更新を確認済みとは扱いません。
 委譲を重複制御する Claude Herdr plugin も無効にし、自作の手順を使います。
 Herdr の明示操作は `herdr`、Claude からの委譲は `codex-delegate` が担当します。
 
