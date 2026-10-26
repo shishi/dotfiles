@@ -146,7 +146,7 @@ set default_user shishi
 
 # direnv
 if not set -q __dotfiles_fish_initialized; and type direnv &>/dev/null
-    eval (direnv hook fish)
+    direnv hook fish | source
 end
 
 # Command aliases
@@ -175,7 +175,7 @@ switch (uname -a)
 
         # homebrew
         if not set -q __dotfiles_fish_initialized; and test -f /opt/homebrew/bin/brew
-            eval (/opt/homebrew/bin/brew shellenv)
+            /opt/homebrew/bin/brew shellenv fish | source
         end
 
     case "*Linux*"
