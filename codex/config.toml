@@ -8,6 +8,9 @@ default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
 service_tier = "default"
+# Keep MCP OAuth tokens out of the macOS Keychain. The Nix-built codex binary
+# changes path on every update, so Keychain ACL approvals never persist.
+mcp_oauth_credentials_store = "file"
 
 [auto_review]
 # Restore the extra_policy slot missing from some model catalogs (openai/codex#50309).

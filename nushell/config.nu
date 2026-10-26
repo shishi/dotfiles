@@ -29,6 +29,12 @@ def ll [...args] {
     }
 }
 
+# Keep Codex in-process so every launch inherits its caller's environment.
+# Reusing the shared app-server daemon would drop pane-scoped variables.
+def --wrapped codex [...args] {
+    ^codex --no-daemon ...$args
+}
+
 # Keep the tracked Herdr plugin lock in sync after successful mutations.
 def --wrapped herdr [...args] {
     ^herdr ...$args
@@ -41,7 +47,7 @@ def --wrapped herdr [...args] {
         $args.1 in ['install' 'uninstall']
     ) {
         let recorder = 'bash ~/.agent-shared/bin/herdr-plugins.sh record'
-        let windows_runner = ($nu.home-path | path join '.agent-shared/bin/invoke-git-bash-hook.ps1')
+        let windows_runner = ($nu.home-dir | path join '.agent-shared/bin/invoke-git-bash-hook.ps1')
         if ((which powershell.exe | is-not-empty) and ($windows_runner | path exists)) {
             ^powershell.exe -NoProfile -ExecutionPolicy Bypass -File $windows_runner $recorder
         } else {
