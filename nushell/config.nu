@@ -29,6 +29,12 @@ def ll [...args] {
     }
 }
 
+# Keep Codex in-process so every launch inherits its caller's environment.
+# Reusing the shared app-server daemon would drop pane-scoped variables.
+def --wrapped codex [...args] {
+    ^codex --no-daemon ...$args
+}
+
 # Keep the tracked Herdr plugin lock in sync after successful mutations.
 def --wrapped herdr [...args] {
     ^herdr ...$args

@@ -52,6 +52,14 @@ function gd
     git diff $args
 }
 
+# Keep Codex in-process so every launch inherits its caller's environment.
+# Reusing the shared app-server daemon would drop pane-scoped variables.
+function codex
+{
+    $codexExe = Get-Command codex -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    & $codexExe.Source --no-daemon @args
+}
+
 # Keep the tracked Herdr plugin lock in sync after successful mutations.
 function herdr
 {
