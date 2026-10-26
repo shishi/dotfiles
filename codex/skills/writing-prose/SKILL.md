@@ -92,6 +92,7 @@ description: Use when writing or revising prose for human readers in any languag
 
 ## チェック
 
+- 日本語の説明文は、草稿が揃ったら [explain-before-shorten](../explain-before-shorten/SKILL.md) を適用し、その後に以下の最終確認を行う。同じ本文を既に推敲済みで変更がなければ繰り返さない
 - 元の依頼・訂正・参照資料を完成した文書と照合する。要求された全項目、比較の各対象と
   条件、結論を支える根拠が反映されているか確認する。自作の見出し一覧だけで充足を判定しない
 - 必須の内容を「補足」「別の観点」として落とさない。構成を変えた場合も移動元の必要な
