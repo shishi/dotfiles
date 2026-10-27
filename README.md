@@ -20,10 +20,24 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 渡します。詳細規則を hook に重複定義しません。自然言語の注入と、実行を拒否するガードは
 別の役割です。skill や記憶を読んでも、新しい権限や依頼範囲は生まれません。
 
-レビューは `review-gate`、全件調査は `investigation-discipline`、必要なテストの作成は
-`test-red-first` に集約します。作業全体へ固定の承認段階・反復回数を課す superpowers は、
-Claude では plugin 本体、Codex では配布中の各 skill を名前で無効にします。
-Codex の remote plugin はインストールを維持し、更新で skill が追加された場合は対象を見直します。
+設計・計画・実行・調査・テストは、両エージェントで有効な superpowers の対応手順を使います。
+[superpowers-local](codex/skills/superpowers-local/SKILL.md) が、目的・設計 → 作業場所 → 計画 →
+実装・検証 → 独立レビュー → 証拠確認・commit → 統合・後片付けの順序と通過条件を定めます。
+着手時と工程の切替時に適用し、既存の承認範囲で進めます。上流の配布物は編集せず、plugin 管理機能で更新します。
+原因調査は `investigation-discipline`、テスト作成は `test-red-first` が固有要求を補います。
+独立レビューの運営は `review-gate` が担います。依頼側は `requesting-code-review`、指摘受領側は
+`receiving-code-review`、完了を主張する担当は `verification-before-completion` を各段階で使います。
+同じ工程を重ねず、独立レビュー、
+指摘の検証、完了前の証拠確認を維持します。
+Claude は marketplace の本体を有効にし、Codex は現行 remote 版を使います。
+旧 `openai-api-curated` 版の無効設定は、古い配布物を併用しないために残します。
+plugin の更新は起動時の標準機能を使います。Claude は `FORCE_AUTOUPDATE_PLUGINS` と各 marketplace の
+`autoUpdate` を有効にし、CLI 本体の自動更新や不要な通信の抑止は維持します。
+Claude の更新は対話セッションの最初の入力後、最大10分の待ち時間を挟んで実行されます。
+Codex は app-server 起動時に Git marketplace と remote plugin を更新します。
+通常の shell wrapper は `--no-daemon` を渡すため、CLI 起動ごとにこの処理が走ります。
+更新はバックグラウンドで行われ、取得した版は次の起動や再読込で適用される場合があります。
+失敗した場合は既存の配布物で作業を続け、更新を確認済みとは扱いません。
 委譲を重複制御する Claude Herdr plugin も無効にし、自作の手順を使います。
 Herdr の明示操作は `herdr`、Claude からの委譲は `codex-delegate` が担当します。
 

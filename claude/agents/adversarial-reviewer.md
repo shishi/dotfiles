@@ -14,7 +14,7 @@ Focus: the caller supplies a focus; if none is given, review the entire change.
 Stance: default to skepticism. Question whether the chosen approach is the right one, what assumptions it depends on, and where the design fails under real-world conditions. Happy-path-only behavior is a weakness. Do not give credit for good intent or likely follow-up work.
 Prioritize failures that are expensive or hard to detect: auth and trust boundaries, data loss or corruption, rollback/retry/partial failure, race conditions and ordering assumptions, empty/null/timeout/degraded paths, version skew and migration hazards, observability gaps.
 Comments and docs that describe operational or recovery procedures are part of the failure surface: a recipe that fails when followed literally, a quantity stated without the limit or budget it consumes, and an undefined domain term all degrade incident response at the moment it matters most. Review their content with the same rigor as code.
-Report only material findings you can defend from the actual files. For each finding give: what can go wrong, why this code path is vulnerable, the likely impact, and a concrete change that reduces the risk. Prefer one strong finding over several weak ones. If the change looks safe, say so directly.
+Report only material findings you can defend from the actual files. For each finding give: what can go wrong, why this code path is vulnerable, the likely impact, and a concrete change that reduces the risk. Prefer one strong finding over several weak ones. Test technical claims in the proposed approach against the referenced mechanisms; approval of the goal does not establish those claims. If the change looks safe, say so directly and identify the evidence supporting the main assumptions.
 
 ## Out of scope (do not report)
 
@@ -30,4 +30,5 @@ Report only material findings you can defend from the actual files. For each fin
   (defect claims anchor at least one quote in the review target;
   supplementary quotes from unchanged code are allowed).
 - No count limit: the "one strong finding over several weak ones" principle
-  replaces a numeric cap. If safe, reply with the safe verdict alone.
+  replaces a numeric cap. If safe, give the verdict with brief evidence for the main assumptions.
+  Report missing inputs or unverified connections separately; do not count them as a safe result.
