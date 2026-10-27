@@ -21,8 +21,9 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 別の役割です。skill や記憶を読んでも、新しい権限や依頼範囲は生まれません。
 
 設計・計画・実行・調査・テストは、両エージェントで有効な superpowers の対応手順を使います。
-[superpowers-local](codex/skills/superpowers-local/SKILL.md) が、共通指示と既存 skill が求める
-承認・委譲・検証・完了条件の差分を定めます。上流の配布物は編集せず、plugin 管理機能で更新します。
+[superpowers-local](codex/skills/superpowers-local/SKILL.md) が、目的・設計 → 作業場所 → 計画 →
+実装・検証 → 独立レビュー → 証拠確認・commit → 統合・後片付けの順序と通過条件を定めます。
+着手時と工程の切替時に適用し、既存の承認範囲で進めます。上流の配布物は編集せず、plugin 管理機能で更新します。
 原因調査は `investigation-discipline`、テスト作成は `test-red-first` が固有要求を補います。
 独立レビューの運営は `review-gate` が担います。依頼側は `requesting-code-review`、指摘受領側は
 `receiving-code-review`、完了を主張する担当は `verification-before-completion` を各段階で使います。
