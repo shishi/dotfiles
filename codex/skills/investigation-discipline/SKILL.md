@@ -9,6 +9,8 @@ description: 不具合・想定外の挙動の原因調査を superpowers:system
 
 この skill は上流の調査手順に、対象・証拠・既存保証を扱う条件を加えます。全範囲の完遂と変更判断は共通 `AGENTS.md` に従います。
 
+AdGuard の通信ログ、DNS フィルタやモバイル広告の残存を調べる場合は、[ad-filter-investigation](../ad-filter-investigation/SKILL.md) を併用します。
+
 エージェントの shell / sandbox によるファイル・認証・通信の食い違いは、[実行環境の観測](references/agent-runtime.md) を読みます。Windows の文字コード・shell 間の入力や実レジストリは `windows-script-diagnostics` が担当します。
 
 ## 対象と証拠を照合する
