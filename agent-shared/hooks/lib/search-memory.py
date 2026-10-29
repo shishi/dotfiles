@@ -54,9 +54,14 @@ def main():
         key = hashlib.sha256((str(Path(repo).resolve()) + "\0" + session + "\0" +
                               (event.get("transcript_path") or "")).encode()).hexdigest()
         directory = Path.home() / ".cache" / "agent-memory-lookup"
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        cache = directory / (key + ".json")
-        if cache.exists():
+        # cache は「既読の本文を再注入しない」ための最適化。sandbox 内 (入れ子の claude -p など) で
+        # ~/.cache に書けない場合は cache 無しで続け、検索・取得そのものは止めない
+        try:
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+            cache = directory / (key + ".json")
+        except OSError:
+            cache = None
+        if cache and cache.exists():
             try:
                 seen = json.loads(cache.read_text())
                 if not isinstance(seen, dict):
@@ -74,10 +79,14 @@ def main():
             remember(f"{path}#section-{index}", preamble + part)
 
     def save():
-        if cache:
+        if not cache:
+            return
+        try:
             temporary = cache.with_suffix(f".{os.getpid()}.tmp")
             temporary.write_text(json.dumps(seen))
             temporary.replace(cache)
+        except OSError:
+            pass
 
     if mode == "reset":
         seen = {}
