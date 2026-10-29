@@ -14,6 +14,7 @@
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "1",
+    "FORCE_AUTOUPDATE_PLUGINS": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_INTERLEAVED_THINKING": "1",
     "DISABLE_MICROCOMPACT": "1",
@@ -349,31 +350,35 @@
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": false,
-    "superpowers@superpowers-marketplace": false,
+    "superpowers@superpowers-marketplace": true,
     "typescript-lsp@claude-plugins-official": true,
     "ruby-lsp@claude-plugins-official": true,
     "vue-lsp@teachme-web-lsp": true
   },
   "extraKnownMarketplaces": {
     "claude-code-herdr-plugin": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "yigitkonur/claude-code-herdr-plugin"
       }
     },
     "claude-plugins-official": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
       }
     },
     "superpowers-marketplace": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
       }
     },
     "teachme-web-lsp": {
+      "autoUpdate": true,
       "source": {
         "source": "directory",
         "path": "/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_web_duvel/.claude/lsp-marketplace"
