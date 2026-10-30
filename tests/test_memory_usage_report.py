@@ -230,12 +230,31 @@ class MemoryUsageReportTest(unittest.TestCase):
              "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c3",
                          "input": 'text(await tools.exec_command({cmd:"git -C ~/.codex/memory show HEAD:rare.md\\x20"}));'}},
             self.exec_output("c3", 0, "x"),
+            # One script, a successful memory read and a failing command: which code is whose is unknown.
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:05Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c4",
+                         "input": f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:a.md"}}));\n'
+                                  'text(await tools.exec_command({cmd: "false"}));'}},
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:06Z",
+             "payload": {"type": "custom_tool_call_output", "call_id": "c4",
+                         "output": [{"type": "input_text", "text": "Script completed\n"},
+                                    {"type": "input_text", "text": json.dumps({"chunk_id": "x", "exit_code": 0, "output": "alpha"})},
+                                    {"type": "input_text", "text": json.dumps({"chunk_id": "y", "exit_code": 1, "output": ""})}]}},
+            # The failing exit code belongs to the command after the read.
+            self.exec_call("c5", f"git -C ~/.codex/memory show {self.commit}:b.md; false"),
+            self.exec_output("c5", 1, "bravo"),
+            # Only the failing call prints its result; the read's own code is not shown.
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:07Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c6",
+                         "input": f'await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:a.md"}});\n'
+                                  'text(await tools.exec_command({cmd: "false"}));'}},
+            self.exec_output("c6", 1, ""),
         ])
 
         report = usage.build_report(str(self.repo), self.commit, [], [str(self.codex)], "2026-10-01")
 
         self.assertEqual(report["retrieved_total"], 0)
-        self.assertEqual(report["unknown_results"], 1)
+        self.assertEqual(report["unknown_results"], 4)
 
     def test_only_memory_repository_commands_and_lookup_deliveries_count(self):
         self.write_jsonl(self.claude / "session.jsonl", [
@@ -339,7 +358,8 @@ class MemoryUsageReportTest(unittest.TestCase):
 
         self.assertEqual({path: row["retrieved"] for path, row in report["files"].items() if row["retrieved"]},
                          {"b.md": 1, "rare.md": 1})
-        self.assertEqual(report["unparsed_commands"], 1)
+        # c1 only prints the memory path and c4 builds it at run time; neither is a parsed read.
+        self.assertEqual(report["unparsed_commands"], 2)
 
     def test_shell_reads_count_only_when_they_run(self):
         commands = {
@@ -355,6 +375,12 @@ class MemoryUsageReportTest(unittest.TestCase):
             "t10": f"git -c core.quotepath=off -C ~/.claude/memory show {self.commit}:projects/p.md | head -5",
             "t11": "true || # fallback\n  git -C ~/.claude/memory show HEAD:rare.md",
             "t12": "if false; then\n  git -C ~/.claude/memory show HEAD:rare.md\nfi",
+            "t13": "If ($false) { Write-Output skipped; git -C ~/.claude/memory show HEAD:rare.md }; Write-Output done",
+            "t14": 'MEM=~/.claude/memory; git -C "$MEM" show HEAD:rare.md',
+            "t15": "test -d x && git -C ~/.claude/memory show HEAD:rare.md || echo none",
+            "t16": "cat ~/.claude/memory/rare.md",
+            "t17": "Test-Path x || & git -C ~/.claude/memory show HEAD:rare.md",
+            "t18": f"git -C ~/.claude/memory show {self.commit}:projects/p.md | Select-Object -First 5",
         }
         self.write_jsonl(self.claude / "session.jsonl", [
             {"type": "assistant", "timestamp": "2026-10-29T23:59:59Z", "message": {"content": [
@@ -375,7 +401,7 @@ class MemoryUsageReportTest(unittest.TestCase):
         self.assertEqual({path: row["retrieved"] for path, row in report["files"].items() if row["retrieved"]},
                          {"a.md": 1, "b.md": 1, "projects/p.md": 1})
         # Every memory show that is not a plain git command stays visible as unparsed, even t1.
-        self.assertEqual(report["unparsed_commands"], 9)
+        self.assertEqual(report["unparsed_commands"], 14)
 
     def test_codex_reads_follow_the_literal_command_and_the_wrapper_exit_code(self):
         lookup_stdout = ("Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.\n"
@@ -399,13 +425,99 @@ class MemoryUsageReportTest(unittest.TestCase):
             {"type": "response_item", "timestamp": "2026-10-30T00:00:04Z",
              "payload": {"type": "function_call_output", "call_id": "c4",
                          "output": 'Process exited with code 0\nOutput:\n{"chunk_id":"example","exit_code":1}'}},
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:05Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c5",
+                         "input": 'const cmd = "git -C ~/.codex/memory show HEAD:rare.md";\ntext(await tools.exec_command({cmd}));'}},
+            self.exec_output("c5", 0, "x"),
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:06Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c6",
+                         "input": 'if (false) { text(await tools.exec_command({cmd: "git -C ~/.codex/memory show HEAD:rare.md"})); }'
+                                  'text(await tools.exec_command({cmd: "echo ok"}));'}},
+            self.exec_output("c6", 0, "ok"),
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:07Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c7",
+                         "input": 'const x = `${false && await tools.exec_command({cmd: "git -C ~/.codex/memory show HEAD:rare.md"})}`;\n'
+                                  'text(await tools.exec_command({cmd: "echo ok"}));'}},
+            self.exec_output("c7", 0, "ok"),
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:09Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c9",
+                         "input": 'text(await tools.exec_command({cmd: "echo hi"}));\n'
+                                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:rare.md"}}));'}},
+            self.exec_output("c9", 0, "x"),
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:10Z",
+             "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c10",
+                         "input": 'text(await tools.exec_command({cmd: "echo a"}));\nexit();\n'
+                                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md"}}));'}},
+            self.exec_output("c10", 0, "a"),
+            self.exec_call("c8", f"git -C ~/.codex/memory show {self.commit}:rare.md"),
+            {"type": "response_item", "timestamp": "2026-10-30T00:00:08Z",
+             "payload": {"type": "custom_tool_call_output", "call_id": "c8",
+                         "output": [{"type": "input_text", "text": "Script failed\nWall time 1.0 seconds\nOutput:\n"},
+                                    {"type": "input_text", "text": json.dumps({"chunk_id": "x", "exit_code": 0, "output": "x"})}]}},
         ])
 
         report = usage.build_report(str(self.repo), self.commit, [], [str(self.codex)], "2026-10-01")
 
         self.assertEqual({path: row["retrieved"] for path, row in report["files"].items() if row["retrieved"]},
-                         {"a.md": 1, "b.md": 1, "projects/p.md": 1})
-        self.assertEqual(report["unparsed_commands"], 1)
+                         {"a.md": 1, "b.md": 1, "projects/p.md": 1, "rare.md": 1})
+        # c1, the expression call in the memory script c2 (its value is unknown), c5, c6, c7 and
+        # the read after exit() in c10.
+        self.assertEqual(report["unparsed_commands"], 6)
+        # A script that did not complete does not show which reads ran.
+        self.assertEqual(report["unknown_results"], 1)
+
+    def test_codex_reads_whose_run_or_directory_is_uncertain_are_unparsed(self):
+        scripts = {
+            # exit() inside an expression may end the script before the read.
+            "e1": 'text(await tools.exec_command({cmd: "echo a"}));\nok && exit();\n'
+                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md"}}));',
+            "e2": 'text(await tools.exec_command({cmd: "echo a"}));\ntext(`${ok || exit()}`);\n'
+                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md"}}));',
+            "e3": 'text(await tools.exec_command({cmd: "echo a"}));\n`${exit()}`;\n'
+                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md"}}));',
+            "e4": 'text(await tools.exec_command({cmd: "echo a"}));\nglobalThis.exit();\n'
+                  f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md"}}));',
+            # A workdir that is not one whole literal leaves the directory unknown.
+            "w1": 'text(await tools.exec_command({cmd: "git show HEAD:CORE.md", workdir: "C:/work/" + "agent-memory"}));',
+            "w2": 'text(await tools.exec_command({cmd: "git show HEAD:CORE.md", workdir: memoryDir}));',
+            "w3": 'text(await tools.exec_command({...options, cmd: "git show HEAD:CORE.md"}));',
+            # A later spread may replace cmd or workdir.
+            "w4": f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md", workdir: "C:/work", ...options}}));',
+            "w5": f'text(await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:CORE.md", extra: {{}}, ...options}}));',
+        }
+        records = self.codex_hook()
+        for call, script in scripts.items():
+            records += [{"type": "response_item", "timestamp": "2026-10-30T00:00:01Z",
+                         "payload": {"type": "custom_tool_call", "name": "exec", "call_id": call, "input": script}},
+                        self.exec_output(call, 0, "x")]
+        # A write_stdin result in the same script may own the failing code.
+        records += [{"type": "response_item", "timestamp": "2026-10-30T00:00:02Z",
+                     "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "s1",
+                                 "input": f'const r = await tools.exec_command({{cmd: "git -C ~/.codex/memory show {self.commit}:a.md"}});\n'
+                                          'text(await tools.write_stdin({session_id: 1, chars: ""}));'}},
+                    self.exec_output("s1", 1, "")]
+        self.write_jsonl(self.codex / "rollout.jsonl", records)
+        # A transcript that cannot be read is reported instead of stopping the report.
+        (self.claude / "unreadable.jsonl").mkdir()
+
+        report = usage.build_report(str(self.repo), self.commit, [str(self.claude)], [str(self.codex)], "2026-10-01")
+
+        self.assertEqual(report["retrieved_total"], 0)
+        self.assertEqual(report["unparsed_commands"], 9)
+        self.assertEqual(report["unknown_results"], 1)
+        self.assertEqual(report["unreadable_transcripts"], 1)
+
+    def test_compressed_codex_transcripts_are_read(self):
+        records = self.codex_hook() + [self.exec_call("c1", f"git -C ~/.codex/memory show {self.commit}:a.md"),
+                                       self.exec_output("c1", 0, "alpha")]
+        text = "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n"
+        if usage.zstd is None:
+            self.skipTest("compression.zstd is not available")
+        (self.codex / "rollout.jsonl.zst").write_bytes(usage.zstd.compress(text.encode("utf-8")))
+
+        report = usage.build_report(str(self.repo), self.commit, [], [str(self.codex)], "2026-10-01")
+
+        self.assertEqual(report["files"]["a.md"]["retrieved"], 1)
 
     def test_records_before_the_period_are_ignored(self):
         self.write_jsonl(self.claude / "old.jsonl", [

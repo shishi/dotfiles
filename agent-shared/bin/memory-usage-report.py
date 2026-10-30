@@ -2,8 +2,10 @@
 
 usage: memory-usage-report.py [--since YYYY-MM-DD] [--json] <memory-repo> <commit>
 The counts are evidence for consolidation reviews, not a deletion criterion.
-A retrieval is a successful `git -C <memory repo> show`, a body delivered by a hook lookup, or a
-Read of a memory file, made after the hook output of the same user input.
+A retrieval is a `git -C <memory repo> show` that the call's exit code shows ran (a failure hidden
+by a later command still counts), a body delivered by a hook lookup, or a Read of a memory file,
+made after the hook output of the same user input. Memory commands whose execution cannot be
+established are listed as unparsed, so the counts are a lower bound.
 """
 
 import argparse
@@ -16,12 +18,20 @@ import statistics
 import subprocess
 import sys
 
+# Codex compresses older session files (*.jsonl.zst); Python 3.14 and later can read them.
+try:
+    from compression import zstd
+except ImportError:
+    zstd = None
+
 # Only the hook's own first line counts: instructions and pasted text may quote the marker.
 HOOK_OUTPUT = re.compile(r"(?m)^\[記憶検索\] 確定済み記憶の語句検索")
 CANDIDATES = re.compile(r"語句検索の候補[^:：\n]*[:：]\s*([^\n]+)")
-MEMORY_REPO = re.compile(r"agent-memory|\.(?:claude|codex)/memory")
+# The memory link may also be named relative to the dotfiles checkout (codex/memory).
+MEMORY_REPO = re.compile(r"agent-memory|\.?(?:claude|codex)/memory")
 REVISION_PATH = re.compile(r"[\w./^{}@-]+:([\w./-]+\.md)")
-MEMORY_PATH = re.compile(r"(?:agent-memory|\.(?:claude|codex)/memory)/([\w./-]+\.md)")
+MEMORY_PATH = re.compile(r"(?:agent-memory|\.?(?:claude|codex)/memory)/([\w./-]+\.md)")
+WORKDIR = re.compile(r"""\bworkdir\b\s*(?::\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\$]|\\.)*)`)(?=\s*[,}]))?""")
 # The lookup prints JSON, which stays escaped when a shell warning precedes it in the tool output.
 DELIVERED = re.compile(r'<retrieved-memory path=\\*"([^"\\]+)')
 # Codex runs shell commands from exec scripts as tools.exec_command({cmd: <string literal>}).
@@ -31,12 +41,24 @@ EXEC_COMMAND = re.compile(r"""exec_command\s*\(\s*\{[^{}]*?\bcmd\s*:\s*(?:"((?:[
 JS_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f", "v": "\v", "\n": ""}
 TRUNCATION = re.compile(r"Warning: truncated output[^\n]*\n(?:Total output lines: \d+\n)?")
 SHELL_OPERATORS = ("&&", "||", ";", "|", "&", "\n")
-LIST_SEPARATORS = ("", ";", "&", "\n")
 SHELL_SYNTAX = ";&|'\" \t#`$()<>"
 GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
-# Bash and PowerShell words that open or continue a compound command.
-COMPOUND_WORDS = {"if", "then", "elif", "else", "fi", "for", "while", "until", "do", "done", "case", "esac",
-                  "select", "function", "!", "[[", "foreach", "switch", "try", "catch", "finally", "}"}
+DIRECTORY_CHANGES = {"cd", "pushd", "set-location", "sl", "chdir"}
+# Words that end the shell or the script, so later commands may not run.
+TERMINATING = {"exit", "return", "exec", "logout", "break", "continue", "throw", "stop-process"}
+# Bash and PowerShell words that open or continue a compound command (PowerShell ignores case
+# and may attach the condition, as in `if($x)`).
+COMPOUND = re.compile(r"(?:if|then|elif|else|fi|for|while|until|do|done|case|esac|select|function|foreach|switch"
+                      r"|try|catch|finally|trap)(?![\w-])|[!{}(]|\[\[", re.I)
+# In an exec script, a call surely runs when a top-level statement awaits it directly or inside
+# the array of Promise.all / Promise.allSettled, and no earlier statement opens a condition, a loop
+# or an unfinished expression that would govern it.
+JS_STRINGS = re.compile(r"""//[^\n]*|/\*.*?\*/|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`""", re.S)
+AWAITED_CALL = re.compile(r"\s*(?:(?:const|let|var)\s+[\w$]+\s*=\s*)?(?:text\(\s*)?(?:JSON\.stringify\(\s*)?"
+                          r"await\s+(?:tools\.exec_command\(|Promise\.(?:all|allSettled)\(\s*\[)")
+DIRECT_CALL = re.compile(r"\s*tools\.exec_command\(")
+JS_CONTROL = re.compile(r"\s*(?:(?:if|else|for|while|do|switch|try|catch|finally|return|throw|with)\b|[\w$]+\s*:(?!:)"
+                        r"|exit\s*\()")
 SHELL_TOOLS = {"Bash", "PowerShell", "shell", "shell_command", "exec_command", "local_shell"}
 
 
@@ -79,6 +101,9 @@ def wrapper_codes(value):
         return []
     if "chunk_id" in value:
         return [value.get("exit_code")]
+    if value.get("status") == "rejected":
+        # A settled rejection carries no exit code, so the call's result is unknown.
+        return [None]
     if isinstance(value.get("metadata"), dict):
         return [value["metadata"].get("exit_code")]
     return [code for item in value.values() for code in wrapper_codes(item)]
@@ -92,6 +117,9 @@ def exit_status(output):
     """
     texts = [output] if isinstance(output, str) else [
         item.get("text", "") if isinstance(item, dict) else item for item in output or [] if isinstance(item, (dict, str))]
+    # An exec script that failed or is still running does not show which of its calls ran.
+    if texts and texts[0].startswith("Script ") and not texts[0].startswith("Script completed"):
+        return None
     codes = []
     for text in texts:
         notice = re.match(r"\s*Process exited with code (-?\d+)", text)
@@ -108,7 +136,8 @@ def exit_status(output):
         except ValueError:
             # A truncated wrapper may have hidden a failure.
             codes.append(None)
-    if not codes or None in codes:
+    # Mixed codes from several commands do not show whether the read among them succeeded.
+    if not codes or None in codes or (0 in codes and any(code != 0 for code in codes)):
         return None
     return all(code == 0 for code in codes)
 
@@ -151,6 +180,9 @@ def simple_commands(command):
                 word = None
         elif char == "&" and ((word or "").endswith((">", "<")) or following == ">"):
             word = (word or "") + char
+        elif char == "&" and word is None and not words and following != "&":
+            # PowerShell's call operator at the start of a command, not a separator.
+            pass
         elif op := next((op for op in SHELL_OPERATORS if text.startswith(op, index)), None):
             if word is not None:
                 words.append(word)
@@ -172,63 +204,87 @@ def simple_commands(command):
         index += 1
     if quote:
         return None
-    # Blank lines, comments and a trailing separator leave commands without words.
+    # Blank lines, comments and a trailing separator leave commands without words; an empty
+    # command after & is kept, since the line's exit code then belongs to no list.
     return [(op, found) for op, found in commands + [(operator, words + ([word] if word is not None else []))]
-            if found]
+            if found or op == "&"]
 
 
 def mentions_memory(text):
-    return bool(MEMORY_REPO.search(text.replace("\\", "/"))) or "inject-memory.sh" in text
+    # Escaped backslashes in script source (C:\\Users\\...) are path separators too.
+    return bool(MEMORY_REPO.search(re.sub(r"[\\/]+", "/", text))) or "inject-memory.sh" in text
 
 
-def command_reads(command):
+def memory_read(words):
+    """Paths read by `git ... -C <memory repo> ... show`, or True for a hook lookup; None otherwise."""
+    words = [word.replace("\\", "/") for word in words]
+    if words[:1] == ["git"]:
+        repo, index = "", 1
+        while index < len(words) and words[index].startswith("-"):
+            if words[index] in GIT_VALUE_OPTIONS and index + 1 < len(words):
+                repo = words[index + 1] if words[index] == "-C" else repo
+                index += 1
+            index += 1
+        arguments = [word for word in words[index + 1:] if not word.startswith("-")]
+        matches = [REVISION_PATH.fullmatch(word) for word in arguments]
+        # Every argument must name a file at a revision in the repository's own path form.
+        if (words[index:index + 1] == ["show"] and MEMORY_REPO.search(repo) and "$" not in "".join(words)
+                and arguments and all(match and not match[1].startswith(".") for match in matches)):
+            return {match[1] for match in matches}
+        return None
+    script = 1 if words[:1] in (["bash"], ["sh"]) else 0
+    if words[script:script + 1] and words[script].endswith("inject-memory.sh") and words[script + 2:script + 3] == ["lookup"]:
+        return True
+    return None
+
+
+def command_reads(command, in_memory=False):
     """Memory files read by `git -C <memory repo> show`, and whether the command runs a hook lookup.
 
-    None when a command that names the memory repo or the lookup cannot be read: it uses an
-    unsupported construct, reads the memory repo in a form not parsed here, or reads where the
-    call's exit code does not show that the read ran. A read that ran unconditionally but whose
-    own failure a later command hides is still counted.
+    A read counts when the call's exit code shows that the shell reached it: the line uses only
+    ;, newlines, && and pipes, no command ends the shell or opens a compound command, and a read
+    after && is in the last list, whose exit code the call reports. A failure that a later command
+    hides still counts. Any other line that names the memory repo or the lookup, or any line run
+    in the memory repo (`in_memory`, the session's working directory), is None (unparsed): its
+    read may not have run, or it reads memory in a form not parsed here.
     """
-    if not mentions_memory(command):
-        return set(), False
+    if not mentions_memory(command) and not in_memory:
+        return set(), False, True
     commands = simple_commands(command)
-    # Compound commands (if, loops, groups, subshells) decide at run time which reads run.
-    if commands is None or any(words[0] in COMPOUND_WORDS or words[0].startswith(("(", "{")) for _, words in commands):
+    if commands is None:
         return None
-    if not commands:
-        return set(), False
-    # The call's exit code comes from the last list; lists end at ;, & and newlines.
-    last_list = max(position for position, (operator, _) in enumerate(commands) if operator in LIST_SEPARATORS)
-    paths, lookup, guards = set(), False, set()
+    if any(operator in ("||", "&") for operator, _ in commands[1:]):
+        return None
+    if any(words and (COMPOUND.match(words[0]) or words[0].lower() in TERMINATING) for _, words in commands):
+        return None
+    last_list = max((position for position, (operator, _) in enumerate(commands)
+                     if position == 0 or operator in (";", "\n")), default=0)
+    paths, lookup, guarded, reading = set(), False, False, []
     for position, (operator, words) in enumerate(commands):
-        guards = set() if operator in LIST_SEPARATORS else guards | ({operator} & {"&&", "||"})
-        words = [word.replace("\\", "/") for word in words]
-        reads, runs_lookup, parsed = set(), False, False
-        if words[:1] == ["git"]:
-            repo, index = "", 1
-            while index < len(words) and words[index].startswith("-"):
-                if words[index] in GIT_VALUE_OPTIONS and index + 1 < len(words):
-                    repo = words[index + 1] if words[index] == "-C" else repo
-                    index += 1
-                index += 1
-            if words[index:index + 1] == ["show"] and not repo:
-                # The memory repo may be the working directory set by an earlier command.
+        guarded = operator == "&&" or (guarded and operator == "|")
+        read = memory_read(words)
+        if read is None:
+            first = words[0].lower() if words else ""
+            # A directory change into memory makes later relative reads possible.
+            if first in DIRECTORY_CHANGES and not in_memory:
+                in_memory = mentions_memory(" ".join(words))
+                continue
+            # A git command whose repository comes from a variable may target memory. Without -C
+            # it runs in the working directory, which `in_memory` covers.
+            repo = words[words.index("-C") + 1] if "-C" in words[:-1] else ""
+            if in_memory or (first == "git" and "$" in repo) or any(mentions_memory(word) for word in words):
                 return None
-            if words[index:index + 1] == ["show"] and MEMORY_REPO.search(repo):
-                if any("$" in word for word in words[index + 1:]):
-                    return None
-                reads = {match[1] for word in words[index + 1:] if (match := REVISION_PATH.fullmatch(word))}
-                parsed = True
-        for index, word in enumerate(words[:-2]):
-            if word.endswith("inject-memory.sh") and words[index + 2] == "lookup":
-                runs_lookup = parsed = True
-        if not parsed and "show" in words and any(MEMORY_REPO.search(word) for word in words):
+            continue
+        if guarded and position < last_list:
             return None
-        if (reads or runs_lookup) and ("||" in guards or (guards and position < last_list)):
-            return None
-        paths |= reads
-        lookup = lookup or runs_lookup
-    return paths, lookup
+        if read is True:
+            lookup = True
+        else:
+            paths |= read
+        reading.append(position)
+    # Only a single read at the end of the line owns the exit code; a failure code from another
+    # command does not show that the read failed.
+    return paths, lookup, reading in ([], [len(commands) - 1])
 
 
 def file_reads(file_path):
@@ -240,9 +296,10 @@ def hook_output(text):
     return text[match.start():] if match else None
 
 
-def claude_events(record):
+def claude_events(record, state):
     if record.get("isMeta"):
         return
+    in_memory = mentions_memory(record.get("cwd") or "")
     attachment = record.get("attachment") or {}
     if attachment.get("type") == "hook_additional_context" and attachment.get("hookEvent") == "UserPromptSubmit":
         context = hook_output(strings_of(attachment.get("content")))
@@ -262,12 +319,15 @@ def claude_events(record):
             continue
         tool_input = item.get("input") or {}
         if item.get("type") == "tool_use" and item.get("name") in SHELL_TOOLS:
-            reads = command_reads(strings_of(tool_input.get("command")))
+            reads = command_reads(strings_of(tool_input.get("command")), in_memory)
+            # A background command returns before it finishes, without an exit code.
+            if reads and (reads[0] or reads[1]) and tool_input.get("run_in_background"):
+                reads = None
             if reads is None:
                 yield ("unparsed",)
-            yield "attempt", item.get("id"), *(reads or (set(), False))
+            yield "attempt", item.get("id"), *(reads or (set(), False, True))
         elif item.get("type") == "tool_use" and item.get("name") == "Read":
-            yield "attempt", item.get("id"), file_reads(tool_input.get("file_path")), False
+            yield "attempt", item.get("id"), file_reads(tool_input.get("file_path")), False, True
         elif item.get("type") == "tool_result":
             text = strings_of(item.get("content"))
             yield "result", item.get("tool_use_id"), not item.get("is_error"), set(DELIVERED.findall(text))
@@ -280,38 +340,128 @@ def js_string(body):
     return re.sub(r"\\(.)", lambda match: JS_ESCAPES.get(match[1], match[1]), body, flags=re.S)
 
 
-def codex_commands(payload):
-    """Shell commands of a Codex tool call; None for memory commands that cannot be read statically."""
+def closing(code, opening):
+    """Index of the bracket that closes the one at `opening`, or None."""
+    level = 0
+    for index in range(opening, len(code)):
+        level += (code[index] in "([{") - (code[index] in ")]}")
+        if level == 0:
+            return index
+    return None
+
+
+def awaited_calls(script):
+    """Positions of the exec calls that surely run, mapped to the text of their call."""
+    code = JS_STRINGS.sub(lambda literal: " " * len(literal[0]), script)
+    statements, depth, start = [], 0, 0
+    for index, char in enumerate(code):
+        depth += (char in "([{") - (char in ")]}")
+        if depth < 0:
+            return {}
+        if depth == 0 and char in ";\n":
+            statements.append((start, index))
+            start = index + 1
+    calls = {}
+    for begin, end in statements + [(start, len(code))]:
+        statement = code[begin:end]
+        # exit( is looked for in the raw text first, since a template string may call it.
+        if re.search(r"(?<![\w$])exit\s*\(", script[begin:end]):
+            break
+        if not statement.strip():
+            continue
+        # A condition, loop, jump or unfinished expression may govern the following statements.
+        if depth or JS_CONTROL.match(statement) or re.search(r"(?:=>|[=(,?:&|+\-*/])\s*$", statement):
+            break
+        call = AWAITED_CALL.match(code, begin, end)
+        if not call:
+            continue
+        opening = call.end() - 1
+        if code[opening] == "(":
+            calls[opening - len("exec_command")] = script[opening:closing(code, opening) or end]
+            continue
+        # The array of Promise.all / allSettled: each element that is a direct call runs.
+        close = closing(code, opening)
+        element = opening + 1
+        while close and element < close:
+            direct = DIRECT_CALL.match(code, element)
+            if not direct:
+                break
+            call_close = closing(code, direct.end() - 1)
+            if call_close is None:
+                break
+            calls[direct.end() - len("exec_command(")] = script[direct.end() - 1:call_close + 1]
+            element = call_close + 1
+            separator = re.match(r"\s*,?", code[element:close])
+            element += separator.end()
+    return calls
+
+
+def codex_commands(payload, in_memory=False):
+    """(command, runs in memory) for each shell command of a Codex tool call.
+
+    The command is None when it may read memory but cannot be read statically. `in_memory` is the
+    turn's working directory; a call's own workdir replaces it, and an unreadable workdir leaves
+    the directory unknown.
+    """
     kind, name = payload.get("type"), payload.get("name")
     if kind == "custom_tool_call" and name == "exec":
         script = payload.get("input") or ""
-        starts = [match.start() for match in EXEC_CALL.finditer(script)]
+        # A cmd built from variables or expressions may take its value from anywhere in the
+        # script, or run in a memory working directory, so these decide whether an unreadable
+        # call may read memory.
+        memory_script = mentions_memory(script) or in_memory
+        awaited = awaited_calls(script)
+        code = JS_STRINGS.sub(lambda literal: " " * len(literal[0]), script)
         commands = []
-        for start, end in zip(starts, starts[1:] + [len(script)]):
+        for match in EXEC_CALL.finditer(script):
+            start = match.start()
             literal = EXEC_COMMAND.match(script, start)
-            if literal:
-                template = literal[3]
-                body = next((group for group in literal.groups() if group is not None), "")
-                command = None if template and "${" in template else js_string(body)
-            else:
-                # A cmd that is a variable or another expression cannot be read statically.
+            command = None
+            if literal and not (literal[3] and "${" in literal[3]):
+                command = js_string(next((group for group in literal.groups() if group is not None), ""))
+            close = closing(code, match.end() - 1)
+            arguments = script[match.end():close if close is not None else len(script)]
+            workdir = WORKDIR.search(arguments)
+            directory = in_memory
+            value = None
+            if workdir and any(group is not None for group in workdir.groups()):
+                value = js_string(next(group for group in workdir.groups() if group is not None))
+            # A spread anywhere in the arguments may replace cmd or workdir, and an argument that
+            # is not an object literal hides both, so the call's command and directory are unknown.
+            call_code = code[match.end():close if close is not None else len(code)]
+            if "..." in call_code or not call_code.lstrip().startswith("{"):
+                directory = None
+            elif value is not None:
+                directory = mentions_memory(value)
+            elif workdir or (literal is None and memory_script):
+                # A workdir given by an expression or an undecodable literal is unknown.
+                directory = None
+            if command is not None and (directory is None or start not in awaited and (mentions_memory(command) or directory)):
                 command = None
-            if command is not None or mentions_memory(script[start:end]):
-                commands.append(command)
+            # A call in memory or in an unknown directory is kept, so its reads stay visible.
+            if command is not None or memory_script or directory is not False:
+                commands.append((command, bool(directory)))
         return commands
     if kind == "function_call" and name in SHELL_TOOLS:
         try:
             arguments = json.loads(payload.get("arguments") or "{}")
         except ValueError:
-            return [None]
-        return [strings_of(arguments.get("cmd") or arguments.get("command"))]
+            return [(None, in_memory)]
+        workdir = arguments.get("workdir")
+        directory = mentions_memory(strings_of(workdir)) if workdir else in_memory
+        return [(strings_of(arguments.get("cmd") or arguments.get("command")), directory)]
     if kind == "local_shell_call":
-        return [strings_of((payload.get("action") or {}).get("command"))]
+        action = payload.get("action") or {}
+        workdir = action.get("working_directory")
+        directory = mentions_memory(strings_of(workdir)) if workdir else in_memory
+        return [(strings_of(action.get("command")), directory)]
     return []
 
 
-def codex_events(record):
+def codex_events(record, state):
     payload = record.get("payload") or {}
+    if record.get("type") == "turn_context":
+        state["in_memory"] = mentions_memory(payload.get("cwd") or "")
     if record.get("type") == "event_msg" and payload.get("type") == "task_started":
         yield ("input",)
     if record.get("type") != "response_item":
@@ -325,25 +475,43 @@ def codex_events(record):
             yield "prompt", context
     elif kind.endswith("_output"):
         output = payload.get("output")
-        # One exec script may run several commands, and one PowerShell line may chain several:
-        # any non-zero code discards the whole call's reads, which can drop a successful read.
         yield "result", payload.get("call_id"), exit_status(output), set(DELIVERED.findall(strings_of(output)))
     elif kind.endswith("call"):
-        paths, lookup = set(), False
-        for command in codex_commands(payload):
-            reads = None if command is None else command_reads(command)
+        paths, lookup, own_code = set(), False, True
+        commands = codex_commands(payload, state.get("in_memory", False))
+        for command, in_memory in commands:
+            reads = None if command is None else command_reads(command, in_memory)
             if reads is None:
                 yield ("unparsed",)
                 continue
-            command_paths, command_lookup = reads
+            command_paths, command_lookup, command_own = reads
             paths |= command_paths
             lookup = lookup or command_lookup
-        yield "attempt", payload.get("call_id"), paths, lookup
+            own_code = own_code and (command_own or not (command_paths or command_lookup))
+        # With several commands in one call, a failing code may belong to another command.
+        # write_stdin results carry exit codes too.
+        calls = len(commands) + len(re.findall(r"\bwrite_stdin\s*\(", payload.get("input") or ""))
+        yield "attempt", payload.get("call_id"), paths, lookup, own_code and calls <= 1
 
 
 def transcripts(directories):
     for directory in directories:
-        yield from glob.glob(os.path.join(directory, "**", "*.jsonl"), recursive=True)
+        for pattern in ("*.jsonl", "*.jsonl.zst"):
+            yield from glob.glob(os.path.join(directory, "**", pattern), recursive=True)
+
+
+def transcript_lines(path):
+    """Lines of a transcript; OSError when it cannot be read, including a compressed one without zstd."""
+    if not path.endswith(".zst"):
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            return handle.readlines()
+    if zstd is None:
+        raise OSError(f"compression.zstd is not available for {path}")
+    try:
+        with zstd.open(path, "rt", encoding="utf-8", errors="replace") as handle:
+            return handle.readlines()
+    except (zstd.ZstdError, EOFError) as error:
+        raise OSError(str(error)) from error
 
 
 def build_report(repo, commit, claude_dirs, codex_dirs, since):
@@ -351,43 +519,50 @@ def build_report(repo, commit, claude_dirs, codex_dirs, since):
     files = {path: {"chars": len(git(repo, "show", f"{commit}:{path}")), "retrieved": 0, "candidate": 0, "outside": 0}
              for path in tree if path not in ("MEMORY.md", "CONVENTIONS.md")}
     prompts = []
-    unknown_results = unparsed_commands = 0
+    unknown_results = unparsed_commands = unreadable = 0
     for parse, directories in ((claude_events, claude_dirs), (codex_events, codex_dirs)):
         for transcript in transcripts(directories):
             current = None
-            pending = {}
-            with open(transcript, encoding="utf-8", errors="replace") as handle:
-                for line in handle:
-                    try:
-                        record = json.loads(line)
-                    except ValueError:
+            pending, state = {}, {}
+            try:
+                lines = transcript_lines(transcript)
+            except OSError:
+                # Left out of the counts and reported, not treated as read.
+                unreadable += 1
+                continue
+            for line in lines:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if record.get("timestamp", since) < since:
+                    continue
+                for event in parse(record, state):
+                    if event[0] == "input":
+                        current, pending = None, {}
+                    elif event[0] == "prompt":
+                        listed = CANDIDATES.search(event[1])
+                        names = {name.strip() for name in listed[1].split(",")} if listed else set()
+                        current = {"chars": len(event[1]), "candidates": names & files.keys(), "retrieved": set()}
+                        prompts.append(current)
+                        pending = {}
+                    elif current is None:
                         continue
-                    if record.get("timestamp", since) < since:
-                        continue
-                    for event in parse(record):
-                        if event[0] == "input":
-                            current, pending = None, {}
-                        elif event[0] == "prompt":
-                            listed = CANDIDATES.search(event[1])
-                            names = {name.strip() for name in listed[1].split(",")} if listed else set()
-                            current = {"chars": len(event[1]), "candidates": names & files.keys(), "retrieved": set()}
-                            prompts.append(current)
-                            pending = {}
-                        elif current is None:
-                            continue
-                        elif event[0] == "unparsed":
-                            unparsed_commands += 1
-                        elif event[0] == "attempt":
-                            pending[event[1]] = (event[2], event[3])
-                        else:
-                            _, call, succeeded, delivered = event
-                            reads, lookup = pending.pop(call, (set(), False))
-                            # A lookup counts only the bodies it delivered, not the path it was asked for.
-                            found = (reads | (delivered if lookup else set())) & files.keys()
-                            if succeeded:
-                                current["retrieved"] |= found
-                            elif succeeded is None and (reads or lookup):
-                                unknown_results += 1
+                    elif event[0] == "unparsed":
+                        unparsed_commands += 1
+                    elif event[0] == "attempt":
+                        pending[event[1]] = event[2:]
+                    else:
+                        _, call, succeeded, delivered = event
+                        reads, lookup, own_code = pending.pop(call, (set(), False, True))
+                        if succeeded is False and not own_code:
+                            succeeded = None
+                        # A lookup counts only the bodies it delivered, not the path it was asked for.
+                        found = (reads | (delivered if lookup else set())) & files.keys()
+                        if succeeded:
+                            current["retrieved"] |= found
+                        elif succeeded is None and (reads or lookup):
+                            unknown_results += 1
     for prompt in prompts:
         for path in prompt["candidates"]:
             files[path]["candidate"] += 1
@@ -403,6 +578,7 @@ def build_report(repo, commit, claude_dirs, codex_dirs, since):
         "prompts": len(prompts),
         "unknown_results": unknown_results,
         "unparsed_commands": unparsed_commands,
+        "unreadable_transcripts": unreadable,
         "prompts_with_retrieval": sum(bool(prompt["retrieved"]) for prompt in prompts),
         "retrieved_in_candidates": sum(len(prompt["retrieved"] & prompt["candidates"]) for prompt in prompts),
         "retrieved_total": sum(len(prompt["retrieved"]) for prompt in prompts),
@@ -421,8 +597,11 @@ def print_text(report):
     print(f"取得した本文のうち候補一覧にあったもの: {report['retrieved_in_candidates']} / {report['retrieved_total']}"
           f"（候補一覧の延べ件数 {report['candidates_total']}）")
     print("CORE.md と現プロジェクトの記憶は起動時に自動注入されるため、取得回数に現れない。")
-    print("取得は、hook が動いた入力の中で成功した `git -C <記憶 repo> show`・Read と、lookup が渡した本文だけを数える。"
+    print("取得は、hook が動いた入力の中で実行を確かめられた `git -C <記憶 repo> show`(後のコマンドに隠れた失敗を含む)、"
+          "成功した Read、lookup が渡した本文だけを数える。実行を確かめられない記憶関連のコマンドは解析不能に数えるので、"
+          "取得数は記憶を読んだ回数の下限になる。"
           "サブエージェントの取得は含まない。")
+    print(f"読めずに集計から外した会話記録: {report['unreadable_transcripts']} 件")
     print(f"成否を判定できず数えなかった記憶の読み取り: {report['unknown_results']} 件、"
           f"記憶 repo か lookup を含むが解析できなかったコマンド: {report['unparsed_commands']} 件")
     print("「候補外」は、その入力の候補一覧に無かったのに取得された回数。索引の手がかりを直す対象になる。")
