@@ -2051,6 +2051,28 @@ later(function()
   add({
     source = 'stevearc/conform.nvim',
   })
+
+  -- `bun fmt` は Bun 1.4.4 で追加されたので、それより古い bun では prettier に任せる
+  local bun_fmt_available
+  local function has_bun_fmt()
+    if bun_fmt_available == nil then
+      if vim.fn.executable('bun') == 0 then
+        return false
+      end
+      local ok, result = pcall(function()
+        return vim.system({ 'bun', '--version' }, { text = true }):wait(1000)
+      end)
+      if not ok or result.code ~= 0 then
+        -- タイムアウトなど一時的な失敗は記録せず、次の保存で確かめ直す
+        return false
+      end
+      local version = vim.version.parse(result.stdout)
+      bun_fmt_available = version ~= nil and vim.version.ge(version, '1.4.4')
+    end
+    return bun_fmt_available
+  end
+  local bun_or_prettier = { 'bun_fmt', 'prettier', stop_after_first = true }
+
   require('conform').setup({
     default_format_opts = {
       lsp_format = 'fallback',
@@ -2074,32 +2096,41 @@ later(function()
       -- その他のファイルはsetup時の設定でフォーマット
       return {}
     end,
-    -- formatters = {
-    --   yaml = {
-    --     append_args = { '--single-quote' },
-    --   },
-    -- },
+    formatters = {
+      bun_fmt = {
+        command = 'bun',
+        -- --no-script: package.json の fmt スクリプトではなく常にフォーマッタを起動する
+        args = { 'fmt', '--no-script', '--stdin-filepath', '$FILENAME' },
+        -- bun fmt は作業ディレクトリから bunfig.toml を探すので、ファイルに近い設定の root から起動する
+        cwd = function(self, ctx)
+          local prettier_root = require('conform.formatters.prettier').cwd(self, ctx)
+          local bunfig_root = vim.fs.root(ctx.dirname, 'bunfig.toml')
+          if prettier_root and bunfig_root then
+            return #bunfig_root > #prettier_root and bunfig_root or prettier_root
+          end
+          return prettier_root or bunfig_root or ctx.dirname
+        end,
+        condition = has_bun_fmt,
+      },
+    },
     formatters_by_ft = {
       go = { 'gofmt', 'goimports' },
-      -- json = { 'deno_fmt' },
-      -- jsonc = { 'deno_fmt' },
-      json = { 'prettier' },
-      jsonc = { 'prettier' },
+      json = bun_or_prettier,
+      jsonc = bun_or_prettier,
       lua = { 'stylua' },
       ruby = { 'rubocop' },
       sh = { 'shfmt' },
-      -- yaml = { 'deno_fmt' },
-      yaml = { 'prettier' },
-      javascript = { 'prettier' },
-      javascriptreact = { 'prettier' },
-      typescript = { 'prettier' },
-      typescriptreact = { 'prettier' },
-      vue = { 'prettier' },
-      css = { 'prettier' },
-      scss = { 'prettier' },
-      less = { 'prettier' },
-      html = { 'prettier' },
-      markdown = { 'prettier' },
+      yaml = bun_or_prettier,
+      javascript = bun_or_prettier,
+      javascriptreact = bun_or_prettier,
+      typescript = bun_or_prettier,
+      typescriptreact = bun_or_prettier,
+      vue = bun_or_prettier,
+      css = bun_or_prettier,
+      scss = bun_or_prettier,
+      less = bun_or_prettier,
+      html = bun_or_prettier,
+      markdown = bun_or_prettier,
       fish = { 'fish_indent' },
     },
   })

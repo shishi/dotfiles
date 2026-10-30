@@ -1,5 +1,6 @@
 -- Load the configuration with isolated XDG data/state, installed plugins, and
--- prettier available before running this integration check.
+-- prettier available before running this integration check. With Bun 1.4.4 or
+-- later on PATH, the check expects `bun fmt` instead of prettier.
 local function check()
   assert(
     vim.wait(3000, function()
@@ -87,13 +88,16 @@ local function check()
     html = '<div   class="x"><p>hi</p></div>',
     md = '-  item',
   }
+  local bun = vim.fn.executable('bun') == 1 and vim.system({ 'bun', '--version' }, { text = true }):wait()
+  local bun_version = bun and bun.code == 0 and vim.version.parse(bun.stdout)
+  local formatter = bun_version and vim.version.ge(bun_version, '1.4.4') and 'bun_fmt' or 'prettier'
   for extension, input in pairs(samples) do
     local path = dir .. '/format.' .. extension
     vim.cmd.edit(path)
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { input })
     vim.cmd.write()
     assert(table.concat(vim.fn.readfile(path), '\n') ~= input, extension .. ' was not formatted on save')
-    assert(require('conform').list_formatters(0)[1].name == 'prettier', extension .. ' must use prettier')
+    assert(require('conform').list_formatters(0)[1].name == formatter, extension .. ' must use ' .. formatter)
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { input })
     vim.cmd('write!')
     assert(vim.fn.readfile(path)[1] == input, ':w! must skip formatting')
