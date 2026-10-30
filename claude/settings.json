@@ -243,9 +243,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory core",
+            "timeout": 20,
+            "statusMessage": "個人記憶を同期・注入中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory project",
             "timeout": 10,
-            "statusMessage": "個人記憶を注入中..."
+            "statusMessage": "プロジェクト記憶を注入中..."
           }
         ]
       },

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索候補を渡す。
+# Claude の SessionStart は hook 出力 1 つあたりの文字数上限に収めるため、core と project の
+# 2 つの hook に分ける。索引は毎入力の lookup で届くので、Claude の起動時には出さない。
 # 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
-# usage: inject-memory.sh [MEMORY_DIR] [lookup [検索語...]]
+# usage: inject-memory.sh [MEMORY_DIR] [core|project|lookup [検索語...]]
 set -u
 
 MEMORY_DIR="${1:-${HOME}/.claude/memory}"
@@ -36,8 +38,14 @@ is_num() { # $1 が空でない十進数か(外部コマンドの出力を算術
   case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
 }
 
+# 同じイベントの hook は並列に走るため、同期は 1 つの hook だけで行う。
+# Claude の project は同期を待たずに読み、その古さを未同期と同じく出力で伝える。
 sync_note=""
-if [ "$mode" != lookup ]; then
+pre_sync=""
+if [ "$mode" = core ]; then
+  pre_sync=$(git -C "$MEMORY_DIR" rev-parse --verify -q 'main^{commit}' 2>/dev/null | tr -d '\r')
+fi
+if [ "$mode" != lookup ] && [ "$mode" != project ]; then
   sync_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/memory-write-preflight.sh"
   if bash "$sync_helper" "$MEMORY_DIR" --read-sync >/dev/null 2>&1; then
     sync_note="記憶の同期: origin/main と同期済み"
@@ -97,7 +105,8 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
     echo "<personal-memory-warning>記憶 repo が不健全なため注入をスキップ: ${fatal}(${MEMORY_DIR})。${recovery}</personal-memory-warning>"
     exit 0
   fi
-  if ! porcelain=$(git -C "$MEMORY_DIR" status --porcelain 2>/dev/null); then
+  # 並列に走る同期の fast-forward と index.lock を取り合わないよう、index の refresh を書かない。
+  if ! porcelain=$(git --no-optional-locks -C "$MEMORY_DIR" status --porcelain 2>/dev/null); then
     echo "<personal-memory-warning>記憶 repo の Git 状態を確認できないため注入をスキップしました</personal-memory-warning>"
     exit 0
   fi
@@ -322,9 +331,73 @@ if [ "$mode" = lookup ]; then
   fi
   exit 2
 fi
-# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。
-if [ -n "$py_bin" ]; then
+# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。既読として記録するのは、
+# この出力が全文を渡す文書だけにする。Claude では並列に走る 2 つの hook が同じ記録を
+# 書き合わないよう、project 側が共有の記録をリセットし、core 側は CORE を別の記録に書く。
+if [ -n "$py_bin" ] && [ "$mode" != core ] && [ "$mode" != project ]; then
   printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
+fi
+
+# Claude は hook 出力 1 つあたり 10,000 文字を超えると、先頭だけのプレビューに置き換えて
+# 本文を渡さない。超える場合は本文の代わりに、確定 commit から全文を読む手順を渡す。
+if [ "$mode" = core ] || [ "$mode" = project ]; then
+  claude_limit=10000
+  if [ "$mode" = core ]; then
+    tag=personal-memory
+    header="個人永続記憶の全体価値観と方針。索引は毎入力の <personal-memory-index>、プロジェクト記憶は別の起動時 hook で渡す。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
+    project_note=""
+    if [ -n "$pre_sync" ] && [ "$pre_sync" != "$snapshot" ] \
+      && ! git -C "$MEMORY_DIR" diff --quiet "$pre_sync" "$snapshot" -- "$project_path" 2>/dev/null; then
+      project_note="⚠ 起動時の同期でプロジェクト記憶(${project_path})が同期で更新された。別の起動時 hook が渡した本文は同期前の版なので、作業前に lookup で $(printf '%q' "$project_path") を取得し直すこと"
+    fi
+    notes=("$sync_note" "$degraded" "$ahead_warn" "$project_note")
+    doc_path="CORE.md" doc_present="$core_present" doc_content="$core_content"
+    doc_title="## 全体価値観と方針"
+  else
+    tag=personal-memory-project
+    header="個人永続記憶のプロジェクト記憶。"
+    if [ -n "$project_present" ]; then
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
+    elif [ -n "$degraded" ]; then
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: 最後の commit 時点ではなし)"
+    else
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
+    fi
+    notes=("⚠ 起動時の同期を待たずに読んだローカルの確定済み記憶(同期は並列に走る CORE 側の起動時 hook が行う)。未同期の記憶と同じく、別端末の最新変更が必要なら lookup で取得し直すこと" "$slug_note" "$degraded")
+    doc_path="$project_path" doc_present="$project_present" doc_content="$project_content"
+    doc_title="## プロジェクト記憶 (${slug})"
+  fi
+  render() { # $1=本文。空なら header と注記だけ
+    printf '<%s>\n%s\n' "$tag" "$header"
+    for note in "${notes[@]}"; do
+      [ -n "$note" ] && printf '%s\n' "$note"
+    done
+    [ -n "$1" ] && printf '\n%s\n' "$1"
+    printf '</%s>\n' "$tag"
+  }
+  body=""
+  [ -n "$doc_present" ] && body=$(printf '%s\n%s' "$doc_title" "$doc_content")
+  output=$(render "$body")
+  # Claude の文字数は UTF-16 の単位で数える。数えられないときは本文をそのまま出す。
+  chars=""
+  if [ -n "$py_bin" ]; then
+    chars=$(printf '%s' "$output" | "$py_bin" -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8", "replace").encode("utf-16-le")) // 2)' 2>/dev/null | tr -d '\r')
+  fi
+  delivered="$doc_path"
+  if is_num "$chars" && [ "$chars" -ge "$claude_limit" ]; then
+    mem_q=$(printf '%q' "$MEMORY_DIR")
+    show_q=$(printf '%q' "${snapshot}:${doc_path}")
+    output=$(render "<personal-memory-warning>${doc_path} を含む起動時の注入が ${chars} 文字で、Claude の hook 出力上限(${claude_limit} 文字)を超えるため本文を省略しました。作業前に \`git -C ${mem_q} show ${show_q}\` で全文を読むこと</personal-memory-warning>")
+    delivered=""
+  fi
+  [ -n "$doc_present" ] || delivered=""
+  if [ -n "$py_bin" ]; then
+    record_mode=reset-project
+    [ "$mode" = core ] && record_mode=record-core
+    printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" "$record_mode" "$delivered" "$secret_pattern" || true
+  fi
+  printf '%s\n' "$output"
+  exit 0
 fi
 
 echo "<personal-memory>"

@@ -534,19 +534,39 @@ release() {
   return "$release_status"
 }
 
+# Read-only counterpart of acquire's preconditions, for callers that only need to know
+# whether a writer could start now. It never creates the state root.
+idle() {
+  local repo state_root
+
+  repo="$(canonical_repo "$1")" || return 1
+  state_root="$repo/.git/memory-write-state"
+  if [ -e "$repo/.git/memory-write.lock" ] || [ -L "$repo/.git/memory-write.lock" ]; then
+    return 1
+  fi
+  retirement_exists "$repo" && return 1
+  if [ -e "$state_root" ] || [ -L "$state_root" ]; then
+    [ -d "$state_root" ] && [ ! -L "$state_root" ] || return 1
+    [ "$(stat_mode "$state_root")" = 700 ] || return 1
+    state_has_other_entries "$state_root" && return 1
+  fi
+  return 0
+}
+
 main() {
   if [ "$#" -eq 3 ] && [ "$1" = verify ]; then
     verify "$2" "$3"
     return $?
   fi
   if [ "$#" -ne 2 ]; then
-    warn "usage: acquire <canonical-repo> | release <opaque-handle> | verify <opaque-handle> <canonical-repo>"
+    warn "usage: acquire <canonical-repo> | release <opaque-handle> | verify <opaque-handle> <canonical-repo> | idle <canonical-repo>"
     return 2
   fi
   case "$1" in
     acquire) acquire "$2" ;;
     release) release "$2" ;;
-    *) warn "usage: acquire <canonical-repo> | release <opaque-handle>"; return 2 ;;
+    idle) idle "$2" ;;
+    *) warn "usage: acquire <canonical-repo> | release <opaque-handle> | verify <opaque-handle> <canonical-repo> | idle <canonical-repo>"; return 2 ;;
   esac
 }
 

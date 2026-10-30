@@ -114,27 +114,85 @@ else
   ng "offline startup uses committed memory with an explicit sync warning"
 fi
 
-# A stuck transport must finish before the 10-second hook deadline and leave no lock.
-mkdir "$TMP/bin"
-export MEMORY_TEST_REAL_GIT
-MEMORY_TEST_REAL_GIT=$(command -v git)
-cat >"$TMP/bin/git" <<'EOF'
-#!/usr/bin/env bash
-if [ "${3:-}" = fetch ]; then
-  sleep 20
-  exit 0
-fi
-exec "$MEMORY_TEST_REAL_GIT" "$@"
-EOF
-chmod +x "$TMP/bin/git"
-started=$SECONDS
-out=$(PATH="$TMP/bin:$PATH" AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/timeout.err")
+# The remote side is replaced through upload-pack because Windows Python does not
+# resolve a git stub placed on the MSYS PATH.
+make_upload_pack() { # $1=script path $2=body run before serving the fetch
+  printf '#!/usr/bin/env bash
+%s
+exec git upload-pack "$@"
+' "$2" >"$1"
+  chmod +x "$1"
+}
+
+# The network wait must not block writers: the write lock is taken only for the local update.
+make_fixture network || exit 1
+make_upload_pack "$TMP/record-upload-pack"   "if [ -e '$CLONE/.git/memory-write.lock' ]; then echo held; else echo free; fi >>'$TMP/fetch.log'"
+git -C "$CLONE" config remote.origin.uploadpack "$TMP/record-upload-pack"
+printf 'network update
+' >>"$SEED/CONVENTIONS.md"
+git -C "$SEED" add CONVENTIONS.md && git_commit "$SEED" network-update
+git -C "$SEED" push -q "$ORIGIN" main
+AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/network.err"
 status=$?
-if [ "$status" -ne 0 ] && [ $((SECONDS - started)) -lt 10 ] \
-  && grep -q 'timed out' "$TMP/timeout.err" && [ ! -e "$CLONE/.git/memory-write.lock" ]; then
+if [ "$status" -eq 0 ] && [ "$(cat "$TMP/fetch.log" 2>/dev/null)" = free ]   && [ "$(git -C "$CLONE" rev-parse HEAD)" = "$(git -C "$ORIGIN" rev-parse main)" ]   && [ "$(git -C "$CLONE" rev-parse origin/main)" = "$(git -C "$ORIGIN" rev-parse main)" ]   && [ ! -e "$CLONE/.git/memory-write.lock" ]; then
+  ok "read sync fetches without holding the write lock and still fast-forwards"
+else
+  ng "read sync fetches without holding the write lock and still fast-forwards"
+fi
+# Already in sync, but a writer holds the lock: the reader must not claim to be synchronized.
+handle=$(bash "$LOCK_HELPER" acquire "$CLONE")
+AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/held.err"
+status=$?
+if [ "$status" -ne 0 ] && [ -d "$handle" ] && grep -q 'write lock is held or needs recovery' "$TMP/held.err"; then
+  ok "an up-to-date read sync still reports a writer's lock as unsynchronized"
+else
+  ng "an up-to-date read sync still reports a writer's lock as unsynchronized"
+fi
+bash "$LOCK_HELPER" release "$handle"
+
+# A stuck transport must finish well within the startup hook timeout and leave no lock.
+make_upload_pack "$TMP/stuck-upload-pack" "sleep 20"
+git -C "$CLONE" config remote.origin.uploadpack "$TMP/stuck-upload-pack"
+printf 'unreachable update
+' >>"$SEED/CONVENTIONS.md"
+git -C "$SEED" add CONVENTIONS.md && git_commit "$SEED" unreachable-update
+git -C "$SEED" push -q "$ORIGIN" main
+started=$SECONDS
+out=$(AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/timeout.err")
+status=$?
+if [ "$status" -ne 0 ] && [ $((SECONDS - started)) -lt 10 ]   && grep -q 'timed out' "$TMP/timeout.err" && [ ! -e "$CLONE/.git/memory-write.lock" ]; then
   ok "read sync bounds network wait and releases the lock on timeout"
 else
   ng "read sync bounds network wait and releases the lock on timeout"
+fi
+
+# The unlocked fetch must not touch the refs a writer uses, even while the writer holds the lock.
+make_fixture refs || exit 1
+handle=$(bash "$LOCK_HELPER" acquire "$CLONE")
+tracking_before=$(git -C "$CLONE" rev-parse origin/main)
+printf 'writer-time update\n' >>"$SEED/CONVENTIONS.md"
+git -C "$SEED" add CONVENTIONS.md && git_commit "$SEED" writer-time-update
+git -C "$SEED" push -q "$ORIGIN" main
+AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/refs.err"
+status=$?
+if [ "$status" -ne 0 ] && [ "$(git -C "$CLONE" rev-parse origin/main)" = "$tracking_before" ] \
+  && [ "$(git -C "$CLONE" rev-parse refs/memory-read-sync/main)" = "$(git -C "$ORIGIN" rev-parse main)" ] \
+  && [ ! -e "$CLONE/.git/FETCH_HEAD" ] && [ -d "$handle" ]; then
+  ok "read sync leaves origin/main and FETCH_HEAD to the lock holder"
+else
+  ng "read sync leaves origin/main and FETCH_HEAD to the lock holder"
+fi
+bash "$LOCK_HELPER" release "$handle"
+
+# Up to date, but the private state root is not what acquire accepts.
+make_fixture badroot || exit 1
+rm -rf "$CLONE/.git/memory-write-state"
+printf 'not a directory\n' >"$CLONE/.git/memory-write-state"
+AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/badroot.err"
+if [ "$?" -ne 0 ] && grep -q 'write lock is held or needs recovery' "$TMP/badroot.err"; then
+  ok "an up-to-date read sync rejects a state root that acquire would reject"
+else
+  ng "an up-to-date read sync rejects a state root that acquire would reject"
 fi
 
 echo "PASS=$PASS FAIL=$FAIL"

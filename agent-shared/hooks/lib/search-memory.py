@@ -48,21 +48,27 @@ def main():
     repo, snapshot, mode, project, secret_pattern = sys.argv[1:]
     event = json.load(sys.stdin)
     session = event.get("session_id", "")
-    cache = None
+    cache = core_cache = None
     seen = {}
+
+    def load(path):
+        try:
+            loaded = json.loads(path.read_text())
+        except (ValueError, OSError):
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+
     if session:
         key = hashlib.sha256((str(Path(repo).resolve()) + "\0" + session + "\0" +
                               (event.get("transcript_path") or "")).encode()).hexdigest()
         directory = Path.home() / ".cache" / "agent-memory-lookup"
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         cache = directory / (key + ".json")
-        if cache.exists():
-            try:
-                seen = json.loads(cache.read_text())
-                if not isinstance(seen, dict):
-                    seen = {}
-            except (ValueError, OSError):
-                seen = {}
+        # Claude's CORE startup hook runs in parallel with the project hook, so it records
+        # what it delivered in its own file instead of writing the shared record. Retrievals
+        # recorded in the shared file after startup take precedence over the startup record.
+        core_cache = directory / (key + ".core.json")
+        seen = {**load(core_cache), **load(cache)}
 
     def remember(path, body):
         seen[path] = hashlib.sha256(body.encode()).hexdigest()
@@ -73,19 +79,23 @@ def main():
         for index, part in enumerate(parts):
             remember(f"{path}#section-{index}", preamble + part)
 
-    def save():
-        if cache:
-            temporary = cache.with_suffix(f".{os.getpid()}.tmp")
+    def save(target=None):
+        target = target or cache
+        if target:
+            temporary = target.with_suffix(f".{os.getpid()}.tmp")
             temporary.write_text(json.dumps(seen))
-            temporary.replace(cache)
+            temporary.replace(target)
 
-    if mode == "reset":
+    if mode in ("reset", "reset-project", "record-core"):
+        # reset-project and record-core are the two halves of Claude's split startup output;
+        # each overwrites only its own record with the document it delivered in full (the path
+        # argument, possibly empty), so either may finish first.
         seen = {}
-        for path in ["CORE.md", project]:
+        for path in ["CORE.md", project] if mode == "reset" else [project]:
             if path and subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{snapshot}:{path}"],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
                 remember_document(path, git(repo, "show", f"{snapshot}:{path}"))
-        save()
+        save(core_cache if mode == "record-core" else cache)
         return
 
     prompt = event.get("prompt", "")
