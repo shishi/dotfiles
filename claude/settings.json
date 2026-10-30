@@ -17,7 +17,6 @@
     "FORCE_AUTOUPDATE_PLUGINS": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_INTERLEAVED_THINKING": "1",
-    "DISABLE_MICROCOMPACT": "1",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "DISABLE_TELEMETRY": "1",
     "MAX_MCP_OUTPUT_TOKENS": "50000",
@@ -429,7 +428,7 @@
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "preferredNotifChannel": "terminal_bell",
-  "autoCompactEnabled": false,
+  "autoCompactEnabled": true,
   "skipAutoPermissionPrompt": true,
   "autoUpdates": false,
   "feedbackSurveyState": {
