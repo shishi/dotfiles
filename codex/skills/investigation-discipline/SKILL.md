@@ -1,6 +1,6 @@
 ---
 name: investigation-discipline
-description: 不具合・想定外の挙動の原因調査を superpowers:systematic-debugging で進め、観測経路、既存保証と修正の収束を補います。全件調査・抽出・比較の対象と証拠の照合、回避策・残置・削除の判断にも使います。
+description: 不具合・想定外の挙動の原因調査を superpowers:systematic-debugging で進め、観測経路、既存保証と修正の収束を補います。全件調査・抽出・比較の対象と証拠の照合、回避策・残置・削除の判断にも使います。Claude Code・Codex の sandbox 設定を追加・変更して検証するときも使います。
 ---
 
 # 原因調査の追加条件
@@ -9,7 +9,7 @@ description: 不具合・想定外の挙動の原因調査を superpowers:system
 
 この skill は上流の調査手順に、対象・証拠・既存保証を扱う条件を加えます。全範囲の完遂と変更判断は共通 `AGENTS.md` に従います。
 
-エージェントの shell / sandbox によるファイル・認証・通信の食い違いは、[実行環境の観測](references/agent-runtime.md) を読みます。Windows の文字コード・shell 間の入力や実レジストリは `windows-script-diagnostics` が担当します。
+エージェントの shell / sandbox によるファイル・認証・通信の食い違いや、Claude Code・Codex の sandbox 設定の照合・検証は、[実行環境の観測](references/agent-runtime.md) を読みます。Windows の文字コード・shell 間の入力や実レジストリは `windows-script-diagnostics` が担当します。
 
 ## 対象と証拠を照合する
 

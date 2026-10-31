@@ -151,7 +151,7 @@ PY
 fi
 
 # 手順 2: 同一プロセスで再解決した正本を渡して lock を取得する。
-# trap は acquire より前に張る。取得成功の瞬間から解放保証を効かせるためで、
+# trap は acquire より前に張る。取得成功の瞬間から解放を保証するためで、
 # 取得後に張ると trap 設置までの数命令が lock を漏らす窓になる。
 # handle が空のまま死んだ場合は finish_preflight のガードが release を抑止する
 # (acquire 自身の失敗掃除は lock helper 内部の trap が行う)。

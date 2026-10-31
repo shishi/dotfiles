@@ -18,11 +18,11 @@ codex の進捗出力はログファイルへ逃がし、失敗したときだ�
 である Claude が差分を見て行う。したがって**委譲専用の検査機構は持たない** — 妥当性は差分の
 確認と review-gate skill で見る。
 
-**ただし codex 側の hook は委譲の中でも効く。** `~/.codex/hooks.json` の PreToolUse hook は委譲先の
+**ただし codex 側の hook は委譲の中でも適用される。** `~/.codex/hooks.json` の PreToolUse hook は委譲先の
 Bash 呼び出しに対しても実行前に走り、拒否されたコマンドは実行されないまま
 `Command blocked by PreToolUse hook: <理由>` が委譲先へ返る。`hooks.state` のエントリは `enabled` が
 省略されていても走ることがあるため、省略を「無効」の印として読まない(既定値を定める codex 側の
-記述が無く、省略からは状態を判定できない)。これは委譲専用の検査ではなく、codex を使う限り効く経路
+記述が無く、省略からは状態を判定できない)。これは委譲専用の検査ではなく、codex を使う限り適用される経路
 である。
 
 **hook が見るのは Bash に渡されたコマンド文字列であって、委譲先が書き込む内容ではない。** heredoc の
@@ -75,7 +75,7 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 未インストールのリポジトリでは、AGENTS.md が求めるテストや build の実行自体がこれに当たる。
 開けるとその委譲の送信先が OpenAI だけではなくなるので、必要なタスクに限る。
 
-**`read-only` では `NET=true` が黙って効かない。** `sandbox_workspace_write.network_access` は
+**`read-only` では `NET=true` が黙って無視される。** `sandbox_workspace_write.network_access` は
 `workspace-write` のときだけ読まれるキーで、`read-only` の委譲は `NET` の値に関わらず
 `Could not resolve host` になる。エラーにならず素通りするので、設定したつもりで遮断されたまま走る。
 ネットワークが要る調査は explore では行えない — `workspace-write` の委譲にする(書き込まないタスク
@@ -139,7 +139,7 @@ Do not commit, stash, or create branches. Leave all changes in the working tree.
 `~/.codex/AGENTS.md` は codex に独立レビューを求めるが、レビューは委譲した側が委譲後に行う。
 内側で走らせると二重になり、委譲 1 本の所要時間と OpenAI 枠の消費が増える。commit を禁じるのは、
 レビューゲートが commit の前に走るため、委譲先が commit すると Claude が差分を見る前に変更が
-確定するからである。無効化が効かなかった場合は差分を見る手順で気づく — commit されていれば
+確定するからである。無効化が反映されなかった場合は差分を見る手順で気づく — commit されていれば
 `git log`、stash されていれば「変更が無いのに `changed_files` が非空」という食い違いに現れる。
 
 ### 3. 走査・実行・結果の取り出し
@@ -155,7 +155,7 @@ case "${WORK##*/}" in (codex-delegate-??????) ;; (*) exit 96 ;; esac  # 1 回目
 gitleaks dir "$WORK/prompt.md" --no-banner || exit 98   # 検出あり・実行不能とも委譲しない
 mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、または目印を作れない
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
-NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ効く)
+NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ読まれる)
 DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
 DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
 ROLE=explore             # explore / chore / implement
@@ -191,7 +191,7 @@ exit "$rc"
 スニペットの順序・リダイレクト・目印の取り方・`--config` はいずれも、実測した失敗を
 避けるために選ばれている。根拠を確認せずに単純化すると、その失敗が戻る。
 
-実行時に効く事実を 1 つだけここに置く。
+実行時に必要な事実を 1 つだけここに置く。
 
 - **`writable_roots=[]` でも `$TMPDIR` と `/tmp` は書き込み可能なままである。** 塞がるのは
   ホームディレクトリなど「workspace でも一時領域でもない場所」で、書き込みが workspace 内に
