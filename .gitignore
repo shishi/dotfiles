@@ -32,8 +32,6 @@
 !/codex/agents/**
 !/codex/hooks/
 !/codex/hooks/**
-!/codex/rules/
-!/codex/rules/**
 !/codex/skills/
 !/codex/skills/**
 /codex/skills/.system/
