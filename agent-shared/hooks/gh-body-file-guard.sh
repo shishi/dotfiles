@@ -22,11 +22,11 @@ deny() {
 }
 
 [ -n "$py_bin" ] || exit 0
-calls=$(printf '%s' "$input" | "$py_bin" "$HOME/.agent-shared/hooks/lib/detect-invocation.py" gh 2>/dev/null)
+calls=$(printf '%s' "$input" | "$py_bin" "$(dirname "${BASH_SOURCE[0]}")/lib/detect-invocation.py" gh 2>/dev/null)
 [ -z "$calls" ] && exit 0
 
 if [ "$calls" = "EPARSE" ]; then
-  deny "コマンドを解析できなかった (クォートが閉じていない可能性)。gh の呼び出しを含むため保守的に停止する。コマンドを整理して再実行すること。"
+  deny "コマンドを解析できず (クォートが閉じていない可能性)、gh に本文をパスで渡しているか判定できなかったため止めた。解析できる形に書き換えて再実行すること。"
 fi
 
 offender=$(printf '%s' "$calls" | "$py_bin" -c '

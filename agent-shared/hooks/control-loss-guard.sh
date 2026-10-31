@@ -67,13 +67,19 @@ deny() {
   exit 0
 }
 
+# 判定できない呼び出しも止めるが、操作不能化と判定したわけではないことを理由で区別する。
+undecidable() {
+  jq -n --arg why "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:($why + "ため、元の操作可能状態へ戻せない操作を含むか判定できず止めました。解析できる形に書き換えて再実行してください")}}'
+  exit 0
+}
+
 input=$(cat)
 command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || exit 0
 [ -n "$command" ] || exit 0
 
 py_bin=$(command -v python3 || command -v python) || py_bin=""
-[ -n "$py_bin" ] || deny
+[ -n "$py_bin" ] || undecidable "python が見つからない"
 
 risk_kind=$(printf '%s' "$command" | "$py_bin" -c '
 import os
@@ -190,7 +196,7 @@ status=$?
 case "$status" in
   0) ;;
   1) exit 0 ;;
-  *) risk_kind="解析不能"; deny ;;
+  *) undecidable "コマンドを解析できなかった" ;;
 esac
 
 consume_approval() {
