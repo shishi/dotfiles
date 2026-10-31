@@ -61,100 +61,50 @@ if [ "${1:-}" = "--record-approval" ]; then
   record_approval
 fi
 
+# 止めた理由に、どこから何として読んだか (本文・行ごとの読み・bash としての読み) と解析器の通知を添える
+reason_suffix() {
+  [ -n "${explanation:-}" ] && printf ' (根拠: %s)' "$explanation"
+  [ -n "$notice" ] && printf ' (%s)' "$notice"
+  return 0
+}
+
 deny() {
-  jq -n --arg kind "${risk_kind:-不明}" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("この操作(" + $kind + ")はユーザー操作なしで元の操作可能状態へ戻せないため、現在のユーザーターンで対象が明示された場合だけ実行できます")}}'
+  jq -n --arg kind "${risk_kind:-不明}" --arg suffix "$(reason_suffix)" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("この操作(" + $kind + ")はユーザー操作なしで元の操作可能状態へ戻せないため、現在のユーザーターンで対象が明示された場合だけ実行できます" + $suffix)}}'
   exit 0
 }
 
-# 判定できない呼び出しも止めるが、操作不能化と判定したわけではないことを理由で区別する。
+# 判定できない呼び出しも止めるが、操作不能化と判定したわけではないことと、何が判定できなかったかを理由に書く。
 undecidable() {
-  jq -n --arg why "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:($why + "ため、元の操作可能状態へ戻せない操作を含むか判定できず止めました。解析できる形に書き換えて再実行してください")}}'
+  jq -n --arg why "$1$(reason_suffix)" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:("元の操作可能状態へ戻せない操作を含むか判定できず止めた: " + $why)}}'
+  exit 0
+}
+
+# 対象外のコマンドは通す。解析器が無く簡易判定に戻したときだけ、その旨をユーザーに知らせる。
+allow() {
+  if [ "$notify" = 1 ] && [ -n "$notice" ]; then
+    jq -n --arg m "[control-loss-guard] $notice" '{systemMessage:$m}'
+  fi
   exit 0
 }
 
 input=$(cat)
-command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
-session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || exit 0
-[ -n "$command" ] || exit 0
+notice=""
 
 py_bin=$(command -v python3 || command -v python) || py_bin=""
-[ -n "$py_bin" ] || undecidable "python が見つからない"
+[ -n "$py_bin" ] || undecidable "python が見つからず解析できない。コマンドの書き換えでは直らない。python3 を PATH に入れること"
 
-risk_kind=$(printf '%s' "$command" | "$py_bin" -c '
-import os
-import shlex
+# 構文は本物の解析器 (shfmt / PowerShell の Parser) に任せる (lib/shell_commands.py)。
+# ここでは実行される単純コマンドへ規則を当てるだけ。引数 --shell powershell は Codex on Windows 用。
+result=$(printf '%s' "$input" | "$py_bin" -c '
 import sys
+sys.path[:] = [sys.argv.pop(1), *(p for p in sys.path if p)]  # 作業ディレクトリ ("") を外し、同名のモジュールを読まない
+from shell_commands import executable, guard_main
 
-src = sys.stdin.read()
-separators = {";", "|", "||", "&", "&&", "(", ")"}
-
-def executable(token):
-    return os.path.basename(token.replace("\\", "/")).removesuffix(".exe").lower()
-
-def strip_assignments(tokens):
-    while tokens and "=" in tokens[0] and tokens[0].split("=", 1)[0].replace("_", "").isalnum():
-        tokens = tokens[1:]
-    return tokens
-
-def unwrap(tokens):
-    tokens = strip_assignments(tokens)
-    while tokens:
+def classify(commands):
+    for tokens in commands:
         name = executable(tokens[0])
-        if name in {"sudo", "doas"}:
-            value_options = {"-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt"}
-            index = 1
-            while index < len(tokens):
-                option = tokens[index]
-                if option == "--":
-                    index += 1
-                    break
-                if option in value_options:
-                    index += 2
-                    continue
-                if option.startswith("-"):
-                    index += 1
-                    continue
-                break
-            tokens = strip_assignments(tokens[index:])
-            continue
-        if name == "env":
-            index = 1
-            while index < len(tokens) and (tokens[index].startswith("-") or "=" in tokens[index]):
-                index += 1
-            tokens = strip_assignments(tokens[index:])
-            continue
-        if name in {"command", "nohup"}:
-            index = 1
-            while index < len(tokens) and tokens[index].startswith("-"):
-                index += 1
-            tokens = strip_assignments(tokens[index:])
-            continue
-        break
-    return tokens
-
-def classify(command, depth=0):
-    if depth > 3:
-        return "unknown"
-    lexer = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars="();|&")
-    lexer.whitespace_split = True
-    segments, current = [], []
-    for token in list(lexer):
-        if token in separators:
-            if current:
-                segments.append(current)
-                current = []
-        else:
-            current.append(token)
-    if current:
-        segments.append(current)
-
-    for segment in segments:
-        segment = unwrap(segment)
-        if not segment:
-            continue
-        name = executable(segment[0])
-        args = [arg.lower() for arg in segment[1:]]
+        args = [arg.lower() for arg in tokens[1:]]
         if name == "adb" and ("reboot" in args or args[:2] == ["emu", "kill"]):
             return "emulator"
         if name == "loginctl" and any(arg in {"lock-session", "terminate-session", "terminate-user"} for arg in args):
@@ -174,29 +124,21 @@ def classify(command, depth=0):
             return "network"
         if name == "ip" and "link" in args and "down" in args:
             return "network"
-        if name in {"bash", "sh", "zsh"}:
-            for index, option in enumerate(segment[1:], start=1):
-                if option.startswith("-") and "c" in option[1:] and index + 1 < len(segment):
-                    nested = classify(segment[index + 1], depth + 1)
-                    if nested:
-                        return nested
-                    break
     return ""
 
-try:
-    kind = classify(src)
-except ValueError:
-    sys.exit(2)
-if kind:
-    print(kind)
-    sys.exit(0)
-sys.exit(1)
-')
+guard_main(classify, sys.argv[1:], head="control-loss")
+' "$(dirname "${BASH_SOURCE[0]}")/lib" "$@")
 status=$?
-case "$status" in
-  0) ;;
-  1) exit 0 ;;
-  *) undecidable "コマンドを解析できなかった" ;;
+if [ "$status" -ne 0 ] && ! "$py_bin" -c '' >/dev/null 2>&1; then
+  undecidable "python を起動できない ($py_bin。Microsoft Store の別名など) ため解析できない。コマンドの書き換えでは直らない。起動できる python3 を PATH に入れること"
+fi
+[ "$status" -eq 0 ] || undecidable "判定処理 (hooks/lib/shell_commands.py) が異常終了した (終了コード $status)。hook 自身の不具合で、コマンドの書き換えでは直らない"
+{ IFS= read -r verdict; IFS= read -r risk_kind; IFS= read -r notice; IFS= read -r notify; IFS= read -r explanation; } <<<"$result"
+case "$verdict" in
+  none) allow ;;
+  match) ;;
+  undecidable) undecidable "$risk_kind" ;;
+  *) undecidable "判定処理の出力 ($verdict) を読めなかった。hook 自身の不具合で、コマンドの書き換えでは直らない" ;;
 esac
 
 consume_approval() {
@@ -224,5 +166,7 @@ consume_approval() {
   return "$valid"
 }
 
+# jq の起動は Windows で 1 回約 70ms かかるため、承認の照合が要るときだけ読む。
+session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
 consume_approval || deny
 exit 0

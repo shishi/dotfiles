@@ -1,106 +1,68 @@
 #!/usr/bin/env python3
-"""PreToolUse / PostToolUse hook 共通: Bash コマンド中の「実際の起動」を検出する。
+"""PostToolUse hook (outward-write-readback.sh) 用: コマンド中の「実際の起動」を検出する。
 
-引数で渡した名前 (例: gh, git) が *コマンド位置* に現れる呼び出しだけを拾い、
-その呼び出しのトークン列を 1 行 1 件で出力する。
+使い方: detect-invocation.py [--shell powershell] NAME...
+引数で渡した名前 (例: gh, git) の呼び出しを、以前の判定 (head_judge.py に凍結した b337715 の
+detect-invocation.py。ヒアドキュメントの本文を除き、コマンドの位置にある呼び出しを集める近似の読み。push かどうかは
+outward-write-readback.sh が呼び出しの語に正規表現を当てて照合する) と構文木の判定 (shell_commands.py) の和で拾う。
+以前の判定が分割できないときは、ガードと同じく書き換えて読み直さず undecidable とし、閉じられない引用符の行
+(元のコマンドの行) と文字を理由に書く。
 
-コマンド位置とは、コマンド列の先頭、または改行・; ・パイプ・&& などの区切りの直後を指す。
-クォートやヒアドキュメント本文に同じ文字列が現れても、そこはコマンド位置ではないため拾わない。
-単純な部分一致だと、コマンドを説明する文字列や JSON ペイロードを起動と誤認して誤発火する。
+stdin から hook の JSON を読む。出力の 1 行目は "ok" か "undecidable"、2 行目は通知文 (10 分に 1 回へ間引く。
+無ければ空)。ok なら 3 行目以降に呼び出しを 1 行 1 件 (前置きの sudo / env 等を剥がしたトークン列を空白で連結)、
+undecidable なら 3 行目が理由。トークン内の改行は空白にする。複数行の引数 (commit message 等) の中の行を
+別の呼び出しと誤認しないため。
 
-改行の扱いに注意がいる。shlex は改行を空白として扱うため、素通しにすると 2 行目以降が
-コマンド位置と認識されず、複数行コマンドの検出をまるごと取りこぼす。改行は区切りへ変換する。
-その前にヒアドキュメント本文を取り除く。本文はコマンドではないうえ、改行を区切りに変えると
-本文の各行が起動に見えてしまうため。
-
-stdin から hook の JSON を読み、tool_input.command または tool_input.cmd を対象にする。
-クォートが閉じていない等で解析できない場合は EPARSE 行で伝える
-(呼び出し側が保守的に倒せるようにするため、無音にはしない)。
+下の strip_heredocs / invocations は detect-wrapped-gh.py が使う以前の関数 (b337715 のまま)。
 """
 
-import json
-import re
-import shlex
+import os
 import sys
 
-SEPARATORS = {";", "|", "||", "&", "&&", "(", ")", "{", "}"}
-HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import head_judge  # noqa: E402
+import parser_tools  # noqa: E402
+from shell_commands import (  # noqa: E402
+    DEADLINE_SECONDS, Deadline, analyze, executable, head_split_where, setup_stdout, shell_argument, tool_command,
+)
 
-
-def strip_heredocs(command):
-    """ヒアドキュメント本文を取り除く。"""
-    lines = command.split("\n")
-    kept = []
-    pending = []
-
-    for line in lines:
-        if pending:
-            marker, allow_indent = pending[0]
-            candidate = line.strip() if allow_indent else line.rstrip()
-            if candidate == marker:
-                pending.pop(0)
-            continue
-
-        kept.append(line)
-        for match in HEREDOC.finditer(line):
-            pending.append((match.group(3), bool(match.group(1))))
-
-    return "\n".join(kept)
-
-
-def invocations(command, names):
-    """コマンド位置に names のいずれかが現れる呼び出しを、トークン列のリストで返す。"""
-    command = strip_heredocs(command).replace("\n", " ; ")
-
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-
-    found = []
-    at_command_position = True
-    current = None
-
-    for token in lexer:
-        if token in SEPARATORS:
-            at_command_position = True
-            current = None
-            continue
-
-        if at_command_position:
-            # VAR=value は前置代入なのでコマンド位置のまま進む
-            head = token.split("=", 1)[0]
-            if "=" in token and head and head.replace("_", "").isalnum():
-                continue
-            at_command_position = False
-            if token in names or token.rsplit("/", 1)[-1] in names:
-                current = [token]
-                found.append(current)
-            continue
-
-        if current is not None:
-            current.append(token)
-
-    return found
+_HEAD = head_judge.legacy_module()
+strip_heredocs = _HEAD["strip_heredocs"]
+invocations = _HEAD["invocations"]
 
 
 def main():
-    # Windows の Python は改行を CRLF で書き、行単位で読むシェル側の値に CR が残る。
-    sys.stdout.reconfigure(newline="\n")
-    names = set(sys.argv[1:])
-    try:
-        tool_input = json.load(sys.stdin).get("tool_input", {})
-        command = tool_input.get("command") or tool_input.get("cmd", "")
-    except Exception:
-        return 0
-
+    setup_stdout()
+    argv = sys.argv[1:]
+    shell = shell_argument(argv)
+    if "--shell" in argv:
+        del argv[argv.index("--shell"):argv.index("--shell") + 2]
+    names = sorted(set(argv))
+    raw = sys.stdin.buffer.read()
+    command = tool_command(raw)
     if not command:
+        print("ok")
+        print("")
         return 0
-
-    try:
-        for tokens in invocations(command, names):
-            print(" ".join(tokens))
-    except ValueError:
-        print("EPARSE")
-
+    deadline = Deadline(DEADLINE_SECONDS)
+    head_calls = head_judge.detect_text(raw, names)
+    if head_calls == "EPARSE":
+        found = head_split_where("gh", command)
+        where = found[0] if found else "閉じられない引用符 (位置は特定できなかった)"
+        print("undecidable")
+        print("")
+        print(" ".join(f"以前の判定 (shlex による近似の読み。ヒアドキュメントの本文は読まない) が {where}ため、"
+                       "呼び出しを分割できなかった".split()))
+        return 0
+    analysis = analyze(command, shell, deadline)
+    tree_calls = [" ".join(" ".join(token.split()) for token in tokens)
+                  for tokens in analysis.commands if executable(tokens[0]) in names]
+    calls = [line for line in head_calls.split("\n") if line] + tree_calls
+    notice = analysis.notice if analysis.notice and parser_tools.should_notify(analysis.notice) else ""
+    print("ok")
+    print(" ".join(notice.split()))
+    for call in dict.fromkeys(calls):
+        print(call)
     return 0
 
 
