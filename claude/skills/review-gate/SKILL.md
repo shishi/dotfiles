@@ -123,7 +123,7 @@ DB スキーマ・関連の設計や変更を含む場合は、
 | 司令塔 | spec-scope | 同系統 correctness / adversarial | 他系統 correctness / adversarial |
 |---|---|---|---|
 | Claude Code | Claude の新規観点 agent | 司令塔と同じモデルの新規観点 agent / high | Codex CLI(`codex-review`、Astra / high) |
-| Codex | Codex の新規観点 agent | 司令塔と同じモデルの新規観点 agent / high | Claude CLI(`claude-review`、Fable / high。ユーザー指定なら Opus / high) |
+| Codex | Codex の新規観点 agent | Astra の新規観点 agent / high(司令塔が Sol でも同じ) | Claude CLI(`claude-review`、Fable / high。ユーザー指定なら Opus / high) |
 
 - 曜日による利用制限は両方とも設けない。secrets は常時 gitleaks。
 - 同系統の確認も実装した会話の自己点検とは別に行う。両系統に同じ原要求・既存保証・
