@@ -41,7 +41,9 @@ if [ -n "$push_call" ]; then
     cd "${hook_cwd:-${CLAUDE_PROJECT_DIR:-.}}" 2>/dev/null || notify "[readback] 作業ディレクトリに移動できず、送信先を照合できなかった。"
   fi
 
-  [ -z "$dst" ] && dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  case "$dst" in
+    '' | HEAD) dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) ;;
+  esac
   [ -z "$src" ] && src=HEAD
   [ -z "$dst" ] && notify "[readback] git push の宛先ブランチを特定できなかった。"
 
