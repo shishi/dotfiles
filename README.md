@@ -83,7 +83,8 @@ bash ~/.agent-shared/bin/codex-verified.sh '実行する依頼'
 
 Codex と Claude Code の既存のサブスクリプション認証、gitleaks、jq、Python 3.11 以降が必要です。
 既存の実行ガードと承認を維持します。この入口は非対話 CLI 用で、標準 Desktop 画面や
-通常の対話 CLI の表示を置き換えません。
+通常の対話 CLI の表示を置き換えません。対話画面の Stop hook は回答を表示した後に動き、
+block しても表示済みの回答は残るため、表示前の検査には使えません。
 
 ## 個人記憶の参照
 
