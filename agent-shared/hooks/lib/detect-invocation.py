@@ -83,6 +83,8 @@ def invocations(command, names):
 
 
 def main():
+    # Windows の Python は改行を CRLF で書き、行単位で読むシェル側の値に CR が残る。
+    sys.stdout.reconfigure(newline="\n")
     names = set(sys.argv[1:])
     try:
         tool_input = json.load(sys.stdin).get("tool_input", {})

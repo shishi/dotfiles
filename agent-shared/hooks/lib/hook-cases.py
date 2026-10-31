@@ -5,10 +5,14 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
-HOOKS = os.path.expanduser("~/.agent-shared/hooks")
+HOOKS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Windows の CreateProcess は PATH より System32 の bash.exe(WSL)を先に選ぶ。
+# PATH でも System32 が Git Bash より前にある場合は WSL になるため、Windows では Git Bash から実行する。
+BASH = shutil.which("bash") or "bash"
 GUARD = os.path.join(HOOKS, "gh-body-file-guard.sh")
 READBACK = os.path.join(HOOKS, "outward-write-readback.sh")
 
@@ -43,7 +47,7 @@ CASES = [
 def run(hook, command):
     payload = json.dumps({"tool_input": {"command": command},
                           "tool_response": {"stdout": "ok"}})
-    return subprocess.run(["bash", hook], input=payload, capture_output=True,
+    return subprocess.run([BASH, hook], input=payload, capture_output=True,
                           text=True, timeout=60).stdout.strip()
 
 

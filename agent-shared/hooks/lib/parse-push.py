@@ -71,6 +71,8 @@ def parse(tokens):
 
 
 def main():
+    # Windows の Python は改行を CRLF で書き、行単位で読むシェル側の値に CR が残る。
+    sys.stdout.reconfigure(newline="\n")
     line = sys.stdin.read().strip()
     if not line:
         return 0
