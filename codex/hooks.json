@@ -69,6 +69,7 @@
         "hooks": [
           {
             "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "commandWindows": "& (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
             "timeout": 10,
             "type": "command"
           }
