@@ -1,0 +1,6 @@
+{
+  "name": "output-gate",
+  "version": "0.1.0",
+  "description": "回答を表示する前に応答の規則で検査し、訂正した文字列だけを表示する出力ゲート。",
+  "types": "./types/index.d.ts"
+}

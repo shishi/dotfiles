@@ -10,6 +10,10 @@
 !/claude/settings.json
 !/claude/statusline.sh
 !/claude/install-plugins.sh
+!/claude/mods/
+!/claude/mods/**
+# mod を読み込んだ Claude Code が書く型定義。
+/claude/mods/*/.claude-plugin/types/
 !/claude/agents/
 !/claude/agents/**
 !/claude/hooks/
