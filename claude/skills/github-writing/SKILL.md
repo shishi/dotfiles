@@ -11,17 +11,17 @@ description: GitHub の issue・PR・コメント・レビュー本文の投稿�
 
 1. GitHub ホスト、repository、issue / PR 番号、本文かコメントかを特定します。更新では対象 ID と現在の本文も取得します。
 2. 依頼で許可された操作とアカウントを確認します。ユーザー指定の connector・API・CLI を優先し、宛先と全文を `review-gate` でレビューします。既にある承認は取り直しません。
-3. 複数行本文は構造化引数で渡します。CLI を使う場合は以下の方法で本文を渡し、シェルのコードへ埋め込みません。
+3. 複数行本文は構造化引数で渡します。CLI を使う場合は以下の方法で本文を標準入力から渡します。本文は引用付きのヒアドキュメント (`<<'EOF'`) か PowerShell の here-string (`@'…'@`) にだけ書き、コマンドの引数や二重引用符の中へ埋め込みません。ヒアドキュメントの区切り語は本文に単独の行として現れない語にします (区切り語の行で本文が切れ、残りがコマンドとして実行されるため)。here-string の終端は `'@` に固定なので、本文に `'@` で始まる行があるときは、その行だけを単一引用の文字列 (中の `'` は `''`) にし、前後の here-string と `` (@'…'@, '…', @'…'@) -join "`n" `` のように連結してから標準入力へ流します。
 
 ## gh CLI の本文受け渡し
 
 | 操作 | 本文の渡し方 |
 |---|---|
-| `gh issue/pr create`・`edit`・`comment` | 確定本文を UTF-8 の一時ファイルへ保存し、確認した絶対パスを `--body-file` に渡します |
-| REST の本文更新 | JSON serializer で `{"body": 本文}` を作り、`gh api --method PATCH <endpoint> --input <絶対パス>` に渡します |
-| GraphQL | `query` と `variables` を JSON にし、`gh api graphql --input <絶対パス>` に渡します |
+| `gh issue/pr create`・`edit`・`comment` | 確定本文をコマンドの中のヒアドキュメント (PowerShell では here-string) で標準入力へ流し、`--body-file -` を指定します |
+| REST の本文更新 | 本文を標準入力から JSON serializer に渡して `{"body": 本文}` を作り (例: `jq -Rs '{body: .}' <<'EOF'` … `EOF`。PowerShell では here-string から `ConvertTo-Json`)、パイプで `gh api --method PATCH <endpoint> --input -` に渡します |
+| GraphQL | `query` と `variables` を同じ方法で JSON にし、パイプで `gh api graphql --input -` に渡します |
 
-一時ファイルは送信する環境から読み直して本文を確認します。sandbox や別プロセスの一時ディレクトリを推測して組み立てません。stdin を使う環境では `--body-file -` / `--input -` に同じ本文を渡せます。文字コードと改行が保持されることを確認します。
+実行前からあるファイルを本文や payload にしません。sandbox の有無で一時ディレクトリが変わり、同じパスで別の残骸ファイルが読まれても gh は失敗しないためです。Bash の実行前ガード (`command-judge.sh`) もこの形を止めます。文字コードと改行が保持されることを確認します。Windows PowerShell 5.1 はネイティブコマンドへのパイプで非 ASCII 文字を失うため、本文を流す同じコマンドの先頭で `$OutputEncoding = [Text.UTF8Encoding]::new($false);` を設定します (別のコマンドで設定しても引き継がれません)。
 
 `gh api -f body=@-` は禁止です。`-f` はリテラル文字列なので、本文を `@-` に置き換えます。`-F` は別の型変換規則です。本文を含む複雑な payload には JSON と `--input` を使います。[gh api の仕様](https://cli.github.com/manual/gh_api)
 

@@ -33,9 +33,6 @@ out=$(observe 'gh pr edit 1 --body-file -')
 check '本文を取得しても本文自身は注入しない' "$out" '本文を取得した'
 out=$(observe 'gh pr edit 1 --body-file -' cmd)
 check 'native cmd 入力でも取得処理へ到達する' "$out" '本文を取得した'
-out=$(jq -n '{tool_input:{command:"",cmd:"gh pr edit 1 --body-file -"},tool_response:{stdout:"https://github.com/example/repo/pull/1"}}' |
-  bash "$HOOK" | jq -r '.hookSpecificOutput.additionalContext')
-check 'command が空なら cmd を読む (以前の判定と同じ)' "$out" '本文を取得した'
 READBACK_BODY=''
 out=$(observe 'gh pr edit 1 --body-file -')
 check '空の本文も取得成功として扱う' "$out" '本文を取得した'
@@ -46,27 +43,34 @@ check '終了コードによって取得失敗を区別する' "$out" '本文の
 READBACK_STATUS=0
 out=$(observe 'gh pr comment 1 --body-file -')
 check '親本文をコメントの実物として扱わない' "$out" 'コメント本文は未取得'
+out=$(jq -n '{tool_input:{command:["gh","pr","edit","1","--body-file","-"]},tool_response:{stdout:"https://github.com/example/repo/pull/1"}}' |
+  bash "$HOOK" | jq -r '.hookSpecificOutput.additionalContext')
+check 'argv 配列のコマンドも読む' "$out" '本文を取得した'
 
-
-# 検出処理の出力を読めない (1 行目が ok でも undecidable でもない) ときは、確認していないことを 10 分に 1 回知らせる
-mkdir -p "$TMP/garbled"
-real_python=$(command -v python3 || command -v python)
-cat >"$TMP/garbled/python3" <<EOF
-#!/usr/bin/env bash
-case "\$1" in
-  *detect-invocation.py) cat >/dev/null; echo 'Traceback?'; exit 0 ;;
-esac
-exec "$real_python" "\$@"
-EOF
-chmod +x "$TMP/garbled/python3"
-garbled() {
-  jq -n '{tool_input:{command:"git push origin HEAD"}}' |
-    PATH="$TMP/garbled:$PATH" XDG_STATE_HOME="$TMP/state" bash "$HOOK" | jq -r '.hookSpecificOutput.additionalContext'
-}
-out=$(garbled)
-check '検出処理の出力を読めなければ知らせる' "$out" '出力を読めず'
-out=$(garbled)
-if [ -z "$out" ]; then PASS=$((PASS + 1)); echo "ok: 同じ通知は間引く"; else FAIL=$((FAIL + 1)); echo "NG: 同じ通知は間引く ($out)"; fi
+# 検出処理を動かせないときは、確認していないことを知らせる
+export XDG_STATE_HOME="$TMP/state"
+mkdir -p "$TMP/nopy"
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c '' >/dev/null 2>&1; then
+    real_python=$(command -v "$candidate")
+    break
+  fi
+done
+printf '#!/usr/bin/env bash\nexit 9\n' >"$TMP/nopy/python3"
+# ホストに python が無くても、起動できる python を 1 つ用意して試す
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$real_python" >"$TMP/nopy/python"
+chmod +x "$TMP/nopy/python3" "$TMP/nopy/python"
+out=$(PATH="$TMP/nopy:$PATH" observe 'gh pr edit 1 --body-file -')
+check '起動できない python3 があっても、起動できる python で確認する' "$out" '本文を取得した'
+cp "$TMP/nopy/python3" "$TMP/nopy/python"
+out=$(PATH="$TMP/nopy:$PATH" observe 'git push origin HEAD')
+check '起動できる python が無いことを黙って通さない' "$out" 'を確認していない'
+rm -f "$TMP/nopy/python"
+printf '#!/usr/bin/env bash\n[ "$1" = -c ] && exit 0\nexit 2\n' >"$TMP/nopy/python3"
+out=$(PATH="$TMP/nopy:$PATH" observe 'git push origin HEAD')
+check '検出処理の失敗を黙って通さない' "$out" '終了コード 2'
+out=$(PYTHONIOENCODING=cp932 observe 'gh pr edit 1 --body "あ"')
+check '既定の符号化が UTF-8 でなくても日本語を含む入力を読む' "$out" '本文を取得した'
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

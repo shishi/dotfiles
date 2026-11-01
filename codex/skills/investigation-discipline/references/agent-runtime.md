@@ -74,7 +74,7 @@ bash スクリプトとして起動する helper の書込みは、内部で呼�
 入れ子の `claude -p` に検証したい設定を渡し、その中で対象の操作を実行させます。
 
 ```sh
-env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT AGENT_DELEGATED_SESSION=1 \
   claude -p --model haiku --permission-mode default \
   --settings '<検証する設定の JSON>' '<実行させる指示>' </dev/null
 ```

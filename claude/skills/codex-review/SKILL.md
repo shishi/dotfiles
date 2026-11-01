@@ -63,6 +63,9 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    REVIEW_EFFORT=high
    PERSPECTIVE=correctness
    STARTED_AT=$(date +%s)
+   # 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印。codex exec の行の許可 prefix を
+   # 保つため別の行で設定する。export が codex exec に届くよう、このブロックは 1 回の Bash 呼び出しで実行する
+   export AGENT_DELEGATED_SESSION=1
    codex exec -s read-only --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
    rc=$?
    FINISHED_AT=$(date +%s)

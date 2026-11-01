@@ -74,7 +74,8 @@ gitleaks dir "$WORK/prompt.md" --no-banner || exit 98
 mkdir "$WORK/run.claim" || exit 96
 SCHEMA=$(jq -c . "$HOME/.codex/skills/claude-delegate/schema.json") || exit 1
 STARTED_AT=$(date +%s)
-claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
+# AGENT_DELEGATED_SESSION: 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印
+AGENT_DELEGATED_SESSION=1 claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
 rc=$?
 FINISHED_AT=$(date +%s)
 RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" claude "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/result.json" "" "$FINISHED_AT") || exit 95
@@ -89,7 +90,8 @@ chore / implement は `ROLE` を変更し、上の Claude コマンドのツー�
 `Edit` のパス許可は Write にも適用されます。Bash 不要ならツールと許可から外します。
 
 ```sh
-claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob,Edit,Write,Bash --allowedTools 'Edit(./src/**)' 'Bash(python3 verify.py)' --disallowedTools 'Bash(codex:*)' 'Bash(git commit:*)' 'Bash(git push:*)' 'Bash(git stash:*)' 'Bash(git checkout:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(git rebase:*)' 'Bash(git pull:*)' 'Bash(git cherry-pick:*)' 'Bash(git branch:*)' --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
+# AGENT_DELEGATED_SESSION: 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印
+AGENT_DELEGATED_SESSION=1 claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob,Edit,Write,Bash --allowedTools 'Edit(./src/**)' 'Bash(python3 verify.py)' --disallowedTools 'Bash(codex:*)' 'Bash(git commit:*)' 'Bash(git push:*)' 'Bash(git stash:*)' 'Bash(git checkout:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(git rebase:*)' 'Bash(git pull:*)' 'Bash(git cherry-pick:*)' 'Bash(git branch:*)' --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
 ```
 
 - 正常終了と JSON 受領は作業完了の証明ではありません。`status`、`blockers`、検証結果を

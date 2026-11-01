@@ -54,7 +54,8 @@ REVIEW_MODEL=fable
 REVIEW_EFFORT=high
 PERSPECTIVE=correctness
 STARTED_AT=$(date +%s)
-claude -p --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --output-format json < "$REVIEW_INPUT" > "$REVIEW_OUTPUT"
+# AGENT_DELEGATED_SESSION: 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印
+AGENT_DELEGATED_SESSION=1 claude -p --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --output-format json < "$REVIEW_INPUT" > "$REVIEW_OUTPUT"
 rc=$?
 FINISHED_AT=$(date +%s)
 RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" claude "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_OUTPUT" "" "$FINISHED_AT") || exit 95
