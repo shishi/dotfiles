@@ -11,6 +11,9 @@ service_tier = "default"
 # Keep MCP OAuth tokens out of the macOS Keychain. The Nix-built codex binary
 # changes path on every update, so Keychain ACL approvals never persist.
 mcp_oauth_credentials_store = "file"
+# 出力ゲートの中継は、同じ利用者のプロセスがログイン情報を読める前提で 127.0.0.1 に待ち受ける
+# (docs/output-gate.md)。その前提を全てのマシンでそろえるため、ログイン情報もファイルに保存する。
+cli_auth_credentials_store = "file"
 
 [auto_review]
 # Restore the extra_policy slot missing from some model catalogs (openai/codex#50309).
