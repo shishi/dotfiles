@@ -70,6 +70,7 @@ Codex で、独自 provider を手元の中継に向けて次のことを確か�
 - `--no-daemon` を付けない起動でも、差し替えた文字列が表示されました。終了後に daemon のプロセスは残っておらず、共有 daemon を経由したかは確認できていません。
 - この項目と次の項目は、中継の接続先を `http://127.0.0.1:<ポート>/backend-api/codex` にして試しました。provider に `capabilities.remote_compaction = "v2"` を指定し、自動の compaction の閾値 (`model_auto_compact_token_limit`) を下げて、`codex exec` とその resume で 2 ターン続けました。2 ターン目の前に、サーバー側の compaction の要求が中継を通りました。要求の `request_kind` は `compaction` で、要求本文には 1 ターン目の差し替えた文字列が入っていました。中継は応答の compaction の項目を書き換えずに流し、2 ターン目の要求本文にはその compaction の項目が入りました。続けて resume した 3 ターン目の要求も、同じ内容の compaction の項目を送りました。
 - provider の `name` 欄を `OpenAI` にすると、要求本文の zstd 圧縮・`x-codex-routing-hint` ヘッダー・`client_metadata` の `guardian_credits_requested` が付きました。`OpenAI` 以外では、この三つが付きませんでした。どちらでも `include` は `reasoning.encrypted_content` だけで、差し替えた文字列が表示されました。
+- 試験用の MCP サーバーを設定して `codex exec` でツールを呼ばせると、`name` 欄が `OpenAI` でもそれ以外でも、ツールの呼び出しと結果がモデルに届き、結果を使った回答が差し替えられて表示されました。どちらの場合も、要求本文に `mcp_attribution` と結果の `_meta` は入りませんでした。`name` 欄が `OpenAI` 以外では、内部の付帯情報も入りませんでした。
 - codex-cli 0.164.0 の hook のイベント一覧には `PreModelRequest` が含まれます。hook を有効にした挙動は、利用者が試験用の hook を信頼するまで確かめられません。
 
 Claude Code 2.1.302 (Windows) の対話 CLI で、偽のモデル API と turn.step の mod を使って次のことを確かめました。
@@ -311,7 +312,6 @@ WebSocket を無効にしたために止まる機能:
 - 副エージェント (`collab_spawn`) の出力が利用者に表示されるか。
 - 委譲・レビューの全ての起動経路が中継を通らず、起動前確認を通ること。
 - 各環境の復旧手順で、中継を通さずに Codex を使えること。
-- 対話 CLI の `/voice` が、独自 provider の設定で接続できること。
 - 手動の `/compact` とターンの途中の compaction でも、サーバー側の compaction の要求が中継を通り、次の要求で文脈が続くこと。
 - compaction の直後の検査で、検査役への入力に直近の回答が入ること。後の要求の compaction の項目の `encrypted_content` が、compaction の応答で返したものと同じであること。compaction が続けて起きた場合、中継の起動し直し・fork・巻き戻しの後、`codex exec --ephemeral` でも確かめます。
 - クラウドのタスクで、環境のセットアップスクリプトにより中継と設定を置き、Codex がそれを使うこと。
@@ -347,6 +347,7 @@ WebSocket を無効にしたために止まる機能:
 - クラウドで動く環境は、自分のファイルを置けるなら対象にし、置けないなら動かないことを受け入れます。
 - `codex-verified` は維持せず、検査の仕組みを一つにします。
 - Codex の独自 provider でも、サーバー側の compaction を使います。
+- Codex の音声会話 (`/voice`) が中継の設定で接続できなくても受け入れます。
 
 残っていること:
 
