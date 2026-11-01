@@ -14,6 +14,30 @@
         "matcher": "Bash"
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-compact",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-compact'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreModelRequest": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-model",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-model'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -26,6 +50,18 @@
           }
         ],
         "matcher": "Bash"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-end",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-end'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -57,6 +93,16 @@
             "command": "bash ~/.codex/herdr-agent-state.sh session",
             "commandWindows": "& (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
             "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-start",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-start'",
+            "timeout": 15,
             "type": "command"
           }
         ]
@@ -100,6 +146,16 @@
             "command": "bash ~/.agent-shared/hooks/task-policy.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-policy.sh'",
             "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh prompt",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh prompt'",
+            "timeout": 15,
             "type": "command"
           }
         ]

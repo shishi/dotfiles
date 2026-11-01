@@ -47,7 +47,9 @@ configure_codex_config_filter() {
 
   git -C "$DOTDIR" config --local filter.codex-config.clean \
     "bash agent-shared/bin/clean-codex-config.sh" &&
-    git -C "$DOTDIR" config --local filter.codex-config.smudge cat &&
+    # smudge のスクリプトが無い古い commit を checkout しても止まらないよう、無ければそのまま出す。
+    git -C "$DOTDIR" config --local filter.codex-config.smudge \
+      "[ -f agent-shared/bin/smudge-codex-config.sh ] && exec bash agent-shared/bin/smudge-codex-config.sh || exec cat" &&
     git -C "$DOTDIR" config --local filter.codex-config.required true ||
     echo "setup.sh: could not configure Codex config filter"
 }

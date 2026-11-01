@@ -17,6 +17,22 @@ seconds, cwd, *command = sys.argv[1:]
 executable = shutil.which(command[0])
 if executable is None:
     sys.exit(127)
+process = None
+
+
+def stop_judge(signum, _frame):
+    # 呼び出し側が止められたとき (POSIX の TERM・HUP) も、別グループの判定役を残さない。
+    if process is not None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            pass
+    sys.exit(128 + signum)
+
+
+if os.name != "nt":
+    signal.signal(signal.SIGTERM, stop_judge)
+    signal.signal(signal.SIGHUP, stop_judge)
 process = subprocess.Popen([executable, *command[1:]], cwd=cwd, stdin=subprocess.PIPE,
                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                            start_new_session=os.name != "nt")
