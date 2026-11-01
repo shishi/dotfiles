@@ -3,7 +3,7 @@ name: codex-review
 description: 最上位の Claude Code から Codex CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。review-gate の外部エンジンまたは明示された Codex レビューに使い、実装や受託側からの再委譲には使わない。
 ---
 
-# Codex Review (engine adapter)
+# Codex レビューエンジンの接続
 
 Codex CLI を独立レビューエンジンとして使う。観点はこの skill には無い —
 `~/.claude/agents/<perspective>-reviewer.md` が単一ソース(Claude エンジンと共用)。
@@ -22,7 +22,7 @@ spec-scope の既定エンジンは Claude subagent である(review-gate の規
 subagent が結果を返さないときの差し替え先として使う。前置きに足す入力が他の 2 モードと違う
 ため、下記の専用節に従う。
 
-## Prerequisites
+## 実行条件
 
 送信の許可と承認要求の組成は AGENTS.md の「相互委譲の事前承認」に従う。
 OpenAI の公式サービスへの対象範囲内の送信は事前承認済み。プロンプトと、CLI が追加取得する
@@ -128,9 +128,9 @@ spec-scope は照合相手が差分の外にあるため、上の前置きだけ
 
 - **review-gate 経由では 1 パスのみ**(反復ループ・修正適用・引用検証は gate の責務)
 - **単独発動時のみ**この skill が反復を回す。収束・停止の条件は AGENTS.md に従い、
-  必要な確認を周回数で打ち切らない。指摘の引用を検証(引用不一致は棄却・記録)→ 採否判定
-  (指摘は採用命令ではない。現在の依頼への実益か回避する具体的リスクを説明できるものだけ
-  修正し、他は理由付きで棄却)→ 修正 → secrets-scan → 同モード再実行。clean 判定:
+  必要な確認を周回数で打ち切らない。指摘の引用を検証(引用不一致は棄却・記録)→
+  [review-gate の指摘の価値から採否を決める](../review-gate/SKILL.md#指摘の価値から採否を決める)
+  に従って採否判定 → 修正 → secrets-scan → 同モード再実行。clean 判定:
   correctness = 採用した blocker/should がすべて解消(note は任意改善のみ)/
   adversarial = safe 相当の結論 /
   spec-scope = 採用した blocker/should がすべて解消し、**全要件が証拠付きで満たされていること**。
@@ -157,7 +157,7 @@ diff が巨大(目安: >10 ファイルかつ互いに独立な変更)なら、�
 指示して複数回に分ける。同一パターンの繰り返しなら分割不要。
 分割した全対象と境界の確認結果を揃えてから判定する。Focus の指定は対象の除外に使わない。
 
-## Troubleshooting
+## 問題への対処
 
 ### `Permission for this action has been denied. ... "Create Unsafe Agents block rule"`
 
@@ -182,7 +182,7 @@ adapter 内では再試行しない。結果と原因を返し、司令塔が `r
 代替エンジン・最終的な自己代替の順で判断する。単独発動時も同じ手順を使う。
 大きさが原因なら全対象を Focus で分割できるが、必要な対象を除外しない。
 
-## Final report(単独発動時)
+## 最終報告(単独発動時)
 
 ```
 ## Codex レビュー結果
