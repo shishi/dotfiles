@@ -115,23 +115,43 @@ CLI の実績は `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` の JSONL �
 応答本文を含めず、取得できた使用量と実検証結果を担当選択に使います。
 利用枠の取得失敗は不明として扱い、呼出回数を残量に換算しません。
 
-## 検査後に回答を表示する CLI
+## 出力ゲート
 
-`codex-verified.sh` は作業前に Claude が元の依頼から要件を抽出し、Codex の作業後に
-別の検査コンテキストで各要件と実行証拠・回答を照合します。goal の完了状態や
-テストの成功件数だけを達成の証拠にしません。要件の欠落や未検証がある判定は通しません。
-未達なら同じ Codex セッションで1回だけ修正し、再検査します。通過した回答だけを
-1回表示します。再検査でも未達の場合や検査失敗時には、草稿を表示せず停止します。
-作業中に加えたファイルの変更は自動で取り消しません。
+Claude Code と Codex の回答を、表示する前に応答の規則 (共通指示の「応答」の節) で検査し、
+訂正した文字列だけを表示します。検査できなかったときは、原文の先頭に理由を添えて表示します。
+設計と制限は [docs/output-gate.md](docs/output-gate.md) にあります。
+
+- Claude Code: `claude/mods/output-gate/` の mod を、`claude/settings.json` の
+  `CLAUDE_CODE_PLUGIN_DIRS` で全てのセッションに読み込みます。mod を使えない Desktop の
+  WSL セッションでは、`agent-shared/hooks/output-gate-claude.sh` の hook が表示を置き換えます。
+  検査するかはマシンごとに次のコマンドで切り替えます (既定は無効)。WSL では WSL の中でも実行します。
 
 ```sh
-bash ~/.agent-shared/bin/codex-verified.sh '実行する依頼'
+bash ~/.agent-shared/hooks/output-gate-claude.sh enable
 ```
 
-Codex と Claude Code の既存のサブスクリプション認証、gitleaks、jq、Python 3.11 以降が必要です。
-既存の実行ガードと承認を維持します。この入口は非対話 CLI 用で、標準 Desktop 画面や
-通常の対話 CLI の表示を置き換えません。対話画面の Stop hook は回答を表示した後に動き、
-block しても表示済みの回答は残るため、表示前の検査には使えません。
+```sh
+bash ~/.agent-shared/hooks/output-gate-claude.sh disable
+```
+
+  mod そのものを外すには、`claude/settings.json` の `CLAUDE_CODE_PLUGIN_DIRS` の行を外して起動し直します。
+
+- Codex: ローカルの中継を、組み込みの provider の `openai_base_url` に設定して使います。
+  中継を使うかはマシンごとに次のコマンドで切り替えます。行は Git に入らず、hook と Git の
+  フィルターが書き戻します。
+
+```sh
+bash ~/.agent-shared/hooks/output-gate-codex.sh enable
+```
+
+```sh
+bash ~/.agent-shared/hooks/output-gate-codex.sh disable
+```
+
+有効にした後は、Codex の `/hooks` で出力ゲートの hook を信頼します。検査役は `codex exec`
+(読み取り専用、ツール無効) で、Codex のログイン、gitleaks、Python 3.11 以降が必要です。
+中継の圧縮送信には Python 3.14 以降を使います。委譲とレビューで起動する Codex は中継を通さず、
+検査もしません。
 
 ## 個人記憶の参照
 
