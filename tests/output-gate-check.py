@@ -31,16 +31,21 @@ class CheckTests(unittest.TestCase):
         self.rules = self.tmp / 'AGENTS.md'
         self.rules.write_text(RULES, encoding='utf-8')
         self.prompt_log = self.tmp / 'prompt.txt'
+        self.instructions_log = self.tmp / 'instructions.txt'
         self.gitleaks = self.fake_gitleaks([])
 
-    def fake_checker(self, reply, sleep=0):
+    def fake_checker(self, reply, sleep=0, exit_code=0):
+        """偽の検査役。標準入力と、作業ディレクトリに置かれた検査役への指示を記録する。"""
         script = self.tmp / 'checker.py'
         script.write_text(textwrap.dedent(f'''\
-            import sys, time
+            import os, shutil, sys, time
             prompt = sys.stdin.read()
             open({str(self.prompt_log)!r}, 'w', encoding='utf-8').write(prompt)
+            if os.path.exists('checker-instructions.md'):
+                shutil.copyfile('checker-instructions.md', {str(self.instructions_log)!r})
             time.sleep({sleep})
             sys.stdout.write({reply!r})
+            sys.exit({exit_code})
             '''), encoding='utf-8')
         return json.dumps([sys.executable, '-I', str(script)])
 
@@ -69,10 +74,10 @@ class CheckTests(unittest.TestCase):
             '''), encoding='utf-8')
         return json.dumps([sys.executable, '-I', str(script)])
 
-    def run_check(self, draft, reply, sleep=0, timeout=10, gitleaks=None, extra=None):
+    def run_check(self, draft, reply, sleep=0, timeout=10, gitleaks=None, extra=None, exit_code=0):
         env = dict(os.environ)
         env.update({
-            'OUTPUT_GATE_CHECKER_CMD': self.fake_checker(reply, sleep),
+            'OUTPUT_GATE_CHECKER_CMD': self.fake_checker(reply, sleep, exit_code),
             'OUTPUT_GATE_TIMEOUT': str(timeout),
             'OUTPUT_GATE_RULES': str(self.rules),
             'OUTPUT_GATE_GITLEAKS': self.gitleaks if gitleaks is None else gitleaks,
@@ -164,6 +169,44 @@ class CheckTests(unittest.TestCase):
         prompt = self.prompt_log.read_text(encoding='utf-8')
         self.assertIn('最新の依頼', prompt)
         self.assertIn('前の回答', prompt)
+
+    def test_checker_instructions_are_a_file_in_the_workdir(self):
+        self.run_check('問題ありません。', json.dumps({'pairs': []}))
+        instructions = self.instructions_log.read_text(encoding='utf-8')
+        prompt = self.prompt_log.read_text(encoding='utf-8')
+        self.assertIn('{"pairs": []}', instructions)
+        self.assertNotIn('{"pairs": []}', prompt)
+        self.assertIn('問題ありません。', prompt)
+
+    def test_protected_parts_of_the_draft_are_listed_for_the_checker(self):
+        self.run_check('> 引用の効く\n\n本文は効く。`code` も。', json.dumps({'pairs': []}))
+        prompt = self.prompt_log.read_text(encoding='utf-8')
+        protected = prompt.split('## Protected parts of the draft', 1)[1].split('## Draft answer', 1)[0]
+        self.assertIn('> 引用の効く', protected)
+        self.assertIn('`code`', protected)
+        self.assertNotIn('本文は効く', protected)
+
+    def test_draft_without_code_or_quotes_lists_no_protected_parts(self):
+        self.run_check('本文は効く。', json.dumps({'pairs': []}))
+        prompt = self.prompt_log.read_text(encoding='utf-8')
+        protected = prompt.split('## Protected parts of the draft', 1)[1].split('## Draft answer', 1)[0]
+        self.assertEqual(protected.strip(), '(none)')
+
+    def test_occurrence_inside_a_quote_is_kept_and_the_one_outside_is_replaced(self):
+        out = self.run_check('> 引用の効く\n\n本文は効く。', self.pairs(('効く', '速い', 'r', False)))
+        self.assertEqual(out['status'], 'checked')
+        self.assertEqual(out['text'], '> 引用の効く\n\n本文は速い。')
+
+    def test_occurrence_inside_code_is_kept_and_the_one_outside_is_replaced(self):
+        out = self.run_check('`効く` は効く。', self.pairs(('効く', '速い', 'r', False)))
+        self.assertEqual(out['status'], 'checked')
+        self.assertEqual(out['text'], '`効く` は速い。')
+
+    def test_checker_login_failure_names_the_fix(self):
+        draft = 'この設定は効く。'
+        out = self.run_check(draft, '', exit_code=77)
+        self.assert_unchecked(out, draft)
+        self.assertIn('codex login', out['reason'])
 
     def test_multiline_secret_is_masked(self):
         self.gitleaks = self.fake_gitleaks_from_file('-----BEGIN KEY-----', '-----END KEY-----')
@@ -472,6 +515,13 @@ class CheckTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def test_default_command_reads_the_instructions_file(self):
+        check = self.load_check_module(self.tmp / 'codex')
+        path = self.tmp / 'work' / 'checker-instructions.md'
+        command = check.checker_command(None, path)
+        self.assertIn(f'model_instructions_file={json.dumps(str(path))}', command)
+        self.assertIn('skills.include_instructions=false', command)
 
     def test_checker_model_follows_cyber_program(self):
         home = self.tmp / 'codex'
