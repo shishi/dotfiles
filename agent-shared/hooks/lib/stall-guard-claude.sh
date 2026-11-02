@@ -33,9 +33,116 @@ claude_main() {
     record) claude_record "$@" ;;
     stop-check) claude_stop_check "$@" ;;
     status) claude_status "$@" ;;
+    watch) claude_watch "$@"; return $? ;;
     *) echo "stall-guard: unknown subcommand: $sub" >&2; return 1 ;;
   esac
   return 0
+}
+
+# 本体 (CLAUDE_PID) の起動引数を NUL 区切りで出す。読めなければ非 0。
+claude_host_argv() {
+  if [ -n "${STALL_GUARD_ARGV_FILE:-}" ]; then
+    [ -f "$STALL_GUARD_ARGV_FILE" ] && cat "$STALL_GUARD_ARGV_FILE"
+    return
+  fi
+  local pid=${CLAUDE_PID:-}
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  if [ -r "/proc/$pid/cmdline" ]; then cat "/proc/$pid/cmdline"; return; fi
+  case $(uname -s 2>/dev/null) in MINGW* | MSYS* | CYGWIN*) ;; *) return 1 ;; esac
+  local py
+  for py in python3 python; do
+    if command -v "$py" >/dev/null 2>&1; then "$py" -I "$SG_HOOK_DIR/lib/stall-guard-argv.py" "$pid"; return; fi
+  done
+  return 1
+}
+
+# 非ストリーミングの -p か (true / false / null は読めない)。本体が asyncRewake を背景で走らせない条件
+# (対話でも streaming 入力でもない) を、ホストのプロセス自身の起動引数の配列の要素で判定する。
+claude_text_print() {
+  local args=()
+  mapfile -d '' -t args < <(claude_host_argv 2>/dev/null)
+  [ ${#args[@]} -gt 0 ] || { echo null; return; }
+  local i print=false stream=false
+  for ((i = 1; i < ${#args[@]}; i++)); do
+    case ${args[i]} in
+      -p | --print) print=true ;;
+      --input-format) [ "${args[i + 1]:-}" = stream-json ] && stream=true ;;
+      --input-format=stream-json) stream=true ;;
+    esac
+  done
+  if $print && ! $stream; then echo true; else echo false; fi
+}
+
+# 見張り: asyncRewake の Stop hook。確認時刻を過ぎた作業があれば事実を stderr に書いて exit 2 でモデルを起こす。
+# 確認時刻 = max(最後のターン境界, 見張りの起動時刻) + interval + 120 秒。60 秒ごとに台帳を読み直し、
+# 対象が無くなる・後から仕掛かった見張りに lock を引き継がれる・無効化・台帳の削除で exit 0 する。
+claude_watch() {
+  local input meta sid st
+  input=$(cat) || return 0
+  [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && return 0
+  meta=$(jq -r '(.session_id | tostring),
+    ({running: [(.background_tasks // [])[] | select(.status == "running") | {id, type}]} | tojson)' <<<"$input" 2>/dev/null) || return 0
+  meta=${meta//$SG_CR/}
+  sid=${meta%%$'\n'*}
+  st=${meta#*$'\n'}
+  sg_valid_sid "$sid" || return 0
+  sg_mark_hooked claude "$sid"
+  [[ "$st" == *'"running":[]'* ]] && return 0
+  local dir
+  dir=$(sg_session_dir claude "$sid") || return 0
+  local started=${STALL_GUARD_WATCH_STARTED:-$(sg_now)} period=${STALL_GUARD_WATCH_PERIOD:-60}
+  local first=true existed=false me=$$ now res count due argv_state lock
+  while :; do
+    sg_disabled && return 0
+    if [ -d "$dir" ]; then existed=true; elif $existed; then return 0; fi
+    if ! $first; then
+      lock=$(cat "$dir/watch.lock" 2>/dev/null)
+      [[ "$lock" =~ \"pid\":([0-9]+) ]] && [ "${BASH_REMATCH[1]}" = "$me" ] || return 0
+    fi
+    now=$(sg_now)
+    sg_files "$dir" tasks seen ended keeps deadlines turns argv
+    res=$(jq -nrR --argjson S "$st" --argjson first "$first" --argjson now "$now" --argjson started "$started" --argjson off 0 \
+      "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
+      sg_load as $L
+      | (if $first or (lastof($L.seen) | not) then [$S.running[].id] else lastof($L.seen).running end) - ids($L.ended)
+      | [.[] as $id | (last_by_id($L.tasks; $id) // {kind: ([$S.running[] | select(.id == $id) | .type] | first // "unknown"), started: $now}) as $t
+          | select(($t.kind == "shell" and (kept($L; $id) or $t.ends_with_final == true)) | not)
+          | ([(lastof($L.turns).at // 0), $started] | max) as $base | interval_of($L; $id) as $iv
+          | {id: $id, kind: $t.kind, started: ($t.started // $now), iv: $iv, base: $base, due: ($base + $iv + 120)}] as $T
+      | "N\t\($T | length)",
+        "V\t\(if $L.argv then (lastof($L.argv).text_print | tojson) else "unread" end)",
+        "D\t\(any($T[]; .due <= $now))",
+        ($T[] | select(.due <= $now)
+          | "F\t- \(.id) (\(.kind)): 起動から \((($now - .started) / 60) | floor) 分、確認の間隔 \(.iv / 60 | floor) 分、最後の確認から \((($now - .base) / 60) | floor) 分")' \
+      ${SG_FILES[@]+"${SG_FILES[@]}"} 2>/dev/null) || return 0
+    res=${res//$SG_CR/}
+    count=$(sed -n 's/^N\t//p' <<<"$res")
+    [ "${count:-0}" -gt 0 ] 2>/dev/null || return 0
+    if $first; then
+      argv_state=$(sed -n 's/^V\t//p' <<<"$res")
+      if [ "$argv_state" = unread ]; then
+        argv_state=$(claude_text_print)
+        sg_append "$dir/argv.jsonl" "{\"at\":$now,\"text_print\":$argv_state}"
+      fi
+      # 非ストリーミングの -p では asyncRewake が同期で走り、プロセスを待たせるので仕掛けない。
+      [ "$argv_state" = true ] && return 0
+      mkdir -p "$dir" && printf '{"pid":%s,"until":%s}\n' "$me" $((now + 2100)) >"$dir/watch.lock.$me" && mv -f "$dir/watch.lock.$me" "$dir/watch.lock"
+      existed=true
+      first=false
+    fi
+    due=$(sed -n 's/^D\t//p' <<<"$res")
+    if [ "$due" = true ]; then
+      lock=$(cat "$dir/watch.lock" 2>/dev/null)
+      [[ "$lock" =~ \"pid\":([0-9]+) ]] && [ "${BASH_REMATCH[1]}" = "$me" ] || return 0
+      sg_append "$dir/turns.jsonl" "{\"at\":$now,\"event\":\"watch\"}"
+      {
+        echo "stall-guard: 確認時刻を過ぎた背景作業がある。状態を確かめ、続けるなら確認を予約し直すか、止める・未完了として報告するかを決める。"
+        sed -n 's/^F\t//p' <<<"$res"
+      } >&2
+      return 2
+    fi
+    sleep "$period"
+  done
 }
 
 claude_record() {

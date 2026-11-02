@@ -266,3 +266,108 @@ ok "other session's tasks are ignored"
 reset; agent a1; sg disable >/dev/null
 [ -z "$(stop "$(bt a1:subagent)")" ] && [ "$(lines "$D/crons.jsonl")" = 1 ] && [ ! -e "$D/seen.jsonl" ] || fail "disabled is inert (stop-check)"
 ok "disabled is inert (stop-check)"
+
+# --- watch: 見張り (実時刻で動かす) ---
+
+export STALL_GUARD_WATCH_PERIOD=1 STALL_GUARD_ARGV_FILE="$work/argv"
+unset CLAUDE_PID
+argv() { printf '%s\0' "$@" >"$STALL_GUARD_ARGV_FILE"; }
+argv claude --input-format stream-json --output-format stream-json
+rnow() { printf '%(%s)T\n' -1; }
+# watch_bg <background_tasks> [番号]: 見張りを背景で起動し、pid を W に入れる。
+watch_bg() {
+  jq -nc --argjson b "$1" '{session_id:"s1",hook_event_name:"Stop",stop_hook_active:false,prompt_id:"p1",background_tasks:$b,session_crons:[]}' >"$work/win${2:-1}.json"
+  env -u STALL_GUARD_NOW bash "$HOOK" watch <"$work/win${2:-1}.json" 2>"$work/w${2:-1}.err" &
+  W=$!
+}
+# ends_within <秒> <pid>: その時間内に終われば終了コードを WC に入れて真。
+ends_within() {
+  local i=0 n=$(($1 * 5))
+  WC=
+  while [ $i -lt $n ]; do
+    if ! kill -0 "$2" 2>/dev/null; then wait "$2" && WC=0 || WC=$?; return 0; fi
+    sleep 0.2; i=$((i + 1))
+  done
+  return 1
+}
+# stop_watch <pid>: 動き続けた見張りを無効の印で止める (止まらなければ kill)。
+stop_watch() { : >"$STALL_GUARD_STATE_DIR/disabled"; ends_within 3 "$1" || kill "$1" 2>/dev/null; rm -f "$STALL_GUARD_STATE_DIR/disabled"; }
+
+reset; jq -nc '{session_id:"s1",hook_event_name:"Stop",prompt_id:"p1",background_tasks:[],session_crons:[]}' | env -u STALL_GUARD_NOW bash "$HOOK" watch || fail "empty session watch exits 0"
+[ ! -e "$D" ] || fail "empty session is silent (watch)"
+ok "empty session is silent (watch)"
+
+reset; watch_bg "$(bt a1:subagent)"
+! ends_within 2 $W || fail "watcher arms from its own stdin before seen exists (ended $WC)"
+stop_watch $W
+ok "watcher arms from its own stdin before seen exists"
+
+# interval を過ぎても余裕 (120 秒) の内は、予約の起床を優先して起こさない。
+reset; STALL_GUARD_NOW=$(($(rnow) - 3000)) agent a1; t=$(($(rnow) - 1260)); printf '{"at":%s,"event":"stop"}\n' "$t" >>"$D/turns.jsonl"
+STALL_GUARD_WATCH_STARTED=$t watch_bg "$(bt a1:subagent)"
+! ends_within 2 $W || fail "the margin leaves room for the scheduled wake-up (ended $WC)"
+stop_watch $W
+ok "the margin leaves room for the scheduled wake-up"
+
+reset; STALL_GUARD_NOW=$(($(rnow) - 3000)) agent a1; t=$(($(rnow) - 1321)); printf '{"at":%s,"event":"stop"}\n' "$t" >>"$D/turns.jsonl"
+STALL_GUARD_WATCH_STARTED=$t watch_bg "$(bt a1:subagent)"
+ends_within 2 $W && [ "$WC" = 2 ] && grep -q a1 "$work/w1.err" && [ "$(field .event "$(last "$D/turns.jsonl")")" = watch ] || fail "due task wakes the model (${WC:-running})"
+ok "due task wakes the model"
+
+reset; agent a1; printf '{"at":%s,"event":"stop"}\n' "$(($(rnow) - 5000))" >>"$D/turns.jsonl"
+watch_bg "$(bt a1:subagent)"
+! ends_within 3 $W || fail "stale turns do not wake at once (ended $WC)"
+stop_watch $W
+ok "stale turns do not wake at once"
+
+reset; watch_bg "$(bt a1:subagent)"
+! ends_within 3 $W || fail "empty turns do not wake at once (ended $WC)"
+stop_watch $W
+ok "empty turns do not wake at once"
+
+reset; agent a1; watch_bg "$(bt a1:subagent)"; sleep 0.5
+STALL_GUARD_NOW=$(rnow) stop '[]' >/dev/null
+ends_within 2 $W && [ "$WC" = 0 ] || fail "empty seen ends the watcher (${WC:-running})"
+ok "empty seen ends the watcher"
+
+reset; agent a1; seen '["a1"]'; watch_bg "$(bt a1:subagent)"; sleep 0.5
+printf '{"id":"a1","by":"SubagentStop","at":%s}\n' "$(rnow)" >>"$D/ended.jsonl"
+ends_within 2 $W && [ "$WC" = 0 ] || fail "ended subagent is not watched (${WC:-running})"
+ok "ended subagent is not watched"
+
+reset; agent a1; watch_bg "$(bt a1:subagent)"; w1=$W; sleep 0.5; watch_bg "$(bt a1:subagent)" 2; w2=$W
+ends_within 3 $w1 && [ "$WC" = 0 ] && kill -0 $w2 && [ "$(jq -r .pid "$D/watch.lock" | tr -d '\r')" = "$w2" ] || fail "newer watcher takes over"
+stop_watch $w2
+ok "newer watcher takes over"
+
+reset; shell b1; printf '{"id":"b1","at":%s}\n' "$NOW" >>"$D/keeps.jsonl"
+watch_bg "$(bt b1:shell)"; ends_within 1 $W && [ "$WC" = 0 ] || fail "kept shell is not watched"
+ok "kept shell is not watched"
+
+reset; AGENT_DELEGATED_SESSION=1 watch_bg "$(bt a1:subagent)"; ends_within 1 $W && [ "$WC" = 0 ] || fail "delegated session does not watch"
+ok "delegated session does not watch"
+
+reset; sg disable >/dev/null; watch_bg "$(bt a1:subagent)"; ends_within 1 $W && [ "$WC" = 0 ] || fail "disabled is inert (watch at start)"
+reset; watch_bg "$(bt a1:subagent)"; sleep 0.5; sg disable >/dev/null
+ends_within 2 $W && [ "$WC" = 0 ] || fail "disabled is inert (running watcher)"
+ok "disabled is inert (watch)"
+
+reset; argv claude -p --output-format json hello
+watch_bg "$(bt a1:subagent)"; ends_within 2 $W && [ "$WC" = 0 ] || fail "text print session does not watch (${WC:-running})"
+[ "$(field .text_print "$(last "$D/argv.jsonl")")" = true ] || fail "text print result is kept in the ledger"
+argv claude -p --input-format stream-json
+watch_bg "$(bt a1:subagent)"; ends_within 2 $W && [ "$WC" = 0 ] && [ "$(lines "$D/argv.jsonl")" = 1 ] || fail "second watcher reads the kept argv result"
+ok "text print session does not watch"
+
+reset; argv claude --print --input-format stream-json --output-format stream-json
+watch_bg "$(bt a1:subagent)"
+! ends_within 2 $W || fail "stream-json print is watched (ended $WC)"
+stop_watch $W
+ok "stream-json print is watched"
+
+reset; rm -f "$STALL_GUARD_ARGV_FILE"
+watch_bg "$(bt a1:subagent)"
+! ends_within 2 $W || fail "unreadable argv keeps watching (ended $WC)"
+stop_watch $W
+[ "$(field .text_print "$(last "$D/argv.jsonl")")" = null ] || fail "unreadable argv is kept as unknown"
+ok "unreadable argv keeps watching"
