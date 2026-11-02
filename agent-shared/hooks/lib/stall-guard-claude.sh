@@ -16,8 +16,8 @@ def live($w; $crons):
   if $crons == null then false
   elif $w.source == "CronCreate" then any($crons[]; .id == $w.cron_id)
   else (($w.fire + $off) % 3600 / 60 | floor) as $m | (($w.fire + $off) % 86400 / 3600 | floor) as $h
-    | any($crons[]; .recurring == false and ((.schedule // "") | split(" ")) as $p
-        | (($p[0] | tonumber?) == $m) and (($p[1] | tonumber?) == $h))
+    | any($crons[]; (.recurring == false)
+        and (((.schedule // "") | split(" ")) as $p | (($p[0] | tonumber?) == $m) and (($p[1] | tonumber?) == $h)))
   end;
 def observed_of($L; $key): ([($L.observed // [])[] | select(.key == $key)] | last | .observed_with) // null;
 # 今 running とみなす作業: 最新の seen の running から ended を除く (seen が無ければ tasks から)。
@@ -62,10 +62,10 @@ claude_record() {
        elif $in.tool_name == "CronCreate" and ($r.id | type) == "string" then
          {file: "wakeups", cand: true, v: {key: $r.id, source: "CronCreate", cron_id: $r.id, fire: (($r.nextFireAt // 0) / 1000 | floor), recurring: ($r.recurring == true), created: $now}}
        else null end) as $f
-    | [($in.session_id | tostring), ($f | tojson)] | @tsv' <<<"$input" 2>/dev/null) || return 0
+    | ($in.session_id | tostring), ($f | tojson)' <<<"$input" 2>/dev/null) || return 0
   meta=${meta//$SG_CR/}
-  sid=${meta%%$'\t'*}
-  fact=${meta#*$'\t'}
+  sid=${meta%%$'\n'*}
+  fact=${meta#*$'\n'}
   sg_valid_sid "$sid" || return 0
   sg_mark_hooked claude "$sid"
   [ "$fact" = null ] && return 0
@@ -125,4 +125,102 @@ claude_status() {
   sg_apply "$dir" "$out"
 }
 
-claude_stop_check() { cat >/dev/null; return 0; }
+# 終了の関所。running の背景作業それぞれに、今から interval 以内に発火する生きた予約が無ければ block する。
+# 同じ prompt_id の中で、満たさない作業の集合が縮まない block が 2 回続くか、block が合計 6 回になれば抜ける
+# (本体の連続 block の上限 8 を出力ゲートと共有するため。抜けた後は見張りが確認時刻に起こす)。
+claude_stop_check() {
+  local input now meta sid st
+  input=$(cat) || return 0
+  now=$(sg_now)
+  meta=$(jq -r '(.session_id | tostring),
+    ({pid: (.prompt_id // ""), crons: (.session_crons // []),
+      running: [(.background_tasks // [])[] | select(.status == "running") | {id, type}]} | tojson)' <<<"$input" 2>/dev/null) || return 0
+  meta=${meta//$SG_CR/}
+  sid=${meta%%$'\n'*}
+  st=${meta#*$'\n'}
+  sg_valid_sid "$sid" || return 0
+  sg_mark_hooked claude "$sid"
+  local dir
+  dir=$(sg_session_dir claude "$sid") || return 0
+  # 背景作業も台帳も無い普段のセッションは、ここで終える (jq 1 回だけ)。
+  [ ! -d "$dir" ] && [[ "$st" == *'"running":[]'* ]] && return 0
+  if sg_disabled; then
+    # 無効化の後も、撤去の照合のために session_crons の観測値だけを書く。
+    [ -d "$dir" ] && sg_append "$dir/crons.jsonl" "$(jq -c --argjson now "$now" '{at: $now, crons: .crons}' <<<"$st")"
+    return 0
+  fi
+  local delegated=false plan
+  [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && delegated=true
+  sg_files "$dir" tasks wakeups failed ended seen observed blocks released leftover deadlines keeps
+  plan=$(jq -nrR --argjson S "$st" --argjson now "$now" --argjson off "$(sg_tz_offset)" --argjson delegated "$delegated" \
+    --arg self "$SG_SELF" "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
+    def inter($a; $b): [$a[] | select(. as $x | any($b[]; . == $x))];
+    def hm($t): ($t + $off) | strftime("%H:%M");
+    def same_set($a; $b): ($a | sort) == ($b | sort);
+    sg_load as $L | $S.crons as $crons | [$S.running[].id] as $rids
+    | (lastof($L.seen).running // []) as $prev
+    | [$S.running[] | select(.id as $i | ids($L.tasks) | index($i) | not) | {id, kind: .type, started: $now}] as $adopt
+    | {tasks: (($L.tasks // []) + $adopt)} as $T
+    # 作成後の最初の Stop で、作成時の候補のうち今も running の作業を observed_with に残す (残った予約で使う)。
+    | [($L.wakeups // [])[] | select(.key as $k | any(($L.observed // [])[]; .key == $k) | not)
+        | {key, observed_with: inter(.tasks_at_create // []; $rids), at: $now}] as $obs
+    | {observed: (($L.observed // []) + $obs)} as $O
+    | [$rids[] as $id | last_by_id($T.tasks; $id) as $t
+        | interval_of($L; $id) as $iv | ((($now + $iv + 59) / 60 | floor) * 60) as $due
+        | if $t.kind == "shell" and kept($L; $id) then empty
+          elif $t.kind == "shell" and $t.ends_with_final == true then empty
+          elif any(($L.wakeups // [])[]; live(.; $crons) and .fire > $now and .fire <= $due) then empty
+          else {id: $id, kind: $t.kind, started: $t.started, interval: $iv} end] as $unmet
+    | ([($L.blocks // [])[] | select(.prompt_id == $S.pid)]) as $B
+    | ([$B[] | select(.kind != "leftover")] | reduce .[] as $b ({prev: null, streak: 0};
+        if .prev != null and ($b.unmet | length) < (.prev | length) and (inter($b.unmet; .prev) | length) == ($b.unmet | length)
+        then {prev: $b.unmet, streak: 0} else {prev: $b.unmet, streak: (.streak + 1)} end)) as $k
+    | [$unmet[].id] as $uids
+    | ($k.prev != null and ($uids | length) < ($k.prev | length) and (inter($uids; $k.prev) | length) == ($uids | length)) as $shrunk_now
+    | any(($L.released // [])[]; .prompt_id == $S.pid) as $already
+    # 残った予約: 作業が全て終わった Stop で、作業と同時に動いていたと観測した予約のうち生きているもの。
+    | (if ($prev | length) > 0 and ($rids | length) == 0 then
+         [($L.wakeups // [])[] | select((observed_of($O; .key) // []) | length > 0) | select(live(.; $crons))]
+       else [] end) as $left
+    | [$left[].key] as $lkeys
+    | (($lkeys | length) > 0 and (any(($L.leftover // [])[]; .event == "delivered" and .via == "stop" and same_set(.set; $lkeys)) | not)) as $left_new
+    | (if ($unmet | length) > 0 then
+         if ($B | length) >= 6 then "total"
+         elif $k.streak >= 2 and ($shrunk_now | not) then "unshrunk"
+         else null end
+       else null end) as $release
+    | (($left_new) and ($B | length) < 6) as $left_block
+    | def fact($u):
+        "- \($u.id) (\($u.kind)): 起動から \((($now - $u.started) / 60) | floor) 分、確認の間隔 \($u.interval / 60 | floor) 分、間隔内に発火する確認の予約なし"
+        + ([($L.deadlines // [])[] | select(.id == $u.id)] | last | if . then "、deadline \(.interval_sec / 60 | floor) 分 (\(hm(.at)) に設定)" + (if (.watch | length) > 0 then "、watch \(.watch | join(" "))" else "" end) else "" end)
+        + ([($L.failed // [])[] | select(.at >= $u.started)] | if length > 0 then "、予約の失敗: " + (map("\(.event) \(.tool) \(hm(.at))") | join(", ")) + " (今確認するか未完了として報告する)" else "" end);
+      def means($u):
+        if $delegated then "  手段: 今この作業を確認する、または未完了として報告する。"
+        else "  手段: ScheduleWakeup の delaySeconds を \($u.interval) 秒以内にして確認を予約する / `bash \($self) deadline \($u.id) <1〜30 分>` で間隔を変える / 今確認する / 未完了として報告する"
+          + (if $u.kind == "shell" then " / 意図して動かし続ける shell なら `bash \($self) keep \($u.id)`" else "" end) + "。"
+        end;
+    "A\tseen\t\({at: $now, running: $rids} | tojson)",
+    "A\tturns\t\({at: $now, event: "stop"} | tojson)",
+    "A\tcrons\t\({at: $now, crons: $crons} | tojson)",
+    ($adopt[] | "A\ttasks\t\(tojson)"),
+    ($obs[] | "A\tobserved\t\(tojson)"),
+    "S\t\($L._skipped)",
+    (if ($unmet | length) > 0 then
+       if $release then
+         (if $already then empty else "A\treleased\t\({prompt_id: $S.pid, at: $now, unmet: $uids, cause: $release} | tojson)" end)
+       else
+         "A\tblocks\t\({prompt_id: $S.pid, unmet: $uids, at: $now, kind: "tasks"} | tojson)",
+         "O\t\({decision: "block", reason: (["stall-guard: 背景作業が確認の予定なしで動いている。ターンを終える前に、作業ごとに次のどれかを行う。"] + [$unmet[] | fact(.), means(.)] | join("\n"))} | tojson)"
+       end
+     elif ($lkeys | length) > 0 then
+       (if any(($L.leftover // [])[]; .event == "detected" and same_set(.set; $lkeys)) then empty
+        else "A\tleftover\t\({event: "detected", set: $lkeys, at: $now} | tojson)" end),
+       (if $left_block then
+          "A\tleftover\t\({event: "delivered", set: $lkeys, via: "stop", at: $now} | tojson)",
+          "A\tblocks\t\({prompt_id: $S.pid, unmet: [], at: $now, kind: "leftover"} | tojson)",
+          "O\t\({decision: "block", reason: (["stall-guard: 背景作業は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる)。"]
+             + [$left[] | "- \(.source) \(.key): \(hm(.fire)) に発火予定 (同時に動いていた作業: \(observed_of($O; .key) | join(", ")))"] | join("\n"))} | tojson)"
+        else empty end)
+     else empty end)' ${SG_FILES[@]+"${SG_FILES[@]}"}) || return 0
+  sg_apply "$dir" "$plan"
+}

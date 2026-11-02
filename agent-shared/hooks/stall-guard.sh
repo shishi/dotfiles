@@ -92,6 +92,8 @@ sg_files() {
   for name in "$@"; do
     [ -f "$dir/$name.jsonl" ] && SG_FILES+=("$dir/$name.jsonl")
   done
+  # ファイルが 1 つも無いと jq -n の inputs が標準入力を読みにいくため、空の入力を必ず渡す。
+  SG_FILES+=(/dev/null)
   return 0
 }
 
