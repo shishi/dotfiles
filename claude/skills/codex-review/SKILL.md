@@ -91,6 +91,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
 You are a delegated reviewer called by Claude Code. Review only the supplied scope.
 Do not edit files, commit, run another review gate, or delegate to another agent or CLI.
 Task under review: <変更の短い説明(あればタスク記述の逐語引用)>
+Purpose source: <review-gate の入力組成で確定した目的の正本の逐語。PR 本文・紐づく issue を含む>
 Focus: <呼び出し側指定の焦点。無ければ the entire change>
 Review target: <呼出元が固定した基準 commit、全差分、対象 untracked の全文、必要な周辺文脈>
 If you inspect the working tree, compare it with the supplied target. Report any version
@@ -108,7 +109,8 @@ spec-scope は照合相手が差分の外にあるため、上の前置きだけ
 場合はこのモードを実行しない — 照合相手を欠いた spec-scope は、差分を差分自身と比べることになる。
 
 1. **タスク記述 — 既存テキストの逐語コピーに限る。** 元のユーザー依頼・訂正と参照された
-   plan doc・spec。要約や言い換えの禁止、および該当テキストが無ければ停止する
+   plan doc・spec と、目的の正本(PR があれば現在の本文・紐づく issue。組成は review-gate の
+   入力組成に従う)。要約や言い換えの禁止、および該当テキストが無ければ停止する
    規則は spec-scope-review skill の「入力組成」が単一ソースである
 2. **累積判定の指示。** 渡すのは前回からの差分ではなく「当初の依頼の逐語 + 現在の総差分」。
    問いは「この総量が最初から 1 つの提案として出てきたら、依頼に対して承認したか」
@@ -129,8 +131,8 @@ spec-scope は照合相手が差分の外にあるため、上の前置きだけ
 - **review-gate 経由では 1 パスのみ**(反復ループ・修正適用・引用検証は gate の責務)
 - **単独発動時のみ**この skill が反復を回す。収束・停止の条件は AGENTS.md に従い、
   必要な確認を周回数で打ち切らない。指摘の引用を検証(引用不一致は棄却・記録)→ 採否判定
-  (指摘は採用命令ではない。現在の依頼への実益か回避する具体的リスクを説明できるものだけ
-  修正し、他は理由付きで棄却)→ 修正 → secrets-scan → 同モード再実行。clean 判定:
+  ([review-gate の指摘の価値から採否を決める](../review-gate/SKILL.md#指摘の価値から採否を決める) に従い、目的を失わせる
+  修正案は採用せず、実在する欠陥は目的を保つ別案で解消し、両立しなければ人間の判断を待つ)→ 修正 → secrets-scan → 同モード再実行。clean 判定:
   correctness = 採用した blocker/should がすべて解消(note は任意改善のみ)/
   adversarial = safe 相当の結論 /
   spec-scope = 採用した blocker/should がすべて解消し、**全要件が証拠付きで満たされていること**。
