@@ -68,9 +68,9 @@ test('the answer is shown only after the check, corrected', async ($, on) => {
   const { text } = await run($)
   expect(text).toBe('これは速い。')
   expect(calls.length).toBe(1)
-  expect(calls[0].draft).toBe('これは効く。')
-  expect(calls[0].cli).toBe('claude')
-  expect(calls[0].latest_user).toBe('設定を教えて')
+  expect(calls[0]?.draft).toBe('これは効く。')
+  expect(calls[0]?.cli).toBe('claude')
+  expect(calls[0]?.latest_user).toBe('設定を教えて')
 })
 
 test('a failed check shows the original with the reason', async ($, on) => {

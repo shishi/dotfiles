@@ -88,8 +88,12 @@ function runs(held: readonly TurnStepChunk[]): { runs: Run[]; owner: (number | u
       return
     }
     const previous = i > 0 ? held[i - 1] : undefined
-    if (previous?.kind !== 'text' || previous.index !== chunk.index) result.push({ index: chunk.index, text: '' })
-    result[result.length - 1].text += chunk.text
+    let run = result.at(-1)
+    if (run === undefined || previous?.kind !== 'text' || previous.index !== chunk.index) {
+      run = { index: chunk.index, text: '' }
+      result.push(run)
+    }
+    run.text += chunk.text
     owner.push(result.length - 1)
   })
   return { runs: result, owner }
@@ -117,7 +121,10 @@ function* rebuilt(held: readonly TurnStepChunk[], owner: (number | undefined)[],
       yield chunk
     } else if (!sent.has(run) && chunk.kind === 'text') {
       sent.add(run)
-      yield { kind: 'text', index: chunk.index, text: checked[run] }
+      const text = checked[run]
+      // checked は区間ごとに一つずつ作るため、ここには来ない。来たら hook の失敗として .catch の処理に任せる。
+      if (text === undefined) throw new Error('区間の訂正版が無い')
+      yield { kind: 'text', index: chunk.index, text }
     }
   }
 }
@@ -161,8 +168,9 @@ async function setHolding($: EngineInterface, change: number) {
 }
 
 // mod が動いたセッションに印を残す。mod を使えない環境向けの MessageDisplay hook
-// (agent-shared/hooks/output-gate-claude.sh) は、印に書かれたターンの回答では何もしない (同じ回答を二度
-// 検査しない)。以前のターンの印で検査を飛ばさないよう、モデルへの要求ごとに今のターンの識別子を書く。
+// (agent-shared/hooks/output-gate-claude.sh) は、印があるセッションでは何もしない (同じ回答を二度検査しない)。
+// その UserPromptSubmit hook が利用者の入力のたびに印を消すため、モデルへの要求ごとに書き直す。中身の
+// ターンの識別子は記録のためだけで、hook は照合しない (MessageDisplay の turn_id は別に作られる値)。
 async function markSession($: EngineInterface, e: TurnStepInput) {
   try {
     const id = await $.session.id()
@@ -199,7 +207,7 @@ export const register: Register = on => {
           }
           const split = runs(held)
           const checked = await Promise.all(split.runs.map(run => check($, run.text)))
-          // 検査の間に同じセッションの別のステップが印を書き換えることがあるため、流す直前にも書き直す。
+          // 検査の間に利用者の入力が届いて印が消えることがあるため、流す直前にも書き直す。
           await markSession($, e)
           yield* rebuilt(held, split.owner, checked)
           completed = true

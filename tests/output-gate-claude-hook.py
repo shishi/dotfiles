@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """mod を使えない環境向けの、出力ゲートの Claude Code の hook (MessageDisplay と UserPromptSubmit) を確かめる。"""
+from concurrent.futures import ThreadPoolExecutor
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -7,7 +9,9 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 # 入口の output-gate-claude.sh は Python を探して起動するだけなので、本体を直接起動する。
@@ -51,8 +55,11 @@ class ClaudeHookTests(unittest.TestCase):
         return json.loads(result.stdout) if result.stdout.strip() else None
 
     def display(self, delta, final, index=0, message='m1', **env):
-        return self.hook('display', {'hook_event_name': 'MessageDisplay', 'turn_id': 't1', 'message_id': message,
-                                     'index': index, 'final': final, 'delta': delta}, **env)
+        event = {'hook_event_name': 'MessageDisplay', 'turn_id': 't1', 'message_id': message, 'final': final,
+                 'delta': delta}
+        if index is not None:
+            event['index'] = index
+        return self.hook('display', event, **env)
 
     @staticmethod
     def shown(out):
@@ -107,12 +114,159 @@ class ClaudeHookTests(unittest.TestCase):
         self.assertTrue(self.shown(out).startswith('[出力ゲート: 検査できませんでした'))
         self.assertTrue(self.shown(out).endswith('これは効く。'))
 
-    def test_marker_of_another_turn_is_ignored(self):
-        # 以前 mod が動いたセッションを、mod の無い環境で再開した場合は、印が前のターンのものなので検査する。
+    def test_a_marker_naming_another_turn_id_still_leaves_the_answer_to_the_mod(self):
+        # 対話 CLI の MessageDisplay の turn_id は、mod の turnId と別に作られる値なので、印の中身とは一致しない。
         marker = self.state / 'output-gate' / 'claude-mod' / 's1'
         marker.parent.mkdir(parents=True)
-        marker.write_text('t0', encoding='utf-8')
+        marker.write_text('mod-turn', encoding='utf-8')
+        self.assertIsNone(self.display('これは効く。', final=True))
+        self.assertEqual(self.checker_calls(), [])
+
+    def test_a_marker_removed_in_the_middle_of_a_message_keeps_it_with_the_mod(self):
+        # ターン中に送られた入力の UserPromptSubmit が、回答の表示の途中で印を消す場合。後半だけを検査しない。
+        marker = self.state / 'output-gate' / 'claude-mod' / 's1'
+        marker.parent.mkdir(parents=True)
+        marker.write_text('mod-turn', encoding='utf-8')
+        self.assertIsNone(self.display('一行目は効く。\n', final=False))
+        self.hook('prompt', {'hook_event_name': 'UserPromptSubmit', 'prompt': '追加の依頼'})
+        self.assertIsNone(self.display('二行目も効く。', final=True, index=1))
+        self.assertEqual(self.checker_calls(), [])
+
+    def test_a_call_without_an_index_is_taken_as_the_first(self):
+        # SDK 経由は index 0 の最後の呼び出しだけ。index が欠けた入力も、その回答の最初の断片として扱って検査する。
+        self.assertEqual(self.shown(self.display('これは効く。', final=True, index=None)), 'これは速い。')
+
+    def test_calls_running_side_by_side_are_put_together_in_index_order(self):
+        # 対話 CLI は同じ回答の呼び出しを最大 3 件並べて動かす。最後の呼び出しが先に動き、前の断片が逆順に届いても、
+        # 最後の呼び出しは全ての断片を待ち、index の順に組み立てて検査する。
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            last = pool.submit(self.display, '三行目も効く。', True, 2)
+            time.sleep(0.5)
+            self.assertEqual(self.shown(self.display('二行目も効く。\n', final=False, index=1)), '')
+            self.assertEqual(self.shown(self.display('一行目は効く。\n', final=False, index=0)), '')
+            self.assertEqual(self.shown(last.result()), '一行目は速い。\n二行目も速い。\n三行目も速い。')
+        self.assertEqual([c['draft'] for c in self.checker_calls()], ['一行目は効く。\n二行目も効く。\n三行目も効く。'])
+
+    def test_a_part_already_put_together_is_not_shown_again(self):
+        # 組み立てに使った index の呼び出しが後から動いても、その行をもう一度見せない (二重に表示しない)。
+        self.display('一行目は効く。\n', final=False, index=0)
+        self.assertEqual(self.shown(self.display('二行目も効く。', final=True, index=1)), '一行目は速い。\n二行目も速い。')
+        self.assertEqual(self.shown(self.display('一行目は効く。\n', final=False, index=0)), '')
+
+    def test_a_failure_while_putting_the_answer_together_shows_the_held_text_with_the_reason(self):
+        # 状態ディレクトリを扱えない (Windows で別のプロセスが開いているなど) ときも、hook ごと落ちずに、
+        # 手元の原文に理由を添えて見せる。
+        self.display('一行目は効く。\n', final=False, index=0)
+        parts = self.state / 'output-gate' / 'claude-display' / 's1' / 'm1'
+        (parts / '1.part').mkdir()   # 最後の呼び出しの行を書けなくする
+        out = self.display('二行目も効く。', final=True, index=1)
+        self.assertTrue(self.shown(out).startswith('[出力ゲート: 検査できませんでした'))
+        self.assertTrue(self.shown(out).endswith('一行目は効く。\n二行目も効く。'))
+
+    def test_a_part_written_while_a_failed_final_call_takes_the_lock_is_not_lost(self):
+        # 失敗の経路の最後の呼び出しが錠を取る直前に、前の index の呼び出しが行を書いて '' を返しても、その行を失わない。
+        self.display('一行目は効く。\n', final=False, index=0)
+        session_dir = self.state / 'output-gate' / 'claude-display' / 's1'
+        (session_dir / 'm1' / '2.part').mkdir()   # 最後の呼び出しの行を書けなくして、失敗の経路に入れる
+        spec = importlib.util.spec_from_file_location('output_gate_claude_race', HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        real_lock, shown, late = module.message_lock, [], []
+
+        def lock_after_a_late_part(path, *args, **kwargs):
+            if kwargs.get('wait') is not None and not late:   # 失敗の経路が錠を取る直前に割り込む
+                late.append(self.display('二行目も効く。\n', final=False, index=1))
+            return real_lock(path, *args, **kwargs)
+
+        module.message_lock = lock_after_a_late_part
+        module.emit = shown.append
+        event = {'session_id': 's1', 'message_id': 'm1', 'index': 2, 'final': True, 'delta': '三行目も効く。'}
+        module.display(event, session_dir, mod_runs=False)
+        self.assertEqual(self.shown(late[0]), '')
+        self.assertTrue(self.shown(shown[0]).endswith('一行目は効く。\n二行目も効く。\n三行目も効く。'))
+
+    def test_a_part_after_a_failed_final_call_is_still_shown(self):
+        # 最後の呼び出しが失敗の経路で表示した後に、前の index の呼び出しが動いても、その行を隠したままにしない。
+        self.display('一行目は効く。\n', final=False, index=0)
+        parts = self.state / 'output-gate' / 'claude-display' / 's1' / 'm1'
+        (parts / '2.part').mkdir()
+        out = self.display('三行目も効く。', final=True, index=2)
+        self.assertTrue(self.shown(out).endswith('一行目は効く。\n三行目も効く。'))
+        self.assertEqual(self.shown(self.display('二行目も効く。\n', final=False, index=1)), '二行目も効く。\n')
+
+    def test_a_part_that_does_not_arrive_in_time_is_not_dropped(self):
+        # 上限まで待っても断片が揃わなければ、検査せずに手元の原文全体を理由付きで見せる。遅れて届いた断片は
+        # そのまま見せる (隠したままにしない)。
+        self.display('一行目は効く。\n', final=False, index=0)
+        out = self.display('三行目も効く。', final=True, index=2)
+        self.assertTrue(self.shown(out).startswith('[出力ゲート: 検査できませんでした'))
+        self.assertTrue(self.shown(out).endswith('一行目は効く。\n三行目も効く。'))
+        self.assertEqual(self.shown(self.display('二行目も効く。\n', final=False, index=1)), '二行目も効く。\n')
+        self.assertEqual(self.checker_calls(), [])
+
+    def test_a_marker_written_in_the_middle_of_a_message_does_not_drop_the_held_lines(self):
+        self.assertEqual(self.shown(self.display('一行目は効く。\n', final=False)), '')
+        marker = self.state / 'output-gate' / 'claude-mod' / 's1'
+        marker.parent.mkdir(parents=True)
+        marker.write_text('mod-turn', encoding='utf-8')
+        out = self.display('二行目も効く。', final=True, index=1)
+        self.assertEqual(self.shown(out), '一行目は速い。\n二行目も速い。')
+
+    def test_a_marker_from_before_the_latest_prompt_is_ignored(self):
+        # 以前 mod が動いたセッションを、mod の無い環境で再開した場合: 利用者の入力で印が消え、mod が書き直さないので検査する。
+        marker = self.state / 'output-gate' / 'claude-mod' / 's1'
+        marker.parent.mkdir(parents=True)
+        marker.write_text('mod-turn', encoding='utf-8')
+        self.hook('prompt', {'hook_event_name': 'UserPromptSubmit', 'prompt': '次'})
         self.assertEqual(self.shown(self.display('これは効く。', final=True)), 'これは速い。')
+
+    def test_only_the_end_of_a_long_transcript_is_read(self):
+        # 検査役に渡すのは直近の発言と最新の利用者の発言だけなので、記録の前の方は読まない。渡す内容は変えない。
+        filler = {'type': 'user', 'message': {'role': 'user', 'content': [
+            {'type': 'tool_result', 'tool_use_id': 'toolu_1', 'content': 'x' * 1000}]}}
+        answers = [{'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': f'回答{i}'}]}}
+                   for i in range(12)]
+        self.record(*[filler] * 4000, {'type': 'user', 'message': {'role': 'user', 'content': '最新の依頼'}}, *answers)
+        spec = importlib.util.spec_from_file_location('output_gate_claude', HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        read = [0]
+
+        class CountingFile:
+            def __init__(self, f):
+                self.f = f
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *error):
+                self.f.close()
+
+            def seek(self, *args):
+                return self.f.seek(*args)
+
+            def read(self, *args):
+                data = self.f.read(*args)
+                read[0] += len(data)
+                return data
+
+        class CountingPath(type(Path())):
+            def read_text(self, *args, **kwargs):
+                text = super().read_text(*args, **kwargs)
+                read[0] += len(text.encode('utf-8'))
+                return text
+
+            def open(self, *args, **kwargs):
+                return CountingFile(super().open(*args, **kwargs))
+
+        module.Path = CountingPath
+        checker = json.dumps([sys.executable, '-I', str(self.checker)])
+        with mock.patch.dict(os.environ, {'OUTPUT_GATE_CHECK_CMD': checker}):
+            module.check('これは効く。', str(self.transcript))
+        call = self.checker_calls()[0]
+        self.assertEqual(call['latest_user'], '最新の依頼')
+        self.assertEqual(call['conversation'], [{'role': 'assistant', 'text': f'回答{i}'} for i in range(2, 12)])
+        self.assertLess(read[0], self.transcript.stat().st_size // 4)
 
     def test_old_session_files_are_cleaned_up_at_a_prompt(self):
         old_dir = self.state / 'output-gate' / 'claude-display' / 'old-session'
@@ -140,6 +294,30 @@ class ClaudeHookTests(unittest.TestCase):
     def test_delegated_sessions_are_not_checked(self):
         self.assertIsNone(self.display('これは効く。', final=True, AGENT_DELEGATED_SESSION='1'))
         self.assertEqual(self.checker_calls(), [])
+
+    def record(self, *entries):
+        with open(self.transcript, 'a', encoding='utf-8') as f:
+            for entry in entries:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+    # Claude Code が API のエラーを回答の形で会話記録に書いた行 (2.1.302 の実際の行から、判定に使わない欄を省いた)。
+    ENGINE_ERROR = {'type': 'assistant', 'isApiErrorMessage': True, 'error': 'invalid_request',
+                    'message': {'id': '00000000-0000-4000-8000-000000000001', 'model': '<synthetic>', 'role': 'assistant',
+                                'stop_reason': 'stop_sequence', 'type': 'message',
+                                'content': [{'type': 'text', 'text': 'Prompt is too long'}]}}
+
+    def test_text_claude_code_wrote_itself_is_shown_as_is(self):
+        # Desktop などの SDK 経由では、Claude Code が作った API エラーの回答にも MessageDisplay が呼ばれる。
+        self.record(self.ENGINE_ERROR)
+        self.assertEqual(self.shown(self.display('Prompt is too long', final=True)), 'Prompt is too long')
+        self.assertEqual(self.checker_calls(), [])
+        self.assertIsNone(self.hook('prompt', {'hook_event_name': 'UserPromptSubmit', 'prompt': '次'}))
+
+    def test_an_engine_message_of_an_earlier_prompt_does_not_exempt_the_answer(self):
+        # 前の入力のターンに同じ文字列のエラーがあっても、今のターンの回答は検査する。
+        self.record(self.ENGINE_ERROR, {'type': 'user', 'message': {'role': 'user', 'content': '続けて'}})
+        self.display('Prompt is too long', final=True)
+        self.assertEqual(len(self.checker_calls()), 1)
 
     def test_subagent_messages_are_not_checked(self):
         out = self.hook('display', {'hook_event_name': 'MessageDisplay', 'turn_id': 't1', 'message_id': 'm2',

@@ -6,9 +6,9 @@
 #   output-gate-claude.sh prompt             UserPromptSubmit hook
 #
 # 使うかの正本は、Git で追跡しないマシンごとの印 ($XDG_STATE_HOME/output-gate/claude-enabled)。mod も同じ印を見る。
-# hook は無効のマシンでは何もしない。MessageDisplay は表示する行ごとに呼ばれるため、mod が扱ったターンの
-# 回答 (mod が claude-mod/<session_id> にターンの識別子を書く) では Python を起動せずに終える。
-# UserPromptSubmit は毎回本体を動かし、訂正版の受け渡しと古い状態の掃除をする。処理の本体は lib/output-gate-claude.py。
+# hook は無効のマシンでは何もしない。MessageDisplay は表示する行ごとに呼ばれるため、mod が動いているセッション
+# (mod がモデルへの要求ごとに claude-mod/<session_id> を書く) では Python を起動せずに終える。
+# UserPromptSubmit は毎回本体を動かし、mod の印を消し、訂正版の受け渡しと古い状態の掃除をする。処理の本体は lib/output-gate-claude.py。
 set -u
 
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -33,13 +33,22 @@ esac
 [ -e "$flag" ] || exit 0
 [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && exit 0
 input=$(cat)
-# 早い経路: mod の印に今のターンの識別子が書かれていれば終える。読めなければ本体に任せる
+# 早い経路: 回答を mod に任せるか (<message_id>.how が mod か) をシェルだけで決めて終える。mod の印は利用者の
+# 入力のたびに本体が消すため、あれば mod が今のターンで動いている。扱いは回答の最初に動いた呼び出しが決めて
+# 変えない: 任せた回答は途中で印が消えても終え、本体が貯め始めた回答 (hold) は途中で印が現れても本体に任せる。
+# 扱いを作れなかった・読めなかった (書きかけを含む) ときや、session_id・message_id を読めなければ本体に任せる
 # (本体も同じ判定をする)。
-if [[ $input =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]]; then
-  sid=${BASH_REMATCH[1]}
-  if [[ $input =~ \"turn_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]] &&
-    [ "$(cat "$state_root/claude-mod/$sid" 2>/dev/null)" = "${BASH_REMATCH[1]}" ]; then
-    exit 0
+if [ "$1" = display ] &&
+  [[ $input =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]]; then
+  display_dir="$state_root/claude-display/${BASH_REMATCH[1]}"
+  mod_marker="$state_root/claude-mod/${BASH_REMATCH[1]}"
+  if [[ $input =~ \"message_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]]; then
+    how="$display_dir/${BASH_REMATCH[1]}.how"
+    if [ ! -e "$how" ] && [ -e "$mod_marker" ]; then
+      # noclobber で、並んで動く呼び出しのうち作れた一つだけが決める。
+      mkdir -p "$display_dir" && (set -C; printf mod >"$how") 2>/dev/null && exit 0
+    fi
+    [ "$(cat "$how" 2>/dev/null)" = mod ] && exit 0
   fi
 fi
 for candidate in python3 python; do
