@@ -34,9 +34,136 @@ claude_main() {
     stop-check) claude_stop_check "$@" ;;
     status) claude_status "$@" ;;
     watch) claude_watch "$@"; return $? ;;
+    inject) claude_inject "$@" ;;
+    deadline) claude_deadline "$@"; return $? ;;
+    keep) claude_keep "$@"; return $? ;;
     *) echo "stall-guard: unknown subcommand: $sub" >&2; return 1 ;;
   esac
   return 0
+}
+
+# モデルが Bash で実行する deadline・keep は、Bash の子に入る CLAUDE_CODE_SESSION_ID で自分の台帳を探す。
+claude_cmd_dir() {
+  local sid=${CLAUDE_CODE_SESSION_ID:-}
+  if ! sg_valid_sid "$sid"; then echo "stall-guard: CLAUDE_CODE_SESSION_ID is not set; run this from a Claude Code Bash tool" >&2; return 1; fi
+  sg_session_dir claude "$sid"
+}
+
+# path の大きさと更新時刻を「パス・大きさ・時刻」の順に並べる (無いパスは null)。
+claude_stat_args() {
+  local p s
+  for p in "$@"; do
+    s=$(stat -c '%s %Y' -- "$p" 2>/dev/null) || s="null null"
+    printf '%s\n%s\n%s\n' "$p" "${s% *}" "${s#* }"
+  done
+}
+
+# deadline <id> <分> [--watch <path>]...: 作業の確認の間隔を 1〜30 分に変え、成果物のパスを登録する。
+claude_deadline() {
+  local id=${1:-} min=${2:-} dir
+  if [ -z "$id" ] || ! [[ "$min" =~ ^[0-9]+$ ]] || [ "$min" -lt 1 ] || [ "$min" -gt 30 ]; then
+    echo "stall-guard: usage: deadline <id> <minutes 1-30> [--watch <path>]... (got '${min}')" >&2
+    return 1
+  fi
+  shift 2
+  local paths=() p
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --watch)
+        p=${2:-}
+        [ -n "$p" ] || { echo "stall-guard: --watch needs a path" >&2; return 1; }
+        [[ "$p" == /* || "$p" =~ ^[A-Za-z]: ]] || p="$PWD/$p"
+        paths+=("$p"); shift 2 ;;
+      *) echo "stall-guard: unknown argument: $1" >&2; return 1 ;;
+    esac
+  done
+  dir=$(claude_cmd_dir) || return 1
+  if sg_disabled; then echo "stall-guard: disabled; nothing recorded"; return 0; fi
+  local now plan
+  now=$(sg_now)
+  plan=$(claude_stat_args ${paths[@]+"${paths[@]}"} | jq -nrR --arg id "$id" --argjson iv $((min * 60)) --argjson now "$now" '
+    [inputs] as $a | [range(0; $a | length; 3) as $i | {path: $a[$i], size: ($a[$i + 1] | tonumber?), mtime: ($a[$i + 2] | tonumber?)}] as $p
+    | "A\tdeadlines\t\({id: $id, interval_sec: $iv, watch: [$p[].path], at: $now} | tojson)",
+      ($p[] | "A\tobs\t\(. + {at: $now} | tojson)")') || return 1
+  sg_apply "$dir" "$plan"
+  echo "stall-guard: $id is checked every $min minute(s)"
+}
+
+# keep <id>: 意図して動かし続ける shell の作業を、確認の予約を求める対象から外す (期限なし)。
+claude_keep() {
+  local id=${1:-} dir kind
+  [ -n "$id" ] || { echo "stall-guard: usage: keep <id>" >&2; return 1; }
+  dir=$(claude_cmd_dir) || return 1
+  if sg_disabled; then echo "stall-guard: disabled; nothing recorded"; return 0; fi
+  sg_files "$dir" tasks
+  kind=$(jq -nrR --arg id "$id" --argjson now 0 --argjson off 0 "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'sg_load as $L | (last_by_id($L.tasks; $id).kind // "none")' "${SG_FILES[@]}" 2>/dev/null)
+  kind=${kind//$SG_CR/}
+  if [ "$kind" != shell ]; then
+    echo "stall-guard: keep is only for background shell tasks; $id is ${kind:-none}. Schedule a check, check it now, or report it as unfinished." >&2
+    return 1
+  fi
+  sg_append "$dir/keeps.jsonl" "{\"id\":\"$id\",\"at\":$(sg_now)}"
+  echo "stall-guard: $id is kept running without check schedules"
+}
+
+# inject (UserPromptSubmit): ターンの境界を書き、running の作業・前のターンで抜けた記録・残った予約の事実を渡す。
+claude_inject() {
+  local input sid
+  input=$(cat) || return 0
+  sid=$(jq -r '.session_id | tostring' <<<"$input" 2>/dev/null) || return 0
+  sid=${sid//$SG_CR/}
+  sg_valid_sid "$sid" || return 0
+  sg_mark_hooked claude "$sid"
+  sg_disabled && return 0
+  local dir now off plan paths
+  dir=$(sg_session_dir claude "$sid") || return 0
+  [ -d "$dir" ] || return 0
+  now=$(sg_now)
+  off=$(sg_tz_offset)
+  sg_files "$dir" tasks wakeups failed ended seen crons observed released leftover deadlines keeps turns obs
+  local files=("${SG_FILES[@]}")
+  # 1 回目: 大きさを測るパス (running の作業の watch と outputFile) を出す。
+  paths=$(jq -nrR --argjson now "$now" --argjson off "$off" "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
+    sg_load as $L | running_ids($L)[] as $id
+    | ((last_by_id($L.deadlines; $id).watch // [])[], (task_of($L; $id).output_file // empty))' "${files[@]}" 2>/dev/null) || return 0
+  paths=${paths//$SG_CR/}
+  local list=()
+  [ -n "$paths" ] && mapfile -t list <<<"$paths"
+  local stats
+  stats=$(claude_stat_args ${list[@]+"${list[@]}"} | jq -Rsc 'split("\n") | .[:-1]' 2>/dev/null) || return 0
+  plan=$(jq -nrR --argjson now "$now" --argjson off "$off" --argjson stats "${stats//$SG_CR/}" "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
+    def hm($t): ($t + $off) | strftime("%H:%M");
+    def sizes: $stats as $a | [range(0; $a | length; 3) as $i | {key: $a[$i], value: {size: ($a[$i + 1] | tonumber?), mtime: ($a[$i + 2] | tonumber?)}}] | from_entries;
+    def growth($L; $p): sizes[$p] as $s | ([($L.obs // [])[] | select(.path == $p)] | last) as $o
+      | if $s.size == null then "\($p): 無い"
+        else "\($p): \($s.size) バイト" + (if $o.size != null then " (前回から \(if $s.size >= $o.size then "+" else "" end)\($s.size - $o.size))" else "" end)
+          + ", 更新 \(hm($s.mtime))" end;
+    sg_load as $L | crons_now($L) as $crons
+    | ([($L.turns // [])[] | select(.event == "prompt") | .at] | last // 0) as $prev
+    | [running_ids($L)[] as $id | task_of($L; $id) as $t
+        | ([($L.deadlines // [])[] | select(.id == $id)] | last) as $d
+        | "- \($id) (\($t.kind)): 起動から \((($now - $t.started) / 60) | floor) 分、確認の間隔 \(interval_of($L; $id) / 60 | floor) 分"
+          + (if kept($L; $id) then "、keep 中 (確認の予約を求めない)" else "" end)
+          + (if $d then "、deadline \($d.interval_sec / 60 | floor) 分 (\(hm($d.at)) に設定)" else "" end)
+          + ([($d.watch // [])[] | growth($L; .)] | if length > 0 then "、成果物 " + join("; ") else "" end)
+          + (if $t.output_file then "、会話記録 " + growth($L; $t.output_file) else "" end)
+          + ([($L.failed // [])[] | select(.at >= $t.started)] | if length > 0 then "、予約の失敗: " + (map("\(.event) \(.tool) \(hm(.at))") | join(", ")) else "" end)] as $facts
+    | [($L.released // [])[] | select(.at >= $prev)
+        | "- 前のターン (prompt \(.prompt_id)) で、stall-guard は block をやめた (\(if .cause == "total" then "1 ターンの block の上限" else "block に応じた変化が無い" end))。確認の予定が無い作業: \(.unmet | join(", "))"] as $rel
+    | [($L.leftover // [])[] | select(.event == "detected") | .set as $set
+        | select(any(($L.leftover // [])[]; .event == "delivered" and .via == "inject" and ((.set | sort) == ($set | sort))) | not)
+        | {set: $set, live: [($L.wakeups // [])[] | select(.key as $k | $set | index($k)) | select(live(.; $crons))]}
+        | select(.live | length > 0)] as $left
+    | "A\tturns\t\({at: $now, event: "prompt"} | tojson)",
+      (sizes | to_entries[] | "A\tobs\t\({path: .key, size: .value.size, mtime: .value.mtime, at: $now} | tojson)"),
+      ($left[] | "A\tleftover\t\({event: "delivered", set: .set, via: "inject", at: $now} | tojson)"),
+      "S\t\($L._skipped)",
+      (($facts | if length > 0 then ["stall-guard: 動いている背景作業の事実 (確認するか、続けるか止めるかの判断に使う):"] + . else [] end)
+        + $rel
+        + [$left[] | .live[] | "- 背景作業は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる): \(.source) \(.key) が \(hm(.fire)) に発火予定 (同時に動いていた作業: \(observed_of($L; .key) // [] | join(", ")))"]
+       | if length > 0 then "O\t\({hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: join("\n")}} | tojson)" else empty end)' \
+    "${files[@]}" 2>/dev/null) || return 0
+  sg_apply "$dir" "$plan"
 }
 
 # 本体 (CLAUDE_PID) の起動引数を NUL 区切りで出す。読めなければ非 0。

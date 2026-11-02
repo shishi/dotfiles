@@ -371,3 +371,61 @@ watch_bg "$(bt a1:subagent)"
 stop_watch $W
 [ "$(field .text_print "$(last "$D/argv.jsonl")")" = null ] || fail "unreadable argv is kept as unknown"
 ok "unreadable argv keeps watching"
+
+# --- inject・deadline・keep ---
+
+inject() { jq -nc '{session_id:"s1",hook_event_name:"UserPromptSubmit",prompt_id:"p5",prompt:"続けて"}' | sg inject; }
+ctx() { field '.hookSpecificOutput.additionalContext // ""' "$1"; }
+cs() { CLAUDE_CODE_SESSION_ID=s1 sg "$@"; }
+
+reset; out=$(inject)
+[ -z "$out" ] && [ ! -e "$D" ] || fail "inject is silent without tasks"
+ok "inject is silent without tasks"
+
+reset; agent a1; seen '["a1"]'; printf 'start\n' >"$work/result.txt"
+cs deadline a1 5 --watch "$work/result.txt" || fail "deadline with a watch path"
+printf '0123456789' >>"$work/result.txt"
+out=$(inject); c=$(ctx "$out")
+[ "$(field .hookSpecificOutput.hookEventName "$out")" = UserPromptSubmit ] && has a1 "$c" && has '+10' "$c" && has 'result.txt' "$c" \
+  && [ "$(field .event "$(last "$D/turns.jsonl")")" = prompt ] || fail "inject reports facts and growth: $out"
+c=$(ctx "$(inject)")
+has '+0' "$c" || fail "inject reports growth since the previous prompt: $c"
+ok "inject reports facts and growth"
+
+reset; agent a1; f=$((NOW + 1200)); wake $f
+stop "$(bt a1:subagent)" "[$(cron_of $f)]" >/dev/null
+[ "$(decision "$(stop '[]' "[$(cron_of $f)]" p2)")" = block ] || fail "leftover is blocked once at the transition"
+[ -z "$(stop '[]' "[$(cron_of $f)]" p2)" ] || fail "an empty Stop after the transition stays silent"
+c=$(ctx "$(inject)")
+has "$(date -d "@$f" '+%H:%M')" "$c" && has a1 "$c" && ! has 'stop:true' "$c" && ! has CronDelete "$c" && grep -q '"via":"inject"' "$D/leftover.jsonl" \
+  || fail "inject reports leftover wakeups: $c"
+! has "$(date -d "@$f" '+%H:%M')" "$(ctx "$(inject)")" || fail "inject reports leftover wakeups once"
+reset; agent a1; f=$((NOW + 1200)); wake $f
+stop "$(bt a1:subagent)" "[$(cron_of $f)]" >/dev/null; stop '[]' "[$(cron_of $f)]" p2 >/dev/null; stop '[]' '[]' p3 >/dev/null
+! has "$(date -d "@$f" '+%H:%M')" "$(ctx "$(inject)")" || fail "a cancelled leftover wakeup is not reported"
+ok "inject reports leftover wakeups once"
+
+reset; agent a1
+for m in 0 31 x; do ! cs deadline a1 $m 2>/dev/null || fail "deadline rejects $m"; done
+[ ! -e "$D/deadlines.jsonl" ] || fail "rejected deadlines are not kept"
+! sg deadline a1 5 2>/dev/null || fail "deadline needs CLAUDE_CODE_SESSION_ID"
+cs deadline a1 5 && [ "$(field .interval_sec "$(last "$D/deadlines.jsonl")")" = 300 ] || fail "deadline a1 5"
+ok "deadline rejects out of range"
+
+reset; agent a1; shell b1; seen '["a1","b1"]'
+! cs keep a1 2>/dev/null || fail "keep rejects a subagent"
+cs keep b1 || fail "keep accepts a shell"
+has keep "$(ctx "$(inject)")" && [ "$(field '.tasks[] | select(.id=="b1") | .keep' "$(sg status --json --session s1)")" = true ] || fail "keep is shown in inject and status"
+ok "keep rejects a subagent"
+
+reset; agent a1
+stop "$(bt a1:subagent)" >/dev/null; stop "$(bt a1:subagent)" >/dev/null; stop "$(bt a1:subagent)" >/dev/null
+[ "$(lines "$D/released.jsonl")" = 1 ] || fail "a released prompt is recorded"
+c=$(ctx "$(inject)")
+has 'p1' "$c" || fail "released turn is reported: $c"
+ok "released turn is reported"
+
+reset; agent a1; seen '["a1"]'; n=$(lines "$D/turns.jsonl"); sg disable >/dev/null
+[ -z "$(inject)" ] && [ "$(lines "$D/turns.jsonl")" = "$n" ] || fail "disabled is inert (inject)"
+! cs deadline a1 5 2>/dev/null || [ ! -e "$D/deadlines.jsonl" ] || fail "disabled is inert (deadline)"
+ok "disabled is inert (inject)"
