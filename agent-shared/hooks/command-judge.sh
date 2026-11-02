@@ -262,12 +262,16 @@ data="$data$(section USER "$user_message")"
 # codex login で選んだもの (CODEX_HOME の auth.json) だけを使う。環境変数の API キーへは切り替えない。
 judge_cwd="$state_dir/judge-cwd"
 down_stamp="$state_dir/judge-down-$cli"
+JUDGE_LOGIN_INVALID="判定役の codex のログインが無効 (認証エラー 401) で、codex login でログインし直す必要がある"
 # 経過は秒で比べる (BSD の find -mmin は分に切り上げるため、1 分以内の判定に使えない)。
-if [ -f "$down_stamp" ] && [ ! -L "$down_stamp" ] && IFS= read -r down_at <"$down_stamp"; then
+# 印は "<時刻> [原因]"。原因が login なら、判定を省く間もログインの無効を伝える。
+if [ -f "$down_stamp" ] && [ ! -L "$down_stamp" ] && read -r down_at down_cause <"$down_stamp"; then
   case "$down_at" in
     ""|*[!0-9]*) ;;
-    *) [ $((now - down_at)) -ge 0 ] && [ $((now - down_at)) -lt $((down_retry_minutes * 60)) ] &&
-      unjudged judge-down "判定役の codex exec が直前の確認で簡単な問いにも答えなかった (codex login status・利用枠・通信を確認すること)" ;;
+    *) if [ $((now - down_at)) -ge 0 ] && [ $((now - down_at)) -lt $((down_retry_minutes * 60)) ]; then
+         [ "${down_cause:-}" = login ] && unjudged judge-login "$JUDGE_LOGIN_INVALID"
+         unjudged judge-down "判定役の codex exec が直前の確認で簡単な問いにも答えなかった (codex login status・利用枠・通信を確認すること)"
+       fi ;;
   esac
 fi
 output=$({ cat "$hook_dir/command-judge-prompt.md" && printf '%s' "$data"; } | run_codex "$judge_timeout_seconds")
@@ -276,6 +280,11 @@ case "$status" in
   0) ;;
   124) judge_failed "判定役が ${judge_timeout_seconds} 秒以内に答えなかった" ;;
   127) unjudged no-codex "判定役に使う codex が見つからない" ;;
+  77)
+    # run-judge.py が判定役の認証エラー (HTTP 401) の繰り返しを見て止めた。問い直しても同じなので、
+    # 判定役が答えないときと同じく、しばらく判定を省く。
+    printf '%s login\n' "$(date +%s)" >"$down_stamp" 2>/dev/null
+    unjudged judge-login "$JUDGE_LOGIN_INVALID" ;;
   *) judge_failed "判定役の codex exec が終了コード $status で失敗した" ;;
 esac
 

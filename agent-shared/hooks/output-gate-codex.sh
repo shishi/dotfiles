@@ -41,16 +41,21 @@ find_python() {
 
 json_string() {
   # ASCII だけで出す。-I では PYTHONUTF8 が効かず、Windows のパイプは ANSI コードページになるため。
-  "$py_bin" -I -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
+  # 行末も付けない (Windows の Python が付ける CR は、$(...) で外れずに JSON の後ろに残る)。
+  "$py_bin" -I -c 'import json, sys; print(json.dumps(sys.argv[1]), end="")' "$1"
 }
 
 finish() {
-  if [ -n "$stop_reason" ]; then
-    printf '{"continue": false, "stopReason": %s}\n' "$(json_string "[出力ゲート] $stop_reason")"
-  elif [ "${#messages[@]}" -gt 0 ] && [ -n "${py_bin:-}" ]; then
-    local joined
+  local joined system=
+  if [ "${#messages[@]}" -gt 0 ] && [ -n "${py_bin:-}" ]; then
     joined=$(printf '%s ' "${messages[@]}")
-    printf '{"systemMessage":%s}\n' "$(json_string "[出力ゲート] ${joined% }")"
+    system=$(json_string "[出力ゲート] ${joined% }")
+  fi
+  if [ -n "$stop_reason" ]; then
+    printf '{"continue": false, "stopReason": %s%s}\n' "$(json_string "[出力ゲート] $stop_reason")" \
+      "${system:+, \"systemMessage\": $system}"
+  elif [ -n "$system" ]; then
+    printf '{"systemMessage":%s}\n' "$system"
   fi
   exit 0
 }
@@ -65,14 +70,15 @@ default_port() {
 }
 
 # 状態ファイルを読む: "enabled port" を出力する。無ければ "false 0"。
+# 行末を付けずに出す (Windows の Python は行末に CR を付け、read がポートの値に含めてしまう)。
 read_state() {
   "$py_bin" -I - "$state_file" <<'EOF'
 import json, sys
 try:
     data = json.load(open(sys.argv[1], encoding='utf-8'))
-    print('true' if data.get('enabled') else 'false', int(data.get('port') or 0))
+    print('true' if data.get('enabled') else 'false', int(data.get('port') or 0), end='')
 except (OSError, ValueError, TypeError):
-    print('false 0')
+    print('false 0', end='')
 EOF
 }
 
@@ -96,6 +102,17 @@ ok = lambda v: isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9._-]{1,128}", v) 
 print(sid if ok(sid) else "-", source if ok(source) else "-", end="")'
 }
 
+# 中継を直せない問題は、同じセッションには一度だけ伝える。Codex は直せないまま要求を再試行し、
+# 利用者の入力のたびに同じ表示を重ねても新しく分かることが無いため。中継が答えたら印を消す。
+report_once() {
+  local mark="$relay_state/reported/$sid"
+  if [ -n "$sid" ]; then
+    [ -f "$mark" ] && [ "$(cat "$mark")" = "$1" ] && return 0
+    mkdir -p "$relay_state/reported" && printf '%s' "$1" >"$mark"
+  fi
+  messages+=("$1")
+}
+
 ensure_relay() {
   local port=$1
   mkdir -p "$relay_state" || { messages+=("中継の状態ディレクトリを作れない ($relay_state)。"); return 1; }
@@ -106,6 +123,7 @@ try:
     print(json.load(sys.stdin).get("state", ""))
 except ValueError:
     print("")')
+  [ -n "$state" ] && [ "$state" != failed ] && [ -n "$sid" ] && rm -f -- "$relay_state/reported/$sid"
   case "$state" in
     running|started|updated) return 0 ;;
     update-deferred)
@@ -116,7 +134,7 @@ except ValueError:
       messages+=("中継の新しい版に入れ替えられなかったため、古い版のまま動かしている。")
       return 0 ;;
   esac
-  messages+=("中継を 127.0.0.1:$port で起動できない。ほかのプロセスがポートを使っている可能性がある。直すまで Codex はモデルに接続できない。中継を外すには: bash ~/.agent-shared/hooks/output-gate-codex.sh disable")
+  report_once "中継を 127.0.0.1:$port で起動できない。ほかのプロセスがポートを使っている可能性がある。直すまで Codex はモデルに接続できない。中継を外すには: bash ~/.agent-shared/hooks/output-gate-codex.sh disable"
   return 1
 }
 
@@ -136,8 +154,9 @@ reconcile() {
 find_python || { case "$mode" in enable|disable) echo 'output-gate-codex.sh: Python が見つからない。' >&2; exit 1 ;; esac; exit 0; }
 read -r enabled port < <(read_state)
 
+sid=
 case "$mode" in
-  session-start|session-end|prompt)
+  session-start|session-end|prompt|pre-compact)
     read -r sid source < <(hook_fields)
     [ "$sid" = - ] && sid=
     ;;
@@ -152,7 +171,7 @@ case "$mode" in
         rm -f -- "$relay_state/delegated/$sid"
       fi
     fi
-    [ "$mode" = session-end ] && [ -n "$sid" ] && rm -f -- "$relay_state/unrouted/$sid"
+    [ "$mode" = session-end ] && [ -n "$sid" ] && rm -f -- "$relay_state/unrouted/$sid" "$relay_state/reported/$sid"
     if [ "$mode" = session-start ] && [ "$enabled" = true ]; then
       ensure_relay "$port"
       reconcile apply "$port"
@@ -178,10 +197,17 @@ case "$mode" in
     [ -n "$sid" ] && [ -s "$relay_state/unrouted/$sid" ] && stop_reason=$(cat "$relay_state/unrouted/$sid")
     finish
     ;;
-  pre-compact|pre-model)
-    # 利用者の入力から始まらない要求 (compaction など) の前にも、止まった中継を起動し直す。
+  pre-compact)
+    # 利用者の入力から始まらない要求 (compaction) の前にも、止まった中継を起動し直す。
     [ "$enabled" = true ] && ensure_relay "$port" quiet
     finish
+    ;;
+  pre-model)
+    # ターンの途中で止まった中継を起動し直す。codex/hooks.json で async にしてあるため、Codex は要求を
+    # この hook の終わりまで待たない。中継がまだ答えなければ、その要求は Codex の再試行で吸収する。
+    # Codex は PreModelRequest の hook の標準出力を読まないため、何も出さない。
+    [ "$enabled" = true ] && ensure_relay "$port" quiet
+    exit 0
     ;;
   enable)
     port=${2:-$(default_port)}

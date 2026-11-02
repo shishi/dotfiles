@@ -729,6 +729,90 @@ class RelayTests(unittest.TestCase):
             time.sleep(0.1)
         self.assertFalse(pid_alive(pid))
 
+    AUTH_ERROR_LINE = ('2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to '
+                       'connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses')
+
+    def restart_with_real_checker(self, fake_codex_source):
+        """実物の検査処理 (output-gate-check.py → run-judge.py) の先に、偽の検査役を置いて中継を起動し直す。"""
+        fake = self.tmp / 'fake-codex.py'
+        fake.write_text(fake_codex_source, encoding='utf-8')
+        gitleaks = self.tmp / 'gitleaks-none.py'
+        gitleaks.write_text('import json, sys\nargs = sys.argv[1:]\n'
+                            'open(args[args.index("--report-path") + 1], "w").write("[]")\n', encoding='utf-8')
+        rules = self.tmp / 'rules.md'
+        rules.write_text('## 応答\n\n- 規則\n', encoding='utf-8')
+        check = Path(RELAY).with_name('output-gate-check.py')
+        self.restart_relay(extra_env={
+            'OUTPUT_GATE_CHECK_CMD': json.dumps([sys.executable, '-I', str(check)]),
+            'OUTPUT_GATE_CHECKER_CMD': json.dumps([sys.executable, '-I', str(fake)]),
+            'OUTPUT_GATE_GITLEAKS': json.dumps([sys.executable, '-I', str(gitleaks)]),
+            'OUTPUT_GATE_RULES': str(rules)})
+
+    def test_checker_login_failure_is_reported_quickly(self):
+        # 検査役の Codex のログインが無効だと、Codex は 401 を出しながら 15 秒ほど再試行してから終わる (実測)。
+        # 再試行を待たずに、ログインし直す手順を理由に添えて原文を返す。
+        self.restart_with_real_checker(
+            'import sys, time\nsys.stdin.read()\n'
+            f'for _ in range(4):\n    print({self.AUTH_ERROR_LINE!r}, file=sys.stderr, flush=True)\n    time.sleep(0.05)\n'
+            'time.sleep(30)\n')
+        evs, item = message_events('msg_1', 'これは効く。')
+        Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
+        started = time.time()
+        status, events = self.turn(timeout=40)
+        elapsed = time.time() - started
+        text = self.final_text(events)
+        self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
+        self.assertIn('codex login', text)
+        self.assertTrue(text.endswith('これは効く。'))
+        self.assertLess(elapsed, 3, f'took {elapsed:.1f} s')
+
+    def test_checker_recovering_from_auth_errors_is_not_stopped(self):
+        # Codex はログイン情報の読み直しとトークンの更新で立ち直ることがあり、それまでに 401 が 3 回まで出うる。
+        self.restart_with_real_checker(
+            'import sys, time\nsys.stdin.read()\n'
+            f'for _ in range(3):\n    print({self.AUTH_ERROR_LINE!r}, file=sys.stderr, flush=True)\n'
+            'time.sleep(0.3)\n'
+            'print(\'{"pairs": []}\')\n')
+        evs, item = message_events('msg_1', 'これは正しい。')
+        Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
+        status, events = self.turn(timeout=40)
+        self.assertEqual(self.final_text(events), 'これは正しい。')
+
+    def test_auth_error_lines_in_the_conversation_are_not_counted(self):
+        # codex exec は渡された入力を標準エラーにそのまま書き出す (実測)。会話や草稿に 401 のログ行が
+        # 並んでいても、ログインが有効な検査役は止めない。
+        self.restart_with_real_checker(
+            'import sys\nprompt = sys.stdin.read()\n'
+            'print("user\\n" + prompt, file=sys.stderr, flush=True)\n'
+            'import time\ntime.sleep(1)   # モデルの応答を待つ間\n'
+            'print(\'{"pairs": []}\')\n')
+        logs = '\n'.join([self.AUTH_ERROR_LINE] * 4)
+        draft = f'ログを見ると認証で落ちてる。\n\n{logs}\n'
+        evs, item = message_events('msg_1', draft)
+        Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
+        body = {'model': 'm', 'stream': True, 'input': [
+            {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text': f'これを見て\n{logs}'}]}]}
+        status, events = self.turn(body=body, timeout=40)
+        self.assertEqual(self.final_text(events), draft)
+
+    def test_injected_context_does_not_take_the_recent_conversation_slots(self):
+        # Codex は AGENTS.md と環境の情報を利用者の発言の形で送る。これを除いてから直近の発言を数える。
+        def message(role, text):
+            kind = 'input_text' if role == 'user' else 'output_text'
+            return {'type': 'message', 'role': role, 'content': [{'type': kind, 'text': text}]}
+        items = [message('user', '# AGENTS.md instructions for C:/w\n\n<INSTRUCTIONS>\n規則\n</INSTRUCTIONS>'),
+                 message('user', '<environment_context>\n  <cwd>C:/w</cwd>\n</environment_context>')]
+        for n in range(6):
+            items += [message('user', f'質問{n}'), message('assistant', f'回答{n}')]
+        items.append(message('user', '<environment_context>\n  <cwd>C:/x</cwd>\n</environment_context>'))
+        evs, item = message_events('msg_1', 'これは効く。')
+        Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
+        self.turn(body={'model': 'm', 'stream': True, 'input': items})
+        payload = self.checker_inputs()[-1]
+        texts = [turn['text'] for turn in payload['conversation']]
+        self.assertEqual(texts, [t for n in range(1, 6) for t in (f'質問{n}', f'回答{n}')])
+        self.assertEqual(payload['latest_user'], '質問5')
+
     def review_with_finding(self, **changes):
         review = json.loads(self.review_text())
         review['findings'][0].update(changes)
@@ -759,6 +843,21 @@ class RelayTests(unittest.TestCase):
         text = self.final_text(events)
         self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
         self.assertTrue(text.endswith('これは効く。'))
+
+
+class RunJudgeTests(unittest.TestCase):
+    RUN_JUDGE = REPO / 'agent-shared/hooks/lib/run-judge.py'
+
+    def test_deadline_holds_after_the_judge_closes_its_output(self):
+        # 標準出力を先に閉じて動き続ける検査役でも、締切で止めて 124 を返す。
+        work = tempfile.mkdtemp()
+        started = time.time()
+        result = subprocess.run([sys.executable, '-I', str(self.RUN_JUDGE), '0.2', work, sys.executable, '-I', '-c',
+                                 'import os, time; os.close(1); time.sleep(3)'],
+                                input=b'', capture_output=True, timeout=30)
+        elapsed = time.time() - started
+        self.assertEqual(result.returncode, 124)
+        self.assertLess(elapsed, 2, f'took {elapsed:.1f} s')
 
 
 if __name__ == '__main__':

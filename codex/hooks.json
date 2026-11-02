@@ -30,6 +30,7 @@
       {
         "hooks": [
           {
+            "async": true,
             "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-model",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-model'",
             "timeout": 10,

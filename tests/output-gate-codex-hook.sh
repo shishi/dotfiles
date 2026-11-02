@@ -76,6 +76,42 @@ out=$(printf '{"session_id":"s5","source":"startup"}' | bash "$HOOK" session-sta
 check "session whose config cannot be written is stopped" "printf '%s' \"\$out\" | grep -q '\"continue\": *false'"
 printf 'model = "m"\n\n[features]\nhooks = true\n' >"$CODEX_HOME/config.toml"
 
+# ほかのプロセスが待受のポートを使っている: 原因と復旧手順を、セッションごとに 1 回だけ伝える。
+BUSY_PORT=$(python3 -I -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+python3 -I -c 'import socket, sys, time
+s = socket.socket(); s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(50); s.settimeout(0.5)
+end = time.time() + 60
+while time.time() < end:
+    try:
+        s.accept()[0].close()
+    except socket.timeout:
+        pass' "$BUSY_PORT" &
+busy_pid=$!
+sleep 1
+saved_state=$(cat "$XDG_STATE_HOME/output-gate/codex.json")
+printf '{"enabled": true, "port": %s}\n' "$BUSY_PORT" >"$XDG_STATE_HOME/output-gate/codex.json"
+printf '{"session_id":"b0"}' | bash "$HOOK" prompt >/dev/null   # 設定の行をこのポートに合わせておく
+out=$(printf '{"session_id":"b1","source":"startup"}' | bash "$HOOK" session-start)
+message=$(printf '%s' "$out" | python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("systemMessage", ""))' 2>/dev/null)
+check "a busy port is reported with the recovery command" "printf '%s' \"\$message\" | grep -q 'output-gate-codex.sh disable'"
+check "the port in the message has no stray CR" "printf '%s' \"\$message\" | grep -q '127.0.0.1:$BUSY_PORT で'"
+out=$(printf '{"session_id":"b1"}' | bash "$HOOK" prompt)
+check "the same session is not told twice" "[ -z \"\$out\" ]"
+out=$(printf '{"session_id":"b2"}' | bash "$HOOK" prompt)
+check "another session is told" "printf '%s' \"\$out\" | grep -q systemMessage"
+kill "$busy_pid" 2>/dev/null
+wait "$busy_pid" 2>/dev/null
+printf '%s\n' "$saved_state" >"$XDG_STATE_HOME/output-gate/codex.json"
+
+# PreModelRequest は Codex がモデルへの要求 (再試行を含む) のたびに待つ。中継を直せないときに再試行ごとに
+# 秒単位を足さないよう、要求を待たせない async の hook にする (Codex はこの hook の標準出力を読まない)。
+check "the PreModelRequest hook does not hold model requests" "python3 -I -c '
+import json, sys
+hooks = json.load(open(sys.argv[1], encoding=\"utf-8\"))[\"hooks\"][\"PreModelRequest\"]
+gate = [h for g in hooks for h in g[\"hooks\"] if \"output-gate-codex.sh pre-model\" in h[\"command\"]]
+assert gate and all(h.get(\"async\") is True for h in gate), gate
+' '$REPO/codex/hooks.json'"
+
 out=$(bash "$HOOK" disable)
 check "disable removes the lines" "! grep -q 'openai_base_url' '$CODEX_HOME/config.toml'"
 check "disable keeps other lines" "grep -q '^hooks = true' '$CODEX_HOME/config.toml'"

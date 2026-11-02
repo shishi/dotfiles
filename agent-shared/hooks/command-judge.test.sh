@@ -26,6 +26,11 @@ with open(os.path.join(work, "judge-input"), "wb") as f:
     f.write(data)
 with open(os.path.join(work, "calls"), "a") as f:
     f.write("x\n")
+if os.environ.get("STUB_AUTH_FAIL"):   # ログインが無効な codex のように 401 を出し続ける
+    for _ in range(5):
+        print("2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to connect "
+              "to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses",
+              file=sys.stderr, flush=True)
 time.sleep(float(os.environ.get("STUB_SLEEP", "0")))
 print(os.environ.get("STUB_OUTPUT", ""))
 sys.exit(int(os.environ.get("STUB_EXIT", "0")))
@@ -143,6 +148,18 @@ out=$(pre_tool_use '"make test"' | bash "$HOOK")
 out=$(pre_tool_use '"make test"' | bash "$HOOK" --cli codex)
 [ "$(decision "$out")" = deny ] || fail "Codex denies when the verdict is unreadable: $out"
 echo 'ok: a judge that does not answer at all is reported, and a failure on one command asks in Claude and denies in Codex however it is retried'
+
+rm -f "$work/state/judge-down-"*
+start=$(date +%s)
+out=$(pre_tool_use '"make auth"' | STUB_AUTH_FAIL=1 STUB_SLEEP=20 bash "$HOOK" --cli codex)
+[ "$(decision "$out")" = none ] && reason "$out" | grep -q 'codex login' && [ $(($(date +%s) - start)) -lt 10 ] ||
+  fail "a judge whose login is invalid is reported quickly with the way to log in again: $out"
+rm -f "$work/state/notice-"*
+out=$(pre_tool_use '"make auth2"' | bash "$HOOK" --cli codex)
+[ "$(decision "$out")" = none ] && reason "$out" | grep -q 'codex login' && ! reason "$out" | grep -q '簡単な問い' ||
+  fail "while judging is skipped after an invalid login, the notice still names the login: $out"
+rm -f "$work/state/judge-down-"*
+echo 'ok: an invalid judge login is reported with the way to log in again'
 
 rm -f "$work/calls"
 token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")

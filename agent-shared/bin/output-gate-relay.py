@@ -66,6 +66,8 @@ PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
 UNCHECKED_PREFIX = '[出力ゲート: 検査できませんでした — {}]\n\n'
 RECENT_MESSAGES = 10
+# Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
+INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
 COMPACTION_TYPES = {'compaction', 'context_compaction'}
 KEEP_ANSWERS = 3
 # compaction の組に残す回答の phase。途中経過 (commentary) と回答の断片 (partial_answer) は残さない。
@@ -223,8 +225,10 @@ def checker_payload(body, draft):
     compaction_item, rest = split_at_compaction(items)
     after = len(items) - len(rest)
     # 利用者の発言は compaction より前にも保持されて届く。回答は compaction より前の分を保存済みの組から取る。
+    # Codex が利用者の発言の形で送る AGENTS.md と環境の情報は、会話ではないので数える前に除く。
     messages = [i for n, i in enumerate(items) if isinstance(i, dict) and i.get('type') == 'message'
-                and (i.get('role') == 'user' or (i.get('role') == 'assistant' and n >= after))]
+                and ((i.get('role') == 'user' and not input_text(i).startswith(INJECTED_CONTEXT))
+                     or (i.get('role') == 'assistant' and n >= after))]
     users = [m for m in messages if m.get('role') == 'user']
     conversation = [{'role': m['role'], 'text': input_text(m)} for m in messages[-RECENT_MESSAGES:]]
     compacted_note = False
