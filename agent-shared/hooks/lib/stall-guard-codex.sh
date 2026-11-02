@@ -94,7 +94,7 @@ def unrecovered($F): [$F.runs[] | select(.end != "completed" and (.end != null o
 def age($t; $now): if $t == null then "?" else "\($now - $t) 秒" end;
 def run_fact($now):
   "- \(.task_name // .agent_id) (agent_id \(.agent_id)、turn \(.turn_id)): 受付から \(age(.accepted_at; $now))、"
-  + "rollout の最終更新は \(age(.rollout_mtime; $now)) 前"
+  + "rollout の最終更新は \(age(.rollout_mtime; $now))前"
   + (if .end != null then "、終了理由 \(.end)" else "" end) + (if .released then "、歯止めで抜けたターンに動いていた" else "" end);
 def pending_fact($now): "- \(.target): 受付 (\(.event // "受付")) から \(age(.at; $now))、子の run の開始を確認できていない";
 # 今のターンで受け付けた running の run と開始を確認できない受付。fold.json より後に追記された受付は未結合として足す
@@ -253,8 +253,54 @@ codex_advance() {
   return 0
 }
 
-# Task 6 で終了の関所・待ち時間の関所・入力への事実の提示を入れる。
-codex_decide() { return 0; }
+codex_decide() {
+  local sub=$1 dir=$2 turn=$3 tmo=$4 now=$5 plan files
+  sg_files "$dir" accepts waits blocks released notified
+  files=(${SG_FILES[@]+"${SG_FILES[@]}"} /dev/null)
+  [ -f "$dir/fold.json" ] && files+=("$dir/fold.json")
+  plan=$(codex_jq -nrR --arg sub "$sub" --arg turn "$turn" --argjson tmo "${tmo:-0}" --argjson now "$now" "$SG_JQ_LOAD$CODEX_JQ_DEFS"'
+    sg_load as $L | fold_file($L) as $F | targets($F; $L; $turn; $now) as $T
+    | (($T.runs | length) + ($T.pending | length)) as $n
+    | ([$T.runs[] | run_fact($now)] + [$T.pending[] | pending_fact($now)] | join("\n")) as $facts
+    | if $sub == "stop-check" then
+        if $n == 0 or any(($L.released // [])[]; .turn_id == $turn) then empty
+        else [($L.blocks // [])[] | select(.turn_id == $turn)] as $B | ($L.waits // []) as $W | ($B | length) as $k
+          # 歯止め: 前の block から次の Stop までに interval 以上の wait_agent が無い block が 2 回続いたら、そのターンでは block しない。
+          | if $k >= 2 and (complied($W; $B[$k - 2].waits_seen; $B[$k - 1].waits_seen; $turn) | not)
+                       and (complied($W; $B[$k - 1].waits_seen; $W | length; $turn) | not) then
+              "A\treleased\t\({turn_id: $turn, at: $now} | tojson)",
+              ($T.runs[] | "A\truns\t\({event: "released", agent_id, turn_id, at: $now} | tojson)")
+            else
+              "A\tblocks\t\({turn_id: $turn, at: $now, waits_seen: ($W | length)} | tojson)",
+              "O\t\({decision: "block", reason: ("stall-guard: このターンで受け付けた子の run がまだ終わっていない。"
+                + "ターンを終える前に wait_agent を timeout_ms \($wait_ms) 以上で呼んで待つか、止めるなら interrupt_agent を使う"
+                + " (wait_agent は子が終われば早く戻る)。\n" + $facts)} | tojson)"
+            end
+        end
+      elif $sub == "pre-wait" then
+        if $n > 0 and $tmo < $wait_ms then
+          "O\t\({hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny",
+            permissionDecisionReason: ("stall-guard: このターンで受け付けた子の run を待つ wait_agent は timeout_ms を \($wait_ms) 以上にする"
+              + " (今は \($tmo)。子が終われば早く戻る)。\n" + $facts)}} | tojson)"
+        else empty end
+      else
+        ($L.notified // []) as $N
+        | [$F.runs[] | select(.end == null)] as $run
+        | [($L.released // [])[] | . as $r | select(any($N[]; .released_turn == $r.turn_id) | not)] as $rel
+        | [unrecovered($F)[] | . as $u | select(any($N[]; .agent_id == $u.agent_id and .turn_id == $u.turn_id and .end == $u.end) | not)] as $unr
+        | "A\tturns\t\({turn_id: $turn, at: $now} | tojson)",
+          ($unr[] | "A\tnotified\t\({agent_id, turn_id, end, at: $now} | tojson)"),
+          ($rel[] | "A\tnotified\t\({released_turn: .turn_id, at: $now} | tojson)"),
+          (if ($run | length) + ($rel | length) + ($unr | length) == 0 then empty
+           else "O\t\({hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: (["stall-guard: 子の run の事実 (止めるか待つかはここで判断する)。"]
+             + (if ($run | length) > 0 then ["動いている run (前のターンから持ち越したものを含む):"] + [$run[] | run_fact($now)
+                 + (if .accepted_turn == null then "、受付の記録なし (由来不明)" elif .accepted_turn != $turn then "、受け付けたターン \(.accepted_turn)" else "" end)] else [] end)
+             + (if ($unr | length) > 0 then ["完了せずに終わった run (未回収。成果を受け取れていない):"] + [$unr[] | run_fact($now)] else [] end)
+             + (if ($rel | length) > 0 then ["wait_agent で待たずに抜けたターン: " + ([$rel[] | .turn_id] | join(", "))] else [] end)
+             | join("\n"))}} | tojson)" end)
+      end' "${files[@]}" 2>/dev/null) || return 0
+  sg_apply "$dir" "$plan"
+}
 
 codex_status() {
   local json=false sid=${CODEX_THREAD_ID:-}

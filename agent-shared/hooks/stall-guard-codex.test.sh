@@ -191,3 +191,106 @@ ok "status shape"
 reset; SID=s2; child_a; SID=s1; s=$(st)
 [ "$(field '.running|length' "$s")" = 0 ] && [ "$(field '.children|length' "$s")" = 0 ] || fail "other session's tasks are ignored: $s"
 ok "other session's tasks are ignored"
+
+# ===================== Task 6: stop-check・pre-wait・inject =====================
+
+stop() { printf '{"session_id":"%s","turn_id":"%s","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"x"}' "$SID" "$1" | cx stop-check; }
+# prewait <timeout_ms> <turn> [agent_id]
+prewait() {
+  local extra=
+  [ -n "${3:-}" ] && extra=",\"agent_id\":\"$3\",\"agent_type\":\"default\""
+  printf '{"session_id":"%s","turn_id":"%s","hook_event_name":"PreToolUse","tool_name":"collaborationwait_agent","tool_input":{"timeout_ms":%s}%s}' "$SID" "$2" "$1" "$extra" | cx pre-wait
+}
+inject() { printf '{"session_id":"%s","turn_id":"%s","hook_event_name":"UserPromptSubmit","prompt":"x"}' "$SID" "$1" | cx inject; }
+ctx() { field '.hookSpecificOutput.additionalContext' "$1"; }
+blocked() { [ "$(field .decision "$1")" = block ]; }
+delegator_fails() { [ "$(field '(.running|length>0) or (.unrecovered|length>0) or (.pending|length>0)' "$1")" = true ]; }
+
+reset; a=$(stop p1); b=$(prewait 10000 p1); c=$(inject p1)
+[ -z "$a$b$c" ] && [ ! -e "$D" ] || fail "empty session is silent: $a$b$c"
+ok "empty session is silent"
+
+reset; child_a; out=$(stop p1)
+blocked "$out" && [[ "$(field .reason "$out")" == *"/root/child_a"* ]] && [[ "$(field .reason "$out")" == *1200000* ]] || fail "run accepted in this turn blocks the turn: $out"
+ok "run accepted in this turn blocks the turn"
+
+reset; child_a; complete "$R" c1 5; adv; out=$(stop p1)
+[ -z "$out" ] || fail "closed run does not: $out"
+ok "closed run does not"
+
+reset; child_a; a=$(stop p2); b=$(prewait 10000 p2); c=$(inject p2)
+[ -z "$a$b" ] && [[ "$(ctx "$c")" == *c1* ]] || fail "carried-over run does not block: $a$b / $c"
+ok "carried-over run does not block"
+
+reset; child_a; out=$(prewait 10000 p1); out2=$(prewait 1200000 p1)
+[ "$(field .hookSpecificOutput.permissionDecision "$out")" = deny ] && [[ "$(field .hookSpecificOutput.permissionDecisionReason "$out")" == *1200000* ]] \
+  && [ -z "$out2" ] || fail "short wait is denied: $out / $out2"
+ok "short wait is denied"
+
+reset; child_a; out=$(prewait 10000 p1 A1)
+[ -z "$out" ] || fail "child wait is not denied: $out"
+stop p1 >/dev/null; waited 1200000 p1 A1; stop p1 >/dev/null; waited 1200000 p1 A1; out=$(stop p1)
+[ -z "$out" ] && [ "$(lines "$D/released.jsonl")" = 1 ] || fail "child wait is not denied and does not count: $out"
+ok "child wait is not denied and does not count"
+
+reset; RG="$work/rg.jsonl"; rm -f "$RG"; meta "$RG" /root/child_a/grand; spawn grand c1 A1 /root/child_a; start G1 "$RG" g1
+started "$RG" g1 1 c1 /root/child_a; adv G1 "$RG"; out=$(stop c1); out2=$(stop p1)
+[ "$(field '.running[0].parent' "$(st)")" = A1 ] && [ -z "$out$out2" ] || fail "grandchild run does not block the parent: $out$out2"
+ok "grandchild run does not block the parent"
+
+reset; child_a; a=$(stop p1); waited 1200000 p1; b=$(stop p1); waited 1200000 p1; c=$(stop p1)
+blocked "$a" && blocked "$b" && blocked "$c" || fail "compliant wait resets the brake: $c"
+ok "compliant wait resets the brake"
+
+reset; child_a; a=$(stop p1); b=$(stop p1); waited 10000 p1; c=$(stop p1)
+blocked "$a" && blocked "$b" && [ -z "$c" ] && [ "$(lines "$D/released.jsonl")" = 1 ] && [ "$(field '.running[0].released' "$(st)")" = true ] \
+  || fail "two non-compliant blocks release the turn: $c"
+ok "two non-compliant blocks release the turn"
+
+reset; child_a; stop p1 >/dev/null; waited 60000 p1; stop p1 >/dev/null; waited 60000 p1; out=$(stop p1)
+[ -z "$out" ] || fail "timed_out false does not count as compliance: $out"
+ok "timed_out false does not count as compliance"
+
+reset; child_a; stop p1 >/dev/null; stop p1 >/dev/null; stop p1 >/dev/null; aborted "$R" c1 30; stop p1 >/dev/null; s=$(st)
+[ "$(field '.running|length' "$s")" = 0 ] && [ "$(field '.unrecovered[0].end' "$s")" = aborted ] && [ "$(field '.unrecovered[0].released' "$s")" = true ] \
+  && delegator_fails "$s" || fail "released run aborted by exec end is unrecovered: $s"
+ok "released run aborted by exec end is unrecovered"
+
+out=$(inject p2)
+[[ "$(ctx "$out")" == *c1*aborted* ]] && [[ "$(ctx "$out")" == *p1* ]] || fail "inject reports released and unrecovered runs: $out"
+ok "inject reports released and unrecovered runs"
+
+reset; child_a; at 7200; a=$(stop p1); waited 1200000 p1; b=$(stop p1); waited 1200000 p1; c=$(stop p1); at 0
+blocked "$a" && blocked "$b" && blocked "$c" || fail "long run keeps blocking in its turn: $c"
+ok "long run keeps blocking in its turn"
+
+reset; child_a; aborted "$R" c1 5; adv; a=$(inject p2); b=$(inject p3); s=$(st)
+[[ "$(ctx "$a")" == *c1* ]] && [ "$(lines "$D/notified.jsonl")" = 1 ] && [ -z "$b" ] && [ "$(field '.unrecovered|length' "$s")" = 1 ] \
+  || fail "unrecovered run is injected once: $a / $b"
+ok "unrecovered run is injected once"
+
+reset; child_a; mkdir "$D/advance.lock"; complete "$R" c1 5
+t0=$(date +%s%N); at 10; interrupt child_a '"{\"previous_status\":{\"running\":null}}"'; at 0; t1=$(date +%s%N)
+out=$(STALL_GUARD_LOCK_WAIT=1 stop p1); t2=$(date +%s%N)
+[ $(((t1 - t0) / 1000000)) -lt 1500 ] && [ "$(lines "$D/interrupts.jsonl")" = 1 ] || fail "lock held elsewhere: interrupt record waited"
+[ $(((t2 - t1) / 1000000)) -ge 900 ] && blocked "$out" || fail "lock held elsewhere keeps blocking: $out"
+rmdir "$D/advance.lock"; out=$(stop p1)
+[ -z "$out" ] || fail "lock held elsewhere keeps blocking (released lock): $out"
+ok "lock held elsewhere keeps blocking"
+
+reset; child_a; complete "$R" c1 5; adv; mkdir "$D/advance.lock"; spawn child_b p2; out=$(STALL_GUARD_LOCK_WAIT=1 stop p2); rmdir "$D/advance.lock"
+blocked "$out" && [[ "$(field .reason "$out")" == *child_b* ]] || fail "spawn recorded while the lock is held still blocks: $out"
+ok "spawn recorded while the lock is held still blocks"
+
+reset; meta "$R" /root/child_a; started "$R" c1 1 p2 /elsewhere; spawn child_a p2; adv; a=$(stop p2); at 200; b=$(stop p2); s=$(st); at 0
+blocked "$a" && blocked "$b" && delegator_fails "$s" && [ "$(field '.pending[0].boundary_seen' "$s")" = false ] \
+  || fail "boundary-unseen child blocks its turn and fails the delegator: $b / $s"
+ok "boundary-unseen child blocks its turn and fails the delegator"
+
+reset; spawn child_b p1; at 121; out=$(stop p1); s=$(st); at 0
+[ -z "$out" ] && [ "$(field '.pending[0].expired' "$s")" = true ] && delegator_fails "$s" || fail "unstarted acceptance counts as a failure for the delegator: $out / $s"
+ok "unstarted acceptance counts as a failure for the delegator"
+
+reset; child_a; cx disable >/dev/null; a=$(stop p1); b=$(prewait 10000 p1); c=$(inject p1); spawn child_c p1
+[ -z "$a$b$c" ] && [ "$(lines "$D/accepts.jsonl")" = 1 ] || fail "disabled is inert: $a$b$c"
+ok "disabled is inert"
