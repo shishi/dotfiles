@@ -49,6 +49,8 @@
   OUTPUT_GATE_SETTINGS     設定ファイルのパス。既定は $XDG_STATE_HOME/output-gate/checker.json
   OUTPUT_GATE_TIMEOUT      検査全体の締切 (秒)。既定 45。二系統で分ける
   OUTPUT_GATE_RULES        応答の規則を読む共通指示のパス。既定 ~/.codex/AGENTS.md。
+  OUTPUT_GATE_CHECKED_RULES 最終回答で守られているかを確かめる規則の一覧 (JSON の [{id, text}])。
+                           既定はこのファイルと同じ場所の output-gate-rules.json。
   OUTPUT_GATE_GITLEAKS     gitleaks のコマンド (JSON 配列)。既定 ["gitleaks"]。
 
 設定ファイル (JSON、どれも省略できる):
@@ -90,7 +92,8 @@ CLAUDE_DROPPED_ENV = ('CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_BASE_URL', 'ANTHROPI
 CODEX_DROPPED_ENV = ('OPENAI_BASE_URL', 'OPENAI_API_KEY', 'CODEX_API_KEY')
 KINDS = {'unverified_claim': '確認していない主張',
          'missing_request': '依頼の抜け・確認できるのに確認していないこと',
-         'concealment': 'ごまかし'}
+         'concealment': 'ごまかし',
+         'rule_violation': '規則違反'}
 STATES = ('absent', 'failed', 'truncated', 'unrecovered')
 # 出力ゲートの mod が登録する指摘のツールの名前。モデルと tool.call には MCP の名前 (mcp__output-gate__…) で見える。
 GATE_TOOLS = frozenset({'gate_findings', 'mcp__output-gate__gate_findings'})
@@ -103,9 +106,11 @@ CHECKER_SCHEMA = {
             'properties': {'find': {'type': 'string'}, 'replace': {'type': 'string'}, 'rule': {'type': 'string'},
                            'meaning_changed': {'type': 'boolean'}}}},
         'findings': {'type': 'array', 'items': {
-            'type': 'object', 'additionalProperties': False, 'required': ['kind', 'source', 'excerpt', 'evidence'],
+            'type': 'object', 'additionalProperties': False,
+            'required': ['kind', 'rule', 'source', 'excerpt', 'evidence'],
             'properties': {
                 'kind': {'type': 'string', 'enum': list(KINDS)},
+                'rule': {'type': 'string'},
                 'source': {'type': 'string'},
                 'excerpt': {'type': 'string'},
                 'evidence': {'type': 'array', 'items': {
@@ -132,10 +137,6 @@ facts, numbers, success/failure statements and negations. This covers:
   where the answer only mentions the word itself (for example inside 「」 or quotation marks naming the word), it is
   not a use and is not reported, even when the word is forbidden. A forbidden word stays forbidden even when the user
   asked for it.
-- the tone the rules require. Judge the tone of the whole answer, not each sentence. If the answer has a casual tone
-  anywhere (for example a sentence ending with よ, ね, じゃん, だよ, 〜), it complies: change no sentence for tone, even
-  a plain or flat one. Only when the whole answer is in polite form (です, ます, でした, ください) or formal written form
-  with no casual tone, rewrite its sentences into the casual speech the rules describe, keeping every clause and fact.
 - anything else the rules forbid in the answer's text (for example an apology or a self-evaluation).
 When you are unsure whether the draft breaks a rule, leave it unchanged. Do not report anything inside the protected
 parts, commands, identifiers, file paths and URLs, or text that fulfils an explicit request in the user's latest
@@ -171,11 +172,16 @@ already shown in this turn) against the evidence, and report:
    that affects the final state: "should work" or "no problem" without grounds, only the successes of an unresolved
    failure, or the result of a narrowed scope written as if it covered everything. A failure that was fixed and then
    passed the same check again is resolved and is not reported, even if the answer does not mention it.
-Each finding has only: "kind"; "source", the id of the message the excerpt comes from; "excerpt", a string copied
-exactly from that message; and "evidence", a list of {"id", "state"} pairs. "state" is "absent" (no matching item;
+4. Rule violations (kind "rule_violation"): the draft breaks one of "checked_rules". Set "rule" to that rule's "id".
+   Judge each rule by its text against the draft, shown_text, the messages and the evidence. Report a rule only where
+   the violation is clear; when a rule does not apply to this answer, it is met. Report each broken rule once, citing the
+   part of the draft that breaks it (or, when the rule is broken by what the draft leaves out, its last sentence).
+Each finding has only: "kind"; "rule", the "id" of the broken rule for rule violations and "" for the other kinds;
+"source", the id of the message the excerpt comes from; "excerpt", a string copied exactly from that message; and
+"evidence", a list of {"id", "state"} pairs (rule violations may give an empty list). "state" is "absent" (no matching item;
 "id" is null), "failed", "truncated" or "unrecovered" (the item with that id failed, was truncated, or failed and was
 not recovered). Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
-user). Unverified claims and concealment cite "draft" or "shown". Never cite an assistant message as a request.
+user). Unverified claims, concealment and rule violations cite "draft" or "shown". Never cite an assistant message as a request.
 Report each unmet point once. When "previous_findings" is given, the agent was asked to fix them: report what is
 still unmet now.
 """
@@ -183,7 +189,7 @@ OUTPUT_FORMAT = """
 Reply with JSON only, no prose:
 {"replacements": [{"find": "<exact substring of the draft>", "replace": "<replacement>",
                    "rule": "<the rule it breaks, quoted briefly>", "meaning_changed": <true|false>}],
- "findings": [{"kind": "...", "source": "<message id>", "excerpt": "<exact substring>",
+ "findings": [{"kind": "...", "rule": "<rule id or empty>", "source": "<message id>", "excerpt": "<exact substring>",
                "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered"}]}]}
 When nothing is wrong, reply {"replacements": [], "findings": []}.
 """
@@ -247,6 +253,19 @@ def response_rules():
     if not match:
         raise ValueError(f'{path} has no "## 応答" section')
     return match.group(1).strip()
+
+
+def checked_rules():
+    """最終回答で守られているかを確かめる規則 ([{id, text}])。ファイルが無ければ空。"""
+    path = Path(os.environ.get('OUTPUT_GATE_CHECKED_RULES') or Path(__file__).with_name('output-gate-rules.json'))
+    try:
+        raw = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(r, dict) and isinstance(r.get('id'), str)
+                                            and isinstance(r.get('text'), str) for r in raw):
+        raise ValueError(f'確かめる規則の一覧 ({path}) の形が違う')
+    return [{'id': r['id'], 'text': r['text']} for r in raw]
 
 
 def load_settings():
@@ -341,6 +360,8 @@ def build_input(payload, rules, limit=INPUT_LIMIT):
     data = {'final': bool(payload.get('final')), 'round': payload.get('round') or 0, 'response_rules': rules,
             'messages': messages(payload), 'protected_parts_of_draft': protected_parts(joined(body_list(payload))),
             'evidence': current, 'previous_evidence': previous}
+    if payload.get('final'):
+        data['checked_rules'] = checked_rules()
     if payload.get('previous_findings'):
         data['previous_findings'] = payload['previous_findings']
     if payload.get('compacted_note'):
@@ -949,26 +970,32 @@ def verify_findings(payload, raw_findings):
     """findings の根拠を確かめ、(残す findings, 捨てた findings と理由) を返す。"""
     sources = {m['id']: m for m in messages(payload)}
     evidence = evidence_index(payload)
+    rules = {r['id']: r['text'] for r in checked_rules()}
     kept, dropped = [], []
     for item in raw_findings:
-        reason = finding_problem(item, sources, evidence)
+        reason = finding_problem(item, sources, evidence, rules)
         if reason:
             dropped.append({'finding': item, 'reason': reason})
         else:
-            kept.append({'kind': item['kind'], 'source': item['source'], 'excerpt': item['excerpt'],
-                         'evidence': [{'id': ref.get('id'), 'state': ref['state']} for ref in item['evidence']]})
+            finding = {'kind': item['kind'], 'source': item['source'], 'excerpt': item['excerpt'],
+                       'evidence': [{'id': ref.get('id'), 'state': ref['state']} for ref in item['evidence']]}
+            if item['kind'] == 'rule_violation':
+                finding.update(rule=item['rule'], rule_text=rules[item['rule']])
+            kept.append(finding)
     return kept, dropped
 
 
-def finding_problem(item, sources, evidence):
-    if not isinstance(item, dict) or set(item) != {'kind', 'source', 'excerpt', 'evidence'}:
+def finding_problem(item, sources, evidence, rules):
+    if not isinstance(item, dict) or set(item) - {'rule'} != {'kind', 'source', 'excerpt', 'evidence'}:
         return '形に合わない欄がある'
     kind, source, excerpt, refs = item['kind'], item['source'], item['excerpt'], item['evidence']
     if not isinstance(kind, str) or kind not in KINDS:
         return '種類が固定の値ではない'
+    if kind == 'rule_violation' and item.get('rule') not in rules:
+        return '確かめる規則の一覧に無い規則'
     if not isinstance(excerpt, str) or not normalize(excerpt):
         return '抜粋が無い'
-    if not isinstance(refs, list) or not refs:
+    if not isinstance(refs, list) or (not refs and kind != 'rule_violation'):
         return '証拠の参照が無い'
     message = sources.get(source) if isinstance(source, str) else None
     if message is None:
@@ -1018,7 +1045,12 @@ FINDING_SENTENCE = {
     'unverified_claim': 'この記述を裏付ける呼び出しと結果がありません',
     'missing_request': '依頼のこの項目に、回答にも証拠にも対応がありません',
     'concealment': '未解決の失敗・未実施・未確認を隠すか和らげて書いています',
+    'rule_violation': 'この記述は次の規則に反しています',
 }
+
+
+def finding_label(item):
+    return f'{KINDS[item["kind"]]} ({item["rule"]})' if item['kind'] == 'rule_violation' else KINDS[item['kind']]
 
 
 def shown_excerpt(excerpt):
@@ -1029,9 +1061,11 @@ def shown_excerpt(excerpt):
 def agent_message(findings, pairs, evidence):
     lines = [AGENT_PREAMBLE, '']
     for number, item in enumerate(findings, 1):
-        refs = '。'.join(describe_evidence(ref, evidence) for ref in item['evidence'])
-        lines.append(f'{number}. {KINDS[item["kind"]]}: 「{shown_excerpt(item["excerpt"])}」 — '
-                     f'{FINDING_SENTENCE[item["kind"]]}。{refs}。')
+        refs = ''.join(describe_evidence(ref, evidence) + '。' for ref in item['evidence'])
+        sentence = FINDING_SENTENCE[item['kind']]
+        if item['kind'] == 'rule_violation':
+            sentence += f': {item["rule_text"]}'
+        lines.append(f'{number}. {finding_label(item)}: 「{shown_excerpt(item["excerpt"])}」 — {sentence}。{refs}')
     if pairs:
         lines += ['', '応答の規則の違反:']
         lines += [f'- 「{shown_excerpt(pair["find"])}」は応答の規則に反します' for pair in pairs]
@@ -1043,7 +1077,7 @@ def unmet_paragraph(findings):
     """表示する未達の段落 (見出しと項目)。戻り値の unmet_text にも同じ文字列を入れ、呼び出し側が回収の表示などで
     組み立て直さずに使えるようにする。"""
     return UNMET_HEADING + '\n' + '\n'.join(
-        f'- {KINDS[f["kind"]]}: 「{shown_excerpt(f["excerpt"])}」' for f in findings)
+        f'- {finding_label(f)}: 「{shown_excerpt(f["excerpt"])}」' for f in findings)
 
 
 def decorate(bodies, prefix='', suffix=''):

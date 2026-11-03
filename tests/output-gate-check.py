@@ -86,6 +86,10 @@ class GateTestCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.rules = self.tmp / 'AGENTS.md'
         self.rules.write_text(RULES, encoding='utf-8')
+        self.checked = self.tmp / 'checked-rules.json'
+        self.checked.write_text(json.dumps([{'id': 'R1', 'text': '結論を先に書く'}], ensure_ascii=False),
+                                encoding='utf-8')
+        os.environ['OUTPUT_GATE_CHECKED_RULES'] = str(self.checked)
         self.prompt_log = self.tmp / 'prompt.txt'
         self.instructions_log = self.tmp / 'instructions.txt'
         self.launch_log = self.tmp / 'launches.jsonl'
@@ -151,6 +155,7 @@ class GateTestCase(unittest.TestCase):
             'OUTPUT_GATE_SETTINGS': str(self.settings),
             'OUTPUT_GATE_TIMEOUT': str(timeout),
             'OUTPUT_GATE_RULES': str(self.rules),
+            'OUTPUT_GATE_CHECKED_RULES': str(self.checked),
             'OUTPUT_GATE_GITLEAKS': self.gitleaks if gitleaks is None else gitleaks,
         })
         env.update(extra_env or {})
@@ -786,6 +791,23 @@ class FindingTests(GateTestCase):
         self.assertIsNone(out['text'])
         self.assertIn('テストは全て通った', out['agent_message'])
         self.assertEqual(self.checker_input()['previous_findings'][0]['excerpt'], 'テストは全て通った')
+
+    def test_a_rule_violation_names_the_rule_to_the_agent_and_the_checker_gets_the_rules(self):
+        violation = {'kind': 'rule_violation', 'rule': 'R1', 'source': 'draft',
+                     'excerpt': 'テストは全て通ったので', 'evidence': []}
+        out = self.final(answer([], [violation]))
+        self.assertEqual(self.checker_input()['checked_rules'], [{'id': 'R1', 'text': '結論を先に書く'}])
+        self.assertIsNone(out['text'])
+        self.assertIn('規則違反 (R1): 「テストは全て通ったので」', out['agent_message'])
+        self.assertIn('結論を先に書く', out['agent_message'])
+        self.assertIn('- 規則違反 (R1): 「テストは全て通ったので」', out['unmet_text'])
+
+    def test_a_violation_of_a_rule_not_in_the_list_is_dropped(self):
+        violation = {'kind': 'rule_violation', 'rule': 'R9', 'source': 'draft',
+                     'excerpt': 'テストは全て通ったので', 'evidence': []}
+        out = self.final(answer([], [violation, self.CLAIM]))
+        self.assertEqual([f['kind'] for f in out['findings']], ['unverified_claim'])
+        self.assertEqual(out['dropped'][0]['reason'], '確かめる規則の一覧に無い規則')
 
     def test_cannot_continue_round0_shows_the_unmet_items(self):
         out = self.final(answer([], [self.CLAIM]), continuation='none')
