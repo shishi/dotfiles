@@ -132,10 +132,24 @@ def is_user_input(entry, content):
     return not (isinstance(origin, dict) and origin.get('kind') not in (None, 'human'))
 
 
+def queued_input(entry):
+    """作業中に利用者が送った入力 (会話記録では queued_command の添付として残る) の文字列。該当しなければ None。"""
+    attachment = entry.get('attachment') if isinstance(entry, dict) and entry.get('type') == 'attachment' else None
+    if not isinstance(attachment, dict) or attachment.get('type') != 'queued_command':
+        return None
+    origin = attachment.get('origin')
+    if isinstance(origin, dict) and origin.get('kind') not in (None, 'human'):
+        return None
+    text = attachment.get('prompt')
+    return text if isinstance(text, str) and text.strip() else None
+
+
 def message_texts(transcript_path):
-    """会話記録から、利用者と Claude の直近 RECENT_MESSAGES 件の発言 (古い順) と、利用者の最新の発言を返す。
-    ツールの結果と利用者の入力ではない行は除く。両方がそろうところまで末尾から読む。"""
+    """会話記録から、利用者と Claude の直近 RECENT_MESSAGES 件の発言 (古い順) と、利用者の最新の依頼を返す。
+    最新の依頼は、ターンを始めた利用者の入力と、その後の作業中に送られた入力をつないだもの。依頼を何通かに
+    分けて送ることがあるため。ツールの結果と利用者の入力ではない行は除く。両方がそろうところまで末尾から読む。"""
     recent = []
+    queued = []
     latest_user = None
     try:
         for line in lines_from_end(transcript_path):
@@ -144,6 +158,13 @@ def message_texts(transcript_path):
             try:
                 entry = json.loads(line)
             except ValueError:
+                continue
+            text = queued_input(entry)
+            if text is not None:
+                if len(recent) < RECENT_MESSAGES:
+                    recent.append({'role': 'user', 'text': text})
+                if latest_user is None:
+                    queued.append(text)
                 continue
             message = entry.get('message') if isinstance(entry, dict) else None
             role = message.get('role') if isinstance(message, dict) else None
@@ -155,9 +176,11 @@ def message_texts(transcript_path):
             if len(recent) < RECENT_MESSAGES:
                 recent.append({'role': role, 'text': text})
             if role == 'user' and latest_user is None:
-                latest_user = text
+                latest_user = '\n\n'.join([text, *queued[::-1]])
     except (OSError, TypeError, ValueError):
         pass   # 読めた分だけを渡す
+    if latest_user is None and queued:
+        latest_user = '\n\n'.join(queued[::-1])
     return recent[::-1], latest_user or ''
 
 

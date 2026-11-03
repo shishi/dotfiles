@@ -56,6 +56,8 @@ declare module 'claude-code' {
   interface PluginState {
     'output-gate': {
       holding: Holding
+      /** The turnId of the running main turn, so input sent while it runs joins its request; null between turns. */
+      active: string | null
       turn: StateFamily<HoldingTurn>
       evidence: StateFamily<HoldingEvidence>
       issued: StateFamily<HoldingIssued>

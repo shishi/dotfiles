@@ -284,6 +284,22 @@ class ClaudeHookTests(unittest.TestCase):
         self.assertEqual(recent, [{'role': 'assistant', 'text': f'回答{i}'} for i in range(2, 12)])
         self.assertLess(read[0], self.transcript.stat().st_size // 4)
 
+    def test_input_sent_while_working_joins_the_request(self):
+        # 作業中に送られた入力は、会話記録に queued_command の添付として残る。ターンを始めた入力とつないで依頼にする。
+        queued = {'type': 'attachment', 'attachment': {'type': 'queued_command', 'prompt': 'テストも回して',
+                                                       'origin': {'kind': 'human'}}}
+        other = {'type': 'attachment', 'attachment': {'type': 'queued_command', 'prompt': '自動の続き',
+                                                      'origin': {'kind': 'task-notification'}}}
+        self.record({'type': 'user', 'message': {'role': 'user', 'content': '設定を直して'}},
+                    {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': '直すよ'}]}},
+                    queued, other)
+        spec = importlib.util.spec_from_file_location('output_gate_claude', HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        recent, latest_user = module.message_texts(str(self.transcript))
+        self.assertEqual(latest_user, '設定を直して\n\nテストも回して')
+        self.assertEqual(recent[-1], {'role': 'user', 'text': 'テストも回して'})
+
     def test_old_session_files_are_cleaned_up_at_a_prompt(self):
         old_dir = self.state / 'output-gate' / 'claude-display' / 'old-session'
         old_dir.mkdir(parents=True)

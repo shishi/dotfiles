@@ -10,6 +10,8 @@ import type { HoldingEvidence, HoldingMessage, HoldingTurn } from '../types/inde
 // 無くなった回答だけを表示する。証拠は tool.call で記録した呼び出しと結果。
 
 const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
+// 動いているメインのターンの ID。作業中に送られた入力を、そのターンの依頼に足すために使う。
+const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as string | null)
 
 const UNCHECKED = (reason: string) => `[出力ゲート: 検査できませんでした — ${reason}]\n\n`
 const RECENT_MESSAGES = 10
@@ -656,10 +658,30 @@ export const register: Register = on => {
       const context = [...lastExchange(messages, e.text), ...(e.text ? [{ role: 'user', text: e.text }] : [])]
       const latest = e.text || (spoken(messages).filter(m => m.role === 'user').at(-1)?.text ?? '')
       await $.state.set({ plugin: 'output-gate', key: 'turn', id: e.turnId }, newTurn(latest, context, Date.now()))
+      if (e.agentId === undefined) await update($, active, () => e.turnId)
     } catch {
       // 記録できなければ、turn.step が会話の記録から作る。
     }
     return next(e)
+  })
+
+  // 作業中に送られた入力も依頼の一部として扱う。利用者は一つの依頼を何通かに分けて送ることがあるため。
+  // ターンを始める入力は turn.start が記録するので、ここでは動いているターンがあるときだけ足す。
+  on('prompt.submit', async ($, e, next) => {
+    const result = await next(e)
+    if (e.command !== undefined || e.isMeta || !e.text.trim()) return result
+    try {
+      if (await skip($, undefined)) return result
+      const { value: turnId } = await $.state.get({ plugin: 'output-gate', key: 'active' })
+      if (!turnId) return result
+      const { value: turn } = await $.state.get({ plugin: 'output-gate', key: 'turn', id: turnId })
+      if (!turn || turn.latest_user.endsWith(e.text)) return result
+      await $.state.set({ plugin: 'output-gate', key: 'turn', id: turnId },
+        { ...turn, latest_user: turn.latest_user ? `${turn.latest_user}\n\n${e.text}` : e.text })
+    } catch {
+      // 足せなければ、検査役は会話の記録から読む。
+    }
+    return result
   })
 
   on('tool.call', async ($, e, next) => {
@@ -813,6 +835,7 @@ export const register: Register = on => {
     // 止めている間に中断や読み直しが起きて減らせなかった値を、メインのターンの終わりで 0 に戻す。
     try {
       await update($, holding, () => 0)
+      await update($, active, () => null)
     } catch {
       // 表示のための値なので、書けなくても続ける。
     }

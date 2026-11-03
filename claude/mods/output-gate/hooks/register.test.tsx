@@ -168,6 +168,18 @@ test('the answer is shown only after the check, corrected', async ($, on) => {
   expect(calls[0]?.latest_user).toBe('設定を教えて')
 })
 
+test('input sent while the turn runs joins its request', async ($, on) => {
+  const fs = world(on)
+  const calls = checker(on, fs, replaceKiku)
+  tools(on)
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  model(on, [[TEXT(0, 'これは効く。'), STOP()]])
+  await start($)
+  await $.prompt.submit({ text: 'テストも回して' })
+  await run($)
+  expect(calls.at(-1)?.latest_user).toBe('設定を教えて\n\nテストも回して')
+})
+
 test('a failed check shows the original with the reason', async ($, on) => {
   const fs = world(on)
   on('process.run', (_$, e) => ({ value: { ...done, exitCode: e.init?.stdin === undefined ? 0 : 1, stdout: '' } }))

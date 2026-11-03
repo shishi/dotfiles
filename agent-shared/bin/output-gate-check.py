@@ -154,6 +154,9 @@ This answer is not the final answer of the turn. Check only the response rules a
 INSTRUCTIONS_FINAL = """
 Unmet points (findings). This is the final answer of the turn. Judge the draft together with "shown_text" (text
 already shown in this turn) against the evidence, and report:
+The request: the user often writes one request over several messages, sent in a row or while the agent was working.
+Treat the latest user message together with the earlier user messages it continues (in "recent" and "turn_start") as
+one request, and judge every item of it.
 1. Unverified claims (kind "unverified_claim"): the draft or shown_text says something was checked, run, fixed or
    passed, but the evidence has no matching call and result, or the result failed (non-zero exit code, error) while the
    text says it succeeded, or the claim depends on a part the CLI truncated before the model saw it. A statement about a
