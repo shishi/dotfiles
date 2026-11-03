@@ -984,7 +984,7 @@ class RelayTests(unittest.TestCase):
         display = self.gate_state()['display']
         self.assertTrue(display.startswith('全部確認済みだよ'), display)
         self.assertEqual(display.count('出力ゲート: 次の点は確かめられていません'), 1)
-        self.assertIn('出力ゲート: 証拠の一部を確認できませんでした', display)
+        self.assertNotIn('出力ゲート: 証拠の一部を確認できませんでした', display)
 
     def test_engines_and_dropped_findings_are_recorded(self):
         self.register()

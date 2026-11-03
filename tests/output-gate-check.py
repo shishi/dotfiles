@@ -823,11 +823,11 @@ class FindingTests(GateTestCase):
                            'bodies': ['A は効く。', 'B も効く。']})
         self.assertEqual(out['status'], 'unchecked')
 
-    def test_unavailable_evidence_is_marked_for_the_checker_and_the_user(self):
+    def test_unavailable_evidence_is_marked_for_the_checker_and_not_added_to_the_answer(self):
         evidence = [{'id': 'gap_1', 'unavailable': True, 'note': 'compaction で消えた範囲'}, PYTEST_FAILED]
         out = self.final(answer(), evidence=evidence, draft='テストは 1 件失敗したよ。')
         self.assertTrue(self.checker_input()['evidence'][0]['unavailable'])
-        self.assertIn('出力ゲート: 証拠の一部を確認できませんでした', out['text'])
+        self.assertEqual(out['text'], 'テストは 1 件失敗したよ。')
 
     def test_secrets_in_evidence_are_masked_in_both_entry_points(self):
         self.gitleaks = self.fake_gitleaks(['sk-test-SECRETVALUE', 'ghp_SHOWNSECRET'])

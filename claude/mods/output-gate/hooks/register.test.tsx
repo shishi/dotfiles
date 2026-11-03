@@ -527,12 +527,9 @@ for (const reason of ['aborted', 'error']) {
 }
 
 test('the text shown when the turn ends is the checker display_text, with the unmet paragraph once', async ($, on) => {
-  // 証拠の欠けの注記が付く結果でも、表示するのは検査処理の display_text そのもの (置き換え済みの本文、未達の段落、注記)。
+  // 表示するのは検査処理の display_text そのもの (置き換え済みの本文と未達の段落)。
   const fs = world(on)
-  const GAP = '出力ゲート: 証拠の一部を確認できませんでした'
-  const display = `速い全部通った。${UNMET}
-
-${GAP}`
+  const display = `速い全部通った。${UNMET}`
   checker(on, fs, p => ({ ...unmet(p), display_text: display, fallback_text: '(断り書きの形が違う)' }))
   tools(on)
   model(on, [[TEXT(0, '効く全部通った。'), STOP()]])
