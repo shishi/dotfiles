@@ -429,3 +429,41 @@ reset; agent a1; seen '["a1"]'; n=$(lines "$D/turns.jsonl"); sg disable >/dev/nu
 [ -z "$(inject)" ] && [ "$(lines "$D/turns.jsonl")" = "$n" ] || fail "disabled is inert (inject)"
 ! cs deadline a1 5 2>/dev/null || [ ! -e "$D/deadlines.jsonl" ] || fail "disabled is inert (deadline)"
 ok "disabled is inert (inject)"
+
+# --- 登録: claude/settings.json と codex/hooks.json ---
+
+CS="$HOOK_DIR/../../claude/settings.json"
+CX="$HOOK_DIR/../../codex/hooks.json"
+# reg <file> <event> <matcher か null> <コマンドの末尾の正規表現>: その登録が 1 つだけあれば真。
+reg() {
+  jq -e --arg ev "$2" --argjson m "$3" --arg re "stall-guard\\.sh $4\$" \
+    '[.hooks[$ev][]? | select(.matcher == $m) | .hooks[] | select(.command | test($re))] | length == 1' "$1" >/dev/null
+}
+reg "$CS" PostToolUse '"Agent|Bash|ScheduleWakeup|CronCreate|TaskStop"' record \
+  && reg "$CS" PostToolUseFailure '"ScheduleWakeup|CronCreate"' 'record --failed' \
+  && reg "$CS" PermissionDenied '"ScheduleWakeup|CronCreate"' 'record --failed' \
+  && reg "$CS" SubagentStop null record \
+  && reg "$CS" UserPromptSubmit null inject \
+  && reg "$CS" Stop null stop-check \
+  && jq -e '[.hooks.Stop[].hooks[] | select(.command | test("stall-guard\\.sh watch$")) | select(.asyncRewake == true and .timeout == 2100)] | length == 1' "$CS" >/dev/null \
+  || fail "registration matches the design (claude/settings.json)"
+P='"collaborationspawn_agent|collaborationfollowup_task|collaborationinterrupt_agent|collaborationwait_agent"'
+reg "$CX" PostToolUse "$P" '--cli codex record' \
+  && reg "$CX" PreToolUse '"collaborationwait_agent"' '--cli codex pre-wait' \
+  && reg "$CX" SubagentStart null '--cli codex subagent-start' \
+  && reg "$CX" SubagentStop null '--cli codex subagent-stop' \
+  && reg "$CX" Stop null '--cli codex stop-check' \
+  && reg "$CX" UserPromptSubmit null '--cli codex inject' \
+  || fail "registration matches the design (codex/hooks.json)"
+# Codex の Windows の起動は、既存の hook と同じく invoke-git-bash-hook.ps1 経由で同じ引数を渡す。
+jq -e --arg pre "& (Join-Path \$HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '" --arg suf "'" \
+  '[.hooks[][] | .hooks[] | select(.command | test("stall-guard\\.sh"))
+    | select(.timeout == 10 and .type == "command" and .commandWindows == ($pre + (.command | sub("^bash "; "")) + $suf))]
+  | length == 6' "$CX" >/dev/null || fail "registration matches the design (Codex commandWindows)"
+# 既存の出力ゲートと review-rounds の登録が残っている。
+jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-claude\\.sh stop"))] | length == 1' "$CS" >/dev/null \
+  && jq -e '[.hooks.SubagentStop[] | select(.matcher != null) | .hooks[] | select(.command | test("review-rounds\\.sh stop"))] | length == 1' "$CS" >/dev/null \
+  && jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-codex\\.sh stop"))] | length == 1' "$CX" >/dev/null \
+  && jq -e '[.hooks.SubagentStop[] | select(.matcher != null) | .hooks[] | select(.command | test("review-rounds\\.sh stop"))] | length == 1' "$CX" >/dev/null \
+  || fail "registration keeps the output gate and review-rounds hooks"
+ok "registration matches the design"

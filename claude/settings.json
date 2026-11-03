@@ -324,6 +324,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh inject",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -335,6 +344,16 @@
             "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
             "timeout": 30,
             "statusMessage": "投稿された実物を取得中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Bash|ScheduleWakeup|CronCreate|TaskStop",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
+            "timeout": 10
           }
         ]
       }
@@ -359,6 +378,21 @@
             "timeout": 120
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh stop-check",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh watch",
+            "asyncRewake": true,
+            "timeout": 2100
+          }
+        ]
       }
     ],
     "SubagentStop": [
@@ -369,6 +403,39 @@
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/review-rounds.sh stop",
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "ScheduleWakeup|CronCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "ScheduleWakeup|CronCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
+            "timeout": 10
           }
         ]
       }
