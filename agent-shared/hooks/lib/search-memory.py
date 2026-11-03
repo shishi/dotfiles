@@ -19,6 +19,34 @@ def git(repo, *args):
     return subprocess.check_output(["git", "-C", repo, *args], stderr=subprocess.DEVNULL).decode("utf-8")
 
 
+def read_bodies(repo, snapshot, paths):
+    """Return what `git show snapshot:path` prints for each path.
+
+    Starting a git process costs tens of milliseconds on Windows, so blobs are read through
+    one cat-file batch instead of one git show per file. Anything that is not a blob falls
+    back to git show, so its output or failure stays the same.
+    """
+    batch = subprocess.run(["git", "-C", repo, "cat-file", "--batch"],
+                           input="".join(f"{snapshot}:{path}\n" for path in paths).encode("utf-8"),
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout
+    bodies = {}
+    offset = 0
+    for path in paths:
+        end = batch.index(b"\n", offset)
+        # "<oid> <type> <size>" is followed by the content; a missing object has no content.
+        header = batch[offset:end].rsplit(b" ", 2)
+        offset = end + 1
+        if len(header) == 3 and header[2].isdigit():
+            start, offset = offset, offset + int(header[2]) + 1
+            if offset > len(batch):
+                raise ValueError(f"記憶 snapshot の読み取りが途中で切れました: {path}")
+            if header[1] == b"blob":
+                bodies[path] = batch[start:offset - 1].decode("utf-8")
+                continue
+        bodies[path] = git(repo, "show", f"{snapshot}:{path}")
+    return bodies
+
+
 def sections(body):
     """Only explicitly self-contained H2 sections may be delivered separately."""
     frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", body, re.DOTALL)
@@ -112,20 +140,23 @@ def main():
     patterns = {term: re.compile(r"\b" + re.escape(term) + r"\b" if re.fullmatch(r"[a-z]{2}", term)
                                  else re.escape(term)) for term in terms}
 
-    index_content = git(repo, "show", f"{snapshot}:MEMORY.md")
+    manual = event.get("memory_lookup_manual", False)
+    paths = git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines()
+    exact_path = prompt if manual and prompt in paths and prompt.endswith(".md") else None
+    targets = [exact_path] if exact_path else [path for path in paths if path.endswith(".md")
+                                               and path not in {"MEMORY.md", "CONVENTIONS.md"}]
+    bodies = read_bodies(repo, snapshot, ["MEMORY.md", *targets])
+    index_content = bodies["MEMORY.md"]
     index_entries = {
         path: f"{title} {cue}"
         for title, path, cue in re.findall(r"^- \[([^\]]+)\]\(([^)]+)\)\s*—\s*(.*)$",
                                          index_content, re.MULTILINE)
     }
-    manual = event.get("memory_lookup_manual", False)
-    paths = git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines()
-    exact_path = prompt if manual and prompt in paths and prompt.endswith(".md") else None
     documents = []
     for path in [exact_path] if exact_path else paths:
         if not path.endswith(".md") or (not exact_path and path in {"MEMORY.md", "CONVENTIONS.md"}):
             continue
-        body = git(repo, "show", f"{snapshot}:{path}")
+        body = bodies[path]
         headings = [heading.replace("プロジェクト記憶", "")
                     for heading in re.findall(r"^#{1,6} .+", body, re.MULTILINE)]
         description = re.search(r"^description: (.+)", body, re.MULTILINE)
