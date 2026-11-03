@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Bash 実行前に、コマンドを独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
-# エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止める。
+# エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
+# このマシンの外へ軽微でない・元に戻せない影響を与える操作は、利用者の許可が無ければ実行させない。
 #
-#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の最新メッセージを保存する
+#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の直近のメッセージを保存する
 #   command-judge.sh [--cli claude|codex]                   PreToolUse(Bash): 判定して該当すれば止める
 #
 # コマンドの語を照合したり構文解析したりはしない。何が起きるかの判断は判定役に任せ、
-# このスクリプトはコマンド・作業エージェントが述べた目的・利用者の最新メッセージを渡して結果を適用する。
+# このスクリプトはコマンド・作業エージェントが述べた目的・利用者の直近のメッセージを渡して結果を適用する。
 #
 # 判定できないときも黙って通さない。判定役を動かせない状態 (codex が無い、ログイン切れ等) は
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
@@ -29,6 +30,12 @@ case "$cli" in claude|codex) ;; *) bad_args="--cli の値 '$cli' が claude で�
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 state_dir="${COMMAND_JUDGE_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/command-judge-${UID:-user}}"
 safe_ttl_seconds=86400
+# 判定役へ渡す利用者のメッセージの範囲。依頼と許可の後に、進捗確認や補足を何通も挟んでも許可を失わないため。
+# 古い許可を使い続けないよう、最新以外は時間でも区切る。判定役の入力を抑えるため、最新以外で recent_prompt_chars
+# 文字を超えるメッセージは、それより前と一緒に渡さない (一部だけを渡すと、省いた部分にある撤回が届かないため)。
+recent_prompts=20
+recent_prompt_seconds=43200
+recent_prompt_chars=4000
 judge_timeout_seconds=25
 # 判定役が失敗したときに、判定役そのものが動くかを確かめる問いの締切。実測では約 4 秒で答える。
 probe_timeout_seconds=12
@@ -65,7 +72,7 @@ warn() {
 
 # 判定役を動かせない: 警告して通す。
 unjudged() {
-  warn "$1" "$2ため、コマンドを判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作や、本文をファイルで渡す投稿も止まらない。"
+  warn "$1" "$2ため、コマンドを判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、許可の無い push などの外部への操作も止まらない。"
 }
 
 # このコマンドだけ判定結果を得られない: Claude は確認、Codex は止める。
@@ -158,17 +165,23 @@ has_secret() {
 if [ "$mode" = record ]; then
   # 判定役自身の Codex セッションの入力は記録しない。
   [ -z "${COMMAND_JUDGE_ACTIVE:-}" ] || exit 0
-  blocked="このターンは、依頼した再起動などの操作も判定役が依頼として扱えず止まる。"
+  blocked="このメッセージは判定役に渡らないため、このメッセージで依頼・許可した再起動や push などの操作は、許可の無い操作として扱われる (Claude では確認、Codex では止まる)。"
+  lost="このメッセージとそれまでのメッセージで依頼・許可した再起動や push などの操作も、許可の無い操作として扱われる (Claude では確認、Codex では止まる)。必要なら改めて依頼・許可すること。"
   command -v jq >/dev/null 2>&1 || record_failed "jq が見つからない" "$blocked"
   input=$(cat)
   session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
   valid_session "$session" || record_failed "セッション ID を読めなかった" "$blocked"
   prepare_state_dir || record_failed "状態ディレクトリ $state_dir を用意できなかった" "$blocked"
-  # 先に前のメッセージを消す。記録に失敗しても、前のターンの依頼を今の依頼として使わないため。
+  # 直近 recent_prompts 件のメッセージを 1 行 1 件の JSON で残す。許可は、その後の進捗確認などのメッセージを
+  # 挟んでも続くため。書き込みに失敗したら履歴ごと消す: 新しいメッセージを欠いた古い履歴を今の依頼として使わないため。
   prompt_path="$state_dir/prompts/$session"
+  previous=""
+  if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
+    previous=$(cat -- "$prompt_path" 2>/dev/null) || previous=""
+  fi
   if ! rm -f -- "$prompt_path" 2>/dev/null; then
-    { : >"$prompt_path"; } 2>/dev/null && record_failed "前のメッセージを消せず、空にした" "$blocked"
-    record_failed "前のメッセージを消せなかった" "前のターンの依頼が、このターンの依頼として判定役に渡る可能性がある。$prompt_path を消すこと。"
+    { : >"$prompt_path"; } 2>/dev/null && record_failed "前のメッセージを消せず、空にした" "$lost"
+    record_failed "前のメッセージを消せなかった" "前のメッセージが、このターンの依頼として判定役に渡る可能性がある。$prompt_path を消すこと。"
   fi
   # 別のエージェントが委譲で起動したセッションの入力は、利用者の依頼ではないので記録しない。
   [ -z "${AGENT_DELEGATED_SESSION:-}" ] || exit 0
@@ -181,13 +194,23 @@ if [ "$mode" = record ]; then
       0) omitted="秘密情報らしき文字列を含む" ;;
       2) omitted="gitleaks で秘密情報を検査できない" ;;
     esac
-    [ -z "$omitted" ] || prompt="(利用者のメッセージは${omitted}ため省略した)"
+    # 省略したときは前の履歴も消す。省略したメッセージが前の許可を撤回しているかもしれないため。
+    if [ -n "$omitted" ]; then
+      prompt="(利用者のメッセージは${omitted}ため省略した)"
+      previous=""
+    fi
   fi
-  printf '%s' "$prompt" | write_atomic "$prompt_path" || record_failed "書き込みに失敗した" "$blocked"
+  { printf '%s\n' "$previous" | jq -c 'select(type == "object" and (.at | numbers) and (.text | strings))' 2>/dev/null
+    # 本文は標準入力で渡す。引数にすると、長いメッセージで引数長の上限を超えて記録に失敗する。
+    printf '%s' "$prompt" | jq -Rsc --argjson at "$(date +%s)" '{at: $at, text: .}'
+  } | tail -n "$recent_prompts" | write_atomic "$prompt_path" || {
+    rm -f -- "$prompt_path" 2>/dev/null
+    record_failed "書き込みに失敗した" "$lost"
+  }
   # gitleaks を使えないときは、実行前の判定でも検査できず「判定せずに通した」と警告するので、ここでは知らせない。
   case "$omitted" in
     ""|gitleaks*) ;;
-    *) record_failed "${omitted}ため、判定役へ渡さない" "$blocked" ;;
+    *) record_failed "${omitted}ため、このメッセージとそれより前のメッセージを判定役へ渡さない" "$lost" ;;
   esac
   exit 0
 fi
@@ -216,9 +239,18 @@ case "$(uname -s 2>/dev/null)" in
   MINGW*|MSYS*|CYGWIN*) [ "$cli" = codex ] && shell="PowerShell (Windows)" || shell="Git Bash (Windows)" ;;
   *) shell="POSIX シェル ($(uname -s 2>/dev/null))" ;;
 esac
-shell="$shell / エージェント: $cli"
+# 作業ディレクトリも渡す。push の宛先など、同じコマンドでも作業場所で外部への影響が変わるため、キャッシュの鍵にも含める。
+# Codex はコマンドごとの作業ディレクトリ (workdir) を指定でき、相対パスならセッションの cwd を基準にする。
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty | tostring' 2>/dev/null) || cwd=""
+workdir=$(printf '%s' "$input" | jq -r '.tool_input.workdir // empty | tostring' 2>/dev/null) || workdir=""
+case "$workdir" in
+  "") ;;
+  /*|[A-Za-z]:*) cwd=$workdir ;;
+  *) cwd="${cwd:+$cwd/}$workdir" ;;
+esac
+shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不明)}"
 
-# 判定基準を変えたら、それまでの安全判定は使わない。目的の説明が変われば判定役が得る情報も変わるため鍵に含める。
+# 判定基準を変えたら、それまでの安全判定は使わない。目的の説明や作業ディレクトリが変われば判定役が得る情報も変わるため鍵に含める。
 # 利用者のメッセージは含めない: 安全と判定したものは、利用者の依頼に関係なく安全と判定している。
 key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s' "$shell" "$command" "$purpose"; } | hash_stdin) &&
   [ -n "$key" ] || unjudged hash "判定のキャッシュの鍵を計算できなかった"
@@ -233,7 +265,15 @@ fi
 
 user_message="(none)"
 if valid_session "$session" && [ -f "$state_dir/prompts/$session" ] && [ ! -L "$state_dir/prompts/$session" ]; then
-  user_message=$(cat "$state_dir/prompts/$session") || user_message="(none)"
+  # 古い順に、何分前のメッセージかを添えて並べる。最新は時間や長さに関係なく全文を渡す。
+  user_message=$(jq -rs --argjson now "$now" --argjson max_age "$recent_prompt_seconds" --argjson chars "$recent_prompt_chars" '
+    map(select(type == "object" and (.at | numbers) and (.text | strings)))
+    | (length - 1) as $last
+    | ([to_entries[] | select(.key != $last and (.value.text | length) > $chars) | .key] | max // -1) as $long
+    | [to_entries[] | select(.key > $long) | select(.key == $last or $now - .value.at <= $max_age)
+       | "[\((($now - .value.at) / 60) | floor) 分前]\n\(.value.text)"]
+    | join("\n\n")' "$state_dir/prompts/$session" 2>/dev/null) ||
+    user_message="(none)"
   [ -n "$user_message" ] || user_message="(none)"
 fi
 
@@ -290,7 +330,7 @@ esac
 
 verdict=$(printf '%s' "$output" | jq -R -s -c '
   split("\n") | map(fromjson? | select(type == "object" and
-    ([.danger, .user_requested, .body_from_file] | all(type == "boolean")))) | last // empty
+    ([.danger, .user_requested, .body_from_file, .external] | all(type == "boolean")))) | last // empty
 ' 2>/dev/null)
 [ -n "$verdict" ] || judge_failed "判定役の出力から判定結果の JSON を読み取れなかった"
 
@@ -299,10 +339,19 @@ if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
   decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をコマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
 fi
 danger=$(jq -r .danger <<<"$verdict")
-if [ "$danger" = false ]; then
+external=$(jq -r .external <<<"$verdict")
+if [ "$danger" = false ] && [ "$external" = false ]; then
   # 利用者のメッセージに関係なく安全と判定したものだけを再利用する。
   printf '%s\n' "$now" | write_atomic "$safe_path" || true
   exit 0
 fi
 [ "$(jq -r .user_requested <<<"$verdict")" = true ] && exit 0
-decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで明示的に依頼してもらってから実行し直すこと"
+if [ "$danger" = true ]; then
+  [ "$external" = true ] &&
+    decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで、両方の操作を対象を明示して依頼してもらってから実行し直すこと"
+  decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで明示的に依頼してもらってから実行し直すこと"
+fi
+# Claude は利用者に確認させ、その場の許可で実行させる。Codex の PreToolUse は "ask" を受け付けないので止める。
+[ "$cli" = codex ] &&
+  decide deny "このマシンの外へ影響する操作で、利用者の許可が無いため止めた: ${reason}。利用者にこの操作をしてよいか尋ね、何をどこへ行うかを書いた許可 (例: 「origin へ push してよい」) をもらい、対象 (remote・ブランチなど) をコマンドに明示して実行し直すこと"
+decide ask "このマシンの外へ影響する操作のため、実行してよいか確認する: ${reason}"

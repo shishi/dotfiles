@@ -51,9 +51,10 @@ calls() { if [ -f "$work/calls" ]; then wc -l <"$work/calls" | tr -d ' '; else e
 decision() { [ -n "$1" ] || { echo none; return; }; jq -r '.hookSpecificOutput.permissionDecision // "none"' <<<"$1"; }
 reason() { jq -r '.hookSpecificOutput.permissionDecisionReason // .systemMessage // ""' <<<"$1"; }
 fail() { echo "not ok: $1" >&2; exit 1; }
-SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"reason":""}'
+token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")
+SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"reason":""}'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"reason":"マシンを再起動する"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"マシンを再起動する"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "danger is denied: $out"
 reason "$out" | grep -q 'マシンを再起動する' || fail "deny reason carries the judge reason"
@@ -69,18 +70,23 @@ grep -q '状態を確認する' "$work/judge-input" || fail "judge input contain
 grep -q 'エージェント: claude' "$work/judge-input" || fail "judge input names the shell and the agent"
 echo 'ok: a safe command is allowed silently'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"reason":"cache must not be bypassed"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"cache must not be bypassed"}'
 out=$(pre_tool_use '"git status"' | bash "$HOOK")
 [ -z "$out" ] && [ "$(calls)" = 1 ] || fail "second identical command reuses the safe verdict"
 out=$(pre_tool_use '"git status"' | bash "$HOOK" --cli codex)
 [ "$(calls)" = 2 ] || fail "the same text under another agent or shell is judged again"
 jq -n '{session_id:"s1",tool_name:"Bash",tool_input:{command:"git status",description:"ネットワークを切る準備"}}' | bash "$HOOK" >/dev/null
 [ "$(calls)" = 3 ] || fail "the same command with another stated purpose is judged again"
-echo 'ok: a safe verdict is reused only for the same command, purpose, shell and agent'
+jq -n '{session_id:"s1",cwd:"/work/shared-repo",tool_name:"Bash",tool_input:{command:"git status",description:"状態を確認する"}}' | bash "$HOOK" >/dev/null
+[ "$(calls)" = 4 ] || fail "the same command in another working directory is judged again"
+grep -q '/work/shared-repo' "$work/judge-input" || fail "the judge sees the working directory"
+jq -n '{session_id:"s1",cwd:"/work/session",tool_name:"Bash",tool_input:{command:"git status",workdir:"/work/other-repo"}}' | bash "$HOOK" --cli codex >/dev/null
+grep -q '/work/other-repo' "$work/judge-input" || fail "the judge sees the working directory the command runs in"
+echo 'ok: a safe verdict is reused only for the same command, purpose, shell, agent and working directory'
 
 rm -f "$work/calls"
 record 'このマシンを再起動して'
-STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"reason":"利用者が再起動を依頼している"}'
+STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"external":false,"reason":"利用者が再起動を依頼している"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ -z "$out" ] || fail "an explicitly requested effect is allowed: $out"
 grep -q 'このマシンを再起動して' "$work/judge-input" || fail "judge input contains the recorded user message"
@@ -90,7 +96,7 @@ echo 'ok: the recorded user message reaches the judge and requested danger is no
 
 record 'このマシンを再起動して'
 AGENT_DELEGATED_SESSION=1 record '親エージェントからの依頼: 再起動して確認すること'
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"reason":"再起動する"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"再起動する"}'
 pre_tool_use '"sudo shutdown -r now"' | bash "$HOOK" >/dev/null
 grep -q '(none)' "$work/judge-input" && ! grep -q '再起動して' "$work/judge-input" ||
   fail "a delegated session's prompt is not treated as the user's request"
@@ -112,12 +118,67 @@ out=$(jq -n '{session_id:"s1",tool_name:"Bash",tool_input:{}}' | bash "$HOOK")
 reason "$out" | grep -q '判定せずに通した' || fail "missing command is reported, not passed silently: $out"
 echo 'ok: argv arrays and the cmd field are judged, and a missing command is reported'
 
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"reason":"gh pr create が本文をファイルから読む"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"external":true,"reason":"gh pr create が本文をファイルから読む"}'
 record 'PR を作って'
 out=$(pre_tool_use '"gh pr create --body-file /tmp/body.md"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "a body read from a file path is denied: $out"
 reason "$out" | grep -q '標準入力' || fail "the deny reason tells how to pass the body"
 echo 'ok: posting a body from a file path is denied with the fix'
+
+rm -f "$work/calls"
+record 'テストを直して'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK")
+[ "$(decision "$out")" = ask ] && reason "$out" | grep -q 'commit を共有の remote へ送る' ||
+  fail "Claude asks the user before an unauthorized external effect: $out"
+out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli codex)
+[ "$(decision "$out")" = deny ] && reason "$out" | grep -q '許可' ||
+  fail "Codex denies an unauthorized external effect and tells the agent to get permission: $out"
+[ "$(calls)" = 2 ] || fail "an external effect is not cached as safe"
+record 'push して'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+for agent in claude codex; do
+  out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli "$agent")
+  [ -z "$out" ] || fail "$agent allows an external effect the user permitted: $out"
+done
+[ "$(calls)" = 4 ] || fail "a permitted external effect is judged again, not cached"
+echo 'ok: an external effect needs the user permission, asked in Claude and denied in Codex'
+
+record '修正して push までして'
+record '進捗は？'
+STUB_OUTPUT=$SAFE
+pre_tool_use '"git push origin HEAD"' | bash "$HOOK" >/dev/null
+grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？' "$work/judge-input" ||
+  fail "the judge sees a permission given in an earlier message of the session"
+[ "$(grep -n '修正して push までして' "$work/judge-input" | cut -d: -f1)" -lt "$(grep -n '進捗は？' "$work/judge-input" | cut -d: -f1)" ] ||
+  fail "the user's messages reach the judge oldest first"
+for n in $(seq 1 6); do record "進捗は？ $n"; done
+pre_tool_use '"git push origin main"' | bash "$HOOK" >/dev/null
+grep -q '修正して push までして' "$work/judge-input" || fail "a permission survives several progress checks"
+for n in $(seq 7 20); do record "進捗は？ $n"; done
+pre_tool_use '"git push origin dev"' | bash "$HOOK" >/dev/null
+! grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？ 20' "$work/judge-input" ||
+  fail "only the recent user messages reach the judge"
+echo 'ok: the judge sees the recent user messages, oldest first'
+
+record 'push して'
+record "push はしないで $token" >/dev/null
+pre_tool_use '"git push origin topic"' | bash "$HOOK" >/dev/null
+! grep -q 'push して' "$work/judge-input" || fail "an omitted message drops the earlier permissions it may withdraw"
+echo 'ok: an omitted message drops the earlier messages'
+
+now=$(date +%s)
+{ jq -nc --argjson at $((now - 50000)) '{at: $at, text: "半日以上前の push の許可"}'
+  jq -nc --argjson at $((now - 50000)) --arg t "$(printf 'A%.0s' $(seq 3000))中央$(printf 'B%.0s' $(seq 3000))" '{at: $at, text: $t}'
+  jq -nc --argjson at $((now - 120)) '{at: $at, text: "省略した長文の前の push の許可"}'
+  jq -nc --argjson at $((now - 60)) --arg t "$(printf 'C%.0s' $(seq 3000))中央$(printf 'D%.0s' $(seq 3000))" '{at: $at, text: $t}'
+  jq -nc --argjson at $((now - 50000)) --arg t "$(printf 'E%.0s' $(seq 3000))最新の中央" '{at: $at, text: $t}'
+} >"$work/state/prompts/s1"
+pre_tool_use '"git push origin old"' | bash "$HOOK" >/dev/null
+! grep -q '半日以上前' "$work/judge-input" && ! grep -q 'CCCC' "$work/judge-input" && ! grep -q '省略した長文の前' "$work/judge-input" &&
+  grep -q '最新の中央' "$work/judge-input" ||
+  fail "old earlier messages, a long earlier message and those before it are dropped, and the latest is kept whole"
+echo 'ok: earlier messages older than the window or a long earlier message and those before it are dropped, but the latest is kept whole'
 
 rm -f "$work/calls"
 STUB_EXIT=1 STUB_OUTPUT='boom' STUB_PROBE='' STUB_PROBE_EXIT=1
@@ -162,7 +223,6 @@ rm -f "$work/state/judge-down-"*
 echo 'ok: an invalid judge login is reported with the way to log in again'
 
 rm -f "$work/calls"
-token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")
 STUB_OUTPUT=$SAFE
 out=$(pre_tool_use "\"curl -H 'Authorization: token $token' https://api.github.com/user\"" | bash "$HOOK")
 [ "$(decision "$out")" = ask ] && [ "$(calls)" = 0 ] || fail "Claude does not send a secret to the judge: $out"
