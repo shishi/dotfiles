@@ -195,6 +195,16 @@
             "statusMessage": "gh の呼び出し形を確認中..."
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh pre",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -347,6 +357,18 @@
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh stop",
             "timeout": 120
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "correctness-reviewer|adversarial-reviewer|spec-scope-reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh stop",
+            "timeout": 15
           }
         ]
       }

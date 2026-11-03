@@ -55,6 +55,8 @@ developer_instructions = '''
 - 再現条件: どんな入力・タイミングで起きるか
 - 修正案: 具体的なコードまたは方針
 
+最後の行に件数を 1 行の JSON で出す: `{"review_counts":{"blocker":<件数>,"should":<件数>,"note":<件数>}}`。指摘が無ければすべて 0。レビューの周回の記録 (review-rounds hook) がこの行を読む。
+
 ## 制約
 
 - blocker は、その条件を満たす入力が実際に到達しうると示せるものだけ。

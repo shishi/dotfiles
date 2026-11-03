@@ -51,6 +51,17 @@
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh pre",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/review-rounds.sh pre'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ],
+        "matcher": "collaborationspawn_agent"
       }
     ],
     "SessionEnd": [
@@ -119,6 +130,19 @@
             "type": "command"
           }
         ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/review-rounds.sh stop'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ],
+        "matcher": "correctness-reviewer|adversarial-reviewer|spec-scope-reviewer"
       }
     ],
     "UserPromptSubmit": [
