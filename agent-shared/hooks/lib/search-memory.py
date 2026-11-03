@@ -90,13 +90,19 @@ def main():
         key = hashlib.sha256((str(Path(repo).resolve()) + "\0" + session + "\0" +
                               (event.get("transcript_path") or "")).encode()).hexdigest()
         directory = Path.home() / ".cache" / "agent-memory-lookup"
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        cache = directory / (key + ".json")
-        # Claude's CORE startup hook runs in parallel with the project hook, so it records
-        # what it delivered in its own file instead of writing the shared record. Retrievals
-        # recorded in the shared file after startup take precedence over the startup record.
-        core_cache = directory / (key + ".core.json")
-        seen = {**load(core_cache), **load(cache)}
+        # cache は「既読の本文を再注入しない」ための最適化。sandbox 内 (入れ子の claude -p など) で
+        # ~/.cache に書けない場合は cache 無しで続け、検索・取得そのものは止めない
+        try:
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError:
+            pass
+        else:
+            cache = directory / (key + ".json")
+            # Claude's CORE startup hook runs in parallel with the project hook, so it records
+            # what it delivered in its own file instead of writing the shared record. Retrievals
+            # recorded in the shared file after startup take precedence over the startup record.
+            core_cache = directory / (key + ".core.json")
+            seen = {**load(core_cache), **load(cache)}
 
     def remember(path, body):
         seen[path] = hashlib.sha256(body.encode()).hexdigest()
@@ -109,10 +115,14 @@ def main():
 
     def save(target=None):
         target = target or cache
-        if target:
+        if not target:
+            return
+        try:
             temporary = target.with_suffix(f".{os.getpid()}.tmp")
             temporary.write_text(json.dumps(seen))
             temporary.replace(target)
+        except OSError:
+            pass
 
     if mode in ("reset", "reset-project", "record-core"):
         # reset-project and record-core are the two halves of Claude's split startup output;
