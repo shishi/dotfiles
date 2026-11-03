@@ -434,7 +434,7 @@ const engineFailed = (r: CheckResult) => r.status === 'unchecked' && r.engine ==
 async function settings($: EngineInterface): Promise<Settings> {
   const dir = await stateDir($)
   const path = (await $.env.get('OUTPUT_GATE_SETTINGS')) || (dir === undefined ? undefined : `${dir}/checker.json`)
-  if (path === undefined || !(await $.fs.exists(path))) return { first: 'claude', claude: { model: 'sonnet', effort: 'medium' } }
+  if (path === undefined || !(await $.fs.exists(path))) return { first: 'claude', claude: { model: 'opus', effort: 'low' } }
   let raw: unknown
   try {
     raw = JSON.parse(await $.fs.read(path))
@@ -452,7 +452,7 @@ async function settings($: EngineInterface): Promise<Settings> {
   // 推論量が $.model.complete の受け付けない値なら、呼び出しが拒まれて Claude の系統の失敗になる。
   // この mod が検査するのは Claude Code の回答なので、opposite は codex、same は claude と同じ。
   return { first: data.first === 'codex' || data.first === 'opposite' ? 'codex' : 'claude',
-    claude: { model: data.claude?.model || 'sonnet', effort: (data.claude?.effort || 'medium') as Effort } }
+    claude: { model: data.claude?.model || 'opus', effort: (data.claude?.effort || 'low') as Effort } }
 }
 
 // Claude の検査役: 検査処理の入力を組む口で入力を作り (秘密情報は伏せてある)、セッションの認証で呼び、

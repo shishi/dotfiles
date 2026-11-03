@@ -79,10 +79,10 @@ MIN_EXCERPT = 8
 CODEX_MODELS = ('gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra')   # cyber のプログラムに合うモデルを探す順
 CYBER_PROGRAMS = {'standard', 'daybreak_blue', 'daybreak_red'}
 FAMILIES = ('codex', 'claude')
-# どちらの CLI の回答も、精度の基準を満たし最も速い Claude の系統 (Sonnet / medium) で先に検査する。
+# どちらの CLI の回答も、精度の基準を満たし最も速い Claude の系統 (Opus / low) で先に検査する。
 DEFAULT_FIRST = 'claude'
-DEFAULT_ENGINES = {'codex': {'model': 'gpt-6.1-sol', 'effort': 'high'},
-                   'claude': {'model': 'sonnet', 'effort': 'medium'}}
+DEFAULT_ENGINES = {'codex': {'model': 'gpt-6.1-terra', 'effort': 'low'},
+                   'claude': {'model': 'opus', 'effort': 'low'}}
 # 検査役の claude を起動する環境から外す変数。出力ゲートの mod を読ませず、接続先の上書きを外す。
 CLAUDE_DROPPED_ENV = ('CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_BEDROCK_BASE_URL',
                       'ANTHROPIC_VERTEX_BASE_URL', 'ANTHROPIC_FOUNDRY_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK',
