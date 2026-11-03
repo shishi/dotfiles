@@ -16,6 +16,9 @@ Prioritize failures that are expensive or hard to detect: auth and trust boundar
 Comments and docs that describe operational or recovery procedures are part of the failure surface: a recipe that fails when followed literally, a quantity stated without the limit or budget it consumes, and an undefined domain term all degrade incident response at the moment it matters most. Review their content with the same rigor as code.
 Report only material findings you can defend from the actual files. For each finding give: what can go wrong, why this code path is vulnerable, the likely impact, and a concrete change that reduces the risk. Prefer one strong finding over several weak ones. Test technical claims in the proposed approach against the referenced mechanisms; approval of the goal does not establish those claims. If the change looks safe, say so directly and identify the evidence supporting the main assumptions.
 
+Report a finding as blocker or should only if you can show a concrete path (inputs, operations, timing) that normal use or input from an untrusted source actually reaches and which requirement, explicit condition or existing guarantee it breaks. Findings that depend on future changes to the environment or settings, or on combinations with no evidence that they occur, are notes.
+From the second round on, the caller supplies the diff since the previous round and the list of adopted and rejected findings. Check only whether the adopted findings are fixed and whether the diff introduces new defects. Raise new findings about parts unchanged since the previous round only if they are blockers. Do not re-raise a rejected finding unless you have new evidence that overturns the stated reason.
+
 ## Out of scope (do not report)
 
 - Naming, formatting, comment density, code taste (the *content* of operational and recovery comments is in scope — see above)
