@@ -22,10 +22,12 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
 - 回答の項目の暗号化された出力 (encrypted_content) は、要求と応答の両方から取り除く。
 - 上流の失敗や切断は、そのまま Codex に伝える (Codex 本来の再試行に任せる)。
 
-未達のとき: 最終回答 (クライアント側の呼び出しを含まない応答) で検査処理が未達を返し、そのターンでまだ直させて
-おらず、セッションが続行の登録を持っていれば、回答を短い案内に差し替えて流し、指摘と原文を状態に書く
-(substituted)。Codex の Stop hook (output-gate-codex.sh stop) がそれを読んで block し (blocked)、同じターンの
-次の要求では案内を原文に戻して上流へ送る。次の最終回答は round=1 で検査し、未達でも案内にしない (resolved)。
+未達のとき: 最終回答 (クライアント側の呼び出しを含まない応答) で検査処理が未達を返し、セッションが続行の登録を
+持っていれば、回答を短い案内に差し替えて流し、指摘と原文を状態に書く (substituted)。Codex の Stop hook
+(output-gate-codex.sh stop) がそれを読んで block し、直させた回数 (round) を 1 つ増やす (blocked)。同じターンの
+以後の要求では、どの回の案内も原文に戻して上流へ送る。次の最終回答は直させた回数を round に、前の指摘を
+previous_findings に入れて検査し、未達が残る限り何回目でも同じく案内に差し替える。未達が無くなった回答だけを
+そのまま流して resolved にする。
 
 状態ディレクトリ:
   delegated/<session_id>  委譲の子セッションの登録 (hook が書く)。24 時間以内のものは検査せずに流す。
@@ -33,11 +35,13 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
                           案内に差し替える。
   gate/<session_id>/<turn_id>.json
                           差し戻しの状態 {phase, round, findings, agent_message, original, display,
-                          notice_marker, injected?, shown?, created, engine, engine_failures, dropped}。
-                          phase は substituted → blocked (Stop hook が書く) → resolved。resolved にするときは
-                          original と agent_message を消す。original はモデルへ戻す置き換え前の原文で、同じターンの
-                          次の要求で案内を原文に戻すために使う。display は利用者に回収で見せる表示用の本文
-                          (検査処理の display_text)、shown は hook の回収が表示した印。
+                          notice_marker, notices, shown?, created, engine, engine_failures, dropped}。
+                          phase は未達が残る間 substituted → blocked (Stop hook が書く) をくり返し、resolved で
+                          終わる。round は直させた回数。resolved にするときは original と agent_message を消す。
+                          original は最後に案内へ差し替えた置き換え前の原文、display は利用者に回収で見せる表示用の
+                          本文 (検査処理の display_text)、shown は hook の回収が表示した印。notices は案内の印ごとの
+                          {original, inject?} で、同じターンの以後の要求で各回の案内を原文に戻すために使う。inject は
+                          Stop hook を経ずに続いた回に足した指摘で、Codex の履歴に入らないため要求ごとに足し直す。
   turns/<session_id>/<turn_id>.json
                           ターンの証拠 {turn_id, time, records, shown, start}。records は呼び出しと出力 (と取得
                           できなかった範囲の印) を起きた順に、shown は表示済みの途中の文章、start はターンの開始時の
@@ -515,19 +519,30 @@ def add_shown(sid, tid, text):
             write_json(path, turn)
 
 
-def restore_notice(items, gate):
-    """input の案内の回答を原文に戻す。戻した項目の位置を返す (無ければ None)。"""
+def notice_entries(gate):
+    """案内の印ごとの {original, inject?}。前の回の案内も、同じターンの以後の要求で原文に戻すために残す。"""
+    entries = {marker: dict(entry) for marker, entry in (gate.get('notices') or {}).items()
+               if isinstance(entry, dict) and isinstance(entry.get('original'), str)}
     marker = gate.get('notice_marker')
-    if not marker or not isinstance(gate.get('original'), str):
-        return None
-    found = None
+    if marker and isinstance(gate.get('original'), str):
+        entries.setdefault(marker, {'original': gate['original']})
+    return entries
+
+
+def restore_notices(items, entries):
+    """input の案内の回答を原文に戻す。戻した項目の位置を案内の印ごとに返す。"""
+    found = {}
     for index, item in enumerate(items):
-        if isinstance(item, dict) and item.get('type') == 'message' and item.get('role') == 'assistant' \
-                and marker in input_text(item):
-            parts = [p for p in item.get('content') or [] if isinstance(p, dict) and 'text' in p]
-            for number, part in enumerate(parts):
-                part['text'] = gate['original'] if number == 0 else ''
-            found = index
+        if not (isinstance(item, dict) and item.get('type') == 'message' and item.get('role') == 'assistant'):
+            continue
+        text = input_text(item)
+        for marker, entry in entries.items():
+            if marker in text:
+                parts = [p for p in item.get('content') or [] if isinstance(p, dict) and 'text' in p]
+                for number, part in enumerate(parts):
+                    part['text'] = entry['original'] if number == 0 else ''
+                found[marker] = index
+                break
     return found
 
 
@@ -940,23 +955,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         gate = read_json(gate_path(sid, tid))
         if gate is None:
             return
-        restored = restore_notice(items, gate)
-        if restored is None:
-            return
-        steered = gate.get('phase') == 'substituted' and any(is_request(i) for i in items[restored + 1:])
-        if steered or (gate.get('phase') == 'blocked' and gate.get('injected')):
+        entries = notice_entries(gate)
+        positions = restore_notices(items, entries)
+        current = gate.get('notice_marker')
+        if gate.get('phase') == 'substituted' and current in positions \
+                and any(is_request(i) for i in items[positions[current] + 1:]):
             # 案内の後に利用者の入力 (steer) が待っていて、Codex が Stop hook を動かさずに続けた。指摘を Stop hook
-            # の reason と同じ形で足し、直させた回 (round=1) として扱う。Codex の履歴には入らないので、
-            # 同じターンの以後の要求にも足し直す。
-            hook = {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text':
-                    f'<hook_prompt hook_run_id="output-gate">{gate.get("agent_message") or ""}</hook_prompt>'}]}
-            items.insert(restored + 1, hook)
-        if steered:
+            # の reason と同じ形で足し、直させた回として数える。
+            entries[current]['inject'] = gate.get('agent_message') or ''
             try:
-                write_json(gate_path(sid, tid), dict(gate, phase='blocked', round=1, injected=True))
+                write_json(gate_path(sid, tid), dict(gate, phase='blocked', round=int(gate.get('round') or 0) + 1,
+                                                     notices=entries))
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
             log(event='steer-continued')
+        # 足した指摘は Codex の履歴に入らないので、同じターンの以後の要求にも足し直す。後ろから入れて位置を保つ。
+        for marker, index in sorted(positions.items(), key=lambda pair: pair[1], reverse=True):
+            inject = entries[marker].get('inject')
+            if isinstance(inject, str):
+                items.insert(index + 1, {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text':
+                             f'<hook_prompt hook_run_id="output-gate">{inject}</hook_prompt>'}]})
 
     def classify(self, body):
         """要求をどう扱うかを決める: check (検査する) / review / unchecked (理由を添える) / pass (そのまま)。"""
@@ -1149,22 +1167,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except OSError as error:
             log(event='turn-store-failed', error=type(error).__name__)
         evidence, previous = turn_evidence(sid, tid)
-        withhold = final and not incomplete and gate is None and registered(sid)
-        extra = {'final': final, 'round': 1 if gate is not None else 0,
+        # 直させた回数。Stop hook が block したとき (と steer で続いたとき) に増える。案内を流した後に Codex が
+        # 同じ要求を送り直した回 (substituted のまま) は、まだ直させていないので増えない。
+        sent_back = int(gate.get('round') or 0) if gate is not None else 0
+        withhold = final and not incomplete and registered(sid)
+        extra = {'final': final, 'round': sent_back,
                  'continuation': 'withhold' if withhold else 'none', 'evidence': evidence,
                  'previous_evidence': previous, 'turn_start_context': (turn or {}).get('start') or [],
                  'shown_text': '\n\n'.join((read_json(Settings.state_dir / 'turns' / sid / f'{tid}.json') or {})
                                            .get('shown') or [])}
-        if gate is not None:
+        if sent_back >= 1:
             extra['previous_findings'] = gate.get('findings') or []
         result = run_check(checker_payload(body, bodies, **extra), self.checks)
         self.result_record = engine_record(result)
         texts = result.get('bodies')
         if texts is None:
             marker = f'output-gate:{tid}:{os.urandom(4).hex()}'
-            state = {'phase': 'substituted', 'round': 0, 'findings': result.get('findings') or [],
-                     'agent_message': result['agent_message'], 'original': '\n\n'.join(bodies),
-                     'display': result.get('display_text'), 'notice_marker': marker,
+            original = '\n\n'.join(bodies)
+            notices = notice_entries(gate) if gate is not None else {}
+            notices[marker] = {'original': original}
+            state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
+                     'agent_message': result['agent_message'], 'original': original,
+                     'display': result.get('display_text'), 'notice_marker': marker, 'notices': notices,
                      'created': time.time(), **self.result_record}
             try:
                 write_json(gate_path(sid, tid), state)
@@ -1174,8 +1198,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 log(event='gate-state-failed', error=type(error).__name__)
                 texts = result['fallback_bodies']
         elif final and gate is not None:
-            # 回数は送る前に resolved で残す (再試行でも案内にしない)。原文と指摘は以後使わないので消す。
-            state = dict(gate, phase='resolved', round=1, findings=result.get('findings') or [], **self.result_record)
+            # 未達が無くなった (または続けさせられない) 回答を流す前に resolved で残す。最後の原文と指摘は回収に
+            # 使わないので消す。各回の案内を原文に戻す notices は、同じターンの以後の要求のために残す。
+            state = dict(gate, phase='resolved', round=sent_back, findings=result.get('findings') or [],
+                         notices=notice_entries(gate), **self.result_record)
             state.pop('original', None)
             state.pop('agent_message', None)
             try:

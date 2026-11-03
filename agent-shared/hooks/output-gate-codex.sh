@@ -5,9 +5,10 @@
 #   output-gate-codex.sh enable [PORT] | disable                       利用者が使う切り替え
 #   output-gate-codex.sh held [SESSION_ID]                             直させる前の原文の手動の回収 (24 時間まで)
 #
-# 差し戻し: 中継が未達の回答を案内に差し替えたターン (状態 substituted) を、Stop hook が 1 回だけ block して
-# 同じターンで直させる (blocked)。続けさせてよいのは、SessionStart で app-server の hooks/list により出力ゲートの
-# Stop hook が信頼済みと確かめ、続行の登録 (relay/continue/<session_id>) を書いたセッションだけ。原文が利用者に
+# 差し戻し: 中継が未達の回答を案内に差し替えたターン (状態 substituted) を、Stop hook が block して同じターンで
+# 直させる (blocked)。直させた後の回答にも未達が残れば中継がまた差し替えるので、そのたびに block する。
+# 続けさせてよいのは、SessionStart で app-server の hooks/list により出力ゲートの Stop hook が信頼済みと確かめ、
+# 続行の登録 (relay/continue/<session_id>) を書いたセッションだけ。原文が利用者に
 # 届かないまま終わったターンは、同じセッションの別のターンの入力で一度だけ表示し、held でいつでも表示する。
 #
 # 中継を使うかとポートは、Git で追跡しないマシンごとの状態ファイル
@@ -166,7 +167,8 @@ reconcile() {
 }
 
 # 状態を 1 か所で書き換える: 差し戻しの状態ファイルを読み、phase を変えて一時ファイルから置き換える。
-#   stop FILE        substituted なら blocked にして、Stop hook の block を ASCII の JSON で出す
+#   stop FILE        substituted なら blocked にして直させた回数 (round) を 1 つ増やし、Stop hook の block を
+#                    ASCII の JSON で出す
 #   recover DIR TID  別のターン (TID 以外) の回収の対象で shown の無いものを表示用に出す (状態は変えない)
 #   mark DIR TID     recover と同じ対象に shown を付ける (表示を出力できた後に呼ぶ)
 #   held DIR...      回収の対象を shown に関係なく出す (状態は変えない)
@@ -210,6 +212,7 @@ if mode == 'stop':
     state = load(path)
     if state and state.get('phase') == 'substituted' and isinstance(state.get('agent_message'), str):
         state['phase'] = 'blocked'
+        state['round'] = (state.get('round') or 0) + 1
         try:
             save(path, state)
         except OSError:
@@ -235,7 +238,8 @@ else:
 EOF
 }
 
-# Stop hook: 中継が案内に差し替えたターン (substituted) を 1 回だけ block して作業を続けさせる。
+# Stop hook: 中継が案内に差し替えたターン (substituted) を block して作業を続けさせる。差し替えごとに 1 回 block し、
+# 同じ差し替えを 2 回 block しない (blocked のままなら何もしない)。
 # stop_hook_active では決めない (同じターンで別の Stop hook が先に block しても、出力ゲートの差し戻しはまだのため)。
 # 無効のマシンと、そのターンの状態ファイルが無いときは Python を起動せずに終える。
 if [ "$mode" = stop ]; then

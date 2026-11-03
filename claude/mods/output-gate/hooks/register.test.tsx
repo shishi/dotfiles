@@ -29,11 +29,11 @@ const checked = (p: Payload, change = (s: string) => s): Result => {
 }
 const replaceKiku = (p: Payload) => checked(p, s => s.replaceAll('効く', '速い'))
 const FINDING = { kind: 'unverified_claim', excerpt: { source: 'draft', text: '全部通った' }, evidence: [] }
-// 未達あり: 1 回目はエージェントへの指摘、直させた後 (round=1)・続けさせられない場合は未達の項目付きの本文。
+// 未達あり: 続けさせられるなら何回目 (round) でもエージェントへの指摘、続けさせられない場合は未達の項目付きの本文。
 const unmet = (p: Payload): Result => {
   const marked = [...p.bodies.slice(0, -1), p.bodies.at(-1) + UNMET]
   const base = { ...checked(p), findings: [FINDING], unmet_text: UNMET_TEXT, display_text: marked.join('\n\n') }
-  if (p.round === 1 || p.continuation === 'none') return { ...base, text: marked.join('\n\n'), bodies: marked }
+  if (p.continuation === 'none') return { ...base, text: marked.join('\n\n'), bodies: marked }
   const fallback = ['[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\n\n' + marked[0], ...marked.slice(1)]
   return { ...base, text: null, bodies: null, agent_message: '指摘: 全部通った の証拠が無い',
     fallback_text: fallback.join('\n\n'), fallback_bodies: fallback }
@@ -426,7 +426,7 @@ test('when both checkers fail, the original is shown with both reasons', async (
 
 test('findings at the final answer swap the text for the gate tool call, after the state is written', async ($, on) => {
   const fs = world(on)
-  const calls = checker(on, fs, unmet)
+  const calls = checker(on, fs, p => (p.bodies.join('').includes('証拠付き') ? checked(p) : unmet(p)))
   tools(on)
   const order: string[] = []
   on('state.set', (_$, e, next) => {
@@ -456,13 +456,20 @@ test('findings at the final answer swap the text for the gate tool call, after t
   // gate_findings は指摘を返し、次の end_turn は round=1 で検査される。
   const answer = await $.tool.call({ tool: GATE_TOOL, tool_use_id: tool.id } as never)
   expect((answer as { result: unknown }).result).toBe('指摘: 全部通った の証拠が無い')
-  script.steps = [[TEXT(0, '全部通った。')], [TEXT(0, '直した。全部通った。'), STOP()]]
+  script.steps = [[TEXT(0, '全部通った。')], [TEXT(0, '直した。全部通った。'), STOP()], [TEXT(0, '証拠付きで直した。'), STOP()]]
   const second = await run($, { index: 1 })
   expect(calls[1]?.round).toBe(1)
   expect(calls[1]?.previous_findings).toEqual([FINDING])
-  expect(second.text).toBe('直した。全部通った。' + UNMET)
+  // 未達が残る間は何回目でも直させる: 2 回目の最終回答も表示せず、gate_findings の呼び出しに差し替える。
+  expect(second.chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
+  expect(second.text).toBe('')
   // gate_findings の呼び出しは証拠に入らない。
   expect(calls[1]?.evidence.some(item => item.tool === GATE_TOOL || item.id === tool.id)).toBe(false)
+  // 未達が無くなった最終回答だけを表示する。
+  const third = await run($, { index: 2 })
+  expect(calls[2]?.round).toBe(2)
+  expect(third.chunks.some(c => c.kind === 'tool')).toBe(false)
+  expect(third.text).toBe('証拠付きで直した。')
 })
 
 test('a failed state write shows the original, the reason and the findings', async ($, on) => {
@@ -482,18 +489,26 @@ test('a failed state write shows the original, the reason and the findings', asy
   expect(result?.stopReason).toBe('end_turn')
 })
 
-test('a second final answer is not swapped even when the tool never ran', async ($, on) => {
+test('a second final answer with findings is sent back again even when the tool never ran', async ($, on) => {
   const fs = world(on)
-  checker(on, fs, unmet)
+  const calls = checker(on, fs, unmet)
   tools(on)
   model(on, [[TEXT(0, '全部通った。'), STOP()]])
   await start($)
   const first = await run($)
-  expect(first.chunks.some(c => c.kind === 'tool')).toBe(true)
-  // ツールが拒否された・mod が読み直された: hook の変数ではなく $.state の round=1 で判断する。
+  const firstId = (first.chunks.find(c => c.kind === 'tool') as { id: string }).id
+  // ツールが拒否された・mod が読み直された: hook の変数ではなく $.state の直させた回数で判断する。
   const second = await run($, { index: 1 })
-  expect(second.chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(second.text).toBe('全部通った。' + UNMET)
+  expect(second.chunks.some(c => c.kind === 'tool')).toBe(true)
+  expect(second.text).toBe('')
+  expect(calls[1]?.round).toBe(1)
+  expect(calls[1]?.previous_findings).toEqual([FINDING])
+  // 新しく差し替えた後は、前の gate_findings の呼び出しにはもう指摘を返さない。
+  const old = await $.tool.call({ tool: GATE_TOOL, tool_use_id: firstId } as never)
+  expect((old as { result: unknown }).result).toBe(NOT_ISSUED)
+  const third = await run($, { index: 2 })
+  expect(third.chunks.some(c => c.kind === 'tool')).toBe(true)
+  expect(calls[2]?.round).toBe(2)
 })
 
 test('a gate_findings call the gate did not make gets the fixed answer', async ($, on) => {
@@ -961,7 +976,7 @@ test('previous calls with no record are said to be unrecorded or past the kept r
   expect(gap.note).toContain('記録が無いか保持の範囲外')
 })
 
-test('a mod loaded afresh with only $.state does not swap a second time', async ($, on) => {
+test('a mod loaded afresh with only $.state sends back again, counting on from the stored round', async ($, on) => {
   // 各試験は mod を新しく読み込む。差し替えの後に $.state に残る値だけを与え、hook の変数を持たない mod で
   // 2 回目の最終回答を流す。
   const fs = world(on)
@@ -972,8 +987,15 @@ test('a mod loaded afresh with only $.state does not swap a second time', async 
     unmet: '…', gate_tool_id: 'toolu_outputgate_x', checks: [] }
   on('state.get', (_$, e, next) => (e.key === 'turn' && e.id === 't1' ? { value: { value: swapped, version: 1 } } as never : next(e)))
   model(on, [[TEXT(0, '直した。全部通った。'), STOP()]])
+  const written: unknown[] = []
+  on('state.set', (_$, e, next) => {
+    if (e.key === 'turn' && e.id === 't1') written.push(e.value)
+    return next(e)
+  })
   const { chunks, text } = await run($, { index: 1 })
-  expect(chunks.some(c => c.kind === 'tool')).toBe(false)
+  expect(chunks.some(c => c.kind === 'tool')).toBe(true)
+  expect(text).toBe('')
   expect(calls[0]?.round).toBe(1)
-  expect(text).toBe('直した。全部通った。' + UNMET)
+  expect(calls[0]?.previous_findings).toEqual([FINDING])
+  expect((written.at(-1) as { round: number }).round).toBe(2)
 })

@@ -779,13 +779,12 @@ class FindingTests(GateTestCase):
         self.assertIsNone(self.final(answer(), evidence=evidence)['display_text'])
         self.assertIsNone(self.final('not json')['display_text'])
 
-    def test_round1_appends_the_unmet_items_after_the_replacements(self):
+    def test_unmet_points_left_after_fixing_are_sent_back_again(self):
         out = self.final(answer([{'find': '完了しているよ', 'replace': '完了したよ', 'rule': 'r',
                                   'meaning_changed': False}], [self.CLAIM]),
-                         round=1, previous_findings=[self.CLAIM])
-        self.assertTrue(out['text'].startswith('テストは全て通ったので、変更は完了したよ。'))
-        self.assertIn('出力ゲート: 次の点は確かめられていません', out['text'])
-        self.assertIsNone(out['agent_message'])
+                         round=2, previous_findings=[self.CLAIM])
+        self.assertIsNone(out['text'])
+        self.assertIn('テストは全て通った', out['agent_message'])
         self.assertEqual(self.checker_input()['previous_findings'][0]['excerpt'], 'テストは全て通った')
 
     def test_cannot_continue_round0_shows_the_unmet_items(self):

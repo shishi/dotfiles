@@ -123,9 +123,13 @@ out=$(printf '{"session_id":"g2","turn_id":"t1","stop_hook_active":false}' | bas
 check "stop does not block another session's turn" "[ -z \"\$out\" ] && [ \"\$(gate_field g1 t1 phase)\" = substituted ]"
 out=$(printf '{"session_id":"g1","turn_id":"t1","stop_hook_active":true}' | bash "$HOOK" stop)
 check "stop blocks a substituted turn even when another hook blocked first" "printf '%s' \"\$out\" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert d[\"decision\"] == \"block\" and d[\"reason\"] == \"AGENT-MSG\"'"
-check "stop moves the turn to blocked" "[ \"\$(gate_field g1 t1 phase)\" = blocked ]"
+check "stop moves the turn to blocked and counts the send-back" "[ \"\$(gate_field g1 t1 phase)\" = blocked ] && [ \"\$(gate_field g1 t1 round)\" = 1 ]"
 out=$(printf '{"session_id":"g1","turn_id":"t1","stop_hook_active":false}' | bash "$HOOK" stop)
-check "a blocked turn is not blocked twice" "[ -z \"\$out\" ]"
+check "a blocked turn is not blocked twice" "[ -z \"\$out\" ] && [ \"\$(gate_field g1 t1 round)\" = 1 ]"
+# 直させた後の回答にも未達が残れば、中継がもう一度案内に差し替える (substituted)。Stop hook はそのたびに block する。
+write_gate g1 t1 '{"phase":"substituted","round":1,"findings":[],"agent_message":"AGENT-MSG-2","original":"RAW-2","notice_marker":"m2","created":9999999999}'
+out=$(printf '{"session_id":"g1","turn_id":"t1","stop_hook_active":true}' | bash "$HOOK" stop)
+check "a turn substituted again is blocked again" "printf '%s' \"\$out\" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert d[\"decision\"] == \"block\" and d[\"reason\"] == \"AGENT-MSG-2\"' && [ \"\$(gate_field g1 t1 phase)\" = blocked ] && [ \"\$(gate_field g1 t1 round)\" = 2 ]"
 write_gate g1 t0 '{"phase":"resolved","round":1,"findings":[],"created":9999999999}'
 out=$(printf '{"session_id":"g1","turn_id":"t0","stop_hook_active":false}' | bash "$HOOK" stop)
 check "a resolved turn is not blocked" "[ -z \"\$out\" ]"

@@ -18,7 +18,7 @@
                     取得できなかった範囲は {id, unavailable: true, note}
   previous_evidence 前のターンの証拠 [{turn_id, time, items: [...]}]
   previous_findings 直させる前の検査の findings (再検査で渡す)
-  round             0 (まだ直させていない) | 1 (直させた後)
+  round             直させた回数 (0 以上の整数)。未達が残る間は何回目でも直させる
   final             最終回答か。false なら応答の規則だけを検査する
   continuation      "withhold" (既定: 回答を見せずに続けさせる) | "none" (続けさせられない) |
                     "display" (表示して続けさせる: Desktop の WSL セッションの 1 回目)
@@ -176,7 +176,7 @@ exactly from that message; and "evidence", a list of {"id", "state"} pairs. "sta
 "id" is null), "failed", "truncated" or "unrecovered" (the item with that id failed, was truncated, or failed and was
 not recovered). Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
 user). Unverified claims and concealment cite "draft" or "shown". Never cite an assistant message as a request.
-Report each unmet point once. When "previous_findings" is given, the agent was asked once to fix them: report what is
+Report each unmet point once. When "previous_findings" is given, the agent was asked to fix them: report what is
 still unmet now.
 """
 OUTPUT_FORMAT = """
@@ -1076,7 +1076,7 @@ def judge(payload, reply_text, engine, failures):
     marked = decorate(bodies, suffix='\n\n---\n' + unmet)
     base.update(display_text=joined(marked), display_bodies=marked)
     mode = payload.get('continuation') or 'withhold'
-    if payload.get('round') == 1 or mode == 'none':
+    if mode == 'none':
         return dict(base, text=joined(marked), bodies=marked)
     message = agent_message(findings, answer['replacements'], evidence_index(payload))
     fallback = decorate(marked, prefix='[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\n\n')
@@ -1191,8 +1191,8 @@ def validate(payload):
     for key in ('recent_messages', 'turn_start_context'):
         if not is_turns(payload.get(key) or []):
             raise ValueError(f'{key} must be a list of {{role, text}}')
-    if payload.get('round', 0) not in (0, 1):
-        raise ValueError('round must be 0 or 1')
+    if not (isinstance(payload.get('round', 0), int) and payload.get('round', 0) >= 0):
+        raise ValueError('round must be a non-negative integer')
     if payload.get('continuation', 'withhold') not in ('withhold', 'none', 'display'):
         raise ValueError('continuation must be withhold, none or display')
 

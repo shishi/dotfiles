@@ -45,7 +45,8 @@ class ClaudeHookTests(unittest.TestCase):
                               "evidence": [{{"id": None, "state": "absent"}}]}}]
                 unmet = "出力ゲート: 次の点は確かめられていません\\n- 未確認"
                 marked = payload["draft"] + "\\n\\n---\\n" + unmet
-                message = None if payload.get("round") == 1 else "出力ゲートの指摘: 確かめてから答え直して"
+                # 未達がある間は、何回目の検査でも指摘を返す (検査処理の契約)。
+                message = None if payload.get("continuation") == "none" else "出力ゲートの指摘: 確かめてから答え直して"
                 print(json.dumps({{"status": "checked", "text": marked, "findings": findings, "agent_message": message,
                                    "fallback_text": None if message is None else "[保存できない]\\n\\n" + marked,
                                    "unmet_text": unmet, "reason": None, "applied": 0}}))
@@ -469,7 +470,7 @@ class ClaudeHookTests(unittest.TestCase):
         self.assertEqual(decision, {'decision': 'block', 'reason': '出力ゲートの指摘: 確かめてから答え直して'})
         self.assertTrue(self.session_file(self.pair_name('全部通ったよ') + '.blocked').exists())
 
-    def test_the_answer_after_a_block_is_checked_again_once(self):
+    def test_answers_are_sent_back_until_no_findings_remain(self):
         self.transcript.write_text('', encoding='utf-8')
         self.record(self.user('テストして', 'u1'))
         self.display('全部通ったよ', final=True, message='m1', FAKE_CHECK_FINDINGS='1')
@@ -477,14 +478,27 @@ class ClaudeHookTests(unittest.TestCase):
         # Claude Code は Stop hook の指摘を isMeta の利用者の行として書く。利用者の入力として扱わない。
         self.record({'type': 'user', 'isMeta': True, 'message': {'role': 'user', 'content': 'Stop hook feedback:\n指摘'}},
                     self.answer('r9', 'テストは未実施だよ'))
-        out = self.display('テストは未実施だよ', final=True, message='m2', FAKE_CHECK_FINDINGS='1')
+        self.display('テストは未実施だよ', final=True, message='m2', FAKE_CHECK_FINDINGS='1')
         second = self.checker_calls()[1]
         self.assertEqual((second['round'], second['latest_user']), (1, 'テストして'))
         self.assertEqual(second['previous_findings'],
                          [{'kind': 'unverified_claim', 'source': 'draft', 'excerpt': '全部通ったよ',
                            'evidence': [{'id': None, 'state': 'absent'}]}])
-        self.assertIn('出力ゲート: 次の点は確かめられていません', self.shown(out))
-        self.assertIsNone(self.stop('テストは未実施だよ'))
+        # 直させた後の回答にも未達が残れば、また差し戻し、回数を進める。
+        self.assertEqual(self.stop('テストは未実施だよ')['decision'], 'block')
+        self.assertEqual(json.loads(self.session_file('u1.round.json').read_text(encoding='utf-8'))['round'], 2)
+        self.record({'type': 'user', 'isMeta': True, 'message': {'role': 'user', 'content': 'Stop hook feedback:\n指摘'}},
+                    self.answer('r10', 'pytest を流して 3 件通ったよ'))
+        self.display('pytest を流して 3 件通ったよ', final=True, message='m3', FAKE_CHECK_FINDINGS='1')
+        third = self.checker_calls()[2]
+        self.assertEqual(third['round'], 2)
+        self.assertEqual([f['excerpt'] for f in third['previous_findings']], ['テストは未実施だよ'])
+        self.assertEqual(self.stop('pytest を流して 3 件通ったよ')['decision'], 'block')
+        # 未達の無い回答は差し戻さない。
+        self.record(self.answer('r11', '3 件通ったのを確かめたよ'))
+        self.display('3 件通ったのを確かめたよ', final=True, message='m4')
+        self.assertEqual(self.checker_calls()[3]['round'], 3)
+        self.assertIsNone(self.stop('3 件通ったのを確かめたよ'))
 
     def test_stop_blocks_a_pair_once_even_after_another_hook_blocked(self):
         self.display('全部通ったよ', final=True, FAKE_CHECK_FINDINGS='1')
@@ -531,7 +545,7 @@ class ClaudeHookTests(unittest.TestCase):
         marker.write_text('mod-turn', encoding='utf-8')
         self.assertIsNone(self.stop('全部通ったよ'))
 
-    def test_an_answer_mistaken_for_the_final_one_does_not_use_up_the_round(self):
+    def test_an_answer_mistaken_for_the_final_one_does_not_advance_the_round(self):
         # 行がまだ書かれていない途中の応答を最終回答と取り違えても、Stop が block していなければ回数は進まない。
         self.transcript.write_text('', encoding='utf-8')
         self.record(self.user('テストして', 'u1'))

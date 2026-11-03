@@ -14,7 +14,7 @@ prompt (UserPromptSubmit hook):
   記録した訂正版があれば、追加の文脈として渡して消す。mod の印も消す。
 stop (Stop hook):
   last_assistant_message の組に指摘があり、まだ差し戻していなければ、block して同じセッションで直させる。
-  検査中なら結果を待つ。1 つの組で差し戻すのは 1 回だけ。
+  検査中なら結果を待つ。1 つの組で差し戻すのは 1 回だけで、直させた後の回答も未達が残る間は差し戻す。
 
 mod が動いているセッション (mod が利用者の最新の入力より後に印を書いた)、委譲の子セッション、
 副エージェントの回答では検査しない。mod と二重に検査しないため、また機械が読む出力を書き換えないため。
@@ -379,10 +379,23 @@ def write_json(path, value):
     os.replace(tmp, path)   # Stop hook が書きかけを読まないよう、置き換えで書く
 
 
+def stored_round(session_dir, turn):
+    """ターンの直させた回数と、最後に直させたときの指摘を返す。記録が無い・読めなければ (0, [])。"""
+    try:
+        record = json.loads((session_dir / f'{turn}.round.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return 0, []
+    count = record.get('round') if isinstance(record, dict) else None
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        return 0, []
+    findings = record.get('findings')
+    return count, findings if isinstance(findings, list) else []
+
+
 def check(draft, event, session_dir, stop_reason):
     """回答を検査し、(表示する文字列, 検査の状態, 適用した置き換えの数, 表示に添えた未達の段落) を返す。最終回答では未達を判定させ、
     指摘を Stop hook へ渡す。直させた回数は Stop hook が block した時点で進める (途中の応答を最終回答と取り違えても
-    回数を使い切らないため)。"""
+    block しなければ回数を進めないため)。"""
     transcript_path = event.get('transcript_path')
     said, latest_user = message_texts(transcript_path)
     final = stop_reason in FINAL_STOP_REASONS or stop_reason is None
@@ -396,17 +409,14 @@ def check(draft, event, session_dir, stop_reason):
                'final': final, 'cyber_program': None, 'round': 0}
     if final:
         try:
-            record = json.loads((session_dir / f"{turn['key']}.round.json").read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            record = None
-        try:
             shown_text = shown_path.read_text(encoding='utf-8').strip()
         except OSError:
             shown_text = ''
         payload.update(continuation='display', evidence=turn['evidence'], shown_text=shown_text,
                        previous_evidence=turn['previous_evidence'], turn_start_context=turn['turn_start_context'])
-        if isinstance(record, dict) and record.get('round') == 1:   # Stop hook で差し戻した後の再検査
-            payload.update(round=1, previous_findings=record.get('findings') or [])
+        count, previous = stored_round(session_dir, turn['key'])
+        if count:   # Stop hook で差し戻した後の再検査。直させた回数と、最後に直させたときの指摘を渡す
+            payload.update(round=count, previous_findings=previous)
     result = run_check(payload)
     text = result['text']
     engine = {key: result.get(key) for key in ('engine', 'engine_failures', 'dropped')}
@@ -423,7 +433,7 @@ def check(draft, event, session_dir, stop_reason):
         # 未達の無い結果・検査できなかった結果も、このターンのこの回答の結果として保存する。Stop hook は、前に同じ
         # 文字列の回答で残った結果ではなく、この結果を読む。
         findings = (result.get('findings') or []) if result['status'] == 'checked' else []
-        message = result.get('agent_message') if findings and payload['round'] == 0 else None
+        message = result.get('agent_message') if findings else None   # 未達が残る間は、何回目でも直させる
         try:
             if message:
                 (session_dir / f'{pair}.blocked').unlink(missing_ok=True)   # 前に同じ文字列で差し戻した印
@@ -694,7 +704,8 @@ def from_another_turn(result_path, current):
 def stop(event, session_dir):
     """Stop hook: 回答の組に指摘があり、まだ差し戻していなければ block する。stop_hook_active では決めない
     (別の Stop hook が先に block すると true になるが、出力ゲートの差し戻しはまだ行われていないため)。
-    block する前に、組に block した印を書き、ターンの直させた回数を 1 にする。"""
+    block する前に、組に block した印を書き、ターンの直させた回数を 1 つ進める。直させた後の回答も、
+    MessageDisplay hook の検査で指摘が残れば、別の組 (同じ文字列なら印を消した組) として差し戻す。"""
     message = event.get('last_assistant_message')
     if not isinstance(message, str) or not message.strip():
         return
@@ -724,21 +735,23 @@ def stop(event, session_dir):
         stop_log(session_dir, pair, 'unreadable result')
         return
     if not isinstance(result, dict) or not isinstance(result.get('agent_message'), str) or not result['agent_message']:
-        return   # 指摘の無い結果 (直させた後の再検査など)
-    try:   # 作れた 1 回だけが block する
+        return   # 指摘の無い結果
+    try:   # 作れた 1 回だけが block する (同じ回答で Stop hook が 2 回動いても、二重に差し戻さない)
         os.close(os.open(session_dir / f'{pair}.blocked', os.O_WRONLY | os.O_CREAT | os.O_EXCL))
     except FileExistsError:
         return
     except OSError:
         stop_log(session_dir, pair, 'cannot write the blocked marker', result)
         return
+    count, _ = stored_round(session_dir, result['turn'])
     try:
-        write_json(session_dir / f"{result['turn']}.round.json", {'round': 1, 'findings': result.get('findings') or []})
+        write_json(session_dir / f"{result['turn']}.round.json",
+                   {'round': count + 1, 'findings': result.get('findings') or []})
+        outcome = 'blocked'
     except OSError:
-        # 回数を残せないまま差し戻すと、次の回答をまた差し戻しうる。差し戻さずに終える。
-        stop_log(session_dir, pair, 'cannot write the round', result)
-        return
-    stop_log(session_dir, pair, 'blocked', result)
+        # 回数を残せなくても差し戻す。次の再検査に渡す回数と前回の指摘が古くなるだけで、未達の回答を表示で終えない。
+        outcome = 'blocked without writing the round'
+    stop_log(session_dir, pair, outcome, result)
     emit({'decision': 'block', 'reason': result['agent_message']})
 
 

@@ -7,7 +7,7 @@ export type HoldingMessage = { role: string; text: string }
 /**
  * What the gate keeps for one turn of the main loop, by its turnId; null once the turn ended.
  *
- * `round` is 1 once the gate swapped a final answer for its `gate_findings` call (`gate_tool_id`);
+ * `round` is how many times the gate swapped a final answer for its `gate_findings` call (`gate_tool_id`);
  * `original` and `unmet` are the answer it withheld and what to show if the turn ends before the next
  * final answer. `judged_len` is how much of `shown` was already judged as a final answer.
  */
@@ -18,7 +18,7 @@ export type HoldingTurn = {
   tool_ids: string[]
   shown: string
   judged_len: number
-  round: 0 | 1
+  round: number
   agent_message: string | null
   findings: unknown[]
   original: string | null

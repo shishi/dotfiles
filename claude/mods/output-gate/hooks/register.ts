@@ -5,8 +5,9 @@ import type { HoldingEvidence, HoldingMessage, HoldingTurn } from '../types/inde
 // 出力ゲートの Claude Code 側: モデルの応答の文字列を止め、共通の検査処理
 // (~/.agent-shared/bin/output-gate-check.py) で検査し、訂正した文字列だけを流す。
 // 流した文字列が画面と会話記録になる。検査できなければ、原文の先頭に理由を添えて流す。
-// 最終回答 (end_turn・stop_sequence の段) に未達があれば、1 回だけ本文を gate_findings の呼び出しに差し替え、
-// 指摘をツールの結果として返して同じターンで直させる。証拠は tool.call で記録した呼び出しと結果。
+// 最終回答 (end_turn・stop_sequence の段) に未達があれば、本文を gate_findings の呼び出しに差し替え、
+// 指摘をツールの結果として返して同じターンで直させる。未達が残る間は何回目の最終回答でも直させ、未達の
+// 無くなった回答だけを表示する。証拠は tool.call で記録した呼び出しと結果。
 
 const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 
@@ -68,7 +69,7 @@ type Payload = {
   evidence: Item[]
   previous_evidence: PreviousTurn[]
   previous_findings: unknown[] | null
-  round: 0 | 1
+  round: number
   final: boolean
   continuation: 'withhold' | 'none'
   engines: ['codex']
@@ -607,7 +608,7 @@ async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies
     turn_start_context: turn.turn_start_context, shown_text: turn.shown,
     evidence: final ? await currentEvidence($, turn) : [],
     previous_evidence: final ? await previousEvidence($, turnId, turn) : [],
-    previous_findings: turn.round === 1 ? turn.findings : null, round: turn.round, final, continuation,
+    previous_findings: turn.round >= 1 ? turn.findings : null, round: turn.round, final, continuation,
     engines: ['codex'], cyber_program: null,
   }
 }
@@ -619,10 +620,18 @@ async function recordSwap($: EngineInterface, turnId: string, turn: Turn, toolId
   // ターンが次の最終回答を経ずに終わったときに表示する文は、検査処理の display_text (置き換え済みの本文、
   // 未達の段落、証拠の欠けの注記) をそのまま使う。
   const display = result.display_text ?? original
-  const next: Turn = { ...turn, round: 1, agent_message: result.agent_message, findings: result.findings, original,
-    unmet: ENDED_UNFIXED + display, gate_tool_id: toolId }
+  const next: Turn = { ...turn, round: turn.round + 1, agent_message: result.agent_message, findings: result.findings,
+    original, unmet: ENDED_UNFIXED + display, gate_tool_id: toolId }
   await $.state.set({ plugin: 'output-gate', key: 'turn', id: turnId }, next)
   await $.state.set({ plugin: 'output-gate', key: 'issued', id: toolId }, { turn_id: turnId, agent_message: result.agent_message! })
+  // 前に差し替えた呼び出しの指摘は返し終えている。turn.complete が消すのは最後の呼び出しだけなので、ここで消す。
+  if (turn.gate_tool_id !== null) {
+    try {
+      await $.state.set({ plugin: 'output-gate', key: 'issued', id: turn.gate_tool_id }, null)
+    } catch {
+      // 消せなくても差し替えは続ける。残るのは返し終えた呼び出しの指摘だけ。
+    }
+  }
 }
 
 export const register: Register = on => {
@@ -635,7 +644,7 @@ export const register: Register = on => {
         })
       }
     } catch {
-      // 登録できなくても検査は続ける。差し替えた呼び出しは失敗し、次の最終回答で未達の項目付きで表示する。
+      // 登録できなくても検査は続ける。差し替えた呼び出しは失敗し、次の最終回答をまた検査する。
     }
     return next(e)
   })
@@ -725,7 +734,7 @@ export const register: Register = on => {
           turn.checks = [...turn.checks, checkRecord(e.index, final, result)]
           // 検査の間に利用者の入力が届いて印が消えることがあるため、流す直前にも書き直す。
           await markSession($, e)
-          if (final && turn.round === 0 && result.text === null && result.agent_message !== null) {
+          if (final && result.text === null && result.agent_message !== null) {
             const toolId = `toolu_outputgate_${crypto.randomUUID().replaceAll('-', '')}`
             let isSaved = true
             try {

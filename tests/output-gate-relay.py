@@ -146,7 +146,7 @@ class RelayTests(unittest.TestCase):
                     marked = fixed[:-1] + [fixed[-1] + "\\n\\n---\\n" + unmet]
                     result.update(findings=found, unmet_text=unmet, display_text="\\n\\n".join(marked),
                                   display_bodies=marked)
-                    if payload.get("round") == 1 or payload.get("continuation") == "none":
+                    if payload.get("continuation") == "none":
                         result.update(text="\\n\\n".join(marked), bodies=marked)
                     else:
                         fallback = ["[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\\n\\n" + marked[0]] + marked[1:]
@@ -1080,68 +1080,105 @@ class RelayTests(unittest.TestCase):
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         return self.final_text(self.answer('全部確認済みだよ'))
 
+    def sent_back(self):
+        """Stop hook が block したときと同じく、状態を blocked にして直させた回数を 1 つ増やす。"""
+        state = self.gate_state()
+        self.write_gate_state(dict(state, phase='blocked', round=state['round'] + 1))
+
+    def upstream_texts(self):
+        sent = json.loads(Upstream.requests[-1][2])
+        return [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+
     def test_continued_request_restores_the_original(self):
         notice = self.substituted()
-        self.write_gate_state(dict(self.gate_state(), phase='blocked'))
+        self.sent_back()
         hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG: 確かめて</hook_prompt>')
         self.answer('確かめ直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
-        sent = json.loads(Upstream.requests[-1][2])
-        texts = [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+        texts = self.upstream_texts()
         self.assertIn('全部確認済みだよ', texts)
         self.assertNotIn(notice, texts)
         payload = self.checker_inputs()[-1]
         self.assertEqual(payload['latest_user'], '元の依頼')
         self.assertEqual(payload['round'], 1)
 
-    def test_steer_without_stop_hook_adds_the_findings(self):
+    def test_steer_without_stop_hook_adds_the_findings_and_sends_back_again(self):
         notice = self.substituted()
+        first = self.gate_state()
         body = {'input': [self.user('元の依頼'), self.assistant(notice), self.user('ついでにこれも')]}
-        events = self.answer('追加分もやったよ', body=body)
-        sent = json.loads(Upstream.requests[-1][2])
-        texts = [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+        events = self.answer('追加分も確認済み', body=body)
+        texts = self.upstream_texts()
         self.assertIn('全部確認済みだよ', texts)
         self.assertTrue(any('AGENT-MSG: 確かめて' in t for t in texts))
-        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
-        self.assertIn('UNMET-ITEM', self.final_text(events))   # 未達でも案内にしない
-        self.assertEqual(self.gate_state()['phase'], 'resolved')
-
-    def test_substituted_to_resolved_drops_the_original(self):
-        self.substituted()
-        self.answer('もう一回答えるね')
+        payload = self.checker_inputs()[-1]
+        self.assertEqual(payload['round'], 1)
+        self.assertEqual(payload['previous_findings'], first['findings'])
+        # 未達が残る間は、直させた後の回答も案内にして直させ続ける
+        second = self.final_text(events)
         state = self.gate_state()
-        self.assertEqual(state['phase'], 'resolved')
-        self.assertNotIn('original', state)
+        self.assertNotIn('UNMET-ITEM', second)
+        self.assertIn(state['notice_marker'], second)
+        self.assertNotEqual(state['notice_marker'], first['notice_marker'])
+        self.assertEqual((state['phase'], state['round'], state['original']), ('substituted', 1, '追加分も確認済み'))
+        # 次の回でも、前の回の案内は原文に戻り、Codex の履歴に無い指摘は足し直す
+        self.sent_back()
+        hook = self.user('<hook_prompt hook_run_id="h2">AGENT-MSG: 確かめて</hook_prompt>')
+        later = {'input': body['input'] + [self.assistant(second), hook]}
+        self.answer('直したよ', body=later)
+        texts = self.upstream_texts()
+        self.assertEqual(texts[:5], ['元の依頼', '全部確認済みだよ',
+                                     '<hook_prompt hook_run_id="output-gate">AGENT-MSG: 確かめて</hook_prompt>',
+                                     'ついでにこれも', '追加分も確認済み'])
+        self.assertEqual(self.checker_inputs()[-1]['round'], 2)
+
+    def test_retry_before_the_stop_hook_is_withheld_at_the_same_round(self):
+        self.substituted()
+        # 案内を流した後に接続が切れ、Codex が案内を履歴に入れずに同じ要求を送り直した: まだ直させていない
+        events = self.answer('全部確認済みだよ')
+        self.assertEqual(self.checker_inputs()[-1]['round'], 0)
+        self.assertNotIn('previous_findings', self.checker_inputs()[-1])
+        state = self.gate_state()
+        self.assertEqual((state['phase'], state['round']), ('substituted', 0))
+        self.assertIn(state['notice_marker'], self.final_text(events))
 
     def test_second_answer_resolves_from_blocked_and_drops_the_original(self):
         notice = self.substituted()
-        self.write_gate_state(dict(self.gate_state(), phase='blocked'))
+        self.sent_back()
         (self.tmp / 'findings-on').unlink()
         hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
         events = self.answer('直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
         self.assertEqual(self.final_text(events), '直したよ')
         state = self.gate_state()
         self.assertEqual(state['phase'], 'resolved')
+        self.assertEqual(state['round'], 1)
         self.assertNotIn('original', state)   # 原文はエージェントに届いた: 回収の対象から外す
         self.assertNotIn('agent_message', state)
 
-    def test_second_answer_with_findings_shows_unmet_items(self):
+    def test_every_answer_with_findings_is_sent_back_until_none_remain(self):
+        items = [self.user('元の依頼')]
         notice = self.substituted()
-        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
-        events = self.answer('まだ確認済み', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
-        self.assertIn('UNMET-ITEM', self.final_text(events))
-        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
-        self.assertEqual(self.gate_state()['phase'], 'resolved')
-
-    def test_retry_after_resolved_stays_round_one(self):
-        notice = self.substituted()
-        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
-        body = {'input': [self.user('元の依頼'), self.assistant(notice), hook]}
-        self.answer('まだ確認済み', body=body)
-        # 再検査後の応答の途中で接続が切れ、Codex が同じターンの要求を送り直した
-        events = self.answer('まだ確認済み', body=body)
-        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
-        self.assertIn('UNMET-ITEM', self.final_text(events))
-        self.assertNotIn(self.gate_state()['notice_marker'], self.final_text(events))
+        for number, draft in enumerate(['まだ確認済み', 'やっぱり確認済み'], 1):
+            self.sent_back()
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            previous = self.gate_state()['findings']
+            events = self.answer(draft, body={'input': list(items)})
+            payload = self.checker_inputs()[-1]
+            self.assertEqual(payload['round'], number)
+            self.assertEqual(payload['previous_findings'], previous)
+            notice = self.final_text(events)
+            state = self.gate_state()
+            self.assertNotIn('UNMET-ITEM', notice)
+            self.assertIn(state['notice_marker'], notice)
+            self.assertEqual((state['phase'], state['round'], state['original']), ('substituted', number, draft))
+        self.sent_back()
+        (self.tmp / 'findings-on').unlink()
+        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h3">AGENT-MSG</hook_prompt>')]
+        events = self.answer('全部直したよ', body={'input': items})
+        self.assertEqual(self.final_text(events), '全部直したよ')
+        self.assertEqual(self.checker_inputs()[-1]['round'], 3)
+        # どの回の案内も、モデルへ送る前に原文へ戻す
+        answers = [t for t in self.upstream_texts() if not t.startswith(('元の依頼', '<hook_prompt'))]
+        self.assertEqual(answers, ['全部確認済みだよ', 'まだ確認済み', 'やっぱり確認済み'])
+        self.assertEqual((self.gate_state()['phase'], self.gate_state()['round']), ('resolved', 3))
 
     def test_unwritable_state_falls_back_to_the_original(self):
         self.register()
