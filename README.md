@@ -174,6 +174,49 @@ Codex と Claude Code のログイン、gitleaks、Python 3.11 以降が必要�
 中継の圧縮送信には Python 3.14 以降を使います。委譲とレビューで起動する Codex は中継を通さず、
 検査もしません。
 
+## 委譲・背景実行の放置の検出
+
+背景で動かした作業があるのに、確かめる予定を立てないままターンを終えることを、hook で止めます
+(`agent-shared/hooks/stall-guard.sh`)。判定には CLI が hook に渡す構造化された値と時刻だけを使います。
+
+- Claude Code: 背景の Agent・Bash が動いている間、それぞれに 20 分以内に発火する確認の予約
+  (ScheduleWakeup・CronCreate) が無ければ、Stop hook がターンの終了を止めて事実を渡します。
+  モデルが予約しないまま 2 回続けて終えようとしたら止めるのをやめ、代わりに見張りの Stop hook が
+  確認時刻にセッションを起こします。毎回の入力にも、動いている作業の経過時間と成果物の増分を添えます。
+- Codex: そのターンで起動した子の run が終わるまで、Stop hook がターンの終了を止め、
+  20 分以上の `wait_agent` を求めます。短い `wait_agent` は実行前に拒否します。
+  前のターンから持ち越した run は止めず、次の入力に事実を添えるだけです。
+
+止めないもの:
+
+- 背景作業が無いのに、やることを残してターンを終えること。
+- Codex で、指示に従わないモデルが答え直しだけを続けた場合。2 回で止めるのをやめ、次の入力で事実を渡すまでになります。
+- `keep` を宣言した背景 Bash。背景 Bash で起動した委譲 (`codex exec` など) も Bash の作業なので、`keep` で確認の対象から外せます。
+
+モデルと利用者が使うコマンドです (Claude Code の Bash から実行したときは、そのセッションの台帳を使います)。
+
+```sh
+bash ~/.agent-shared/hooks/stall-guard.sh deadline <id> <1〜30 分> [--watch <path>]  # 確認の間隔を変え、成果物を登録する
+bash ~/.agent-shared/hooks/stall-guard.sh keep <id>           # 意図して動かし続ける背景 Bash を確認の対象から外す
+bash ~/.agent-shared/hooks/stall-guard.sh [--cli codex] status [--json] --session <id>
+```
+
+委譲の skill (codex-delegate・codex-review・claude-delegate) は、委譲先の終了後に `status --json` を読み、
+終わっていない作業を委譲の失敗として扱います。`hooked` が false なら hook が動いていないと報告します。
+Codex は `codex/hooks.json` を更新した後に `/hooks` で stall-guard の hook を信頼し直します。
+
+外すときは、先に無効にしてから予約を消し、最後に登録を外します。
+予約より先に登録を外すと、その時点の Stop で予約を作り直させてしまうためです。
+
+```sh
+bash ~/.agent-shared/hooks/stall-guard.sh disable
+```
+
+1. 無効にすると、記録・入力への事実・見張りは何もしなくなり、Stop hook は予約の観測だけを書きます。
+2. `status` に出る予約を、会話で CronDelete (ScheduleWakeup の予約は `ScheduleWakeup{stop:true}`) で消します。
+3. `claude/settings.json` と `codex/hooks.json` から `stall-guard.sh` の登録を外し、状態ディレクトリ
+   (`${XDG_STATE_HOME:-$HOME/.local/state}/stall-guard`) を消します。
+
 ## 個人記憶の参照
 
 記憶本文は private repo `agent-memory` に置き、両エージェントの `memory/` から参照します。

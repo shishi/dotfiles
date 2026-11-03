@@ -71,6 +71,12 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    FINISHED_AT=$(date +%s)
    RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
    printf 'Run record: %s\n' "$RUN_RECORD" >&2
+   # stall-guard: レビュー役の子の run が終わらないまま exec が終わっていないかを読む (stall-guard を外していれば何もしない)
+   SG="$HOME/.agent-shared/hooks/stall-guard.sh"
+   SG_THREAD=$(jq -r 'select(.type == "thread.started") | .thread_id' "$REVIEW_EVENTS" 2>/dev/null | head -n 1)
+   if [ -f "$SG" ] && [ -n "$SG_THREAD" ]; then
+     bash "$SG" --cli codex status --json --session "$SG_THREAD" > "$REVIEW_EVENTS.stall-guard.json" 2>> "$REVIEW_LOG"
+   fi
    [ "$rc" -eq 0 ] && [ -s "$REVIEW_OUTPUT" ] || { tail -c 4000 "$REVIEW_LOG"; tail -c 4000 "$REVIEW_EVENTS"; exit 97; }
    cat "$REVIEW_OUTPUT"
    ```
@@ -81,6 +87,10 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    hook 拒否・入力不足の返答は clean と扱いません。取得できる実モデルの metadata と指定値を
    照合し、取得できなければ実モデル未確認とします。CLI 成功はレビュー合格ではなく、本文と
    全対象の確認結果を gate が判定します。
+   `$REVIEW_EVENTS.stall-guard.json` の `.running`・`.unrecovered`・`.pending` のどれかが空でなければ、
+   レビュー役の子が完了しないまま終わっています。そのレビューを clean と扱わず、`agent_id`・`task_name`・
+   `elapsed_sec`・終了理由 (`.pending` は「開始を確認できない」) を報告します。`.hooked == false` は
+   「stall-guard の hook が動いていない」と報告し、未完了なしとは扱いません。
 4. 本文と実績記録を保全してから、自分が作った一時ファイルを削除する。
    `RUN_RECORD` は採否と実検証の結果を追記するまで保持する。
 
