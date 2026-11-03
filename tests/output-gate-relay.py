@@ -650,7 +650,7 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn()
         done = [e['item'] for e in events if e['type'] == 'response.output_item.done']
         self.assertEqual([d['type'] for d in done], ['message', 'function_call'])
-        self.assertEqual(done[0]['content'][0]['text'], 'これは速い。')
+        self.assertEqual(done[0]['content'][0]['text'], 'これは効く。')
         self.assertEqual(done[1], call)
 
     def test_missing_compaction_pair_is_logged(self):
@@ -936,12 +936,12 @@ class RelayTests(unittest.TestCase):
     def test_tool_call_answer_is_not_final_and_becomes_shown_text(self):
         call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
         self.answer('先に見ておくね。これは効く。', before=self.call_events(call), item_id='msg_a')
-        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(self.checker_inputs(), [])
         body = {'input': [self.user('元の依頼'), call, {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]}
         self.answer('終わったよ', body=body)
         sent = self.checker_inputs()[-1]
         self.assertTrue(sent['final'])
-        self.assertIn('先に見ておくね。これは速い。', sent['shown_text'])
+        self.assertIn('先に見ておくね。これは効く。', sent['shown_text'])
 
     def test_findings_with_registration_send_the_notice(self):
         self.register()
@@ -1024,21 +1024,21 @@ class RelayTests(unittest.TestCase):
     def test_client_tool_search_is_not_final(self):
         call = {'id': 'ts_1', 'type': 'tool_search_call', 'call_id': 'c1', 'execution': 'client', 'arguments': {}}
         self.answer('探すね', before=self.call_events(call), item_id='msg_a')
-        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(self.checker_inputs(), [])
 
     def test_end_turn_false_is_not_final(self):
         evs, item = message_events('msg_e', '続けるね')
         end = completed([item])
         end['response']['end_turn'] = False
         self.answer('続けるね', end=end)
-        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(self.checker_inputs(), [])
 
     def test_interrupted_incomplete_is_not_final(self):
         # Codex 0.164.0 のソース (rust-v0.164.0 のタグ) では reason が interrupted の打ち切りを end_turn=false の完了として扱い、同じターンを続ける。
         end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
                                                             'incomplete_details': {'reason': 'interrupted'}}}
         self.answer('途中まで', end=end)
-        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(self.checker_inputs(), [])
 
     def test_findings_without_registration_show_the_original_with_unmet_items(self):
         self.register('other-session')
@@ -1057,7 +1057,7 @@ class RelayTests(unittest.TestCase):
         end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
                                                             'incomplete_details': {'reason': 'content_filter'}}}
         events = self.answer('途中まで', end=end)
-        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(self.checker_inputs(), [])
         self.assertNotIn('UNMET', self.all_text(events))
         (self.tmp / 'findings-on').unlink()
         self.answer('続きの回答')

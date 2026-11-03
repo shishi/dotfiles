@@ -556,7 +556,7 @@ test('an interrupted turn without a swap is not checked again', async ($, on) =>
   expect(end.text).not.toContain('確かめられていません')
 })
 
-test('a max_tokens step is checked for the rules only and its text is shown at the final check', async ($, on) => {
+test('steps before the final answer are not checked and their text is shown at the final check', async ($, on) => {
   const fs = world(on)
   const calls = checker(on, fs, p => (p.final ? unmet(p) : replaceKiku(p)))
   tools(on)
@@ -564,13 +564,14 @@ test('a max_tokens step is checked for the rules only and its text is shown at t
     [TEXT(0, '全部通った。'), STOP()]])
   await start($)
   const first = await run($)
-  expect(calls[0]?.final).toBe(false)
-  expect(first.text).toBe('前半は速い。')
+  expect(calls).toHaveLength(0)
+  expect(first.text).toBe('前半は効く。')
   await run($, { index: 1 })
   await run($, { index: 2 })
-  expect(calls[2]?.final).toBe(true)
-  expect(calls[2]?.shown_text).toContain('前半は速い。')
-  expect(calls[2]?.shown_text).toContain('回復。')
+  expect(calls).toHaveLength(1)
+  expect(calls[0]?.final).toBe(true)
+  expect(calls[0]?.shown_text).toContain('前半は効く。')
+  expect(calls[0]?.shown_text).toContain('回復。')
 })
 
 test('a turn that ends at max_tokens is checked at turn.complete without a swap', async ($, on) => {

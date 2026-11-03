@@ -703,6 +703,15 @@ export const register: Register = on => {
             return step.value
           }
           const original = split.runs.map(run => run.text)
+          if (!final) {
+            // 途中の段は検査せずに流す (待たせないため)。表示した文章は最終回答の検査に「表示済み」として渡す。
+            const text = original.join('\n\n')
+            await $.state.set({ plugin: 'output-gate', key: 'turn', id: e.turnId },
+              { ...turn, shown: turn.shown ? `${turn.shown}\n\n${text}` : text })
+            yield* held
+            completed = true
+            return step.value
+          }
           let result: CheckResult
           try {
             result = await check($, await payloadFor($, e.turnId, turn, original, final, 'withhold'))

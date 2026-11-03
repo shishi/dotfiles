@@ -1127,6 +1127,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         reason = ((response.get('incomplete_details') or {}).get('reason') if incomplete else None)
         # 呼び出しが無くても、end_turn=false の完了と、Codex が同じターンで続ける打ち切りは最終回答ではない。
         final = not client_call and response.get('end_turn') is not False and reason not in CONTINUED_INCOMPLETE
+        if not final:
+            # 途中の応答は検査せずに流す (待たせないため)。表示した文章は最終回答の検査に「表示済み」として渡す。
+            if self.turn_key is not None:
+                try:
+                    add_shown(self.turn_key[0], self.turn_key[1], '\n\n'.join(bodies))
+                except OSError as error:
+                    log(event='turn-store-failed', error=type(error).__name__)
+            return list(bodies)
         if self.turn_key is None:
             result = run_check(checker_payload(body, bodies, final=final, continuation='none'), self.checks)
             self.result_record = engine_record(result)
@@ -1174,11 +1182,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 write_json(gate_path(sid, tid), state)
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
-        if not final:
-            try:
-                add_shown(sid, tid, '\n\n'.join(texts))
-            except OSError as error:
-                log(event='turn-store-failed', error=type(error).__name__)
         return texts
 
     def release(self, held, body, mode, reason):
