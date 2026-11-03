@@ -152,8 +152,11 @@ already shown in this turn) against the evidence, and report:
    passed, but the evidence has no matching call and result, or the result failed (non-zero exit code, error) while the
    text says it succeeded, or the claim depends on a part the CLI truncated before the model saw it. A statement about a
    past result presented as past (for example repeating the test result of an earlier turn) may be supported by
-   "previous_evidence". A statement about the current state needs evidence from this turn ("evidence"). Do not report a
-   claim that depends only on a range marked "unavailable" or "omitted" (the evidence could not be collected there).
+   "previous_evidence". A statement about the current state is supported by the latest matching call and result, in
+   this turn or an earlier one, unless a later call in the evidence changed what it describes (for example the same file
+   edited after the passing test run). Do not report text that quotes or withdraws an earlier statement instead of
+   asserting it. Do not report a claim that depends only on a range marked "unavailable" or "omitted" (the evidence could
+   not be collected there).
    External facts that are not items of the request are reported only when the answer says they were confirmed.
 2. Missing requests and checks not done (kind "missing_request"): an item of the user's latest request (or of the
    earlier conversation it points to, in "recent" and "turn_start" messages) that neither the answer nor the evidence
