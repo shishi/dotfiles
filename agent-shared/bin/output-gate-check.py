@@ -52,7 +52,7 @@
   OUTPUT_GATE_GITLEAKS     gitleaks のコマンド (JSON 配列)。既定 ["gitleaks"]。
 
 設定ファイル (JSON、どれも省略できる):
-  {"first": "opposite" | "same", "codex": {"model": ..., "effort": ...}, "claude": {"model": ..., "effort": ...}}
+  {"first": "claude" | "codex" | "opposite" | "same", "codex": {"model": ..., "effort": ...}, "claude": {"model": ..., "effort": ...}}
 """
 import json
 import os
@@ -79,6 +79,8 @@ MIN_EXCERPT = 8
 CODEX_MODELS = ('gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra')   # cyber のプログラムに合うモデルを探す順
 CYBER_PROGRAMS = {'standard', 'daybreak_blue', 'daybreak_red'}
 FAMILIES = ('codex', 'claude')
+# どちらの CLI の回答も、精度の基準を満たし最も速い Claude の系統 (Sonnet / medium) で先に検査する。
+DEFAULT_FIRST = 'claude'
 DEFAULT_ENGINES = {'codex': {'model': 'gpt-6.1-sol', 'effort': 'high'},
                    'claude': {'model': 'sonnet', 'effort': 'medium'}}
 # 検査役の claude を起動する環境から外す変数。出力ゲートの mod を読ませず、接続先の上書きを外す。
@@ -258,9 +260,9 @@ def load_settings():
         raw = {}
     except (OSError, ValueError) as error:
         raise ValueError(f'検査役の設定 ({path}) を読めない: {type(error).__name__}') from error
-    if not isinstance(raw, dict) or raw.get('first', 'opposite') not in ('opposite', 'same'):
+    if not isinstance(raw, dict) or raw.get('first', DEFAULT_FIRST) not in FAMILIES + ('opposite', 'same'):
         raise ValueError(f'検査役の設定 ({path}) の形が違う')
-    settings = {'first': raw.get('first', 'opposite')}
+    settings = {'first': raw.get('first', DEFAULT_FIRST)}
     for family in FAMILIES:
         given = raw.get(family) or {}
         if not isinstance(given, dict) or not all(isinstance(given.get(k, ''), str) for k in ('model', 'effort')):
@@ -271,7 +273,8 @@ def load_settings():
 
 def engine_order(origin, engines, settings):
     opposite = 'claude' if origin == 'codex' else 'codex'
-    order = [opposite, origin] if settings['first'] == 'opposite' else [origin, opposite]
+    first = {'opposite': opposite, 'same': origin}.get(settings['first'], settings['first'])
+    order = [first, 'codex' if first == 'claude' else 'claude']
     return [family for family in order if engines is None or family in engines]
 
 

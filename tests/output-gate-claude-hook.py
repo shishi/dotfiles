@@ -623,13 +623,14 @@ class ClaudeHookTests(unittest.TestCase):
             'import sys\nargs = sys.argv[1:]\nopen(args[args.index("--report-path") + 1], "w").write("[]")\n',
             encoding='utf-8')
         real = REPO / 'agent-shared/bin/output-gate-check.py'
+        (self.tmp / 'opposite-first.json').write_text(json.dumps({'first': 'opposite'}), encoding='utf-8')
         out = self.display('テストは全部通ったよ', final=True,
                            OUTPUT_GATE_CHECK_CMD=json.dumps([sys.executable, '-I', str(real)]),
                            OUTPUT_GATE_CODEX_CMD=json.dumps([sys.executable, '-I', str(self.tmp / 'codex.py')]),
                            OUTPUT_GATE_CLAUDE_CMD=json.dumps([sys.executable, '-I', str(self.tmp / 'claude.py')]),
                            OUTPUT_GATE_GITLEAKS=json.dumps([sys.executable, '-I', str(self.tmp / 'gitleaks.py')]),
                            OUTPUT_GATE_RULES=str(self.tmp / 'AGENTS.md'),
-                           OUTPUT_GATE_SETTINGS=str(self.tmp / 'no-settings.json'))
+                           OUTPUT_GATE_SETTINGS=str(self.tmp / 'opposite-first.json'))
         self.assertIn('出力ゲート: 次の点は確かめられていません', self.shown(out))
         unmet = self.session_file('unmet.txt').read_text(encoding='utf-8').strip()   # 検査処理の unmet_text
         self.assertTrue(unmet.startswith('出力ゲート: 次の点は確かめられていません') and self.shown(out).endswith(unmet))

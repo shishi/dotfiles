@@ -378,8 +378,9 @@ function claudeModel(on: On, answer: (e: Completion) => object, calls: Completio
 }
 const usage = (output: number) => ({ input_tokens: 1, output_tokens: output, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 })
 
-test('when the Codex checker fails, Claude checks through the session at sonnet / medium', async ($, on) => {
+test('with Codex first, when the Codex checker fails, Claude checks through the session at sonnet / medium', async ($, on) => {
   const fs = world(on)
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
   const received: { engine: unknown; engine_failures?: unknown[] }[] = []
   checker(on, fs, { bulk: codexFailed, receive: r => (received.push(r), replaceKiku(r.payload)) })
   const completions = claudeModel(on, () => ({ isAnswered: true, text: '{"replacements":[],"findings":[]}', usage: usage(10) }))
@@ -737,6 +738,7 @@ test('after a resume the previous evidence still comes from the files, and unrec
 
 test('the turn file keeps which checker judged and why the other failed', async ($, on) => {
   const fs = world(on)
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
   checker(on, fs, { bulk: codexFailed, receive: r => ({ ...replaceKiku(r.payload), engine: r.engine,
     engine_failures: r.engine_failures, dropped: [{ finding: FINDING, reason: '抜粋が出どころに無い' }] }) })
   claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
@@ -755,6 +757,7 @@ test('the turn file keeps which checker judged and why the other failed', async 
 
 test('the two checkers share the 45 second deadline, half of what is left to the first', async ($, on) => {
   const fs = world(on)
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
   checker(on, fs, { bulk: codexFailed, receive: r => replaceKiku(r.payload) })
   const completions = claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
   model(on, [[TEXT(0, '答え。'), STOP()]])

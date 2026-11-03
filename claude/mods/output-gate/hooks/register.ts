@@ -91,7 +91,7 @@ type CheckResult = {
   display_text: string | null
 }
 type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-type Settings = { first: 'opposite' | 'same'; claude: { model: string; effort: Effort } }
+type Settings = { first: 'codex' | 'claude'; claude: { model: string; effort: Effort } }
 
 // 起動できた Python の名前。モジュールの読み直しで消えてよい。
 let python: string | undefined
@@ -434,7 +434,7 @@ const engineFailed = (r: CheckResult) => r.status === 'unchecked' && r.engine ==
 async function settings($: EngineInterface): Promise<Settings> {
   const dir = await stateDir($)
   const path = (await $.env.get('OUTPUT_GATE_SETTINGS')) || (dir === undefined ? undefined : `${dir}/checker.json`)
-  if (path === undefined || !(await $.fs.exists(path))) return { first: 'opposite', claude: { model: 'sonnet', effort: 'medium' } }
+  if (path === undefined || !(await $.fs.exists(path))) return { first: 'claude', claude: { model: 'sonnet', effort: 'medium' } }
   let raw: unknown
   try {
     raw = JSON.parse(await $.fs.read(path))
@@ -445,12 +445,13 @@ async function settings($: EngineInterface): Promise<Settings> {
     (typeof value === 'object' && !Array.isArray(value) &&
       ['model', 'effort'].every(key => ['undefined', 'string'].includes(typeof (value as Record<string, unknown>)[key])))
   const data = raw as { first?: unknown; codex?: unknown; claude?: { model?: string; effort?: string } | null }
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !['opposite', 'same', undefined].includes(data.first as string) ||
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !['claude', 'codex', 'opposite', 'same', undefined].includes(data.first as string) ||
       !shaped(data.codex) || !shaped(data.claude)) {
     throw new Error(`検査役の設定 (${path}) の形が違う`)
   }
   // 推論量が $.model.complete の受け付けない値なら、呼び出しが拒まれて Claude の系統の失敗になる。
-  return { first: data.first === 'same' ? 'same' : 'opposite',
+  // この mod が検査するのは Claude Code の回答なので、opposite は codex、same は claude と同じ。
+  return { first: data.first === 'codex' || data.first === 'opposite' ? 'codex' : 'claude',
     claude: { model: data.claude?.model || 'sonnet', effort: (data.claude?.effort || 'medium') as Effort } }
 }
 
@@ -495,7 +496,7 @@ async function check($: EngineInterface, payload: Payload): Promise<CheckResult>
   const total = Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S
   const deadline = Date.now() + total * 1000
   const failures: Failure[] = []
-  const order: ('codex' | 'claude')[] = config.first === 'same' ? ['claude', 'codex'] : ['codex', 'claude']
+  const order: ('codex' | 'claude')[] = config.first === 'claude' ? ['claude', 'codex'] : ['codex', 'claude']
   for (const [position, family] of order.entries()) {
     const left = deadline - Date.now()
     const share = position < order.length - 1 ? left / 2 : left

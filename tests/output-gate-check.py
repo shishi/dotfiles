@@ -91,6 +91,8 @@ class GateTestCase(unittest.TestCase):
         self.launch_log = self.tmp / 'launches.jsonl'
         self.spec = self.tmp / 'spec.json'
         self.settings = self.tmp / 'checker.json'
+        # 系統の順序を試す試験の多くは、逆の系統を先にする順序で組んである。既定の順序は個別の試験で確かめる。
+        self.settings.write_text(json.dumps({'first': 'opposite'}), encoding='utf-8')
         self.set_spec()
         self.gitleaks = self.fake_gitleaks([])
         self.fake = self.tmp / 'fake-cli.py'
@@ -1111,7 +1113,7 @@ class EngineTests(GateTestCase):
 
     def test_settings_change_the_effort_of_both_families(self):
         self.ok_both()
-        self.settings.write_text(json.dumps({'codex': {'effort': 'medium'}, 'claude': {'effort': 'low'}}),
+        self.settings.write_text(json.dumps({'first': 'opposite', 'codex': {'effort': 'medium'}, 'claude': {'effort': 'low'}}),
                                  encoding='utf-8')
         self.check(origin='claude')
         self.check(origin='codex')
@@ -1119,11 +1121,17 @@ class EngineTests(GateTestCase):
         self.assertIn('model_reasoning_effort=medium', codex['args'])
         self.assertEqual(claude['args'][claude['args'].index('--effort') + 1], 'low')
 
-    def test_origin_decides_which_family_goes_first(self):
+    def test_claude_family_goes_first_for_either_origin(self):
+        self.settings.unlink()
         self.ok_both()
         self.check(origin='claude')
         self.check(origin='codex')
-        self.assertEqual(self.families(), ['codex', 'claude'])
+        self.assertEqual(self.families(), ['claude', 'claude'])
+
+    def test_settings_can_put_the_opposite_family_first(self):
+        self.ok_both()
+        self.check(origin='claude')
+        self.assertEqual(self.families(), ['codex'])
 
     def test_missing_origin_launches_nothing(self):
         self.ok_both()
