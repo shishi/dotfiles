@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,10 @@ def free_port():
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
+
+
+def input_text(item):
+    return ''.join(p.get('text') or '' for p in item.get('content') or [])
 
 
 def sse(event):
@@ -113,20 +118,41 @@ class RelayTests(unittest.TestCase):
         cls.upstream = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
         threading.Thread(target=cls.upstream.serve_forever, daemon=True).start()
         cls.checker = cls.tmp / 'check.py'
+        # 共通の検査処理 (output-gate-check.py) の入出力の形を真似る。findings-on の印があれば、最終回答に未達を 1 件返す。
         cls.checker.write_text(textwrap.dedent(f'''\
             import json, sys, time, os
             payload = json.load(sys.stdin)
             open({str(cls.tmp / 'checker-input.json')!r}, 'a', encoding='utf-8').write(json.dumps(payload) + "\\n")
             time.sleep(float(os.environ.get('FAKE_CHECK_SLEEP', '0')))
             open({str(cls.tmp / 'checker-finished')!r}, 'a').write('x')
+            bodies = payload.get("bodies") or [payload.get("draft", "")]
             if os.environ.get('FAKE_CHECK_NO_REASON'):
-                print(json.dumps({{"status": "unchecked", "text": payload["draft"]}}))
+                print(json.dumps({{"status": "unchecked", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
             elif os.environ.get('FAKE_CHECK_FAIL'):
-                print(json.dumps({{"status": "unchecked", "reason": "fake failure",
-                                   "text": "[出力ゲート: 検査できませんでした — fake failure]\\n\\n" + payload["draft"]}}))
+                shown = ["[出力ゲート: 検査できませんでした — fake failure]\\n\\n" + bodies[0]] + bodies[1:]
+                print(json.dumps({{"status": "unchecked", "reason": "fake failure", "text": "\\n\\n".join(shown),
+                                   "bodies": shown}}))
             else:
-                print(json.dumps({{"status": "checked", "text": payload["draft"].replace("効く", "速い"),
-                                   "reason": None, "applied": 1}}))
+                fixed = [b.replace("効く", "速い") for b in bodies]
+                result = {{"status": "checked", "reason": None, "findings": [], "agent_message": None,
+                          "fallback_text": None, "fallback_bodies": None, "unmet_text": None, "applied": 1,
+                          "engine": {{"family": "codex", "model": "m", "effort": "high"}},
+                          "engine_failures": [{{"family": "claude", "reason": "claude failed first"}}],
+                          "dropped": [{{"finding": {{}}, "reason": "excerpt not in source"}}],
+                          "text": "\\n\\n".join(fixed), "bodies": fixed}}
+                if os.path.exists({str(cls.tmp / 'findings-on')!r}) and payload.get("final"):
+                    found = [{{"kind": "unverified_claim", "source": "draft", "excerpt": "確認済み", "evidence": []}}]
+                    unmet = "出力ゲート: 次の点は確かめられていません\\n- UNMET-ITEM"
+                    marked = fixed[:-1] + [fixed[-1] + "\\n\\n---\\n" + unmet]
+                    result.update(findings=found, unmet_text=unmet, display_text="\\n\\n".join(marked),
+                                  display_bodies=marked)
+                    if payload.get("round") == 1 or payload.get("continuation") == "none":
+                        result.update(text="\\n\\n".join(marked), bodies=marked)
+                    else:
+                        fallback = ["[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\\n\\n" + marked[0]] + marked[1:]
+                        result.update(text=None, bodies=None, agent_message="AGENT-MSG: 確かめて",
+                                      fallback_text="\\n\\n".join(fallback), fallback_bodies=fallback)
+                print(json.dumps(result))
             sys.exit(int(os.environ.get('FAKE_CHECK_EXIT', '0')))
             '''), encoding='utf-8')
 
@@ -138,6 +164,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script, Upstream.requests, Upstream.plain = [], [], None
         (self.tmp / 'checker-input.json').unlink(missing_ok=True)
         (self.tmp / 'checker-finished').unlink(missing_ok=True)
+        (self.tmp / 'findings-on').unlink(missing_ok=True)
         self.port = free_port()
         self.state = Path(tempfile.mkdtemp())
         self.start_relay()
@@ -183,8 +210,10 @@ class RelayTests(unittest.TestCase):
         path = self.tmp / 'checker-input.json'
         return [json.loads(l) for l in path.read_text(encoding='utf-8').splitlines()] if path.exists() else []
 
-    def turn(self, body=None, kind='turn', extra_headers=None, timeout=10, session='s1'):
+    def turn(self, body=None, kind='turn', extra_headers=None, timeout=10, session='s1', turn_id=None):
         meta = {'session_id': session, 'request_kind': kind} if kind else {}
+        if turn_id:
+            meta['turn_id'] = turn_id
         headers = {'Content-Type': 'application/json', 'x-codex-turn-metadata': json.dumps(meta)}
         headers.update(extra_headers or {})
         body = body or {'model': 'm', 'input': [
@@ -217,7 +246,8 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(out['content'][0]['text'], 'これは速い。')
         sent = json.loads((self.tmp / 'checker-input.json').read_text(encoding='utf-8').splitlines()[0])
         self.assertEqual(sent['latest_user'], '設定を教えて')
-        self.assertEqual(sent['cli'], 'codex')
+        self.assertEqual(sent['origin'], 'codex')
+        self.assertTrue(sent['final'])
 
     def test_tool_call_item_passes_immediately(self):
         call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{"cmd":"ls"}', 'call_id': 'c1'}
@@ -359,7 +389,7 @@ class RelayTests(unittest.TestCase):
     def test_compaction_pairs_saved_and_used(self):
         self.compact([self.user('q1'), self.assistant('答え1'), self.user('q2'), self.assistant('答え2')], 'ENC1')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC1'}, self.user('q3')])
-        texts = [t['text'] for t in sent['conversation'] if t['role'] == 'assistant']
+        texts = [t['text'] for t in sent['recent_messages'] if t['role'] == 'assistant']
         self.assertEqual(texts, ['答え1', '答え2'])
         self.assertFalse(sent['compacted_note'])
 
@@ -367,13 +397,13 @@ class RelayTests(unittest.TestCase):
         self.compact([self.user('q1'), self.assistant('答え1')], 'ENC1')
         self.restart_relay()
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC1'}, self.user('q3')])
-        self.assertIn('答え1', [t['text'] for t in sent['conversation']])
+        self.assertIn('答え1', [t['text'] for t in sent['recent_messages']])
 
     def test_compaction_chain(self):
         self.compact([self.user('q1'), self.assistant('答え1')], 'ENC1')
         self.compact([{'type': 'compaction', 'encrypted_content': 'ENC1'}, self.user('q2'), self.assistant('答え2')], 'ENC2')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC2'}, self.user('q3')])
-        texts = [t['text'] for t in sent['conversation'] if t['role'] == 'assistant']
+        texts = [t['text'] for t in sent['recent_messages'] if t['role'] == 'assistant']
         self.assertEqual(texts, ['答え1', '答え2'])
 
     def test_unknown_compaction_item_noted(self):
@@ -554,13 +584,13 @@ class RelayTests(unittest.TestCase):
                            (0, completed([]))]
         self.turn({'input': [self.user('q1'), self.assistant('答え1')]}, kind='compaction')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC9'}, self.user('q2')])
-        self.assertIn('答え1', [t['text'] for t in sent['conversation']])
+        self.assertIn('答え1', [t['text'] for t in sent['recent_messages']])
 
     def test_commentary_not_kept_for_compaction(self):
         commentary = dict(self.assistant('途中経過'), phase='commentary')
         self.compact([self.user('q1'), self.assistant('答え1'), commentary], 'ENC7')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC7'}, self.user('q2')])
-        texts = [t['text'] for t in sent['conversation']]
+        texts = [t['text'] for t in sent['recent_messages']]
         self.assertIn('答え1', texts)
         self.assertNotIn('途中経過', texts)
 
@@ -597,7 +627,7 @@ class RelayTests(unittest.TestCase):
         # Codex は保持した利用者の発言の後ろに compaction の項目を置く
         sent = self.turn_after([self.user('最新の依頼'), {'type': 'compaction', 'encrypted_content': 'ENC-L'}])
         self.assertEqual(sent['latest_user'], '最新の依頼')
-        self.assertIn('最新の依頼', [t['text'] for t in sent['conversation'] if t['role'] == 'user'])
+        self.assertIn('最新の依頼', [t['text'] for t in sent['recent_messages'] if t['role'] == 'user'])
 
     def test_review_json_inside_fence_gets_failure_reason(self):
         # Codex は最初の { から最後の } までを JSON として読み、外側の文字列は捨てる
@@ -635,8 +665,11 @@ class RelayTests(unittest.TestCase):
         spec.loader.exec_module(relay)
         env = relay.relay_env({'PATH': '/bin', 'HOME': '/h', 'SYSTEMROOT': 'C:\\Windows',
                                'AGENT_DELEGATED_SESSION': '1', 'OUTPUT_GATE_CHECK_CMD': '[]',
+                               'OUTPUT_GATE_SETTINGS': '/s/checker.json',
                                'OPENAI_API_KEY': 'x', 'SOME_SESSION_VALUE': 'y'})
-        self.assertEqual(env, {'PATH': '/bin', 'HOME': '/h', 'SYSTEMROOT': 'C:\\Windows'})
+        # 検査役の設定ファイルの場所は、どの環境から起動した中継でも同じ設定を使うために通す。
+        self.assertEqual(env, {'PATH': '/bin', 'HOME': '/h', 'SYSTEMROOT': 'C:\\Windows',
+                               'OUTPUT_GATE_SETTINGS': '/s/checker.json'})
 
     def test_ensure_keeps_old_version_when_self_test_fails(self):
         new_dir = self.tmp / 'broken-new'
@@ -665,7 +698,7 @@ class RelayTests(unittest.TestCase):
         partials = [dict(self.assistant(f'断片{n}'), phase='partial_answer') for n in range(3)]
         self.compact([self.user('q1'), dict(self.assistant('答え1'), phase='final_answer'), *partials], 'ENC8')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC8'}, self.user('q2')])
-        texts = [t['text'] for t in sent['conversation']]
+        texts = [t['text'] for t in sent['recent_messages']]
         self.assertIn('答え1', texts)
         self.assertFalse([t for t in texts if t.startswith('断片')])
 
@@ -698,17 +731,7 @@ class RelayTests(unittest.TestCase):
         pid_file.unlink(missing_ok=True)
         sleeper.write_text(f'import os, sys, time\nsys.stdin.read()\nopen({str(pid_file)!r}, "w").write(str(os.getpid()))\n'
                            'time.sleep(30)\n', encoding='utf-8')
-        gitleaks = self.tmp / 'gitleaks-none.py'
-        gitleaks.write_text('import json, sys\nargs = sys.argv[1:]\n'
-                            'open(args[args.index("--report-path") + 1], "w").write("[]")\n', encoding='utf-8')
-        rules = self.tmp / 'rules.md'
-        rules.write_text('## 応答\n\n- 規則\n', encoding='utf-8')
-        check = Path(RELAY).with_name('output-gate-check.py')
-        self.restart_relay(extra_env={
-            'OUTPUT_GATE_CHECK_CMD': json.dumps([sys.executable, '-I', str(check)]),
-            'OUTPUT_GATE_CHECKER_CMD': json.dumps([sys.executable, '-I', str(sleeper)]),
-            'OUTPUT_GATE_GITLEAKS': json.dumps([sys.executable, '-I', str(gitleaks)]),
-            'OUTPUT_GATE_RULES': str(rules)})
+        self.restart_with_real_checker(sleeper.read_text(encoding='utf-8'))
         evs, item = message_events('msg_1', 'これは効く。')
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
@@ -732,19 +755,37 @@ class RelayTests(unittest.TestCase):
     AUTH_ERROR_LINE = ('2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to '
                        'connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses')
 
-    def restart_with_real_checker(self, fake_codex_source):
-        """実物の検査処理 (output-gate-check.py → run-judge.py) の先に、偽の検査役を置いて中継を起動し直す。"""
+    def restart_with_real_checker(self, fake_codex_source, fake_claude_source=None, secrets=()):
+        """実物の検査処理 (output-gate-check.py → run-judge.py) の先に、偽の検査役を置いて中継を起動し直す。
+        試験の差し替えは中継のプロセスの環境変数で渡す (hook が切り離して起動する中継は RELAY_ENV だけを受け取る)。
+        中継は origin=codex を渡すため、既定では Claude の系統が先に動く。偽の claude を渡さない試験は、設定
+        (first=same) で Codex の系統を先にし、Claude の系統は未ログインですぐ失敗させる。"""
         fake = self.tmp / 'fake-codex.py'
         fake.write_text(fake_codex_source, encoding='utf-8')
-        gitleaks = self.tmp / 'gitleaks-none.py'
+        claude = self.tmp / 'fake-claude.py'
+        claude.write_text(fake_claude_source or (
+            'import json, sys\nsys.stdin.read()\n'
+            'print(json.dumps({"is_error": True, "result": "Not logged in - Please run /login"}))\n'),
+            encoding='utf-8')
+        # 本物の gitleaks と同じく、検査した入力に残っている秘密情報だけを報告する。検査処理は伏せた後の入力に
+        # もう一度 gitleaks をかけ、検出が残れば検査役を起動しないため。
+        gitleaks = self.tmp / 'gitleaks-fake.py'
         gitleaks.write_text('import json, sys\nargs = sys.argv[1:]\n'
-                            'open(args[args.index("--report-path") + 1], "w").write("[]")\n', encoding='utf-8')
+                            'text = open(args[args.index("--source") + 1], encoding="utf-8").read()\n'
+                            f'found = [{{"Secret": s}} for s in {list(secrets)!r} if s in text]\n'
+                            'open(args[args.index("--report-path") + 1], "w").write(json.dumps(found))\n',
+                            encoding='utf-8')
         rules = self.tmp / 'rules.md'
         rules.write_text('## 応答\n\n- 規則\n', encoding='utf-8')
+        settings = self.tmp / 'checker-settings.json'
+        settings.write_text(json.dumps({'first': 'same' if fake_claude_source is None else 'opposite'}),
+                            encoding='utf-8')
         check = Path(RELAY).with_name('output-gate-check.py')
         self.restart_relay(extra_env={
             'OUTPUT_GATE_CHECK_CMD': json.dumps([sys.executable, '-I', str(check)]),
-            'OUTPUT_GATE_CHECKER_CMD': json.dumps([sys.executable, '-I', str(fake)]),
+            'OUTPUT_GATE_CODEX_CMD': json.dumps([sys.executable, '-I', str(fake)]),
+            'OUTPUT_GATE_CLAUDE_CMD': json.dumps([sys.executable, '-I', str(claude)]),
+            'OUTPUT_GATE_SETTINGS': str(settings),
             'OUTPUT_GATE_GITLEAKS': json.dumps([sys.executable, '-I', str(gitleaks)]),
             'OUTPUT_GATE_RULES': str(rules)})
 
@@ -772,7 +813,7 @@ class RelayTests(unittest.TestCase):
             'import sys, time\nsys.stdin.read()\n'
             f'for _ in range(3):\n    print({self.AUTH_ERROR_LINE!r}, file=sys.stderr, flush=True)\n'
             'time.sleep(0.3)\n'
-            'print(\'{"pairs": []}\')\n')
+            'print(\'{"replacements": [], "findings": []}\')\n')
         evs, item = message_events('msg_1', 'これは正しい。')
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn(timeout=40)
@@ -785,7 +826,7 @@ class RelayTests(unittest.TestCase):
             'import sys\nprompt = sys.stdin.read()\n'
             'print("user\\n" + prompt, file=sys.stderr, flush=True)\n'
             'import time\ntime.sleep(1)   # モデルの応答を待つ間\n'
-            'print(\'{"pairs": []}\')\n')
+            'print(\'{"replacements": [], "findings": []}\')\n')
         logs = '\n'.join([self.AUTH_ERROR_LINE] * 4)
         draft = f'ログを見ると認証で落ちてる。\n\n{logs}\n'
         evs, item = message_events('msg_1', draft)
@@ -809,7 +850,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         self.turn(body={'model': 'm', 'stream': True, 'input': items})
         payload = self.checker_inputs()[-1]
-        texts = [turn['text'] for turn in payload['conversation']]
+        texts = [turn['text'] for turn in payload['recent_messages']]
         self.assertEqual(texts, [t for n in range(1, 6) for t in (f'質問{n}', f'回答{n}')])
         self.assertEqual(payload['latest_user'], '質問5')
 
@@ -843,6 +884,410 @@ class RelayTests(unittest.TestCase):
         text = self.final_text(events)
         self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
         self.assertTrue(text.endswith('これは効く。'))
+
+
+    # ---- 未達の差し戻し・証拠・状態-----------------------------------------------------------
+    def register(self, session='s1'):
+        (self.state / 'continue').mkdir(parents=True, exist_ok=True)
+        (self.state / 'continue' / session).write_text('', encoding='utf-8')
+
+    def gate_state(self, session='s1', turn_id='t1'):
+        path = self.state / 'gate' / session / f'{turn_id}.json'
+        return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
+
+    def write_gate_state(self, state, session='s1', turn_id='t1'):
+        (self.state / 'gate' / session / f'{turn_id}.json').write_text(json.dumps(state), encoding='utf-8')
+
+    def answer(self, text, turn_id='t1', body=None, session='s1', before=(), end=None, item_id='msg_f'):
+        """最終回答 (before に呼び出しの項目を足せば途中の応答) を流させ、届いたイベントを返す。"""
+        evs, item = message_events(item_id, text)
+        script = [(0, e) for e in before] + [(0, e) for e in evs]
+        output = [e['item'] for e in before if e['type'] == 'response.output_item.done'] + [item]
+        script.append((0, end or completed(output)))
+        Upstream.script = script
+        status, events = self.turn(body=body or {'input': [self.user('元の依頼')]}, session=session,
+                                   turn_id=turn_id)
+        return events
+
+    @staticmethod
+    def call_events(call):
+        return [{'type': 'response.output_item.added', 'output_index': 0, 'item': call},
+                {'type': 'response.output_item.done', 'output_index': 0, 'item': call}]
+
+    @staticmethod
+    def exec_call(call_id, script='await exec("ls")'):
+        return {'type': 'custom_tool_call', 'name': 'exec', 'call_id': call_id, 'input': script, 'status': 'completed'}
+
+    @staticmethod
+    def exec_output(call_id, text):
+        return {'type': 'custom_tool_call_output', 'call_id': call_id, 'output': [{'type': 'input_text', 'text': text}]}
+
+    @staticmethod
+    def all_text(events):
+        return json.dumps(events, ensure_ascii=False)
+
+    def test_web_search_and_message_is_a_final_answer(self):
+        search = {'id': 'ws_1', 'type': 'web_search_call', 'status': 'completed', 'action': {'query': 'q'}}
+        self.answer('結果だよ', before=self.call_events(search))
+        sent = self.checker_inputs()[-1]
+        self.assertTrue(sent['final'])
+        self.assertEqual(sent['origin'], 'codex')
+
+    def test_tool_call_answer_is_not_final_and_becomes_shown_text(self):
+        call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
+        self.answer('先に見ておくね。これは効く。', before=self.call_events(call), item_id='msg_a')
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+        body = {'input': [self.user('元の依頼'), call, {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]}
+        self.answer('終わったよ', body=body)
+        sent = self.checker_inputs()[-1]
+        self.assertTrue(sent['final'])
+        self.assertIn('先に見ておくね。これは速い。', sent['shown_text'])
+
+    def test_findings_with_registration_send_the_notice(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        events = self.answer('全部確認済みだよ')
+        received = time.time()
+        self.assertNotIn('全部確認済みだよ', self.all_text(events))
+        notice = self.final_text(events)
+        self.assertIn('出力ゲート', notice)
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'substituted')
+        self.assertEqual(state['round'], 0)
+        self.assertEqual(state['original'], '全部確認済みだよ')
+        self.assertEqual(state['agent_message'], 'AGENT-MSG: 確かめて')
+        self.assertIn(state['notice_marker'], notice)
+        self.assertLessEqual(state['created'], received)
+        self.assertEqual(self.checker_inputs()[-1]['continuation'], 'withhold')
+
+    def test_recovery_text_is_the_rewritten_answer_with_the_checker_unmet_text(self):
+        # 利用者に見せる回収の本文は置き換え済みの本文と検査処理の未達の文。モデルへ戻す原文は置き換え前のまま。
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        self.answer('全部確認済みで効く')
+        state = self.gate_state()
+        self.assertEqual(state['original'], '全部確認済みで効く')
+        # 検査処理が返す表示用の本文 (display_text) をそのまま使う
+        self.assertEqual(state['display'], '全部確認済みで速い\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
+        self.assertNotIn('unmet_text', state)
+
+    def test_recovery_of_an_answer_with_an_evidence_gap_has_the_unmet_paragraph_once(self):
+        # 実物の検査処理で、Web 検索 (結果の本文を取得できない印) を含む回答を差し戻す。
+        self.register()
+        reply = json.dumps({'replacements': [], 'findings': [
+            {'kind': 'unverified_claim', 'source': 'draft', 'excerpt': '全部確認済みだよ', 'evidence': [{'id': None, 'state': 'absent'}]}]})
+        self.restart_with_real_checker('import sys\nsys.stdin.read()\nsys.exit(1)\n', fake_claude_source=(
+            'import json, sys\nsys.stdin.read()\n'
+            f'print(json.dumps({{"is_error": False, "stop_reason": "end_turn", "structured_output": json.loads({reply!r})}}))\n'))
+        search = {'id': 'ws_1', 'type': 'web_search_call', 'status': 'completed', 'action': {'query': 'q'}}
+        self.answer('全部確認済みだよ', before=self.call_events(search))
+        display = self.gate_state()['display']
+        self.assertTrue(display.startswith('全部確認済みだよ'), display)
+        self.assertEqual(display.count('出力ゲート: 次の点は確かめられていません'), 1)
+        self.assertIn('出力ゲート: 証拠の一部を確認できませんでした', display)
+
+    def test_engines_and_dropped_findings_are_recorded(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        self.answer('全部確認済みだよ')
+        state = self.gate_state()
+        self.assertEqual(state['engine'], {'family': 'codex', 'model': 'm', 'effort': 'high'})
+        self.assertEqual(state['engine_failures'], [{'family': 'claude', 'reason': 'claude failed first'}])
+        self.assertEqual(state['dropped'], [{'finding': {}, 'reason': 'excerpt not in source'}])
+        checked = [json.loads(line) for line in (self.state / 'relay.log').read_text(encoding='utf-8').splitlines()
+                   if json.loads(line).get('event') == 'checked']
+        self.assertEqual(checked[-1]['engine'], {'family': 'codex', 'model': 'm', 'effort': 'high'})
+        self.assertEqual(checked[-1]['engine_failures'], [{'family': 'claude', 'reason': 'claude failed first'}])
+        self.assertEqual(checked[-1]['dropped'], 1)
+        self.assertEqual(checked[-1]['dropped_reasons'], ['excerpt not in source'])
+
+    def test_steer_findings_stay_in_later_requests_of_the_turn(self):
+        notice = self.substituted()
+        body = {'input': [self.user('元の依頼'), self.assistant(notice), self.user('ついでにこれも')]}
+        call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
+        self.answer('見てみる', body=body, before=self.call_events(call), item_id='msg_a')
+        later = {'input': body['input'] + [call, {'type': 'function_call_output', 'call_id': 'c1', 'output': 'ok'}]}
+        self.answer('追加分もやったよ', body=later)
+        sent = json.loads(Upstream.requests[-1][2])
+        texts = [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+        self.assertTrue(any('AGENT-MSG: 確かめて' in t for t in texts))
+        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
+
+    def test_server_side_calls_of_the_same_response_are_evidence(self):
+        search = {'id': 'ws_1', 'type': 'web_search_call', 'status': 'completed', 'action': {'query': 'codex hooks'}}
+        self.answer('調べた結果だよ', before=self.call_events(search))
+        evidence = self.checker_inputs()[-1]['evidence']
+        self.assertEqual(evidence[0]['tool'], 'web_search_call')
+        self.assertEqual(evidence[0]['input'], {'query': 'codex hooks'})
+        self.assertTrue(evidence[1]['unavailable'])
+
+    def test_client_tool_search_is_not_final(self):
+        call = {'id': 'ts_1', 'type': 'tool_search_call', 'call_id': 'c1', 'execution': 'client', 'arguments': {}}
+        self.answer('探すね', before=self.call_events(call), item_id='msg_a')
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+
+    def test_end_turn_false_is_not_final(self):
+        evs, item = message_events('msg_e', '続けるね')
+        end = completed([item])
+        end['response']['end_turn'] = False
+        self.answer('続けるね', end=end)
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+
+    def test_interrupted_incomplete_is_not_final(self):
+        # Codex 0.164.0 のソース (rust-v0.164.0 のタグ) では reason が interrupted の打ち切りを end_turn=false の完了として扱い、同じターンを続ける。
+        end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
+                                                            'incomplete_details': {'reason': 'interrupted'}}}
+        self.answer('途中まで', end=end)
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+
+    def test_findings_without_registration_show_the_original_with_unmet_items(self):
+        self.register('other-session')
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        events = self.answer('全部確認済みだよ')
+        text = self.final_text(events)
+        self.assertTrue(text.startswith('全部確認済みだよ'), text)
+        self.assertIn('UNMET-ITEM', text)
+        self.assertEqual(self.checker_inputs()[-1]['continuation'], 'none')
+        self.assertIsNone(self.gate_state())
+
+    def test_incomplete_content_filter_is_not_final(self):
+        # Codex は content_filter の打ち切りだけ同じターンで要求し直し、届いた出力を残す (Codex のソース)。
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
+                                                            'incomplete_details': {'reason': 'content_filter'}}}
+        events = self.answer('途中まで', end=end)
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertNotIn('UNMET', self.all_text(events))
+        (self.tmp / 'findings-on').unlink()
+        self.answer('続きの回答')
+        self.assertIn('途中まで', self.checker_inputs()[-1]['shown_text'])
+
+    def test_incomplete_that_ends_the_turn_is_final_but_not_withheld(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
+                                                            'incomplete_details': {'reason': 'max_output_tokens'}}}
+        events = self.answer('全部確認済み', end=end)
+        sent = self.checker_inputs()[-1]
+        self.assertTrue(sent['final'])
+        self.assertEqual(sent['continuation'], 'none')
+        self.assertIn('UNMET-ITEM', self.final_text(events))
+        self.assertIsNone(self.gate_state())
+
+    def substituted(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        return self.final_text(self.answer('全部確認済みだよ'))
+
+    def test_continued_request_restores_the_original(self):
+        notice = self.substituted()
+        self.write_gate_state(dict(self.gate_state(), phase='blocked'))
+        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG: 確かめて</hook_prompt>')
+        self.answer('確かめ直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
+        sent = json.loads(Upstream.requests[-1][2])
+        texts = [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+        self.assertIn('全部確認済みだよ', texts)
+        self.assertNotIn(notice, texts)
+        payload = self.checker_inputs()[-1]
+        self.assertEqual(payload['latest_user'], '元の依頼')
+        self.assertEqual(payload['round'], 1)
+
+    def test_steer_without_stop_hook_adds_the_findings(self):
+        notice = self.substituted()
+        body = {'input': [self.user('元の依頼'), self.assistant(notice), self.user('ついでにこれも')]}
+        events = self.answer('追加分もやったよ', body=body)
+        sent = json.loads(Upstream.requests[-1][2])
+        texts = [input_text(i) for i in sent['input'] if i.get('type') == 'message']
+        self.assertIn('全部確認済みだよ', texts)
+        self.assertTrue(any('AGENT-MSG: 確かめて' in t for t in texts))
+        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
+        self.assertIn('UNMET-ITEM', self.final_text(events))   # 未達でも案内にしない
+        self.assertEqual(self.gate_state()['phase'], 'resolved')
+
+    def test_substituted_to_resolved_drops_the_original(self):
+        self.substituted()
+        self.answer('もう一回答えるね')
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'resolved')
+        self.assertNotIn('original', state)
+
+    def test_second_answer_resolves_from_blocked_and_drops_the_original(self):
+        notice = self.substituted()
+        self.write_gate_state(dict(self.gate_state(), phase='blocked'))
+        (self.tmp / 'findings-on').unlink()
+        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
+        events = self.answer('直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
+        self.assertEqual(self.final_text(events), '直したよ')
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'resolved')
+        self.assertNotIn('original', state)   # 原文はエージェントに届いた: 回収の対象から外す
+        self.assertNotIn('agent_message', state)
+
+    def test_second_answer_with_findings_shows_unmet_items(self):
+        notice = self.substituted()
+        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
+        events = self.answer('まだ確認済み', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
+        self.assertIn('UNMET-ITEM', self.final_text(events))
+        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
+        self.assertEqual(self.gate_state()['phase'], 'resolved')
+
+    def test_retry_after_resolved_stays_round_one(self):
+        notice = self.substituted()
+        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
+        body = {'input': [self.user('元の依頼'), self.assistant(notice), hook]}
+        self.answer('まだ確認済み', body=body)
+        # 再検査後の応答の途中で接続が切れ、Codex が同じターンの要求を送り直した
+        events = self.answer('まだ確認済み', body=body)
+        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
+        self.assertIn('UNMET-ITEM', self.final_text(events))
+        self.assertNotIn(self.gate_state()['notice_marker'], self.final_text(events))
+
+    def test_unwritable_state_falls_back_to_the_original(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        (self.state / 'gate').write_text('not a directory', encoding='utf-8')
+        text = self.final_text(self.answer('全部確認済みだよ'))
+        self.assertIn('全部確認済みだよ', text)
+        self.assertIn('指摘を保存できなかった', text)
+        self.assertIn('UNMET-ITEM', text)
+
+    def test_evidence_is_saved_in_order_with_failures_and_truncation(self):
+        out1 = 'Script failed\nExit code: 3\nboom'
+        out2 = 'Warning: truncated output (original token count: 99)\nok'
+        items = [self.user('元の依頼'), self.exec_call('c1', 'await exec("make test")'), self.exec_output('c1', out1),
+                 self.exec_call('c2', 'await exec("make test")'), self.exec_output('c2', out2)]
+        self.answer('直して通ったよ', body={'input': items})
+        evidence = self.checker_inputs()[-1]['evidence']
+        self.assertEqual([e['output'] for e in evidence], [out1, out2])
+        self.assertTrue(evidence[0]['failed'])
+        self.assertEqual(evidence[0]['exit_code'], 3)
+        self.assertFalse(evidence[1].get('failed'))
+        self.assertIn('make test', evidence[0]['input'])
+
+    def test_previous_turn_calls_go_to_previous_evidence(self):
+        old = [self.user('前の依頼'), self.exec_call('c0', 'await exec("old")'), self.exec_output('c0', 'old-out'),
+               self.assistant('前の回答')]
+        items = old + [self.user('元の依頼'), self.exec_call('c1'), self.exec_output('c1', 'new-out')]
+        self.answer('やったよ', body={'input': items}, turn_id='t2')   # 状態ディレクトリは空
+        sent = self.checker_inputs()[-1]
+        self.assertEqual([e['output'] for e in sent['evidence']], ['new-out'])
+        previous = sent['previous_evidence']
+        self.assertEqual([i['output'] for t in previous for i in t['items']], ['old-out'])
+        self.assertEqual(previous[0]['turn_id'], '前のターン (区別不明)')
+        ids = [e['id'] for e in sent['evidence']] + [i['id'] for t in previous for i in t['items']]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_saved_previous_turn_is_used(self):
+        items = [self.user('前の依頼'), self.exec_call('c0'), self.exec_output('c0', 'old-out')]
+        self.answer('前の回答', body={'input': items}, turn_id='t1')
+        items += [self.assistant('前の回答'), self.user('元の依頼')]
+        self.answer('前のターンで通ってたよ', body={'input': items}, turn_id='t2')
+        sent = self.checker_inputs()[-1]
+        self.assertEqual(sent['evidence'], [])
+        self.assertEqual(sent['previous_evidence'][0]['turn_id'], 't1')
+        self.assertEqual([i['output'] for i in sent['previous_evidence'][0]['items']], ['old-out'])
+
+    def test_turn_start_context_keeps_the_original_request(self):
+        start = [self.user('元の依頼: A と B を直して'), self.assistant('計画: A を直して B を直す'), self.user('じゃあ進めて')]
+        self.answer('途中', body={'input': start}, before=self.call_events(self.exec_call('c0')), item_id='msg_0')
+        items = list(start)
+        for n in range(12):
+            items += [dict(self.assistant(f'途中報告{n}'), phase='commentary'), self.exec_call(f'c{n}'),
+                      self.exec_output(f'c{n}', f'out{n}')]
+        for _ in range(2):   # 最終回答の検査と、差し戻した後の再検査
+            self.answer('全部終わった', body={'input': items})
+            sent = self.checker_inputs()[-1]
+            texts = [m['text'] for m in sent['turn_start_context']]
+            self.assertIn('元の依頼: A と B を直して', texts)
+            self.assertIn('計画: A を直して B を直す', texts)
+            self.assertEqual(sent['latest_user'], 'じゃあ進めて')
+
+    def test_compaction_keeps_the_saved_evidence(self):
+        items = [self.user('元の依頼'), self.exec_call('c1', 'await exec("make test")'), self.exec_output('c1', 'passed')]
+        self.answer('途中', body={'input': items}, before=self.call_events(self.exec_call('c2')), item_id='msg_0')
+        self.compact(items + [self.assistant('途中')], 'ENC-T')
+        compacted = [self.user('元の依頼'), {'type': 'compaction', 'encrypted_content': 'ENC-T'}]
+        self.answer('テスト通ったよ', body={'input': compacted})
+        sent = self.checker_inputs()[-1]
+        self.assertEqual([e['output'] for e in sent['evidence']], ['passed'])
+        self.assertFalse([e for e in sent['evidence'] if e.get('unavailable')])
+
+    def test_compaction_without_saved_evidence_is_marked(self):
+        compacted = [self.user('元の依頼'), {'type': 'compaction', 'encrypted_content': 'ENC-U'}]
+        self.answer('テスト通ったよ', body={'input': compacted})
+        evidence = self.checker_inputs()[-1]['evidence']
+        self.assertTrue(evidence and evidence[0].get('unavailable'))
+
+    def test_two_body_elements_are_checked_once(self):
+        texts = ['前半は効く。', '後半も効く。']
+        item = {'id': 'msg_m', 'type': 'message', 'role': 'assistant', 'status': 'completed',
+                'content': [{'type': 'output_text', 'text': t, 'annotations': []} for t in texts]}
+        Upstream.script = [(0, {'type': 'response.output_item.done', 'output_index': 0, 'item': item}),
+                           (0, completed([item]))]
+        status, events = self.turn(turn_id='t1')
+        inputs = self.checker_inputs()
+        self.assertEqual(len(inputs), 1)
+        self.assertEqual(inputs[0]['bodies'], texts)
+        self.assertNotIn('効く', self.all_text(events))
+
+    def test_review_is_not_final_and_keeps_no_round(self):
+        self.register()
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        evs, item = message_events('msg_r', self.review_text())
+        Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
+        status, events = self.turn(extra_headers={'x-openai-subagent': 'review'}, turn_id='t1')
+        self.assertFalse(self.checker_inputs()[-1]['final'])
+        self.assertEqual(json.loads(self.final_text(events))['overall_explanation'], '速い説明')
+        self.assertIsNone(self.gate_state())
+
+    def test_old_states_are_swept(self):
+        old = time.time() - 25 * 3600
+        gate = self.state / 'gate' / 's9'
+        gate.mkdir(parents=True)
+        (gate / 'old.json').write_text(json.dumps({'phase': 'resolved', 'round': 1, 'created': old}), encoding='utf-8')
+        (gate / 'unread.json').write_text(json.dumps({'phase': 'substituted', 'round': 0, 'created': old,
+                                                      'original': 'x'}), encoding='utf-8')
+        turns = self.state / 'turns' / 's1'
+        turns.mkdir(parents=True)
+        (turns / 'stale.json').write_text(json.dumps({'turn_id': 'stale', 'time': old, 'records': []}), encoding='utf-8')
+        for n in range(12):
+            (turns / f'k{n}.json').write_text(json.dumps({'turn_id': f'k{n}', 'time': time.time() - 100 + n,
+                                                          'records': []}), encoding='utf-8')
+        self.answer('やったよ', turn_id='t-new')
+        self.assertFalse((gate / 'old.json').exists())
+        self.assertFalse((gate / 'unread.json').exists())
+        self.assertFalse((turns / 'stale.json').exists())
+        left = sorted(p.stem for p in turns.glob('*.json'))
+        self.assertEqual(len(left), 10)
+        self.assertNotIn('k0', left)
+        self.assertIn('t-new', left)
+
+    def test_secrets_in_evidence_and_shown_text_are_masked(self):
+        secret = 'fake-' + os.urandom(8).hex()
+        prompt_file = self.tmp / 'claude-prompt.txt'
+        self.restart_with_real_checker(
+            'import sys\nsys.stdin.read()\nsys.exit(1)\n',
+            fake_claude_source=('import json, sys\n'
+                                f'open({str(prompt_file)!r}, "a", encoding="utf-8").write(sys.stdin.read())\n'
+                                'print(json.dumps({"is_error": False, "stop_reason": "end_turn", '
+                                '"structured_output": {"replacements": [], "findings": []}}))\n'),
+            secrets=[secret])
+        call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
+        self.answer(f'見るね {secret}', before=self.call_events(call), item_id='msg_a')
+        items = [self.user('元の依頼'), call,
+                 {'type': 'function_call_output', 'call_id': 'c1', 'output': f'token={secret}'}]
+        self.answer('終わったよ', body={'input': items})
+        prompt = prompt_file.read_text(encoding='utf-8')
+        self.assertIn('token=', prompt)
+        self.assertNotIn(secret, prompt)
+
+    def test_self_test_covers_the_notice_and_restore(self):
+        # 自己試験の偽の検査処理が未達を返し、案内への差し替えと、続けた要求での原文への戻しを通す。
+        result = subprocess.run([sys.executable, '-I', str(RELAY), '--port', '0', '--state-dir', str(self.state),
+                                 '--self-test'], capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('notice', result.stdout)
 
 
 class RunJudgeTests(unittest.TestCase):

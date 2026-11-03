@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # 出力ゲートの Codex 側の入口: 中継の起動、config.toml の中継の行の書き戻し、委譲の子セッションの登録。
 #
-#   output-gate-codex.sh session-start|prompt|pre-compact|pre-model|session-end   Codex の hook (標準入力に hook の JSON)
+#   output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|session-end   Codex の hook (標準入力に hook の JSON)
 #   output-gate-codex.sh enable [PORT] | disable                       利用者が使う切り替え
+#   output-gate-codex.sh held [SESSION_ID]                             直させる前の原文の手動の回収 (24 時間まで)
+#
+# 差し戻し: 中継が未達の回答を案内に差し替えたターン (状態 substituted) を、Stop hook が 1 回だけ block して
+# 同じターンで直させる (blocked)。続けさせてよいのは、SessionStart で app-server の hooks/list により出力ゲートの
+# Stop hook が信頼済みと確かめ、続行の登録 (relay/continue/<session_id>) を書いたセッションだけ。原文が利用者に
+# 届かないまま終わったターンは、同じセッションの別のターンの入力で一度だけ表示し、held でいつでも表示する。
 #
 # 中継を使うかとポートは、Git で追跡しないマシンごとの状態ファイル
 # ($XDG_STATE_HOME/output-gate/codex.json) を正本にする。config.toml の中継の行は clean フィルターで
@@ -42,25 +48,32 @@ find_python() {
 json_string() {
   # ASCII だけで出す。-I では PYTHONUTF8 が効かず、Windows のパイプは ANSI コードページになるため。
   # 行末も付けない (Windows の Python が付ける CR は、$(...) で外れずに JSON の後ろに残る)。
-  "$py_bin" -I -c 'import json, sys; print(json.dumps(sys.argv[1]), end="")' "$1"
+  # 文字列は標準入力で渡す。回収する原文はコマンド行の上限 (Windows は 32,767 文字) を超えることがあるため。
+  printf '%s' "$1" | "$py_bin" -I -c 'import json, sys; print(json.dumps(sys.stdin.buffer.read().decode("utf-8")), end="")'
 }
 
 finish() {
-  local joined system=
+  local joined system= printed=0
   if [ "${#messages[@]}" -gt 0 ] && [ -n "${py_bin:-}" ]; then
     joined=$(printf '%s ' "${messages[@]}")
     system=$(json_string "[出力ゲート] ${joined% }")
   fi
   if [ -n "$stop_reason" ]; then
     printf '{"continue": false, "stopReason": %s%s}\n' "$(json_string "[出力ゲート] $stop_reason")" \
-      "${system:+, \"systemMessage\": $system}"
+      "${system:+, \"systemMessage\": $system}" && printed=1
   elif [ -n "$system" ]; then
-    printf '{"systemMessage":%s}\n' "$system"
+    printf '{"systemMessage":%s}\n' "$system" && printed=1
+  fi
+  # 回収した原文は、出力できてから表示済みの印を付ける (出せなかったら次の入力で表示し直す)。
+  if [ "$printed" = 1 ] && [ -n "$system" ] && [ -n "${mark_after:-}" ]; then
+    gate_state mark "$relay_state/gate/$sid" "$turn" >/dev/null
   fi
   exit 0
 }
 
 UNROUTED_REASON="このセッションは Codex の設定に中継の行が無い状態で始まったため、回答を検査できない。行は書き戻したので、Codex を起動し直して。"
+ENABLE_NOTE="未達の回答を直させるには、Codex が出力ゲートの Stop hook を動かす必要がある。hooks.json を更新すると hook の hash が変わるので、Codex の /hooks で出力ゲートの hook (Stop・SessionStart・SessionEnd・UserPromptSubmit) を信頼し直して。信頼していないセッションは続行の登録が無く、直させずに未達の項目を添えた原文を表示する。"
+HELD_NOTE="直させる前の原文は 24 時間まで保存し、同じセッションの次の入力で一度だけ表示する。次の入力が無い単発の codex exec では bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id] で表示できる (session_id は codex exec --json が出す thread_id)。"
 UNWRITABLE_REASON="Codex の設定に中継の行を書けないため、このセッションの回答を検査できない。設定を直すか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で出力ゲートを外してから起動し直して。"
 
 
@@ -87,7 +100,7 @@ write_state() {
   printf '{"enabled": %s, "port": %s}\n' "$1" "$2" >"$state_file.tmp" && mv -f "$state_file.tmp" "$state_file"
 }
 
-# hook の入力から "session_id source" を出力する。使えない値は "-" にする。
+# hook の入力から "session_id source turn_id" を出力する。使えない値は "-" にする。
 hook_fields() {
   "$py_bin" -I -c '
 import json, re, sys
@@ -97,9 +110,10 @@ except ValueError:
     data = {}
 sid = data.get("session_id") if isinstance(data, dict) else None
 source = data.get("source") if isinstance(data, dict) else None
+turn = data.get("turn_id") if isinstance(data, dict) else None
 ok = lambda v: isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9._-]{1,128}", v) and v not in (".", "..")
 # 行末を付けずに出す (Windows の Python は行末に CR を付け、read が値に含めてしまう)。
-print(sid if ok(sid) else "-", source if ok(source) else "-", end="")'
+print(sid if ok(sid) else "-", source if ok(source) else "-", turn if ok(turn) else "-", end="")'
 }
 
 # 中継を直せない問題は、同じセッションには一度だけ伝える。Codex は直せないまま要求を再試行し、
@@ -151,16 +165,162 @@ reconcile() {
   return 0
 }
 
-find_python || { case "$mode" in enable|disable) echo 'output-gate-codex.sh: Python が見つからない。' >&2; exit 1 ;; esac; exit 0; }
+# 状態を 1 か所で書き換える: 差し戻しの状態ファイルを読み、phase を変えて一時ファイルから置き換える。
+#   stop FILE        substituted なら blocked にして、Stop hook の block を ASCII の JSON で出す
+#   recover DIR TID  別のターン (TID 以外) の回収の対象で shown の無いものを表示用に出す (状態は変えない)
+#   mark DIR TID     recover と同じ対象に shown を付ける (表示を出力できた後に呼ぶ)
+#   held DIR...      回収の対象を shown に関係なく出す (状態は変えない)
+gate_state() {
+  "$py_bin" -I - "$@" <<'EOF'
+import json, os, sys
+from pathlib import Path
+
+def load(path):
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+def save(path, data):
+    tmp = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    os.replace(tmp, path)
+
+def recoverable(state):
+    # 原文が利用者に届いていないターン (substituted・blocked)。resolved にするとき中継が original を消す。
+    return isinstance(state.get('original'), str) and state.get('phase') in ('substituted', 'blocked')
+
+def shown(session, turn, state):
+    # 利用者に見せるのは、置き換え済みの本文と検査処理の未達の文 (display)。モデルへ戻す原文 (original) は
+    # 応答の規則の置き換えの前なので見せない。
+    body = state.get('display') if isinstance(state.get('display'), str) else state['original']
+    return (f'[出力ゲート] セッション {session} のターン {turn} の回答は、直させる前の回答のまま利用者に届いていません。\n'
+            f'--- 直させる前の回答 ---\n{body}')
+
+def targets(directory, turn):
+    for path in sorted(Path(directory).glob('*.json')):
+        state = load(path)
+        if path.stem != turn and state and recoverable(state) and not state.get('shown'):
+            yield path, state
+
+mode = sys.argv[1]
+if mode == 'stop':
+    path = Path(sys.argv[2])
+    state = load(path)
+    if state and state.get('phase') == 'substituted' and isinstance(state.get('agent_message'), str):
+        state['phase'] = 'blocked'
+        try:
+            save(path, state)
+        except OSError:
+            sys.exit(0)   # 書けなければ block しない (次の入力か held で原文を回収する)
+        print(json.dumps({'decision': 'block', 'reason': state['agent_message']}), end='')
+elif mode == 'recover':
+    texts = [shown(path.parent.name, path.stem, state) for path, state in targets(sys.argv[2], sys.argv[3])]
+    sys.stdout.buffer.write('\n\n'.join(texts).encode('utf-8'))
+elif mode == 'mark':
+    for path, state in list(targets(sys.argv[2], sys.argv[3])):
+        try:
+            save(path, dict(state, shown=True))
+        except OSError:
+            pass   # 印を付けられなければ、次の入力でもう一度表示する
+else:
+    texts = []
+    for directory in sys.argv[2:]:
+        for path in sorted(Path(directory).glob('*.json')):
+            state = load(path)
+            if state and recoverable(state):
+                texts.append(shown(path.parent.name, path.stem, state))
+    sys.stdout.buffer.write('\n\n'.join(texts).encode('utf-8'))
+EOF
+}
+
+# Stop hook: 中継が案内に差し替えたターン (substituted) を 1 回だけ block して作業を続けさせる。
+# stop_hook_active では決めない (同じターンで別の Stop hook が先に block しても、出力ゲートの差し戻しはまだのため)。
+# 無効のマシンと、そのターンの状態ファイルが無いときは Python を起動せずに終える。
+if [ "$mode" = stop ]; then
+  grep -q '"enabled": *true' "$state_file" 2>/dev/null || exit 0
+  [ -d "$relay_state/gate" ] || exit 0
+  input=$(cat)
+  [[ $input =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]] || exit 0
+  sid=${BASH_REMATCH[1]}
+  [[ $input =~ \"turn_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]] || exit 0
+  turn=${BASH_REMATCH[1]}
+  case "$sid$turn" in *..*) exit 0 ;; esac
+  [ -f "$relay_state/gate/$sid/$turn.json" ] || exit 0
+  find_python || exit 0
+  gate_state stop "$relay_state/gate/$sid/$turn.json"
+  exit 0
+fi
+
+find_python || { case "$mode" in enable|disable|held) echo 'output-gate-codex.sh: Python が見つからない。' >&2; exit 1 ;; esac; exit 0; }
 read -r enabled port < <(read_state)
 
 sid=
+turn=
+hook_input=
 case "$mode" in
   session-start|session-end|prompt|pre-compact)
-    read -r sid source < <(hook_fields)
+    hook_input=$(cat)
+    read -r sid source turn < <(printf '%s' "$hook_input" | hook_fields)
     [ "$sid" = - ] && sid=
+    [ "$turn" = - ] && turn=
     ;;
 esac
+
+# app-server の hooks/list で、このセッションで有効な出力ゲートの Stop hook が信頼済みかを確かめる。
+# 信頼済みなら 0。確かめられない・未信頼なら 1。Codex は信頼済みの hook だけを動かすため、これが通った
+# セッションだけ中継に案内への差し替えを許す (続行の登録)。
+stop_hook_trusted() {
+  printf '%s' "$hook_input" | "$py_bin" -I -c '
+import importlib.util, json, os, queue, shutil, subprocess, sys, threading, time
+try:
+    cwd = json.loads(sys.stdin.buffer.read().decode("utf-8")).get("cwd")
+except (ValueError, AttributeError):
+    cwd = None
+codex = shutil.which("codex")
+if not codex:
+    sys.exit(1)
+# app-server の停止は中継と同じ kill_tree で、子孫ごと止める (Windows の codex の shim は孫を起動するため)。
+spec = importlib.util.spec_from_file_location("output_gate_relay", sys.argv[1])
+relay = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(relay)
+proc = subprocess.Popen([codex, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL, start_new_session=os.name != "nt")
+deadline = time.monotonic() + 8
+lines = queue.Queue()
+threading.Thread(target=lambda: [lines.put(line) for line in iter(proc.stdout.readline, b"")] and None,
+                 daemon=True).start()
+def send(message):
+    proc.stdin.write((json.dumps(message) + "\n").encode())
+    proc.stdin.flush()
+def answer(request_id):
+    while True:
+        try:
+            line = lines.get(timeout=max(0.01, deadline - time.monotonic()))
+        except queue.Empty:
+            return None
+        message = json.loads(line)
+        if isinstance(message, dict) and message.get("id") == request_id and "method" not in message:
+            return message.get("result")
+trusted = False
+try:
+    send({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "output-gate", "version": "1"},
+                                                      "capabilities": {"experimentalApi": True}}})
+    if answer(1) is not None:
+        send({"method": "initialized", "params": {}})
+        send({"id": 2, "method": "hooks/list", "params": {"cwds": [cwd] if isinstance(cwd, str) else []}})
+        result = answer(2) or {}
+        hooks = [h for entry in result.get("data") or [] for h in entry.get("hooks") or []]
+        gate = [h for h in hooks if h.get("eventName") == "stop" and h.get("enabled") is not False
+                and "output-gate-codex.sh stop" in (h.get("command") or "")]
+        trusted = bool(gate) and all(h.get("trustStatus") == "trusted" for h in gate)
+except (OSError, ValueError, AttributeError):
+    trusted = False
+finally:
+    relay.kill_tree(proc)
+sys.exit(0 if trusted else 1)' "$bin_dir/output-gate-relay.py"
+}
 
 case "$mode" in
   session-start|session-end)
@@ -171,7 +331,8 @@ case "$mode" in
         rm -f -- "$relay_state/delegated/$sid"
       fi
     fi
-    [ "$mode" = session-end ] && [ -n "$sid" ] && rm -f -- "$relay_state/unrouted/$sid" "$relay_state/reported/$sid"
+    [ "$mode" = session-end ] && [ -n "$sid" ] && rm -f -- "$relay_state/unrouted/$sid" "$relay_state/reported/$sid" \
+      "$relay_state/continue/$sid"
     if [ "$mode" = session-start ] && [ "$enabled" = true ]; then
       ensure_relay "$port"
       reconcile apply "$port"
@@ -186,6 +347,17 @@ case "$mode" in
         fi
         [ -n "$stop_reason" ] && mkdir -p "$relay_state/unrouted" && printf '%s' "$stop_reason" >"$relay_state/unrouted/$sid"
       fi
+      # 続行の登録: このセッションで出力ゲートの Stop hook が動く (信頼済み) と確かめられたときだけ書く。
+      # 登録の無いセッションでは、中継は未達の回答を案内に差し替えず、未達の項目を添えた原文を流す。
+      # 起動し直しを求めるセッションは中継を通らないので確かめない (hook の時間制限に収めるため)。compact は
+      # 同じスレッドの中で続くので、開始時の登録をそのまま使う。
+      if [ "${AGENT_DELEGATED_SESSION:-}" != 1 ] && [ -n "$sid" ] && [ "$source" != compact ]; then
+        if [ -z "$stop_reason" ] && stop_hook_trusted; then
+          mkdir -p "$relay_state/continue" && : >"$relay_state/continue/$sid"
+        else
+          rm -f -- "$relay_state/continue/$sid"
+        fi
+      fi
     fi
     finish
     ;;
@@ -195,7 +367,24 @@ case "$mode" in
       reconcile apply "$port"
     fi
     [ -n "$sid" ] && [ -s "$relay_state/unrouted/$sid" ] && stop_reason=$(cat "$relay_state/unrouted/$sid")
+    # 前のターンで直させる前の原文が利用者に届かないまま終わっていれば (Stop hook が動かなかった、直させている
+    # 途中で中断した)、別のターンの入力が来たこのときに一度だけ表示する。状態は消さない (24 時間の掃除と held に任せる)。
+    if [ -n "$sid" ] && [ -n "$turn" ] && [ -d "$relay_state/gate/$sid" ]; then
+      recovered=$(gate_state recover "$relay_state/gate/$sid" "$turn")
+      [ -n "$recovered" ] && messages+=("$recovered") && mark_after=1
+    fi
     finish
+    ;;
+  held)
+    # 手動の回収: 直させる前の原文と未達の項目を、表示済みかに関係なくセッションとターンごとに出す。
+    if [ -n "${2:-}" ]; then
+      case "$2" in *[!A-Za-z0-9._-]*|.|..) echo "output-gate-codex.sh: session_id の形が違う。" >&2; exit 2 ;; esac
+      dirs=("$relay_state/gate/$2")
+    else
+      dirs=("$relay_state"/gate/*)
+    fi
+    text=$(gate_state held "${dirs[@]}")
+    printf '%s\n' "${text:-回収できる原文は無い。}" "$HELD_NOTE"
     ;;
   pre-compact)
     # 利用者の入力から始まらない要求 (compaction) の前にも、止まった中継を起動し直す。
@@ -214,7 +403,7 @@ case "$mode" in
     write_state true "$port" || { echo "$state_file を書けない。" >&2; exit 1; }
     ensure_relay "$port"
     reconcile apply "$port"
-    printf '%s\n' "${messages[@]:-出力ゲートを有効にした (127.0.0.1:$port)。}"
+    printf '%s\n' "${messages[@]:-出力ゲートを有効にした (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE"
     ;;
   disable)
     write_state false "${port:-0}" || { echo "$state_file を書けない。" >&2; exit 1; }
@@ -222,7 +411,7 @@ case "$mode" in
     printf '%s\n' "${messages[@]:-出力ゲートを無効にした。Codex を起動し直すと中継を通らない。}"
     ;;
   *)
-    echo "usage: output-gate-codex.sh session-start|prompt|pre-compact|pre-model|session-end|enable [PORT]|disable" >&2
+    echo "usage: output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|session-end|enable [PORT]|disable|held [SESSION_ID]" >&2
     exit 2
     ;;
 esac

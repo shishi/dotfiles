@@ -4,11 +4,14 @@
 #   output-gate-claude.sh enable | disable   このマシンで出力ゲートを使うか (利用者が使う切り替え)
 #   output-gate-claude.sh display            MessageDisplay hook (標準入力に hook の JSON)
 #   output-gate-claude.sh prompt             UserPromptSubmit hook
+#   output-gate-claude.sh stop               Stop hook (未達の回答をエージェントへ差し戻す)
 #
 # 使うかの正本は、Git で追跡しないマシンごとの印 ($XDG_STATE_HOME/output-gate/claude-enabled)。mod も同じ印を見る。
 # hook は無効のマシンでは何もしない。MessageDisplay は表示する行ごとに呼ばれるため、mod が動いているセッション
 # (mod がモデルへの要求ごとに claude-mod/<session_id> を書く) では Python を起動せずに終える。
-# UserPromptSubmit は毎回本体を動かし、mod の印を消し、訂正版の受け渡しと古い状態の掃除をする。処理の本体は lib/output-gate-claude.py。
+# UserPromptSubmit は毎回本体を動かし、mod の印を消し、訂正版の受け渡しと古い状態の掃除をする。Stop は、mod が
+# 動いているセッションでは (mod がツールへの差し替えで直させるため) Python を起動せずに終える。処理の本体は
+# lib/output-gate-claude.py。
 set -u
 
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -24,9 +27,9 @@ case "${1:-}" in
     rm -f -- "$flag" || { echo "$flag を消せない。" >&2; exit 1; }
     echo "出力ゲートを無効にした。"
     exit 0 ;;
-  display|prompt) ;;
+  display|prompt|stop) ;;
   *)
-    echo "usage: output-gate-claude.sh enable|disable|display|prompt" >&2
+    echo "usage: output-gate-claude.sh enable|disable|display|prompt|stop" >&2
     exit 2 ;;
 esac
 
@@ -50,6 +53,11 @@ if [ "$1" = display ] &&
     fi
     [ "$(cat "$how" 2>/dev/null)" = mod ] && exit 0
   fi
+fi
+if [ "$1" = stop ] &&
+  [[ $input =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9._-]{1,128})\" ]] &&
+  [ -e "$state_root/claude-mod/${BASH_REMATCH[1]}" ]; then
+  exit 0
 fi
 for candidate in python3 python; do
   if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -I -c '' >/dev/null 2>&1; then

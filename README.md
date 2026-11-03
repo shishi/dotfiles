@@ -117,13 +117,19 @@ CLI の実績は `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` の JSONL �
 
 ## 出力ゲート
 
-Claude Code と Codex の回答を、表示する前に応答の規則 (共通指示の「応答」の節) で検査し、
-訂正した文字列だけを表示します。検査できなかったときは、原文の先頭に理由を添えて表示します。
-設計と制限は [docs/output-gate.md](docs/output-gate.md) にあります。
+Claude Code と Codex の回答を、表示する前に検査します。そのターンのツールの呼び出しと結果を証拠にして、
+確認していないことを確認済みと書いていないか、依頼の抜けやごまかしが無いかを判定します。
+応答の規則 (共通指示の「応答」の節) の違反は、置き換えて直します。
+未達があれば回答を見せずにエージェントへ指摘を返し、同じセッションで作業を続けさせて、もう一度検査します。
+直させるのは 1 回までで、それでも未達なら未達の項目を回答の下に明記して表示します。
+検査できなかったときは、原文の先頭に理由を添えて表示します。
+検査役は、Claude Code の回答を Codex (`codex exec`)、Codex の回答を Claude (`claude -p`) で検査し、
+その系統が使えなければもう一方の系統で検査します。設計と制限は [docs/output-gate.md](docs/output-gate.md) にあります。
 
 - Claude Code: `claude/mods/output-gate/` の mod を、`claude/settings.json` の
   `CLAUDE_CODE_PLUGIN_DIRS` で全てのセッションに読み込みます。mod を使えない Desktop の
-  WSL セッションでは、`agent-shared/hooks/output-gate-claude.sh` の hook が表示を置き換えます。
+  WSL セッションでは、`agent-shared/hooks/output-gate-claude.sh` の hook が表示を置き換え、
+  未達の項目を明記した回答を一度表示してから Stop hook で直させます。
   検査するかはマシンごとに次のコマンドで切り替えます (既定は無効)。WSL では WSL の中でも実行します。
 
 ```sh
@@ -148,8 +154,23 @@ bash ~/.agent-shared/hooks/output-gate-codex.sh enable
 bash ~/.agent-shared/hooks/output-gate-codex.sh disable
 ```
 
-有効にした後は、Codex の `/hooks` で出力ゲートの hook を信頼します。検査役は `codex exec`
-(読み取り専用、ツール無効) で、Codex のログイン、gitleaks、Python 3.11 以降が必要です。
+有効にした後と、`codex/hooks.json` を更新した後は、Codex の `/hooks` で出力ゲートの hook
+(Stop・SessionStart・SessionEnd・UserPromptSubmit) を信頼し直します。hook の内容が変わると信頼が外れるためです。
+未達の回答を直させるのは、セッションの開始時に出力ゲートの Stop hook が信頼済みだと確かめて、
+続行を登録したセッションだけです。登録の無いセッション (hook を信頼していない、無効にした、
+hook を動かさない環境) では直させず、応答の規則の置き換えを適用した回答に未達の項目を明記して表示します。
+直させる前の回答が表示されないままターンが終わった場合 (Stop hook が動かなかった、直させている途中で
+中断したなど) は、保存した回答 (応答の規則の置き換えを適用したもの) と未達の項目を、同じセッションの
+次の入力で一度だけ表示します。
+次の入力が無い単発の `codex exec` などでは、次のコマンドで表示します。保存した回答は 24 時間残します。
+`session_id` には `codex exec --json` が出す thread_id を渡し、省くと全てのセッションの分を表示します。
+
+```sh
+bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id]
+```
+
+検査役は `codex exec` (読み取り専用、ツール無効) と `claude -p` (ツール無効) で、
+Codex と Claude Code のログイン、gitleaks、Python 3.11 以降が必要です。
 中継の圧縮送信には Python 3.14 以降を使います。委譲とレビューで起動する Codex は中継を通さず、
 検査もしません。
 

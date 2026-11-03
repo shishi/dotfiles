@@ -66,7 +66,18 @@ out=$(event_of m2 | PATH="$TMP/fakebin:$PATH" bash "$HOOK" display)
 check "a message held before the marker appeared still goes to Python" "[ -e '$TMP/python-started' ]"
 rm -f "$TMP/python-started" "$XDG_STATE_HOME/output-gate/claude-display/s1/m2.how"
 
+# Stop hook: mod が動いているセッションは mod がツールへの差し替えで直させるため、Python を起動せずに終える。
+stop_event='{"session_id":"s1","transcript_path":"","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"x"}'
+out=$(printf '%s' "$stop_event" | PATH="$TMP/fakebin:$PATH" bash "$HOOK" stop)
+check "stop in a session where the mod runs skips Python" "[ -z \"\$out\" ] && [ ! -e '$TMP/python-started' ]"
+rm -f "$XDG_STATE_HOME/output-gate/claude-mod/s1"
+out=$(printf '%s' "$stop_event" | PATH="$TMP/fakebin:$PATH" bash "$HOOK" stop)
+check "stop without the mod goes to Python" "[ -e '$TMP/python-started' ]"
+rm -f "$TMP/python-started"
+
 out=$(bash "$HOOK" disable)
 check "disable turns the gate off" "[ ! -e '$XDG_STATE_HOME/output-gate/claude-enabled' ]"
+out=$(printf '%s' "$stop_event" | PATH="$TMP/fakebin:$PATH" bash "$HOOK" stop)
+check "stop on a disabled machine does nothing" "[ -z \"\$out\" ] && [ ! -e '$TMP/python-started' ]"
 
 [ "$failures" -eq 0 ] || exit 1

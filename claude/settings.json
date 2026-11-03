@@ -339,6 +339,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh stop",
+            "timeout": 120
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
