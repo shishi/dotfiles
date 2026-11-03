@@ -17,7 +17,8 @@ fi
 # POSIX symlink は -L で判定できるが、Windows junction は git-bash の -L で
 # 拾えない場合があるため、「親ディレクトリにエントリが在るのに -e が偽」も
 # 壊れ link とみなす。「記憶が静かに消えたまま動き続ける」事故の検知が目的。
-if [ ! -e "$MEMORY_DIR" ]; then
+# lookup はこの 2 つも確かめず、main を読む git の失敗としてその原因を出す。
+if [ "$mode" != lookup ] && [ ! -e "$MEMORY_DIR" ]; then
   if [ -L "$MEMORY_DIR" ] \
     || ls -A "$(dirname "$MEMORY_DIR")" 2>/dev/null | grep -qxF "$(basename "$MEMORY_DIR")"; then
     echo "<personal-memory-warning>記憶ディレクトリの link が壊れています: ${MEMORY_DIR}(リンク先が存在しない)</personal-memory-warning>"
@@ -27,7 +28,7 @@ fi
 
 # MEMORY.md が無い directory は未導入として無言で扱う。一方、MEMORY.md があるのに
 # Git worktree でない実体は editable file を注入しない。commit snapshot だけを信頼する。
-if [ ! -e "${MEMORY_DIR}/.git" ]; then
+if [ "$mode" != lookup ] && [ ! -e "${MEMORY_DIR}/.git" ]; then
   if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
     echo "<personal-memory-warning>記憶ディレクトリが Git repo ではないため注入をスキップ: ${MEMORY_DIR}。MEMORY.md の内容は読み取っていません</personal-memory-warning>"
   fi
@@ -58,11 +59,13 @@ fi
 # MEMORY.md の存在確認より先に Git の健全性を検査する(編集途中で MEMORY.md が
 # 消えている dirty repo を無言スキップに落とさない)。健全なら main commit を一度だけ
 # 固定し、以降はその snapshot だけを読む。
+# lookup は毎入力で走るので、この確認をしない。main の確定 commit だけを読み、読めない・
+# 秘密検査に掛かったときに原因を出して止まる。状態の警告は起動時の注入が伝える。
 snapshot=""
 ahead_warn=""
 degraded=""
 repo_state=""
-if [ -e "${MEMORY_DIR}/.git" ]; then
+if [ "$mode" != lookup ]; then
   branch=$(git -C "$MEMORY_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\r')
   gitdir=$(git -C "$MEMORY_DIR" rev-parse --absolute-git-dir 2>/dev/null | tr -d '\r')
   # 中止(fatal)と劣化注入(degraded)を分ける。
@@ -170,29 +173,6 @@ probe_file() { # $1=repo 相対パス; 0=存在、1=正常な不存在、2=Git�
   return 2
 }
 
-# 記憶未導入(索引なし)は正常系として無言スキップ。ただし worktree に索引が在るのに
-# snapshot に無い場合は「注入したつもりで記憶ゼロ」になるため黙らない(注入は snapshot
-# 経由なので未 commit の索引は出せない = 出せないことを伝えるしかない)。
-probe_file "MEMORY.md"
-index_probe_status=$?
-case "$index_probe_status" in
-  0) ;;
-  1)
-    if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
-      # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
-      # 前にその事実を渡す(repo_state はここまでに算出済み)。
-      state_note=""
-      [ -n "$repo_state" ] && state_note="${repo_state}。"
-      echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
-    fi
-    exit 0
-    ;;
-  *)
-    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: MEMORY.md。本文は出力していません</personal-memory-warning>"
-    exit 0
-    ;;
-esac
-
 if [ "$#" -ge 3 ] && [ "$mode" = lookup ]; then
   shift 2
   input=$(jq -n --arg prompt "$*" '{prompt:$prompt,memory_lookup_manual:true}')
@@ -244,6 +224,47 @@ fi
 
 [ -n "$slug" ] || slug=$(slugify "$cwd")
 
+project_path="projects/${slug}.md"
+secret_pattern="(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
+lookup_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/search-memory.py"
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+if [ "$mode" = lookup ]; then
+  [ -n "$py_bin" ] || { echo "python3 / python が見つからないため記憶を検索できません" >&2; exit 2; }
+  snapshot=$(git -C "$MEMORY_DIR" rev-parse --verify 'main^{commit}') || {
+    echo "記憶 repo の main commit を読めません: ${MEMORY_DIR}" >&2
+    exit 2
+  }
+  snapshot=${snapshot%$'\r'}
+  if printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" lookup "$project_path" "$secret_pattern"; then
+    trap - EXIT
+    exit 0
+  fi
+  exit 2
+fi
+
+# 記憶未導入(索引なし)は正常系として無言スキップ。ただし worktree に索引が在るのに
+# snapshot に無い場合は「注入したつもりで記憶ゼロ」になるため黙らない(注入は snapshot
+# 経由なので未 commit の索引は出せない = 出せないことを伝えるしかない)。
+probe_file "MEMORY.md"
+index_probe_status=$?
+case "$index_probe_status" in
+  0) ;;
+  1)
+    if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
+      # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
+      # 前にその事実を渡す(repo_state はここまでに算出済み)。
+      state_note=""
+      [ -n "$repo_state" ] && state_note="${repo_state}。"
+      echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
+    fi
+    exit 0
+    ;;
+  *)
+    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: MEMORY.md。本文は出力していません</personal-memory-warning>"
+    exit 0
+    ;;
+esac
+
 # required index、optional CORE、存在する selected project file は、wrapper を出す前に
 # 固定 snapshot から各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
 if ! memory_content=$(emit_file "MEMORY.md"); then
@@ -270,7 +291,6 @@ case "$core_probe_status" in
     ;;
 esac
 
-project_path="projects/${slug}.md"
 project_content=""
 project_present=""
 probe_file "$project_path"
@@ -290,7 +310,6 @@ case "$project_probe_status" in
     ;;
 esac
 
-secret_pattern="(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
 scan_content() { # $1=content; 0=secret candidate, 1=clean, other=scan error
   printf '%s\n' "$1" | LC_ALL=C grep -Eiq -- "$secret_pattern"
 }
@@ -321,16 +340,6 @@ if [ -n "$project_present" ]; then
   scan_path "$project_path" "$project_content" && exit 0
 fi
 
-lookup_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/search-memory.py"
-py_bin=$(command -v python3 || command -v python) || py_bin=""
-if [ "$mode" = lookup ]; then
-  [ -n "$py_bin" ] || exit 2
-  if printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" lookup "$project_path" "$secret_pattern"; then
-    trap - EXIT
-    exit 0
-  fi
-  exit 2
-fi
 # 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。既読として記録するのは、
 # この出力が全文を渡す文書だけにする。Claude では並列に走る 2 つの hook が同じ記録を
 # 書き合わないよう、project 側が共有の記録をリセットし、core 側は CORE を別の記録に書く。

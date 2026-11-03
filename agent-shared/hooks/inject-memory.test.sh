@@ -185,6 +185,39 @@ for config in claude/settings.json codex/hooks.json; do
   fi
 done
 
+# lookup は事前に repo の状態を確かめない。main を読めなければ git のエラーを示して止まる。
+NO_MAIN_DIR="$TMP/no-main-memory"
+git init -q -b other "$NO_MAIN_DIR"
+printf '# Index\n' >"$NO_MAIN_DIR/MEMORY.md"
+git -C "$NO_MAIN_DIR" add MEMORY.md
+git -C "$NO_MAIN_DIR" -c user.name=test -c user.email=test@example.invalid -c commit.gpgSign=false commit -qm init
+lookup_status=0
+lookup_error=$(HOME="$TMP/home" bash "$HOOK" "$NO_MAIN_DIR" lookup MEMORY.md 2>&1 >/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && printf '%s' "$lookup_error" | grep -q 'fatal:'; then
+  ok "lookup reports the git error when the main commit cannot be read"
+else
+  ng "lookup reports the git error when the main commit cannot be read"
+fi
+lookup_status=0
+lookup_error=$(HOME="$TMP/home" bash "$HOOK" "$TMP/missing-memory" lookup MEMORY.md 2>&1 >/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && printf '%s' "$lookup_error" | grep -q 'fatal:'; then
+  ok "lookup reports the git error when the memory directory is missing"
+else
+  ng "lookup reports the git error when the memory directory is missing"
+fi
+SECRET_INDEX_DIR="$TMP/secret-index-memory"
+git init -q -b main "$SECRET_INDEX_DIR"
+printf '# Index\npassword = %s\n' "$secret_value" >"$SECRET_INDEX_DIR/MEMORY.md"
+git -C "$SECRET_INDEX_DIR" add MEMORY.md
+git -C "$SECRET_INDEX_DIR" -c user.name=test -c user.email=test@example.invalid -c commit.gpgSign=false commit -qm init
+lookup_status=0
+output=$(printf '%s' '{"prompt":"index"}' | HOME="$TMP/home" bash "$HOOK" "$SECRET_INDEX_DIR" lookup 2>/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && ! printf '%s' "$output" | grep -qF "$secret_value"; then
+  ok "lookup does not emit an index with secret candidates"
+else
+  ng "lookup does not emit an index with secret candidates"
+fi
+
 # Meaningful approval queries retain the word that acknowledgement-only prompts omit.
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup '承認の手順')
 if printf '%s' "$output" | grep -q 検索取得_SENTINEL; then

@@ -16,7 +16,7 @@ MAX_BODY_CHARS = 16000
 
 
 def git(repo, *args):
-    return subprocess.check_output(["git", "-C", repo, *args], stderr=subprocess.DEVNULL).decode("utf-8")
+    return subprocess.check_output(["git", "-C", repo, *args], stderr=subprocess.PIPE).decode("utf-8")
 
 
 def read_bodies(repo, snapshot, paths):
@@ -28,7 +28,7 @@ def read_bodies(repo, snapshot, paths):
     """
     batch = subprocess.run(["git", "-C", repo, "cat-file", "--batch"],
                            input="".join(f"{snapshot}:{path}\n" for path in paths).encode("utf-8"),
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
     bodies = {}
     offset = 0
     for path in paths:
@@ -221,8 +221,8 @@ def main():
         else:
             deferred.append(path)
 
-    # Scan whole selected documents before emitting any of them or recording delivery.
-    for path, body, _, _ in selected:
+    # Scan the index and whole selected documents before emitting any of them or recording delivery.
+    for path, body in [("MEMORY.md", index_content), *((path, body) for path, body, _, _ in selected)]:
         result = subprocess.run(["grep", "-Eiq", "--", secret_pattern], input=body.encode(),
                                 env={**os.environ, "LC_ALL": "C"})
         if result.returncode != 1:
@@ -271,4 +271,7 @@ if __name__ == "__main__":
         main()
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"記憶の検索・取得を完了できません: {error}", file=sys.stderr)
+        detail = getattr(error, "stderr", None)
+        if detail:
+            print(detail.decode("utf-8", "replace").rstrip(), file=sys.stderr)
         sys.exit(2)
