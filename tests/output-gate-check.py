@@ -212,9 +212,12 @@ class CheckTests(GateTestCase):
         draft = 'この設定は効く。'
         self.assert_unchecked(self.run_check(draft, self.pairs(('効く', '速い', '', False))), draft)
 
-    def test_rejects_meaning_changed(self):
-        draft = 'テストは失敗した。'
-        self.assert_unchecked(self.run_check(draft, self.pairs(('失敗した', '成功した', 'r', True))), draft)
+    def test_meaning_changed_pair_is_not_applied(self):
+        # 事実を書き換えるおそれのある置き換えだけを捨て、検査は続ける (回答全体を未検査にしない)。
+        draft = 'テストは失敗した。この設定は効く。'
+        out = self.run_check(draft, self.pairs(('失敗した', '成功した', 'r', True), ('効く', '速い', 'r', False)))
+        self.assertEqual(out['status'], 'checked')
+        self.assertEqual(out['text'], 'テストは失敗した。この設定は速い。')
 
     def test_find_not_found_is_unchecked(self):
         draft = 'この設定は速い。'
@@ -644,6 +647,12 @@ class FindingTests(GateTestCase):
         return self.invoke(payload)
 
     CLAIM = finding('unverified_claim', 'draft', 'テストは全て通った', ('call_1', 'failed'))
+
+    def test_findings_survive_a_meaning_changing_replacement(self):
+        out = self.final(answer([{'find': 'テストは全て通った', 'replace': 'テストは実行していない', 'rule': 'r',
+                                  'meaning_changed': True}], [self.CLAIM]))
+        self.assertEqual(out['status'], 'checked')
+        self.assertEqual([f['excerpt'] for f in out['findings']], ['テストは全て通った'])
 
     def test_answer_without_findings_is_unchanged(self):
         draft = 'テストは 1 件失敗したまま (pytest の終了コード 1) だよ。'

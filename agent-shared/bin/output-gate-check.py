@@ -917,7 +917,9 @@ def apply_pairs(bodies, pairs):
         if not isinstance(rule, str) or not rule.strip():
             return None, '違反した規則を示さない置き換えがある'
         if pair.get('meaning_changed') is not False:
-            return None, '意味を変えるおそれのある置き換えがある'
+            # 事実を書き換えるおそれのある置き換えは適用しない。回答全体を未検査にすると、同じ答えの指摘まで
+            # 捨てることになるため (検査役は未達の指摘と、その箇所を書き直す置き換えを一緒に返すことがある)。
+            continue
         found = False
         outside_any = False
         for index, body in enumerate(bodies):
