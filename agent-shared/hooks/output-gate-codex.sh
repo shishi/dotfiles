@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 出力ゲートの Codex 側の入口: 中継の起動、config.toml の中継の行の書き戻し、委譲の子セッションの登録。
 #
-#   output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|session-end   Codex の hook (標準入力に hook の JSON)
+#   output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model   Codex の hook (標準入力に hook の JSON)
 #   output-gate-codex.sh enable [PORT] | disable                       利用者が使う切り替え
 #   output-gate-codex.sh held [SESSION_ID]                             直させる前の原文の手動の回収 (24 時間まで)
 #
@@ -72,7 +72,7 @@ finish() {
 }
 
 UNROUTED_REASON="このセッションは Codex の設定に中継の行が無い状態で始まったため、回答を検査できない。行は書き戻したので、Codex を起動し直して。"
-ENABLE_NOTE="未達の回答を直させるには、Codex が出力ゲートの Stop hook を動かす必要がある。hooks.json を更新すると hook の hash が変わるので、Codex の /hooks で出力ゲートの hook (Stop・SessionStart・SessionEnd・UserPromptSubmit) を信頼し直して。信頼していないセッションは続行の登録が無く、直させずに未達の項目を添えた原文を表示する。"
+ENABLE_NOTE="未達の回答を直させるには、Codex が出力ゲートの Stop hook を動かす必要がある。hooks.json を更新すると hook の hash が変わるので、Codex の /hooks で出力ゲートの hook (Stop・SessionStart・UserPromptSubmit) を信頼し直して。信頼していないセッションは続行の登録が無く、直させずに未達の項目を添えた原文を表示する。"
 HELD_NOTE="直させる前の原文は 24 時間まで保存し、同じセッションの次の入力で一度だけ表示する。次の入力が無い単発の codex exec では bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id] で表示できる (session_id は codex exec --json が出す thread_id)。"
 UNWRITABLE_REASON="Codex の設定に中継の行を書けないため、このセッションの回答を検査できない。設定を直すか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で出力ゲートを外してから起動し直して。"
 
@@ -260,7 +260,7 @@ sid=
 turn=
 hook_input=
 case "$mode" in
-  session-start|session-end|prompt|pre-compact)
+  session-start|prompt|pre-compact)
     hook_input=$(cat)
     read -r sid source turn < <(printf '%s' "$hook_input" | hook_fields)
     [ "$sid" = - ] && sid=
@@ -323,17 +323,11 @@ sys.exit(0 if trusted else 1)' "$bin_dir/output-gate-relay.py"
 }
 
 case "$mode" in
-  session-start|session-end)
+  session-start)
     if [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && [ -n "$sid" ]; then
-      if [ "$mode" = session-start ]; then
-        mkdir -p "$relay_state/delegated" && : >"$relay_state/delegated/$sid"
-      else
-        rm -f -- "$relay_state/delegated/$sid"
-      fi
+      mkdir -p "$relay_state/delegated" && : >"$relay_state/delegated/$sid"
     fi
-    [ "$mode" = session-end ] && [ -n "$sid" ] && rm -f -- "$relay_state/unrouted/$sid" "$relay_state/reported/$sid" \
-      "$relay_state/continue/$sid"
-    if [ "$mode" = session-start ] && [ "$enabled" = true ]; then
+    if [ "$enabled" = true ]; then
       ensure_relay "$port"
       reconcile apply "$port"
       # 設定を読み込んで始まるスレッド (startup・resume・clear・fork) を止める。compact だけは同じスレッドの
@@ -411,7 +405,7 @@ case "$mode" in
     printf '%s\n' "${messages[@]:-出力ゲートを無効にした。Codex を起動し直すと中継を通らない。}"
     ;;
   *)
-    echo "usage: output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|session-end|enable [PORT]|disable|held [SESSION_ID]" >&2
+    echo "usage: output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|enable [PORT]|disable|held [SESSION_ID]" >&2
     exit 2
     ;;
 esac

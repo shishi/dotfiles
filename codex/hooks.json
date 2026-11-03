@@ -64,18 +64,6 @@
         "matcher": "collaborationspawn_agent"
       }
     ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-end",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-end'",
-            "timeout": 15,
-            "type": "command"
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [

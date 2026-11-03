@@ -155,7 +155,7 @@ bash ~/.agent-shared/hooks/output-gate-codex.sh disable
 ```
 
 有効にした後と、`codex/hooks.json` を更新した後は、Codex の `/hooks` で出力ゲートの hook
-(Stop・SessionStart・SessionEnd・UserPromptSubmit) を信頼し直します。hook の内容が変わると信頼が外れるためです。
+(Stop・SessionStart・UserPromptSubmit) を信頼し直します。hook の内容が変わると信頼が外れるためです。
 未達の回答を直させるのは、セッションの開始時に出力ゲートの Stop hook が信頼済みだと確かめて、
 続行を登録したセッションだけです。登録の無いセッション (hook を信頼していない、無効にした、
 hook を動かさない環境) では直させず、応答の規則の置き換えを適用した回答に未達の項目を明記して表示します。

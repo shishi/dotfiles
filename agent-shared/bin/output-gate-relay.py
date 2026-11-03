@@ -448,7 +448,7 @@ def sweep(force=False):
         state = read_json(path) or {}
         if now - float(state.get('created') or 0) > STATE_TTL:
             path.unlink(missing_ok=True)
-    for path in list(root.glob('continue/*')) + list(root.glob('delegated/*')):
+    for path in [*root.glob('continue/*'), *root.glob('delegated/*'), *root.glob('unrouted/*'), *root.glob('reported/*')]:
         try:
             if now - path.stat().st_mtime > STATE_TTL:
                 path.unlink()

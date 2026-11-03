@@ -44,8 +44,6 @@ check "prompt is silent when nothing changed" "[ -z \"\$out\" ]"
 
 out=$(printf '{"session_id":"child-1"}' | AGENT_DELEGATED_SESSION=1 bash "$HOOK" session-start)
 check "delegated session is registered" "[ -f '$XDG_STATE_HOME/output-gate/relay/delegated/child-1' ]"
-out=$(printf '{"session_id":"child-1"}' | AGENT_DELEGATED_SESSION=1 bash "$HOOK" session-end)
-check "delegated session is removed at the end" "[ ! -e '$XDG_STATE_HOME/output-gate/relay/delegated/child-1' ]"
 out=$(printf '{"session_id":"../../x"}' | AGENT_DELEGATED_SESSION=1 bash "$HOOK" session-start)
 check "unsafe session ids are not used as paths" "[ ! -e '$XDG_STATE_HOME/output-gate/x' ] && [ ! -e '$XDG_STATE_HOME/x' ]"
 
@@ -68,8 +66,6 @@ check "a cleared thread started without the lines is stopped" "printf '%s' \"\$o
 printf 'model = "m"\n\n[features]\nhooks = true\n' >"$CODEX_HOME/config.toml"
 out=$(printf '{"session_id":"child-2","source":"startup"}' | AGENT_DELEGATED_SESSION=1 bash "$HOOK" session-start)
 check "delegated sessions are not stopped" "! printf '%s' \"\$out\" | grep -q '\"continue\"'"
-out=$(printf '{"session_id":"s2"}' | bash "$HOOK" session-end)
-check "session end clears the stop" "[ ! -e '$XDG_STATE_HOME/output-gate/relay/unrouted/s2' ]"
 # 行を書けない設定 (TOML として読めない) で始まったセッションも中継を通らないので止める。
 printf 'model = \n' >"$CODEX_HOME/config.toml"
 out=$(printf '{"session_id":"s5","source":"startup"}' | bash "$HOOK" session-start)
@@ -214,8 +210,6 @@ REG="$XDG_STATE_HOME/output-gate/relay/continue"
 echo trusted >"$CODEXBIN/mode"
 out=$(printf '{"session_id":"c1","source":"startup","cwd":"."}' | PATH="$CODEXBIN:$PATH" bash "$HOOK" session-start)
 check "a session whose Stop hook is trusted is registered" "[ -f '$REG/c1' ]"
-out=$(printf '{"session_id":"c1"}' | PATH="$CODEXBIN:$PATH" bash "$HOOK" session-end)
-check "session end removes the registration" "[ ! -e '$REG/c1' ]"
 echo untrusted >"$CODEXBIN/mode"
 out=$(printf '{"session_id":"c2","source":"startup","cwd":"."}' | PATH="$CODEXBIN:$PATH" bash "$HOOK" session-start)
 check "an untrusted Stop hook is not registered" "[ ! -e '$REG/c2' ]"
