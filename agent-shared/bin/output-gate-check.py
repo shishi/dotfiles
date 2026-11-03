@@ -1058,8 +1058,11 @@ def secret_findings(payload, findings):
     if SECRET_RULE not in rules or any(f.get('rule') == SECRET_RULE for f in findings):
         return []
     text = joined(body_list(payload))
+    # 証拠 (読んだファイルやコマンドの出力) で見つかった秘密情報を回答が書き写した場合も違反にする。回答の中だけでは
+    # 鍵の名前と値の組の形にならず、gitleaks が見つけられないことがあるため。
+    scanned = '\n\n'.join([text, *scanned_texts({'evidence': payload.get('evidence') or []})])
     with tempfile.TemporaryDirectory(prefix='output-gate-') as tmp:
-        found = run_gitleaks(text.encode('utf-8'), Path(tmp))
+        found = run_gitleaks(scanned.encode('utf-8'), Path(tmp))
     for item in found:
         secret = item.get('Secret') if isinstance(item, dict) else None
         start = text.find(secret) if isinstance(secret, str) and secret else -1
