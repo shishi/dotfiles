@@ -802,6 +802,15 @@ class FindingTests(GateTestCase):
         self.assertIn('結論を先に書く', out['agent_message'])
         self.assertIn('- 規則違反 (R1): 「テストは全て通ったので」', out['unmet_text'])
 
+    def test_a_secret_in_the_answer_is_a_violation_of_the_secret_rule(self):
+        self.checked.write_text(json.dumps([{'id': 'T9', 'text': '秘密情報を出さない'}], ensure_ascii=False),
+                                encoding='utf-8')
+        self.gitleaks = self.fake_gitleaks(['hunter2-prod-7731'])
+        out = self.final(answer(), draft='.env の DB_PASSWORD は hunter2-prod-7731 になってるよ。')
+        self.assertEqual([(f['kind'], f['rule']) for f in out['findings']], [('rule_violation', 'T9')])
+        self.assertNotIn('hunter2-prod-7731', out['agent_message'])
+        self.assertIsNone(out['text'])
+
     def test_a_violation_of_a_rule_not_in_the_list_is_dropped(self):
         violation = {'kind': 'rule_violation', 'rule': 'R9', 'source': 'draft',
                      'excerpt': 'テストは全て通ったので', 'evidence': []}

@@ -90,6 +90,8 @@ CLAUDE_DROPPED_ENV = ('CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_BASE_URL', 'ANTHROPI
                       'ANTHROPIC_VERTEX_BASE_URL', 'ANTHROPIC_FOUNDRY_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK',
                       'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY')
 CODEX_DROPPED_ENV = ('OPENAI_BASE_URL', 'OPENAI_API_KEY', 'CODEX_API_KEY')
+# 回答に秘密情報を出さない規則の ID。検査役は伏せた入力しか見ないため、この規則は検査処理が gitleaks で確かめる。
+SECRET_RULE = 'T9'
 KINDS = {'unverified_claim': '確認していない主張',
          'missing_request': '依頼の抜け・確認できるのに確認していないこと',
          'concealment': 'ごまかし',
@@ -1049,6 +1051,29 @@ FINDING_SENTENCE = {
 }
 
 
+def secret_findings(payload, findings):
+    """回答の本文に秘密情報があれば、秘密情報を出さない規則 (SECRET_RULE) の違反として返す。検査役への入力では
+    秘密情報を伏せるため、検査役はこの違反を見つけられない。gitleaks が見つけた値で判定する。"""
+    rules = {r['id']: r['text'] for r in checked_rules()}
+    if SECRET_RULE not in rules or any(f.get('rule') == SECRET_RULE for f in findings):
+        return []
+    text = joined(body_list(payload))
+    with tempfile.TemporaryDirectory(prefix='output-gate-') as tmp:
+        found = run_gitleaks(text.encode('utf-8'), Path(tmp))
+    for item in found:
+        secret = item.get('Secret') if isinstance(item, dict) else None
+        start = text.find(secret) if isinstance(secret, str) and secret else -1
+        if start < 0:
+            continue
+        before = text[:start].rstrip()
+        excerpt = before[-30:] if len(before) >= MIN_EXCERPT else text[start + len(secret):].lstrip()[:30]
+        if len(normalize(excerpt)) < MIN_EXCERPT:
+            continue
+        return [{'kind': 'rule_violation', 'rule': SECRET_RULE, 'rule_text': rules[SECRET_RULE], 'source': 'draft',
+                 'excerpt': excerpt, 'evidence': []}]
+    return []
+
+
 def finding_label(item):
     return f'{KINDS[item["kind"]]} ({item["rule"]})' if item['kind'] == 'rule_violation' else KINDS[item['kind']]
 
@@ -1102,6 +1127,9 @@ def judge(payload, reply_text, engine, failures):
     if answer['findings'] and final and not findings:
         return unchecked(payload, '検査役の指摘が全て根拠の確認で捨てられた', dropped=dropped, engine=engine,
                          engine_failures=failures)
+    if final:
+        findings += secret_findings(payload, findings)
+        base['findings'] = findings
     if not findings:
         shown = decorate(bodies)
         return dict(base, text=joined(shown), bodies=shown)
