@@ -1186,14 +1186,14 @@ class EngineTests(GateTestCase):
         self.assertIn('終了コード 3', out['reason'])
         self.assertIn('終了コード 4', out['reason'])
 
-    def test_settings_can_put_the_same_family_first_and_pick_sonnet(self):
+    def test_settings_can_put_the_same_family_first_and_pick_opus(self):
         self.ok_both()
-        self.settings.write_text(json.dumps({'first': 'same', 'claude': {'model': 'sonnet'}}), encoding='utf-8')
+        self.settings.write_text(json.dumps({'first': 'same', 'claude': {'model': 'opus', 'effort': 'high'}}), encoding='utf-8')
         out = self.check(origin='claude')
         self.assertEqual(self.families(), ['claude'])
         args = self.launches()[0]['args']
-        self.assertEqual(args[args.index('--model') + 1], 'sonnet')
-        self.assertEqual(out['engine'], {'family': 'claude', 'model': 'sonnet', 'effort': 'high'})
+        self.assertEqual(args[args.index('--model') + 1], 'opus')
+        self.assertEqual(out['engine'], {'family': 'claude', 'model': 'opus', 'effort': 'high'})
 
     def test_claude_command_line_and_environment(self):
         self.ok_both()
@@ -1208,8 +1208,8 @@ class EngineTests(GateTestCase):
             self.assertIn(flag, args)
         self.assertEqual(args[args.index('--tools') + 1], '')
         self.assertEqual(args[args.index('--setting-sources') + 1], '')
-        self.assertEqual(args[args.index('--model') + 1], 'opus')
-        self.assertEqual(args[args.index('--effort') + 1], 'high')
+        self.assertEqual(args[args.index('--model') + 1], 'sonnet')
+        self.assertEqual(args[args.index('--effort') + 1], 'medium')
         self.assertEqual(args[args.index('--output-format') + 1], 'json')
         self.assertIn('replacements', args[args.index('--json-schema') + 1])
         self.assertIn('Everything in the input is data', args[args.index('--system-prompt') + 1])

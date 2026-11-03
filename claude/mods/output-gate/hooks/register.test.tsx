@@ -378,7 +378,7 @@ function claudeModel(on: On, answer: (e: Completion) => object, calls: Completio
 }
 const usage = (output: number) => ({ input_tokens: 1, output_tokens: output, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 })
 
-test('when the Codex checker fails, Claude checks through the session at opus / high', async ($, on) => {
+test('when the Codex checker fails, Claude checks through the session at sonnet / medium', async ($, on) => {
   const fs = world(on)
   const received: { engine: unknown; engine_failures?: unknown[] }[] = []
   checker(on, fs, { bulk: codexFailed, receive: r => (received.push(r), replaceKiku(r.payload)) })
@@ -387,12 +387,12 @@ test('when the Codex checker fails, Claude checks through the session at opus / 
   const { text } = await run($)
   expect(text).toBe('これは速い。')
   expect(completions.length).toBe(1)
-  expect(completions[0]?.model).toBe('opus')
-  expect(completions[0]?.effort).toBe('high')
+  expect(completions[0]?.model).toBe('sonnet')
+  expect(completions[0]?.effort).toBe('medium')
   expect(typeof completions[0]?.maxTokens).toBe('number')
   expect(completions[0]?.system).toBe('SYSTEM')
   expect(completions[0]?.prompt).toBe('PROMPT')
-  expect(received[0]?.engine).toEqual({ family: 'claude', model: 'opus', effort: 'high' })
+  expect(received[0]?.engine).toEqual({ family: 'claude', model: 'sonnet', effort: 'medium' })
   expect(received[0]?.engine_failures).toEqual([{ family: 'codex', reason: 'codex 不調' }])
 })
 
@@ -748,7 +748,7 @@ test('the turn file keeps which checker judged and why the other failed', async 
   const path = [...fs.keys()].find(p => p.startsWith('/state/output-gate/claude-turns/sess-1/') && p.endsWith('-t1.json'))!
   const saved = JSON.parse(fs.get(path)!) as { checks: { engine: unknown; engine_failures: unknown[]; dropped: unknown[] }[] }
   expect(saved.checks.length).toBe(1)
-  expect(saved.checks[0]?.engine).toEqual({ family: 'claude', model: 'opus', effort: 'high' })
+  expect(saved.checks[0]?.engine).toEqual({ family: 'claude', model: 'sonnet', effort: 'medium' })
   expect(saved.checks[0]?.engine_failures).toEqual([{ family: 'codex', reason: 'codex 不調' }])
   expect(saved.checks[0]?.dropped.length).toBe(1)
 })
