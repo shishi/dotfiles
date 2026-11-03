@@ -192,6 +192,7 @@ Codex と Claude Code のログイン、gitleaks、Python 3.11 以降が必要�
 - 背景作業が無いのに、やることを残してターンを終えること。
 - Codex で、指示に従わないモデルが答え直しだけを続けた場合。2 回で止めるのをやめ、次の入力で事実を渡すまでになります。
 - `keep` を宣言した背景 Bash。背景 Bash で起動した委譲 (`codex exec` など) も Bash の作業なので、`keep` で確認の対象から外せます。
+- Claude Code で、API エラーや中断で Stop hook が発火せずに終わったターン。見張りも仕掛からないので、次の入力まで誰も起こしません。
 
 モデルと利用者が使うコマンドです (Claude Code の Bash から実行したときは、そのセッションの台帳を使います)。
 
@@ -206,14 +207,14 @@ bash ~/.agent-shared/hooks/stall-guard.sh [--cli codex] status [--json] --sessio
 Codex は `codex/hooks.json` を更新した後に `/hooks` で stall-guard の hook を信頼し直します。
 
 外すときは、先に無効にしてから予約を消し、最後に登録を外します。
-予約より先に登録を外すと、その時点の Stop で予約を作り直させてしまうためです。
+無効にする前に予約を消すと、Stop hook がその時点で予約を作り直させるためです。
 
 ```sh
 bash ~/.agent-shared/hooks/stall-guard.sh disable
 ```
 
 1. 無効にすると、記録・入力への事実・見張りは何もしなくなり、Stop hook は予約の観測だけを書きます。
-2. `status` に出る予約を、会話で CronDelete (ScheduleWakeup の予約は `ScheduleWakeup{stop:true}`) で消します。
+2. `status` に出る予約を、会話で CronDelete (ScheduleWakeup の予約は `ScheduleWakeup{stop:true}`。利用者の /loop など他の起床も取り消します) で消します。
 3. `claude/settings.json` と `codex/hooks.json` から `stall-guard.sh` の登録を外し、状態ディレクトリ
    (`${XDG_STATE_HOME:-$HOME/.local/state}/stall-guard`) を消します。
 

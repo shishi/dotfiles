@@ -372,6 +372,20 @@ stop_watch $W
 [ "$(field .text_print "$(last "$D/argv.jsonl")")" = null ] || fail "unreadable argv is kept as unknown"
 ok "unreadable argv keeps watching"
 
+# 入力で境界が進み確認時刻が見張りの寿命 (起動 + 2100 秒) を超える時は、打ち切られる前 (寿命の 60 秒前) に起こす。
+reset; argv claude --input-format stream-json; STALL_GUARD_NOW=$(($(rnow) - 3000)) agent a1
+printf '{"at":%s,"event":"prompt"}\n' "$(rnow)" >>"$D/turns.jsonl"
+STALL_GUARD_WATCH_STARTED=$(($(rnow) - 2050)) watch_bg "$(bt a1:subagent)"
+ends_within 2 $W && [ "$WC" = 2 ] || { stop_watch $W; fail "watcher wakes before its own timeout (${WC:-running})"; }
+ok "watcher wakes before its own timeout"
+
+# 前の Stop より前に記録した終了は、その後の Stop が running と報告した作業を隠さない。
+reset; agent a1; printf '{"id":"a1","by":"TaskStop","at":%s}\n' "$((NOW - 100))" >>"$D/ended.jsonl"; seen '["a1"]'
+[ "$(field '.tasks[0].id' "$(sg status --json --session s1)")" = a1 ] || fail "an old ended record does not hide a running task"
+printf '{"id":"a1","by":"TaskStop","at":%s}\n' "$NOW" >>"$D/ended.jsonl"
+[ "$(field '.tasks|length' "$(sg status --json --session s1)")" = 0 ] || fail "an ended record after the latest seen removes the task"
+ok "an old ended record does not hide a running task"
+
 # --- inject・deadline・keep ---
 
 inject() { jq -nc '{session_id:"s1",hook_event_name:"UserPromptSubmit",prompt_id:"p5",prompt:"続けて"}' | sg inject; }
@@ -456,9 +470,11 @@ reg "$CX" PostToolUse "$P" '--cli codex record' \
   && reg "$CX" UserPromptSubmit null '--cli codex inject' \
   || fail "registration matches the design (codex/hooks.json)"
 # Codex の Windows の起動は、既存の hook と同じく invoke-git-bash-hook.ps1 経由で同じ引数を渡す。
+# stop-check と pre-wait は起動 (約 1.4 秒) と lock の待ち (8 秒) を収めるため 30 秒、他は 10 秒。
 jq -e --arg pre "& (Join-Path \$HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '" --arg suf "'" \
   '[.hooks[][] | .hooks[] | select(.command | test("stall-guard\\.sh"))
-    | select(.timeout == 10 and .type == "command" and .commandWindows == ($pre + (.command | sub("^bash "; "")) + $suf))]
+    | select(.timeout == (if (.command | test("stop-check$|pre-wait$")) then 30 else 10 end))
+    | select(.type == "command" and .commandWindows == ($pre + (.command | sub("^bash "; "")) + $suf))]
   | length == 6' "$CX" >/dev/null || fail "registration matches the design (Codex commandWindows)"
 # 既存の出力ゲートと review-rounds の登録が残っている。
 jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-claude\\.sh stop"))] | length == 1' "$CS" >/dev/null \

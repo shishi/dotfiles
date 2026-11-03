@@ -20,9 +20,11 @@ def live($w; $crons):
         and (((.schedule // "") | split(" ")) as $p | (($p[0] | tonumber?) == $m) and (($p[1] | tonumber?) == $h)))
   end;
 def observed_of($L; $key): ([($L.observed // [])[] | select(.key == $key)] | last | .observed_with) // null;
+# 終了の記録は、最新の seen 以後のものだけで running から外す (それより前の終了で、後の Stop が running と報告した作業を隠さない)。
+def ended_since($L): (lastof($L.seen).at // 0) as $a | [($L.ended // [])[] | select(.at >= $a) | .id];
 # 今 running とみなす作業: 最新の seen の running から ended を除く (seen が無ければ tasks から)。
 def running_ids($L):
-  (if lastof($L.seen) then lastof($L.seen).running else ids($L.tasks) end) - ids($L.ended);
+  (if lastof($L.seen) then lastof($L.seen).running else ids($L.tasks) end) - ended_since($L);
 def task_of($L; $id): (last_by_id($L.tasks; $id) // {id: $id, kind: "unknown", started: $now});
 '
 
@@ -231,11 +233,11 @@ claude_watch() {
     res=$(jq -nrR --argjson S "$st" --argjson first "$first" --argjson now "$now" --argjson started "$started" --argjson off 0 \
       "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
       sg_load as $L
-      | (if $first or (lastof($L.seen) | not) then [$S.running[].id] else lastof($L.seen).running end) - ids($L.ended)
+      | (if $first or (lastof($L.seen) | not) then [$S.running[].id] else lastof($L.seen).running end) - ended_since($L)
       | [.[] as $id | (last_by_id($L.tasks; $id) // {kind: ([$S.running[] | select(.id == $id) | .type] | first // "unknown"), started: $now}) as $t
           | select(($t.kind == "shell" and (kept($L; $id) or $t.ends_with_final == true)) | not)
           | ([(lastof($L.turns).at // 0), $started] | max) as $base | interval_of($L; $id) as $iv
-          | {id: $id, kind: $t.kind, started: ($t.started // $now), iv: $iv, base: $base, due: ($base + $iv + 120)}] as $T
+          | {id: $id, kind: $t.kind, started: ($t.started // $now), iv: $iv, base: $base, due: ([$base + $iv + 120, $started + 2100 - 60] | min)}] as $T
       | "N\t\($T | length)",
         "V\t\(if $L.argv then (lastof($L.argv).text_print | tojson) else "unread" end)",
         "D\t\(any($T[]; .due <= $now))",
