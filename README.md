@@ -16,9 +16,10 @@ Claude Code と Codex の共通指示は `codex/AGENTS.md` の 1 ファイルに
 | 特定作業の手順・検証方法 | 各 `skills/<name>/SKILL.md`。該当作業で読む |
 | 個人の価値観・環境の観測・プロジェクト制約 | private の `agent-memory`。索引から関連本文を取得 |
 
-`task-policy.sh` と `wording-policy.sh` は両エージェントの `UserPromptSubmit` で短い要点を
-渡します。詳細規則を hook に重複定義しません。自然言語の注入と、実行を拒否するガードは
-別の役割です。skill や記憶を読んでも、新しい権限や依頼範囲は生まれません。
+応答と作業の規則は、入力のたびに hook で注入しません。常時の判断基準は共通指示 (`AGENTS.md`) にあり、
+出力ゲートを有効にしたマシンでは、回答が規則一覧と既定の判定を守っているかを、最終回答の事後検査で確かめます (規則は `agent-shared/bin/output-gate-rules.json`、
+仕組みは `docs/output-gate.md`)。自然言語の規則と、実行を拒否するガードは別の役割です。skill や記憶を読んでも、
+新しい権限や依頼範囲は生まれません。
 
 Bash の実行前には `agent-shared/hooks/command-judge.sh` が、独立した判定役の AI にコマンドを判定させます。
 判定するのは次の 3 点です。判定基準は `agent-shared/hooks/command-judge-prompt.md` にあります。

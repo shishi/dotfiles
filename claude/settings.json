@@ -301,24 +301,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/wording-policy.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/task-policy.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh prompt",
             "timeout": 10
           }

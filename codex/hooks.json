@@ -212,26 +212,6 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/wording-policy.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/wording-policy.sh'",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/task-policy.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-policy.sh'",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
             "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh prompt",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh prompt'",
             "timeout": 15,
