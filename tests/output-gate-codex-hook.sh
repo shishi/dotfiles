@@ -33,6 +33,22 @@ out=$(bash "$HOOK" enable "$PORT")
 check "enable writes the base url line" "grep -q 'openai_base_url = \"http://127.0.0.1:$PORT/backend-api/codex\"' '$CODEX_HOME/config.toml'"
 check "enable writes the feature lines" "grep -q '^enable_request_compression = false' '$CODEX_HOME/config.toml'"
 check "enable starts the relay" "[ -n \"\$(relay_pid)\" ]"
+check "enable names all hooks needed for recovery" "printf '%s' \"\$out\" | grep -q PreCompact && printf '%s' \"\$out\" | grep -q PreModelRequest"
+
+mkdir -p "$TMP/bad-codex"
+printf 'model = \n' >"$TMP/bad-codex/config.toml"
+if XDG_STATE_HOME="$TMP/bad-state" CODEX_HOME="$TMP/bad-codex" bash "$HOOK" enable "$PORT" >"$TMP/bad-enable.log" 2>&1; then
+  failures=$((failures + 1)); echo "FAIL: enable reports an unwritable configuration"
+else
+  echo "ok: enable reports an unwritable configuration"
+fi
+check "failed first enable does not leave the gate enabled" "[ ! -e '$TMP/bad-state/output-gate/codex.json' ]"
+mkdir -p "$TMP/bad-state/output-gate"
+printf '{"enabled": false, "port": 12345}\n' >"$TMP/bad-state/output-gate/codex.json"
+XDG_STATE_HOME="$TMP/bad-state" CODEX_HOME="$TMP/bad-codex" bash "$HOOK" enable "$PORT" >"$TMP/bad-enable.log" 2>&1 || :
+check "failed enable preserves the previous disabled state" "python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1])) == {\"enabled\": False, \"port\": 12345}' '$TMP/bad-state/output-gate/codex.json'"
+out=$(XDG_STATE_HOME="$TMP/optout-state" CODEX_HOME="$TMP/missing-codex" bash "$HOOK" disable)
+check "disable before setup succeeds without a missing config warning" "! printf '%s' \"\$out\" | grep -q '外せない'"
 
 # pull や checkout で行が消えた状態から、次の入力の hook が書き戻す。
 printf 'model = "m"\n\n[features]\nhooks = true\n' >"$CODEX_HOME/config.toml"
