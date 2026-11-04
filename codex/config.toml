@@ -109,8 +109,15 @@ scripts, wrappers, aliases, APIs and delegation as well as direct Git commands.
 Delegated repository work must retain native authorization review.
 Editing, testing or committing alone does not authorize publication. Interpret
 the user's meaning in context without requiring fixed wording, branch spelling
-or command form. Prior authorization remains valid within its scope until
-fulfilled or withdrawn; it does not authorize publishing later work. This rule
+or command form. A request to push the current branch or current work authorizes
+the commits already on that branch needed to update its intended remote, unless
+the user limits the scope or the context identifies a different target. Resolve a
+short request from the ongoing conversation; do not require the user to repeat
+commit names or explicitly approve each already-existing ancestor. An earlier
+assistant message can establish what a short user reply refers to, but only the
+user can authorize publication. Prior authorization remains valid within its
+scope until fulfilled or withdrawn; it does not authorize publishing later work.
+This rule
 does not deny an authorized publication or relax any other safety boundary.
 Standing permission for personal-memory saves covers only the private memory
 repository's own configured origin and the memory commit sent by its write
