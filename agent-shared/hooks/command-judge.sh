@@ -186,6 +186,11 @@ if [ "$mode" = record ]; then
   # 別のエージェントが委譲で起動したセッションの入力は、利用者の依頼ではないので記録しない。
   [ -z "${AGENT_DELEGATED_SESSION:-}" ] || exit 0
   prompt=$(printf '%s' "$input" | jq -j '.prompt // ""' 2>/dev/null)
+  assistant_context=""
+  if [ "$cli" = codex ] && find_python; then
+    assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" 2>/dev/null)
+    case $? in 0) ;; 3) previous="" ;; *) assistant_context="" ;; esac
+  fi
   # Claude のセッションでは、利用者のメッセージは判定役 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら保存しない。
   omitted=""
   if [ "$cli" = claude ]; then
@@ -202,7 +207,7 @@ if [ "$mode" = record ]; then
   fi
   { printf '%s\n' "$previous" | jq -c 'select(type == "object" and (.at | numbers) and (.text | strings))' 2>/dev/null
     # 本文は標準入力で渡す。引数にすると、長いメッセージで引数長の上限を超えて記録に失敗する。
-    printf '%s' "$prompt" | jq -Rsc --argjson at "$(date +%s)" '{at: $at, text: .}'
+    printf '%s' "$prompt" | jq -Rsc --argjson at "$(date +%s)" --arg context "$assistant_context" '{at: $at, text: ., assistant_context: $context}'
   } | tail -n "$recent_prompts" | write_atomic "$prompt_path" || {
     rm -f -- "$prompt_path" 2>/dev/null
     record_failed "書き込みに失敗した" "$lost"
@@ -269,9 +274,9 @@ if valid_session "$session" && [ -f "$state_dir/prompts/$session" ] && [ ! -L "$
   user_message=$(jq -rs --argjson now "$now" --argjson max_age "$recent_prompt_seconds" --argjson chars "$recent_prompt_chars" '
     map(select(type == "object" and (.at | numbers) and (.text | strings)))
     | (length - 1) as $last
-    | ([to_entries[] | select(.key != $last and (.value.text | length) > $chars) | .key] | max // -1) as $long
+    | ([to_entries[] | select(.key != $last and ((.value.text | length) + ((.value.assistant_context // "") | length)) > $chars) | .key] | max // -1) as $long
     | [to_entries[] | select(.key > $long) | select(.key == $last or $now - .value.at <= $max_age)
-       | "[\((($now - .value.at) / 60) | floor) 分前]\n\(.value.text)"]
+       | "[\((($now - .value.at) / 60) | floor) 分前]\n" + (if (.value.assistant_context // "") != "" then "直前のアシスタントの回答（文脈）:\n\(.value.assistant_context)\n" else "" end) + "利用者:\n\(.value.text)"]
     | join("\n\n")' "$state_dir/prompts/$session" 2>/dev/null) ||
     user_message="(none)"
   [ -n "$user_message" ] || user_message="(none)"
