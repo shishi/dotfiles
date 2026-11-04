@@ -72,10 +72,12 @@ finish() {
   exit 0
 }
 
-UNROUTED_REASON="このセッションは Codex の設定に中継の行が無い状態で始まったため、回答を検査できない。行は書き戻したので、Codex を起動し直して。"
-ENABLE_NOTE="Codex の /hooks で出力ゲートの Stop・SessionStart・UserPromptSubmit・PreCompact・PreModelRequest hook を信頼して。信頼されていないと、中継の再起動や未達の回答の差し戻しができない。hooks.json を更新した後も信頼し直して。"
-HELD_NOTE="直させる前の原文は 24 時間まで保存し、同じセッションの次の入力で一度だけ表示する。次の入力が無い単発の codex exec では bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id] で表示できる (session_id は codex exec --json が出す thread_id)。"
-UNWRITABLE_REASON="Codex の設定に中継の行を書けないため、このセッションの回答を検査できない。設定を直すか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で出力ゲートを外してから起動し直して。"
+UNROUTED_REASON="このセッションは中継の設定がない状態で始まったため、回答を検査できません。設定を書き戻しましたので、Codex を再起動してください。"
+INITIAL_UNROUTED_REASON="出力ゲートを自動で有効にしました。設定を反映するため、お手数ですが、開いているすべての Codex セッションを再起動してください。共有 app-server を使用している場合は、そちらも再起動してください。再起動後、停止された入力を送り直してください。それまでは、ほかのセッションへの入力もお控えください。"
+AUTO_ENABLE_FAILURE_REASON="出力ゲートを有効にできませんでした。設定を確認するか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で無効にしてから、Codex を再起動してください。"
+ENABLE_NOTE="Codex の /hooks で出力ゲートの Stop・SessionStart・UserPromptSubmit・PreCompact・PreModelRequest hook を信頼してください。信頼されていない場合、中継の再起動や未達の回答の差し戻しはできません。hooks.json を更新した後も、再度信頼してください。"
+HELD_NOTE="修正前の回答は 24 時間保存し、同じセッションの次の入力で一度だけ表示します。次の入力がない単発の codex exec では、bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id] で表示できます。session_id には codex exec --json が出す thread_id を指定してください。"
+UNWRITABLE_REASON="Codex の設定に中継の行を書き込めないため、このセッションの回答を検査できません。設定を修正するか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で出力ゲートを無効にしてから再起動してください。"
 
 
 default_port() {
@@ -130,7 +132,7 @@ report_once() {
 
 ensure_relay() {
   local port=$1
-  mkdir -p "$relay_state" || { messages+=("中継の状態ディレクトリを作れない ($relay_state)。"); return 1; }
+  mkdir -p "$relay_state" || { messages+=("中継の状態ディレクトリを作成できませんでした ($relay_state)。"); return 1; }
   local result state
   result=$("$py_bin" -I "$bin_dir/output-gate-relay.py" --port "$port" --state-dir "$relay_state" --ensure 2>/dev/null)
   state=$(printf '%s' "$result" | "$py_bin" -I -c 'import json, sys
@@ -143,27 +145,44 @@ except ValueError:
     running|started|updated) return 0 ;;
     update-deferred)
       # モデルへの要求ごとに動く hook では繰り返さず、セッションの開始と利用者の入力のときだけ伝える。
-      [ "${2:-}" = quiet ] || messages+=("中継の新しい版は、処理中の要求が終わってから入れ替える。それまで古い版で動かしている。")
+      [ "${2:-}" = quiet ] || messages+=("処理中の要求が終わってから中継を更新します。それまでは古い版で動作します。")
       return 0 ;;
     update-failed)
-      messages+=("中継の新しい版に入れ替えられなかったため、古い版のまま動かしている。")
+      messages+=("中継を更新できなかったため、古い版で動作しています。")
       return 0 ;;
   esac
-  report_once "中継を 127.0.0.1:$port で起動できない。ほかのプロセスがポートを使っている可能性がある。直すまで Codex はモデルに接続できない。中継を外すには: bash ~/.agent-shared/hooks/output-gate-codex.sh disable"
+  report_once "中継を 127.0.0.1:$port で起動できませんでした。ほかのプロセスがポートを使用している可能性があります。中継を無効にするには、bash ~/.agent-shared/hooks/output-gate-codex.sh disable を実行してください。"
   return 1
 }
 
 reconcile() {
   local result
   if [ "$1" = apply ]; then
-    result=$("$py_bin" -I "$bin_dir/output-gate-codex-config.py" apply --port "$2" "$config" 2>/dev/null) ||
-      { config_failed=true; messages+=("$config に中継の行を書けない。出力ゲートは無効のまま。"); return 1; }
-    [ "$result" = changed ] && { config_changed=true; messages+=("Codex の設定に中継の行を書き戻した。"); }
+    result=$("$py_bin" -I -X utf8 "$bin_dir/output-gate-codex-config.py" apply --port "$2" "$config" 2>&1) ||
+      { config_failed=true; messages+=("中継の設定を書き込めませんでした。$result"); return 1; }
+    [ "$result" = changed ] && { config_changed=true; messages+=("Codex の設定に中継の行を書き戻しました。"); }
   else
     result=$("$py_bin" -I "$bin_dir/output-gate-codex-config.py" remove "$config" 2>/dev/null) ||
-      { messages+=("$config から中継の行を外せない。"); return 1; }
+      { messages+=("$config から中継の行を外せませんでした。"); return 1; }
   fi
   return 0
+}
+
+enable_gate() {
+  local previous_enabled=$enabled previous_port=$port state_existed=false
+  [ -e "$state_file" ] && state_existed=true
+  port=$1
+  ensure_relay "$port" || return 1
+  write_state true "$port" || { messages+=("$state_file に書き込めませんでした。"); return 1; }
+  if ! reconcile apply "$port"; then
+    if [ "$state_existed" = true ]; then
+      write_state "$previous_enabled" "$previous_port" || messages+=("$state_file を復元できませんでした。")
+    else
+      rm -f -- "$state_file" || messages+=("$state_file を削除できませんでした。")
+    fi
+    return 1
+  fi
+  enabled=true
 }
 
 # 状態を 1 か所で書き換える: 差し戻しの状態ファイルを読み、phase を変えて一時ファイルから置き換える。
@@ -257,7 +276,16 @@ if [ "$mode" = stop ]; then
   exit 0
 fi
 
-find_python || { case "$mode" in enable|disable|held) echo 'output-gate-codex.sh: Python が見つからない。' >&2; exit 1 ;; esac; exit 0; }
+if ! find_python; then
+  case "$mode" in
+    enable|disable|held) echo 'output-gate-codex.sh: Python が見つかりません。' >&2; exit 1 ;;
+    session-start|prompt)
+      if [ ! -e "$state_file" ] && [ ! -L "$state_file" ] && [ "${AGENT_DELEGATED_SESSION:-}" != 1 ]; then
+        printf '%s\n' '{"continue":false,"stopReason":"\u51fa\u529b\u30b2\u30fc\u30c8\u306e\u521d\u671f\u5316\u306b\u306f Python 3.11 \u4ee5\u964d\u304c\u5fc5\u8981\u3067\u3059\u3002Python \u3092\u5c0e\u5165\u3059\u308b\u304b\u3001docs/output-gate.md \u306e\u300c\u5229\u7528\u65b9\u6cd5\u300d\u306b\u3042\u308b\u7121\u52b9\u72b6\u614b\u306e\u4f5c\u6210\u624b\u9806\u3092\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002"}'
+      fi ;;
+  esac
+  exit 0
+fi
 read -r enabled port < <(read_state)
 
 sid=
@@ -331,19 +359,39 @@ case "$mode" in
     if [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && [ -n "$sid" ]; then
       mkdir -p "$relay_state/delegated" && : >"$relay_state/delegated/$sid"
     fi
+    if [ "${AGENT_DELEGATED_SESSION:-}" != 1 ] && [ -n "$sid" ] && [ "$source" != compact ]; then
+      rm -f -- "$relay_state/unrouted/$sid"
+    fi
+    bootstrapped=false
+    if [ ! -e "$state_file" ] && [ ! -L "$state_file" ] && [ -n "$sid" ] &&
+      [ "${AGENT_DELEGATED_SESSION:-}" != 1 ] && [ "$source" != compact ]; then
+      if enable_gate "$(default_port)"; then
+        bootstrapped=true
+      else
+        stop_reason=$AUTO_ENABLE_FAILURE_REASON
+        mkdir -p "$relay_state/unrouted" && printf '%s' "$stop_reason" >"$relay_state/unrouted/$sid"
+        finish
+      fi
+    fi
     if [ "$enabled" = true ]; then
-      ensure_relay "$port"
-      reconcile apply "$port"
+      if [ "$bootstrapped" != true ]; then
+        ensure_relay "$port"
+        reconcile apply "$port"
+      fi
       # 設定を読み込んで始まるスレッド (startup・resume・clear・fork) を止める。compact だけは同じスレッドの
       # 中で続き、始めたときの設定のまま中継を通っている。委譲の子は意図して中継を通さない (起動行で
       # openai_base_url を空にする) ので止めない。
       if [ "${AGENT_DELEGATED_SESSION:-}" != 1 ] && [ -n "$sid" ] && [ "$source" != compact ]; then
         if [ "$config_failed" = true ]; then
           stop_reason=$UNWRITABLE_REASON
+        elif [ "$bootstrapped" = true ]; then
+          stop_reason=$INITIAL_UNROUTED_REASON
         elif [ "$config_changed" = true ]; then
           stop_reason=$UNROUTED_REASON
         fi
-        [ -n "$stop_reason" ] && mkdir -p "$relay_state/unrouted" && printf '%s' "$stop_reason" >"$relay_state/unrouted/$sid"
+        if [ -n "$stop_reason" ]; then
+          mkdir -p "$relay_state/unrouted" && printf '%s' "$stop_reason" >"$relay_state/unrouted/$sid"
+        fi
       fi
       # 続行の登録: このセッションで出力ゲートの Stop hook が動く (信頼済み) と確かめられたときだけ書く。
       # 登録の無いセッションでは、中継は未達の回答を案内に差し替えず、未達の項目を添えた原文を流す。
@@ -360,6 +408,16 @@ case "$mode" in
     finish
     ;;
   prompt)
+    if [ ! -e "$state_file" ] && [ ! -L "$state_file" ] && [ -n "$sid" ] &&
+      [ "${AGENT_DELEGATED_SESSION:-}" != 1 ]; then
+      if enable_gate "$(default_port)"; then
+        stop_reason=$INITIAL_UNROUTED_REASON
+      else
+        stop_reason=$AUTO_ENABLE_FAILURE_REASON
+      fi
+      mkdir -p "$relay_state/unrouted" && printf '%s' "$stop_reason" >"$relay_state/unrouted/$sid"
+      finish
+    fi
     if [ "$enabled" = true ]; then
       ensure_relay "$port"
       reconcile apply "$port"
@@ -376,13 +434,13 @@ case "$mode" in
   held)
     # 手動の回収: 直させる前の原文と未達の項目を、表示済みかに関係なくセッションとターンごとに出す。
     if [ -n "${2:-}" ]; then
-      case "$2" in *[!A-Za-z0-9._-]*|.|..) echo "output-gate-codex.sh: session_id の形が違う。" >&2; exit 2 ;; esac
+      case "$2" in *[!A-Za-z0-9._-]*|.|..) echo "output-gate-codex.sh: session_id の形式が正しくありません。" >&2; exit 2 ;; esac
       dirs=("$relay_state/gate/$2")
     else
       dirs=("$relay_state"/gate/*)
     fi
     text=$(gate_state held "${dirs[@]}")
-    printf '%s\n' "${text:-回収できる原文は無い。}" "$HELD_NOTE"
+    printf '%s\n' "${text:-回収できる原文はありません。}" "$HELD_NOTE"
     ;;
   pre-compact)
     # 利用者の入力から始まらない要求 (compaction) の前にも、止まった中継を起動し直す。
@@ -397,32 +455,18 @@ case "$mode" in
     exit 0
     ;;
   enable)
-    previous_port=$port
-    state_existed=false
-    [ -e "$state_file" ] && state_existed=true
-    port=${2:-$(default_port)}
-    if ! ensure_relay "$port"; then
+    if ! enable_gate "${2:-$(default_port)}"; then
       printf '%s\n' "${messages[@]}" >&2
       exit 1
     fi
-    write_state true "$port" || { echo "$state_file を書けない。" >&2; exit 1; }
-    if ! reconcile apply "$port"; then
-      if [ "$state_existed" = true ]; then
-        write_state "$enabled" "$previous_port" || echo "$state_file を復元できない。" >&2
-      else
-        rm -f -- "$state_file" || echo "$state_file を削除できない。" >&2
-      fi
-      printf '%s\n' "${messages[@]}" >&2
-      exit 1
-    fi
-    printf '%s\n' "${messages[@]:-出力ゲートを有効にした (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE"
+    printf '%s\n' "${messages[@]:-出力ゲートを有効にしました (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE"
     ;;
   disable)
-    write_state false "${port:-0}" || { echo "$state_file を書けない。" >&2; exit 1; }
+    write_state false "${port:-0}" || { echo "$state_file に書き込めませんでした。" >&2; exit 1; }
     if [ -e "$config" ] || [ -L "$config" ]; then
       reconcile remove
     fi
-    printf '%s\n' "${messages[@]:-出力ゲートを無効にした。Codex を起動し直すと中継を通らない。}"
+    printf '%s\n' "${messages[@]:-出力ゲートを無効にしました。Codex を再起動すると中継を通らなくなります。}"
     ;;
   *)
     echo "usage: output-gate-codex.sh session-start|prompt|stop|pre-compact|pre-model|enable [PORT]|disable|held [SESSION_ID]" >&2

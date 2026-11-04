@@ -29,6 +29,63 @@ check() {
   if eval "$2"; then echo "ok: $1"; else echo "FAIL: $1"; failures=$((failures + 1)); fi
 }
 
+FIRST="$TMP/first"
+mkdir -p "$FIRST/agent-shared/hooks" "$FIRST/agent-shared/bin" "$FIRST/codex" "$FIRST/bin"
+cp "$HOOK" "$FIRST/agent-shared/hooks/output-gate-codex.sh"
+cp "$REPO/agent-shared/bin/output-gate-codex-config.py" "$FIRST/agent-shared/bin/output-gate-codex-config.py"
+cat >"$FIRST/agent-shared/bin/output-gate-relay.py" <<'EOF'
+import json
+def kill_tree(process):
+    process.kill()
+    process.wait()
+if __name__ == '__main__':
+    print(json.dumps({'state': 'running'}))
+EOF
+printf '#!/bin/sh\nexit 1\n' >"$FIRST/bin/codex"
+chmod +x "$FIRST/bin/codex"
+printf 'model = "m"\n' >"$FIRST/codex/config.toml"
+first_out=$(printf '{"session_id":"first","source":"startup"}' | XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start)
+check "first session enables gate without setup" "python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1]))[\"enabled\"] is True' '$FIRST/state/output-gate/codex.json' && grep -q '^openai_base_url' '$FIRST/codex/config.toml'"
+check "first session is stopped before using the old endpoint" "printf '%s' \"\$first_out\" | python3 -I -c 'import json,sys; assert json.load(sys.stdin)[\"continue\"] is False'"
+check "first session asks for all sessions to restart" "printf '%s' \"\$first_out\" | python3 -I -c 'import json,sys; s=json.load(sys.stdin)[\"stopReason\"]; assert \"すべて\" in s and \"再起動\" in s'"
+check "first session explains shared server and resending input politely" "printf '%s' \"\$first_out\" | python3 -I -c 'import json,sys; s=json.load(sys.stdin)[\"stopReason\"]; assert \"app-server\" in s and \"送り直\" in s and \"ください\" in s'"
+check "first setup reports the configuration change politely" "printf '%s' \"\$first_out\" | python3 -I -c 'import json,sys; assert json.load(sys.stdin)[\"systemMessage\"].endswith(\"ました。\")'"
+printf '{"session_id":"first","source":"resume"}' | XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start >/dev/null
+resumed_prompt=$(printf '{"session_id":"first"}' | XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" prompt)
+check "resumed session can use the configured endpoint" "! printf '%s' \"\$resumed_prompt\" | grep -q '\"continue\"'"
+next_out=$(printf '{"session_id":"next","source":"startup"}' | XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start)
+check "next session continues after reading the new endpoint" "! printf '%s' \"\$next_out\" | grep -q '\"continue\"'"
+XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" disable >/dev/null
+disabled_before=$(cat "$FIRST/state/output-gate/codex.json")
+printf '{"session_id":"disabled","source":"startup"}' | XDG_STATE_HOME="$FIRST/state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start >/dev/null
+check "explicitly disabled gate stays disabled" "[ \"\$(cat '$FIRST/state/output-gate/codex.json')\" = \"\$disabled_before\" ] && ! grep -q '^openai_base_url' '$FIRST/codex/config.toml'"
+mkdir -p "$FIRST/child-codex" "$FIRST/bad-codex"
+printf 'model = "m"\n' >"$FIRST/child-codex/config.toml"
+printf '{"session_id":"child","source":"startup"}' | AGENT_DELEGATED_SESSION=1 XDG_STATE_HOME="$FIRST/child-state" CODEX_HOME="$FIRST/child-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start >/dev/null
+check "delegated sessions do not activate the gate" "[ ! -e '$FIRST/child-state/output-gate/codex.json' ] && ! grep -q '^openai_base_url' '$FIRST/child-codex/config.toml'"
+printf 'model = \n' >"$FIRST/bad-codex/config.toml"
+bad_out=$(printf '{"session_id":"bad","source":"startup"}' | XDG_STATE_HOME="$FIRST/bad-state" CODEX_HOME="$FIRST/bad-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start)
+check "failed automatic setup stops the session without marking it enabled" "[ ! -e '$FIRST/bad-state/output-gate/codex.json' ] && printf '%s' \"\$bad_out\" | python3 -I -c 'import json,sys; assert json.load(sys.stdin)[\"continue\"] is False'"
+check "failed setup reports its cause and how to disable the gate" "printf '%s' \"\$bad_out\" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); assert \"disable\" in d[\"stopReason\"] and \"TOML\" in d[\"systemMessage\"]'"
+check "failure explains restart after disabling" "printf '%s' \"\$bad_out\" | python3 -I -c 'import json,sys; assert \"再起動\" in json.load(sys.stdin)[\"stopReason\"]'"
+bad_prompt=$(printf '{"session_id":"bad"}' | XDG_STATE_HOME="$FIRST/bad-state" CODEX_HOME="$FIRST/bad-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" prompt)
+check "failed initialization keeps later prompts stopped" "printf '%s' \"\$bad_prompt\" | python3 -I -c 'import json,sys; assert json.load(sys.stdin)[\"continue\"] is False'"
+mkdir -p "$FIRST/no-python"
+for name in python3 python; do
+  printf '#!/bin/sh\nexit 1\n' >"$FIRST/no-python/$name"
+  chmod +x "$FIRST/no-python/$name"
+done
+no_python=$(printf '{"session_id":"no-python","source":"startup"}' | XDG_STATE_HOME="$FIRST/no-python-state" CODEX_HOME="$FIRST/codex" PATH="$FIRST/no-python:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start)
+check "missing Python stops initial session" "printf '%s' \"\$no_python\" | python3 -I -c 'import json,sys; assert json.load(sys.stdin)[\"continue\"] is False'"
+check "missing Python provides a recovery procedure" "printf '%s' \"\$no_python\" | python3 -I -c 'import json,sys; assert \"docs/output-gate.md\" in json.load(sys.stdin)[\"stopReason\"]'"
+mkdir -p "$FIRST/disabled-codex"
+printf 'model = "m"\n' >"$FIRST/disabled-codex/config.toml"
+printf '{"session_id":"disable-resume","source":"startup"}' | XDG_STATE_HOME="$FIRST/disabled-state" CODEX_HOME="$FIRST/disabled-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start >/dev/null
+XDG_STATE_HOME="$FIRST/disabled-state" CODEX_HOME="$FIRST/disabled-codex" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" disable >/dev/null
+printf '{"session_id":"disable-resume","source":"resume"}' | XDG_STATE_HOME="$FIRST/disabled-state" CODEX_HOME="$FIRST/disabled-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" session-start >/dev/null
+disabled_prompt=$(printf '{"session_id":"disable-resume"}' | XDG_STATE_HOME="$FIRST/disabled-state" CODEX_HOME="$FIRST/disabled-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" prompt)
+check "resuming after disabling does not keep the old stop" "! printf '%s' \"\$disabled_prompt\" | grep -q '\"continue\"'"
+
 out=$(bash "$HOOK" enable "$PORT")
 check "enable writes the base url line" "grep -q 'openai_base_url = \"http://127.0.0.1:$PORT/backend-api/codex\"' '$CODEX_HOME/config.toml'"
 check "enable writes the feature lines" "grep -q '^enable_request_compression = false' '$CODEX_HOME/config.toml'"
@@ -48,7 +105,7 @@ printf '{"enabled": false, "port": 12345}\n' >"$TMP/bad-state/output-gate/codex.
 XDG_STATE_HOME="$TMP/bad-state" CODEX_HOME="$TMP/bad-codex" bash "$HOOK" enable "$PORT" >"$TMP/bad-enable.log" 2>&1 || :
 check "failed enable preserves the previous disabled state" "python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1])) == {\"enabled\": False, \"port\": 12345}' '$TMP/bad-state/output-gate/codex.json'"
 out=$(XDG_STATE_HOME="$TMP/optout-state" CODEX_HOME="$TMP/missing-codex" bash "$HOOK" disable)
-check "disable before setup succeeds without a missing config warning" "! printf '%s' \"\$out\" | grep -q '外せない'"
+check "disable before setup succeeds without a missing config warning" "! printf '%s' \"\$out\" | grep -Eq '外せ(ない|ません)'"
 
 # pull や checkout で行が消えた状態から、次の入力の hook が書き戻す。
 printf 'model = "m"\n\n[features]\nhooks = true\n' >"$CODEX_HOME/config.toml"
@@ -200,7 +257,7 @@ check "a recovery longer than the command line limit is shown" "printf '%s' \"\$
 out=$(bash "$HOOK" held)
 check "held shows substituted and blocked originals even after they were shown" "printf '%s' \"\$out\" | grep -q ORIGINAL-ANSWER && printf '%s' \"\$out\" | grep -q BLOCKED-ORIGINAL"
 out=$(bash "$HOOK" held r2)
-check "held does not show a resolved turn" "bash '$HOOK' held r3 | grep -q '回収できる原文は無い'"
+check "held does not show a resolved turn" "bash '$HOOK' held r3 | grep -q '回収できる原文はありません'"
 check "held with a session id shows only that session" "printf '%s' \"\$out\" | grep -q BLOCKED-ORIGINAL && ! printf '%s' \"\$out\" | grep -q ORIGINAL-ANSWER"
 check "held keeps the states" "[ -f '$GATE/r1/t1.json' ] && [ -f '$GATE/r2/t1.json' ]"
 

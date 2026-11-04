@@ -53,17 +53,16 @@ def remove_lines(lines):
 
 def apply_lines(lines, port):
     lines = remove_lines(lines)
+    if not any(FEATURES_HEADER.match(line) for line in lines):
+        if lines and lines[-1].strip():
+            lines.append('')
+        lines.append('[features]')
     base = f'{BASE_KEY} = "http://127.0.0.1:{port}/backend-api/codex"'
     first_table = next((i for i, line in enumerate(lines) if TABLE.match(line)), len(lines))
     lines.insert(first_table, base)
     feature_lines = [f'{key} = false' for key in FEATURE_KEYS]
-    header = next((i for i, line in enumerate(lines) if FEATURES_HEADER.match(line)), None)
-    if header is None:
-        if lines and lines[-1].strip():
-            lines.append('')
-        lines += ['[features]', *feature_lines]
-    else:
-        lines[header + 1:header + 1] = feature_lines
+    header = next(i for i, line in enumerate(lines) if FEATURES_HEADER.match(line))
+    lines[header + 1:header + 1] = feature_lines
     return lines
 
 
@@ -74,19 +73,19 @@ def check_meaning(old_text, new_text, action, port):
     try:
         import tomllib
     except ImportError:   # Python 3.10 以前。外すだけなら意味は変わらないので確かめずに進める
-        return None if action == 'remove' else 'Python 3.11 以降が必要なため書き換えない'
+        return None if action == 'remove' else 'Python 3.11 以降が必要なため、設定を書き換えられません。'
     try:
         old = tomllib.loads(old_text)
     except tomllib.TOMLDecodeError:
-        return 'TOML として読めないため書き換えない'
+        return 'TOML として読み込めないため、設定を書き換えられません。'
     try:
         new = tomllib.loads(new_text)
     except tomllib.TOMLDecodeError:
-        return '書き換えると TOML として読めなくなるため書き換えない'
+        return '書き換えると TOML として読み込めなくなるため、設定を変更できません。'
     expected = copy.deepcopy(old)
     features = expected.get('features', {})
     if not isinstance(features, dict):
-        return 'features が表ではないため書き換えない'
+        return 'features が表ではないため、設定を書き換えられません。'
     if action == 'apply':
         expected[BASE_KEY] = f'http://127.0.0.1:{port}/backend-api/codex'
         expected['features'] = dict(features, **{key: False for key in FEATURE_KEYS})
@@ -97,7 +96,7 @@ def check_meaning(old_text, new_text, action, port):
     for data in (expected, new):
         if data.get('features') == {}:
             del data['features']   # 見出しだけ残った [features] は、表が無いのと同じに扱う
-    return None if new == expected else '書き換えるとほかの設定まで変わるため書き換えない'
+    return None if new == expected else 'ほかの設定まで変わるため、設定を書き換えられません。'
 
 
 def edit(text, action, port):

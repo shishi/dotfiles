@@ -42,6 +42,13 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(self.run_tool('apply', '--port', '18800'), 'unchanged')
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_apply_without_features_is_idempotent(self):
+        self.path.write_text('model = "m"\n', encoding='utf-8')
+        self.run_tool('apply', '--port', '18800')
+        before = self.path.read_bytes()
+        self.assertEqual(self.run_tool('apply', '--port', '18800'), 'unchanged')
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_apply_updates_port(self):
         self.path.write_text('model = "m"\n', encoding='utf-8')
         self.run_tool('apply', '--port', '18800')
