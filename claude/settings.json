@@ -12,11 +12,12 @@
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "1",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "1",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/output-gate",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "1",
+    "FORCE_AUTOUPDATE_PLUGINS": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_INTERLEAVED_THINKING": "1",
-    "DISABLE_MICROCOMPACT": "1",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "DISABLE_TELEMETRY": "1",
     "MAX_MCP_OUTPUT_TOKENS": "50000",
@@ -182,27 +183,25 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh",
-            "timeout": 10,
-            "statusMessage": "OS 再起動の明示許可を確認中..."
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh",
-            "timeout": 10,
-            "statusMessage": "操作不能化の明示許可を確認中..."
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/gh-body-file-guard.sh",
-            "timeout": 10,
-            "statusMessage": "gh の本文受け渡しを確認中..."
+            "command": "bash ~/.agent-shared/hooks/command-judge.sh",
+            "timeout": 60,
+            "statusMessage": "コマンドの影響を判定中..."
           },
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
             "timeout": 10,
             "statusMessage": "gh の呼び出し形を確認中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh pre",
+            "timeout": 15
           }
         ]
       }
@@ -242,9 +241,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory core",
+            "timeout": 20,
+            "statusMessage": "個人記憶を同期・注入中..."
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory project",
             "timeout": 10,
-            "statusMessage": "個人記憶を注入中..."
+            "statusMessage": "プロジェクト記憶を注入中..."
           }
         ]
       },
@@ -278,12 +283,7 @@
           },
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh --record-approval",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh --record-approval",
+            "command": "bash ~/.agent-shared/hooks/command-judge.sh --record-prompt",
             "timeout": 10
           }
         ]
@@ -314,6 +314,24 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh prompt",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh inject",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -325,6 +343,98 @@
             "command": "bash ~/.agent-shared/hooks/outward-write-readback.sh",
             "timeout": 30,
             "statusMessage": "投稿された実物を取得中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Bash|ScheduleWakeup|CronCreate|TaskStop",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "MessageDisplay": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh display",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh stop",
+            "timeout": 120
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh stop-check",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh watch",
+            "asyncRewake": true,
+            "timeout": 2100
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "correctness-reviewer|adversarial-reviewer|spec-scope-reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh stop",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "ScheduleWakeup|CronCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "ScheduleWakeup|CronCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
+            "timeout": 10
           }
         ]
       }
@@ -349,31 +459,35 @@
     "superpowers-chrome@superpowers-marketplace": true,
     "superpowers-developing-for-claude-code@superpowers-marketplace": true,
     "superpowers-lab@superpowers-marketplace": false,
-    "superpowers@superpowers-marketplace": false,
+    "superpowers@superpowers-marketplace": true,
     "typescript-lsp@claude-plugins-official": true,
     "ruby-lsp@claude-plugins-official": true,
     "vue-lsp@teachme-web-lsp": true
   },
   "extraKnownMarketplaces": {
     "claude-code-herdr-plugin": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "yigitkonur/claude-code-herdr-plugin"
       }
     },
     "claude-plugins-official": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
       }
     },
     "superpowers-marketplace": {
+      "autoUpdate": true,
       "source": {
         "source": "github",
         "repo": "obra/superpowers-marketplace"
       }
     },
     "teachme-web-lsp": {
+      "autoUpdate": true,
       "source": {
         "source": "directory",
         "path": "/Users/shigenobu.407/dev/src/github.com/StudistCorporation/teachme_web_duvel/.claude/lsp-marketplace"
@@ -424,7 +538,7 @@
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "preferredNotifChannel": "terminal_bell",
-  "autoCompactEnabled": false,
+  "autoCompactEnabled": true,
   "skipAutoPermissionPrompt": true,
   "autoUpdates": false,
   "feedbackSurveyState": {

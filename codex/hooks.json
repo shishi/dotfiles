@@ -12,34 +12,78 @@
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex record",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex record'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "collaborationspawn_agent|collaborationfollowup_task|collaborationinterrupt_agent|collaborationwait_agent"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-compact",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-compact'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreModelRequest": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-model",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-model'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/reboot-guard.sh'",
-            "statusMessage": "OS 再起動の明示許可を確認中...",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/control-loss-guard.sh'",
-            "statusMessage": "操作不能化の明示許可を確認中...",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/gh-body-file-guard.sh",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/gh-body-file-guard.sh'",
-            "statusMessage": "gh の本文受け渡しを確認中...",
-            "timeout": 10,
+            "command": "bash ~/.agent-shared/hooks/command-judge.sh --cli codex",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/command-judge.sh --cli codex'",
+            "statusMessage": "コマンドの影響を判定中...",
+            "timeout": 60,
             "type": "command"
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh pre",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/review-rounds.sh pre'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ],
+        "matcher": "collaborationspawn_agent"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex pre-wait",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex pre-wait'",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "collaborationwait_agent"
       }
     ],
     "SessionStart": [
@@ -49,7 +93,7 @@
             "additionalContextLimit": 30000,
             "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory'",
-            "timeout": 10,
+            "timeout": 20,
             "type": "command"
           }
         ],
@@ -69,6 +113,74 @@
         "hooks": [
           {
             "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "commandWindows": "& (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-start",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-start'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh stop'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex stop-check",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex stop-check'",
+            "timeout": 30,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex subagent-start",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex subagent-start'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/review-rounds.sh stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/review-rounds.sh stop'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ],
+        "matcher": "correctness-reviewer|adversarial-reviewer|spec-scope-reviewer"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex subagent-stop",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex subagent-stop'",
             "timeout": 10,
             "type": "command"
           }
@@ -79,14 +191,8 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/reboot-guard.sh --record-approval",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/reboot-guard.sh --record-approval'",
-            "timeout": 10,
-            "type": "command"
-          },
-          {
-            "command": "bash ~/.agent-shared/hooks/control-loss-guard.sh --record-approval",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/control-loss-guard.sh --record-approval'",
+            "command": "bash ~/.agent-shared/hooks/command-judge.sh --cli codex --record-prompt",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/command-judge.sh --cli codex --record-prompt'",
             "timeout": 10,
             "type": "command"
           }
@@ -118,6 +224,26 @@
           {
             "command": "bash ~/.agent-shared/hooks/task-policy.sh",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/task-policy.sh'",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh prompt",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh prompt'",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/stall-guard.sh --cli codex inject",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/stall-guard.sh --cli codex inject'",
             "timeout": 10,
             "type": "command"
           }

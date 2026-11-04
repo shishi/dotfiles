@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索候補を渡す。
+# Claude の SessionStart は hook 出力 1 つあたりの文字数上限に収めるため、core と project の
+# 2 つの hook に分ける。索引は毎入力の lookup で届くので、Claude の起動時には出さない。
 # 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
-# usage: inject-memory.sh [MEMORY_DIR] [lookup [検索語...]]
+# usage: inject-memory.sh [MEMORY_DIR] [core|project|lookup [検索語...]]
 set -u
 
 MEMORY_DIR="${1:-${HOME}/.claude/memory}"
@@ -15,7 +17,8 @@ fi
 # POSIX symlink は -L で判定できるが、Windows junction は git-bash の -L で
 # 拾えない場合があるため、「親ディレクトリにエントリが在るのに -e が偽」も
 # 壊れ link とみなす。「記憶が静かに消えたまま動き続ける」事故の検知が目的。
-if [ ! -e "$MEMORY_DIR" ]; then
+# lookup はこの 2 つも確かめず、main を読む git の失敗としてその原因を出す。
+if [ "$mode" != lookup ] && [ ! -e "$MEMORY_DIR" ]; then
   if [ -L "$MEMORY_DIR" ] \
     || ls -A "$(dirname "$MEMORY_DIR")" 2>/dev/null | grep -qxF "$(basename "$MEMORY_DIR")"; then
     echo "<personal-memory-warning>記憶ディレクトリの link が壊れています: ${MEMORY_DIR}(リンク先が存在しない)</personal-memory-warning>"
@@ -25,7 +28,7 @@ fi
 
 # MEMORY.md が無い directory は未導入として無言で扱う。一方、MEMORY.md があるのに
 # Git worktree でない実体は editable file を注入しない。commit snapshot だけを信頼する。
-if [ ! -e "${MEMORY_DIR}/.git" ]; then
+if [ "$mode" != lookup ] && [ ! -e "${MEMORY_DIR}/.git" ]; then
   if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
     echo "<personal-memory-warning>記憶ディレクトリが Git repo ではないため注入をスキップ: ${MEMORY_DIR}。MEMORY.md の内容は読み取っていません</personal-memory-warning>"
   fi
@@ -36,8 +39,14 @@ is_num() { # $1 が空でない十進数か(外部コマンドの出力を算術
   case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
 }
 
+# 同じイベントの hook は並列に走るため、同期は 1 つの hook だけで行う。
+# Claude の project は同期を待たずに読み、その古さを未同期と同じく出力で伝える。
 sync_note=""
-if [ "$mode" != lookup ]; then
+pre_sync=""
+if [ "$mode" = core ]; then
+  pre_sync=$(git -C "$MEMORY_DIR" rev-parse --verify -q 'main^{commit}' 2>/dev/null | tr -d '\r')
+fi
+if [ "$mode" != lookup ] && [ "$mode" != project ]; then
   sync_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/memory-write-preflight.sh"
   if bash "$sync_helper" "$MEMORY_DIR" --read-sync >/dev/null 2>&1; then
     sync_note="記憶の同期: origin/main と同期済み"
@@ -50,11 +59,13 @@ fi
 # MEMORY.md の存在確認より先に Git の健全性を検査する(編集途中で MEMORY.md が
 # 消えている dirty repo を無言スキップに落とさない)。健全なら main commit を一度だけ
 # 固定し、以降はその snapshot だけを読む。
+# lookup は毎入力で走るので、この確認をしない。main の確定 commit だけを読み、読めない・
+# 秘密検査に掛かったときに原因を出して止まる。状態の警告は起動時の注入が伝える。
 snapshot=""
 ahead_warn=""
 degraded=""
 repo_state=""
-if [ -e "${MEMORY_DIR}/.git" ]; then
+if [ "$mode" != lookup ]; then
   branch=$(git -C "$MEMORY_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\r')
   gitdir=$(git -C "$MEMORY_DIR" rev-parse --absolute-git-dir 2>/dev/null | tr -d '\r')
   # 中止(fatal)と劣化注入(degraded)を分ける。
@@ -97,7 +108,8 @@ if [ -e "${MEMORY_DIR}/.git" ]; then
     echo "<personal-memory-warning>記憶 repo が不健全なため注入をスキップ: ${fatal}(${MEMORY_DIR})。${recovery}</personal-memory-warning>"
     exit 0
   fi
-  if ! porcelain=$(git -C "$MEMORY_DIR" status --porcelain 2>/dev/null); then
+  # 並列に走る同期の fast-forward と index.lock を取り合わないよう、index の refresh を書かない。
+  if ! porcelain=$(git --no-optional-locks -C "$MEMORY_DIR" status --porcelain 2>/dev/null); then
     echo "<personal-memory-warning>記憶 repo の Git 状態を確認できないため注入をスキップしました</personal-memory-warning>"
     exit 0
   fi
@@ -161,29 +173,6 @@ probe_file() { # $1=repo 相対パス; 0=存在、1=正常な不存在、2=Git�
   return 2
 }
 
-# 記憶未導入(索引なし)は正常系として無言スキップ。ただし worktree に索引が在るのに
-# snapshot に無い場合は「注入したつもりで記憶ゼロ」になるため黙らない(注入は snapshot
-# 経由なので未 commit の索引は出せない = 出せないことを伝えるしかない)。
-probe_file "MEMORY.md"
-index_probe_status=$?
-case "$index_probe_status" in
-  0) ;;
-  1)
-    if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
-      # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
-      # 前にその事実を渡す(repo_state はここまでに算出済み)。
-      state_note=""
-      [ -n "$repo_state" ] && state_note="${repo_state}。"
-      echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
-    fi
-    exit 0
-    ;;
-  *)
-    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: MEMORY.md。本文は出力していません</personal-memory-warning>"
-    exit 0
-    ;;
-esac
-
 if [ "$#" -ge 3 ] && [ "$mode" = lookup ]; then
   shift 2
   input=$(jq -n --arg prompt "$*" '{prompt:$prompt,memory_lookup_manual:true}')
@@ -235,6 +224,47 @@ fi
 
 [ -n "$slug" ] || slug=$(slugify "$cwd")
 
+project_path="projects/${slug}.md"
+secret_pattern="(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
+lookup_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/search-memory.py"
+py_bin=$(command -v python3 || command -v python) || py_bin=""
+if [ "$mode" = lookup ]; then
+  [ -n "$py_bin" ] || { echo "python3 / python が見つからないため記憶を検索できません" >&2; exit 2; }
+  snapshot=$(git -C "$MEMORY_DIR" rev-parse --verify 'main^{commit}') || {
+    echo "記憶 repo の main commit を読めません: ${MEMORY_DIR}" >&2
+    exit 2
+  }
+  snapshot=${snapshot%$'\r'}
+  if printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" lookup "$project_path" "$secret_pattern"; then
+    trap - EXIT
+    exit 0
+  fi
+  exit 2
+fi
+
+# 記憶未導入(索引なし)は正常系として無言スキップ。ただし worktree に索引が在るのに
+# snapshot に無い場合は「注入したつもりで記憶ゼロ」になるため黙らない(注入は snapshot
+# 経由なので未 commit の索引は出せない = 出せないことを伝えるしかない)。
+probe_file "MEMORY.md"
+index_probe_status=$?
+case "$index_probe_status" in
+  0) ;;
+  1)
+    if [ -f "${MEMORY_DIR}/MEMORY.md" ]; then
+      # lock 保持中なら worktree の索引は書き込み途中の可能性があるので、下書きを読ませる
+      # 前にその事実を渡す(repo_state はここまでに算出済み)。
+      state_note=""
+      [ -n "$repo_state" ] && state_note="${repo_state}。"
+      echo "<personal-memory-warning>記憶 repo の commit 済みの索引が読めません(未 commit または object 欠損): ${MEMORY_DIR}。注入なし。${state_note}記憶が要る作業の前に ${MEMORY_DIR}/MEMORY.md を未 commit の下書きとして Read し、その旨をユーザーへ報告すること</personal-memory-warning>"
+    fi
+    exit 0
+    ;;
+  *)
+    echo "<personal-memory-warning>記憶 snapshot の存在確認に失敗したため注入をスキップ: MEMORY.md。本文は出力していません</personal-memory-warning>"
+    exit 0
+    ;;
+esac
+
 # required index、optional CORE、存在する selected project file は、wrapper を出す前に
 # 固定 snapshot から各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
 if ! memory_content=$(emit_file "MEMORY.md"); then
@@ -261,7 +291,6 @@ case "$core_probe_status" in
     ;;
 esac
 
-project_path="projects/${slug}.md"
 project_content=""
 project_present=""
 probe_file "$project_path"
@@ -281,7 +310,6 @@ case "$project_probe_status" in
     ;;
 esac
 
-secret_pattern="(^|[^[:alnum:]_])(password|passwd|secret|token|api[_-]?key|private[_-]?key|client[_-]?secret)[\"']?[[:space:]]*[:=][[:space:]]*(\"[^\"]{8,}\"|'[^']{8,}'|[^[:space:]\"'][^[:space:]\"']{7,})|(gh[pousr]_|github_pat_|xox[baprs]-|sk-)[[:alnum:]_=-]{20,}|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----"
 scan_content() { # $1=content; 0=secret candidate, 1=clean, other=scan error
   printf '%s\n' "$1" | LC_ALL=C grep -Eiq -- "$secret_pattern"
 }
@@ -312,19 +340,73 @@ if [ -n "$project_present" ]; then
   scan_path "$project_path" "$project_content" && exit 0
 fi
 
-lookup_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/search-memory.py"
-py_bin=$(command -v python3 || command -v python) || py_bin=""
-if [ "$mode" = lookup ]; then
-  [ -n "$py_bin" ] || exit 2
-  if printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" lookup "$project_path" "$secret_pattern"; then
-    trap - EXIT
-    exit 0
-  fi
-  exit 2
-fi
-# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。
-if [ -n "$py_bin" ]; then
+# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。既読として記録するのは、
+# この出力が全文を渡す文書だけにする。Claude では並列に走る 2 つの hook が同じ記録を
+# 書き合わないよう、project 側が共有の記録をリセットし、core 側は CORE を別の記録に書く。
+if [ -n "$py_bin" ] && [ "$mode" != core ] && [ "$mode" != project ]; then
   printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
+fi
+
+# Claude は hook 出力 1 つあたり 10,000 文字を超えると、先頭だけのプレビューに置き換えて
+# 本文を渡さない。超える場合は本文の代わりに、確定 commit から全文を読む手順を渡す。
+if [ "$mode" = core ] || [ "$mode" = project ]; then
+  claude_limit=10000
+  if [ "$mode" = core ]; then
+    tag=personal-memory
+    header="個人永続記憶の全体価値観と方針。索引は毎入力の <personal-memory-index>、プロジェクト記憶は別の起動時 hook で渡す。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
+    project_note=""
+    if [ -n "$pre_sync" ] && [ "$pre_sync" != "$snapshot" ] \
+      && ! git -C "$MEMORY_DIR" diff --quiet "$pre_sync" "$snapshot" -- "$project_path" 2>/dev/null; then
+      project_note="⚠ 起動時の同期でプロジェクト記憶(${project_path})が同期で更新された。別の起動時 hook が渡した本文は同期前の版なので、作業前に lookup で $(printf '%q' "$project_path") を取得し直すこと"
+    fi
+    notes=("$sync_note" "$degraded" "$ahead_warn" "$project_note")
+    doc_path="CORE.md" doc_present="$core_present" doc_content="$core_content"
+    doc_title="## 全体価値観と方針"
+  else
+    tag=personal-memory-project
+    header="個人永続記憶のプロジェクト記憶。"
+    if [ -n "$project_present" ]; then
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
+    elif [ -n "$degraded" ]; then
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: 最後の commit 時点ではなし)"
+    else
+      slug_note="現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
+    fi
+    notes=("⚠ 起動時の同期を待たずに読んだローカルの確定済み記憶(同期は並列に走る CORE 側の起動時 hook が行う)。未同期の記憶と同じく、別端末の最新変更が必要なら lookup で取得し直すこと" "$slug_note" "$degraded")
+    doc_path="$project_path" doc_present="$project_present" doc_content="$project_content"
+    doc_title="## プロジェクト記憶 (${slug})"
+  fi
+  render() { # $1=本文。空なら header と注記だけ
+    printf '<%s>\n%s\n' "$tag" "$header"
+    for note in "${notes[@]}"; do
+      [ -n "$note" ] && printf '%s\n' "$note"
+    done
+    [ -n "$1" ] && printf '\n%s\n' "$1"
+    printf '</%s>\n' "$tag"
+  }
+  body=""
+  [ -n "$doc_present" ] && body=$(printf '%s\n%s' "$doc_title" "$doc_content")
+  output=$(render "$body")
+  # Claude の文字数は UTF-16 の単位で数える。数えられないときは本文をそのまま出す。
+  chars=""
+  if [ -n "$py_bin" ]; then
+    chars=$(printf '%s' "$output" | "$py_bin" -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8", "replace").encode("utf-16-le")) // 2)' 2>/dev/null | tr -d '\r')
+  fi
+  delivered="$doc_path"
+  if is_num "$chars" && [ "$chars" -ge "$claude_limit" ]; then
+    mem_q=$(printf '%q' "$MEMORY_DIR")
+    show_q=$(printf '%q' "${snapshot}:${doc_path}")
+    output=$(render "<personal-memory-warning>${doc_path} を含む起動時の注入が ${chars} 文字で、Claude の hook 出力上限(${claude_limit} 文字)を超えるため本文を省略しました。作業前に \`git -C ${mem_q} show ${show_q}\` で全文を読むこと</personal-memory-warning>")
+    delivered=""
+  fi
+  [ -n "$doc_present" ] || delivered=""
+  if [ -n "$py_bin" ]; then
+    record_mode=reset-project
+    [ "$mode" = core ] && record_mode=record-core
+    printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" "$record_mode" "$delivered" "$secret_pattern" || true
+  fi
+  printf '%s\n' "$output"
+  exit 0
 fi
 
 echo "<personal-memory>"

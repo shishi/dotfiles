@@ -5,45 +5,41 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
-HOOKS = os.path.expanduser("~/.agent-shared/hooks")
-GUARD = os.path.join(HOOKS, "gh-body-file-guard.sh")
+HOOKS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Windows の CreateProcess は PATH より System32 の bash.exe(WSL)を先に選ぶ。
+# PATH でも System32 が Git Bash より前にある場合は WSL になるため、Windows では Git Bash から実行する。
+BASH = shutil.which("bash") or "bash"
 READBACK = os.path.join(HOOKS, "outward-write-readback.sh")
 
 MULTILINE_PUSH = 'W="$TMPDIR/x"\nmkdir -p "$W"\ngit -C "$W" status --short\ngit -C "$W" push\n'
-MULTILINE_GH = 'set -e\necho start\ngh pr create --title x --body-file /tmp/x.md\n'
-HEREDOC_GH = "cat > f <<'EOF'\ngh pr create --body-file /tmp/x.md\nEOF\necho done"
-HEREDOC_THEN_REAL = "cat > f <<'EOF'\nexample\nEOF\ngh pr edit 1 --body-file /tmp/x.md"
+COMMIT_THEN_PUSH = "git commit -m \"$(cat <<'EOF'\nx\nEOF\n)\" && git push origin HEAD"
+COMMIT_MENTIONS_PUSH = 'git commit -m "x\ngit push origin main"'
 
 # (説明, hook, command, 発火してほしいか)
 CASES = [
-    ("実際の gh 起動でパス渡し", GUARD, "gh pr create --title x --body-file /tmp/x.md", True),
-    ("stdin 指定", GUARD, "gh pr edit 1 --body-file -", False),
-    ("printf の引数に文字列があるだけ",
-     GUARD, "printf '%s' 'gh pr create --body-file /tmp/x.md' | bash hook.sh", False),
-    ("ヒアドキュメント本文に出現", GUARD, HEREDOC_GH, False),
-    ("ヒアドキュメントの後に実際の gh", GUARD, HEREDOC_THEN_REAL, True),
-    ("複数行の 3 行目が実際の gh", GUARD, MULTILINE_GH, True),
-    ("パイプの後段が実際の gh", GUARD, "echo hi | gh issue create --body-file /tmp/y.md", True),
-    ("&& の後段が実際の gh", GUARD, "true && gh pr edit 1 --body-file /tmp/z.md", True),
-    ("grep の検索語に出現", GUARD, "grep -rn 'gh pr create --body-file' .", False),
-    ("gh だがパス渡しでない", GUARD, "gh pr view 1 --json body", False),
-
     ("readback: 出力に文字列があるだけ", READBACK, "grep -rn 'gh pr create' .", False),
     ("readback: 単一行の push", READBACK, "git push -u origin HEAD", True),
     ("readback: 複数行の末尾が push", READBACK, MULTILINE_PUSH, True),
     ("readback: push という語を含む別コマンド", READBACK, "echo 'git push origin master'", False),
     ("readback: 実際の gh pr edit", READBACK, "gh pr edit 21220 --body-file -", True),
     ("readback: 無関係コマンド", READBACK, "ls -la", False),
+    ("readback: commit message のヒアドキュメントの後の push", READBACK, COMMIT_THEN_PUSH, True),
+    ("readback: 複数行の引数の中の git push", READBACK, COMMIT_MENTIONS_PUSH, False),
+    ("readback: commit message の本文の git push 行", READBACK,
+     "git commit -F - <<'EOF'\nfix: x\ngit push origin main\nEOF", False),
+    ("readback: python3 へ流すコードの中の git push", READBACK,
+     "python3 <<'EOF'\nprint('git push')\nEOF", False),
 ]
 
 
 def run(hook, command):
     payload = json.dumps({"tool_input": {"command": command},
                           "tool_response": {"stdout": "ok"}})
-    return subprocess.run(["bash", hook], input=payload, capture_output=True,
+    return subprocess.run([BASH, hook], input=payload, capture_output=True,
                           text=True, timeout=60).stdout.strip()
 
 

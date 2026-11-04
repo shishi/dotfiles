@@ -22,7 +22,10 @@ repo 経由の変更が必要な環境で、端末へ直接設定を反映しま
    同じ table 内の prefix / metric 比較を、別 table を選ぶ policy routing と混同しません。
    どちらも最終的な `ip route get` や OS の選択経路と照合します。
 3. subnet router の広告、管理側の承認、クライアントへの配布、実使用を分けます。
-   `tailscale status --json` の情報と OS の実経路を対比し、広告設定だけで配布済みとしません。
+   `tailscale status` の health 行は広告中であることだけを示し、prefix を示しません。
+   `tailscale status --json` の該当 peer の `PrimaryRoutes` で primary に選ばれた prefix を、
+   `AllowedIPs` で承認・配布済みの prefix を確認します。exit node は `ExitNodeOption` も見ます。
+   これらと OS の実経路を対比し、広告設定 (`AdvertiseRoutes`) だけで配布済みとしません。
 4. SMB では接続と選択チャネルを確認し、同じ負荷で NIC 統計の前後差分を取ります。
    Windows の `Get-SmbMultichannelConnection` は実行権限を確認します。
    `Get-NetAdapterStatistics` は実行版の引数を調べ、NIC 名を指定します。
@@ -35,9 +38,18 @@ repo 経由の変更が必要な環境で、端末へ直接設定を反映しま
   `accept-routes` の変更と router 側の広告・承認の変更は別の操作です。
 - metric や route を変える場合は、ケーブル抜去・拠点外への移動時の経路も確認します。
   固定 route が残って到達不能になる対処を、速度改善だけで採用しません。
-- LAN prefix 変更時は router の広告と承認・配布を再確認します。
-  拠点間で同じ IPv4 範囲が重なる問題と、LAN 直結 route の優先順位の問題を分けます。
-  重複範囲には再採番や 4via6 を比較し、IPv6 宛先を使えるアプリかも確認します。
+- LAN prefix 変更時は router の広告が自動では追従しないため、広告と承認・配布を再確認します。
+  `accept-routes` を無効にした LAN 直結端末では症状が出ず、外出先の端末だけが LAN に入れなくなります。
+  `tailscale set --advertise-routes=<prefix>` は exit node の広告を保ったまま、subnet route の一覧を
+  指定した値で置き換えます。残す prefix もすべて指定します。`tailscale up` で変更する場合は、
+  既存の広告を含む既定でない設定をすべて再指定します。省略するとエラーで止まり、`--reset` を付けたときだけ
+  省略した設定が既定へ戻ります。その後、管理側で新しい prefix を承認します。
+- 拠点間で同じ IPv4 範囲が重なる問題と、LAN 直結 route の優先順位の問題を分けます。
+  同じ prefix を複数の router が広告すると primary は 1 台だけになり、もう一方の拠点には届きません。
+  拠点を追加するときは、家庭用ルーターの既定 (`192.168.0.0/24`・`192.168.1.0/24` 等) を避け、
+  `10.<任意>.<任意>.0/24` のように他拠点と重なりにくい範囲を選びます。
+  重複後の対処は、再採番、4via6、subnet router 上の iptables `NETMAP` の順に検討します。
+  4via6 は宛先を IPv6 で書けるアプリでしか使えません。`NETMAP` は Tailscale の管理外で、自分で保守します。
 - 承認済みの変更を構成の正本へ反映し、同じ宛先の送信元・NIC 転送量と転送結果を再取得します。
   同じファイルサイズ・方向・負荷で速度を比較し、再接続成功だけで完了しません。
 

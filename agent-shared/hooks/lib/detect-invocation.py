@@ -83,12 +83,22 @@ def invocations(command, names):
 
 
 def main():
+    # Windows の Python は改行を CRLF で書き、行単位で読むシェル側の値に CR が残る。
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     names = set(sys.argv[1:])
+    # hook の JSON は UTF-8。既定の符号化 (Windows では cp932 等) で読むと日本語を含む入力で失敗するため、
+    # バイト列から読む。読めないときは黙って「呼び出しなし」にせず、失敗として呼び出し側へ返す。
     try:
-        tool_input = json.load(sys.stdin).get("tool_input", {})
+        tool_input = json.loads(sys.stdin.buffer.read()).get("tool_input", {})
         command = tool_input.get("command") or tool_input.get("cmd", "")
-    except Exception:
-        return 0
+        # Codex は argv 配列で渡すことがある。1 行のコマンドとして読む。
+        if isinstance(command, list):
+            command = shlex.join(map(str, command))
+        if not isinstance(command, str):
+            raise TypeError(f"command が文字列でも配列でもない ({type(command).__name__})")
+    except Exception as error:
+        print(f"hook の入力を読めなかった: {error}", file=sys.stderr)
+        return 2
 
     if not command:
         return 0

@@ -6,17 +6,47 @@
 input=$(cat)
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# python の bin 名は環境で変わる(python3 / python)。能力で解決する
-py_bin=$(command -v python3 || command -v python) || py_bin=""
+# python の bin 名は環境で変わる(python3 / python)。Windows の Microsoft Store の別名のように
+# 見つかっても起動できないものがあるため、起動できるものを選ぶ
+py_bin=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c '' >/dev/null 2>&1; then
+    py_bin=$candidate
+    break
+  fi
+done
 
 notify() {
-  jq -n --arg m "$1" \
-    '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$m}}'
+  if command -v jq >/dev/null 2>&1; then
+    jq -n --arg m "$1" \
+      '{hookSpecificOutput:{hookEventName:"PostToolUse",additionalContext:$m}}'
+  else
+    # jq が無くても知らせる。通知文にはコマンド由来の値も入るため、JSON に書けない制御文字は空白にする。
+    printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' \
+      "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\000-\037' ' ')"
+  fi
   exit 0
 }
 
-[ -n "$py_bin" ] || exit 0
+# 確認できなかったことを知らせて終える。環境に起因する同じ通知は 10 分に 1 回へ間引く。
+notify_throttled() {
+  local stamp="${XDG_STATE_HOME:-$HOME/.local/state}/agent-guards/notice-$1"
+  [ -n "$(find "$stamp" -mmin -10 2>/dev/null)" ] && exit 0
+  # 間引きの記録を作れなくても知らせる (毎回になるが黙らない)。
+  mkdir -p "${stamp%/*}" 2>/dev/null && : >"$stamp" 2>/dev/null
+  notify "$2"
+}
+skip_unchecked() {
+  notify_throttled no-python-readback "[readback] $1ため、push・gh の書き込みがあったかを確認していない。起動できる python3 を PATH に入れること。"
+}
+
+[ -n "$py_bin" ] || skip_unchecked "起動できる python が見つからない"
 calls=$(printf '%s' "$input" | "$py_bin" "$here/lib/detect-invocation.py" gh git 2>/dev/null)
+status=$?
+if [ "$status" -ne 0 ]; then
+  notify "[readback] 呼び出しの検出処理 (hooks/lib/detect-invocation.py) が終了コード $status で失敗し、push・gh の書き込みがあったかを確認していない。"
+fi
+[ "$calls" = EPARSE ] && notify "[readback] コマンドを解析できず (クォートが閉じていない可能性)、push・gh の書き込みがあったかを確認していない。"
 [ -z "$calls" ] && exit 0
 
 push_call=$(printf '%s' "$calls" | grep -E '^git( -[^ ]+ [^ ]+)* push( |$)' | head -1)
@@ -41,7 +71,9 @@ if [ -n "$push_call" ]; then
     cd "${hook_cwd:-${CLAUDE_PROJECT_DIR:-.}}" 2>/dev/null || notify "[readback] 作業ディレクトリに移動できず、送信先を照合できなかった。"
   fi
 
-  [ -z "$dst" ] && dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  case "$dst" in
+    '' | HEAD) dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) ;;
+  esac
   [ -z "$src" ] && src=HEAD
   [ -z "$dst" ] && notify "[readback] git push の宛先ブランチを特定できなかった。"
 

@@ -9,8 +9,7 @@ description: Use when a task or conversation may have produced durable user valu
 
 ## 失敗・訂正を受けたとき
 
-`create-rule` で行動の修正と反映先を判定済みなら、次の差し戻し段落だけを省く。
-その後の重複回避・保存範囲・公開境界・書き込み手順はすべて適用する。
+`create-rule` で反映先を判定済みなら、この節を繰り返さず保存範囲・書き込みへ進む。
 エージェントの行動への修正要求は、すべて
 [create-rule](../create-rule/SKILL.md) の「行動の修正を求められたとき」で扱う。
 既存規則の未適用原因の分析・改善と、元の依頼の是正を同じ手順へ接続する。

@@ -48,5 +48,29 @@ else
   ng "the owning handle releases its lock and private state"
 fi
 
+if bash "$HELPER" idle "$MEMORY_REPO" 2>"$TMP/idle.err"; then
+  ok "idle reports a released repository as free"
+else
+  ng "idle reports a released repository as free"
+fi
+
+handle="$(bash "$HELPER" acquire "$MEMORY_REPO" 2>"$TMP/acquire2.err")"
+bash "$HELPER" idle "$MEMORY_REPO" 2>"$TMP/idle-held.err"
+if [ "$?" -eq 1 ]; then
+  ok "idle reports a held lock as busy"
+else
+  ng "idle reports a held lock as busy"
+fi
+bash "$HELPER" release "$handle" 2>"$TMP/release2.err"
+
+rm -rf "$MEMORY_REPO/.git/memory-write-state"
+printf 'not a directory\n' >"$MEMORY_REPO/.git/memory-write-state"
+if ! bash "$HELPER" idle "$MEMORY_REPO" 2>"$TMP/idle-bad.err" \
+  && ! bash "$HELPER" acquire "$MEMORY_REPO" >/dev/null 2>&1; then
+  ok "idle rejects a state root that acquire rejects"
+else
+  ng "idle rejects a state root that acquire rejects"
+fi
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
