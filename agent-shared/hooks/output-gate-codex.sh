@@ -459,7 +459,22 @@ case "$mode" in
       printf '%s\n' "${messages[@]}" >&2
       exit 1
     fi
-    printf '%s\n' "${messages[@]:-出力ゲートを有効にしました (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE"
+    restart_failed=false
+    if [ "$config_changed" = true ]; then
+      if command -v codex >/dev/null 2>&1 && codex app-server daemon version >/dev/null 2>&1; then
+        printf '%s\n' "設定を反映するため、共有 app-server を再起動します。"
+        if ! codex app-server daemon restart >/dev/null 2>&1; then
+          messages+=("共有 app-server を再起動できませんでした。設定は保存されています。共有 app-server と Codex セッションを再起動してください。")
+          restart_failed=true
+        else
+          messages+=("共有 app-server を再起動しました。開いていた Codex セッションも再起動してください。")
+        fi
+      else
+        messages+=("共有 app-server を使用中の場合は、設定を反映するため再起動してください。")
+      fi
+    fi
+    printf '%s\n' "${messages[@]:-出力ゲートを有効にしました (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE" || exit 1
+    [ "$restart_failed" = false ] || exit 1
     ;;
   disable)
     write_state false "${port:-0}" || { echo "$state_file に書き込めませんでした。" >&2; exit 1; }

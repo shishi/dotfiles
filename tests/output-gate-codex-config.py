@@ -21,7 +21,7 @@ class ConfigTests(unittest.TestCase):
         result = subprocess.run([sys.executable, '-I', str(TOOL), *args, str(self.path)],
                                 capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout.strip()
+        return result.stdout
 
     def parsed(self):
         return tomllib.loads(self.path.read_text(encoding='utf-8'))

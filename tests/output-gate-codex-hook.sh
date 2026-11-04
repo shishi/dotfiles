@@ -86,6 +86,39 @@ printf '{"session_id":"disable-resume","source":"resume"}' | XDG_STATE_HOME="$FI
 disabled_prompt=$(printf '{"session_id":"disable-resume"}' | XDG_STATE_HOME="$FIRST/disabled-state" CODEX_HOME="$FIRST/disabled-codex" PATH="$FIRST/bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" prompt)
 check "resuming after disabling does not keep the old stop" "! printf '%s' \"\$disabled_prompt\" | grep -q '\"continue\"'"
 
+mkdir -p "$FIRST/daemon-codex" "$FIRST/daemon-bin"
+printf 'model = "m"\n' >"$FIRST/daemon-codex/config.toml"
+cat >"$FIRST/daemon-bin/codex" <<'EOF'
+#!/bin/sh
+case "$*" in
+  "app-server daemon version") [ "${DAEMON_ABSENT:-}" != 1 ] ;;
+  "app-server daemon restart")
+    grep -q '^openai_base_url' "$CODEX_HOME/config.toml" || exit 2
+    printf 'restart\n' >> "$DAEMON_CALLS"
+    [ "${DAEMON_RESTART_FAIL:-}" != 1 ] || exit 1
+    ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$FIRST/daemon-bin/codex"
+DAEMON_CALLS="$FIRST/daemon-calls" XDG_STATE_HOME="$FIRST/daemon-state" CODEX_HOME="$FIRST/daemon-codex" PATH="$FIRST/daemon-bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" enable >/dev/null
+check "enabling updated settings restarts the shared daemon" "[ \"\$(wc -l < '$FIRST/daemon-calls' 2>/dev/null)\" = 1 ]"
+DAEMON_CALLS="$FIRST/daemon-calls" XDG_STATE_HOME="$FIRST/daemon-state" CODEX_HOME="$FIRST/daemon-codex" PATH="$FIRST/daemon-bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" enable >/dev/null
+check "unchanged enable does not restart the shared daemon" "[ \"\$(wc -l < '$FIRST/daemon-calls' 2>/dev/null)\" = 1 ]"
+mkdir -p "$FIRST/daemon-fail-codex"
+printf 'model = "m"\n' >"$FIRST/daemon-fail-codex/config.toml"
+if DAEMON_RESTART_FAIL=1 DAEMON_CALLS="$FIRST/daemon-calls" XDG_STATE_HOME="$FIRST/daemon-fail-state" CODEX_HOME="$FIRST/daemon-fail-codex" PATH="$FIRST/daemon-bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" enable >"$FIRST/daemon-fail.log" 2>&1; then
+  failures=$((failures + 1)); echo "FAIL: daemon restart failure is reported"
+else
+  check "daemon restart failure is reported" "grep -q '再起動できませんでした' '$FIRST/daemon-fail.log'"
+fi
+check "daemon restart failure retains enabled settings" "grep -q '^openai_base_url' '$FIRST/daemon-fail-codex/config.toml' && python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1]))[\"enabled\"]' '$FIRST/daemon-fail-state/output-gate/codex.json'"
+check "daemon restart failure still explains hook trust and answer recovery" "grep -q PreCompact '$FIRST/daemon-fail.log' && grep -q held '$FIRST/daemon-fail.log'"
+mkdir -p "$FIRST/daemon-absent-codex"
+printf 'model = "m"\n' >"$FIRST/daemon-absent-codex/config.toml"
+absent_out=$(DAEMON_ABSENT=1 DAEMON_CALLS="$FIRST/daemon-calls" XDG_STATE_HOME="$FIRST/daemon-absent-state" CODEX_HOME="$FIRST/daemon-absent-codex" PATH="$FIRST/daemon-bin:$PATH" bash "$FIRST/agent-shared/hooks/output-gate-codex.sh" enable)
+check "no daemon does not start one" "[ \"\$(wc -l < '$FIRST/daemon-calls')\" = 2 ] && printf '%s' \"\$absent_out\" | grep -q '使用中の場合'"
+
 out=$(bash "$HOOK" enable "$PORT")
 check "enable writes the base url line" "grep -q 'openai_base_url = \"http://127.0.0.1:$PORT/backend-api/codex\"' '$CODEX_HOME/config.toml'"
 check "enable writes the feature lines" "grep -q '^enable_request_compression = false' '$CODEX_HOME/config.toml'"

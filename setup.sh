@@ -187,7 +187,7 @@ link_agent_home "$DOTDIR/agent-shared/hooks" "$HOME/.agent-shared/hooks"
 if [ ! -e "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json" ] &&
   [ ! -L "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json" ]; then
   env -u CODEX_HOME bash "$DOTDIR/agent-shared/hooks/output-gate-codex.sh" enable ||
-    echo "setup.sh: could not enable Codex output gate"
+    echo "setup.sh: 出力ゲートの有効化または共有 app-server の再起動を完了できませんでした。"
 fi
 
 # 旧名 ~/.agents(実ディレクトリ + 個別 link)は互換 symlink に置き換える。

@@ -146,12 +146,12 @@ def main():
         print(f'{path}: {reason}', file=sys.stderr)
         return 1
     if new_text == text:
-        print('unchanged')
+        print('unchanged', end='')
         return 0
     tmp = path.with_name(f'.{path.name}.output-gate.{os.getpid()}.tmp')
     tmp.write_bytes(new_text.encode('utf-8'))
     os.replace(tmp, path)
-    print('changed')
+    print('changed', end='')
     return 0
 
 
