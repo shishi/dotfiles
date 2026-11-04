@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bash 実行前に、コマンドを独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
 # エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
-# このマシンの外へ軽微でない・元に戻せない影響を与える操作は、利用者の許可が無ければ実行させない。
+# 外部へ軽微でなく取り返しのつかない影響を与える操作や通常の push は、許可が無ければ実行させない。
 #
 #   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の直近のメッセージを保存する
 #   command-judge.sh [--cli claude|codex]                   PreToolUse(Bash): 判定して該当すれば止める
