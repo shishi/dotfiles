@@ -35,6 +35,12 @@ cp "$SETUP" "$DOTFILES/setup.sh"
 cp "$REPO/agent-shared/bin/resolve-memory-dir.sh" "$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
 cp "$REPO/agent-shared/bin/managed-skills.sh" "$DOTFILES/agent-shared/bin/managed-skills.sh"
 cp "$REPO/agent-shared/managed-skills.tsv" "$DOTFILES/agent-shared/managed-skills.tsv"
+cat >"$DOTFILES/agent-shared/hooks/output-gate-codex.sh" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = enable ] && [ -z "${CODEX_HOME:-}" ] && [ -L "$HOME/.codex" ] && [ -L "$HOME/.agent-shared/bin" ] || exit 1
+mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate"
+printf '{"enabled": true, "port": 18765}\n' >"${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json"
+EOF
 printf 'runtime\n' >"$HOME_DIR/.claude/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.agent-shared/skills/local.txt"
@@ -68,7 +74,7 @@ chmod +x "$TMP/bin/gh"
 export FAKE_GH_CALLS="$TMP/gh-calls"
 
 run_setup() {
-  HOME="$HOME_DIR" PATH="$TMP/bin:$PATH" XDG_CONFIG_HOME="$CONFIG_DIR" APPDATA="$TMP/appdata" \
+  HOME="$HOME_DIR" CODEX_HOME="$TMP/other-codex" PATH="$TMP/bin:$PATH" XDG_CONFIG_HOME="$CONFIG_DIR" XDG_STATE_HOME="$TMP/state" APPDATA="$TMP/appdata" \
     REMOTE_CONTAINERS=true AGENT_MEMORY_DIR="$MEMORY_DIR" \
     BASH_ENV="$TMP/hide-optional.sh" bash "$DOTFILES/setup.sh" \
     >"$TMP/setup.log" 2>&1
@@ -83,6 +89,7 @@ resolves_to() {
 }
 
 run_setup
+assert "first setup enables the Codex output gate" grep -q '"enabled": true' "$TMP/state/output-gate/codex.json"
 assert "Hunk config is linked" resolves_to "$CONFIG_DIR/hunk/config.toml" "$DOTFILES/hunk/config.toml"
 assert "Hunk runtime stays local" grep -qx '{"local":true}' "$CONFIG_DIR/hunk/state.json"
 assert "Claude home is linked" resolves_to "$HOME_DIR/.claude" "$DOTFILES/claude"
@@ -95,7 +102,9 @@ assert "Claude memory uses the canonical private repo" resolves_to "$DOTFILES/cl
 assert "Codex memory uses the canonical private repo" resolves_to "$DOTFILES/codex/memory" "$MEMORY_DIR"
 assert "setup synchronizes managed external skills" grep -q '^skill --help$' "$FAKE_GH_CALLS"
 
+printf '{"enabled": false, "port": 18765}\n' >"$TMP/state/output-gate/codex.json"
 run_setup
+assert "rerun preserves a disabled output gate" grep -q '"enabled": false' "$TMP/state/output-gate/codex.json"
 assert "rerun keeps Hunk config linked" resolves_to "$CONFIG_DIR/hunk/config.toml" "$DOTFILES/hunk/config.toml"
 if [ ! -e "$HOME_DIR/.claude.back.1" ] && [ ! -e "$HOME_DIR/.codex.back.1" ]; then
   ok "rerun keeps correct links without extra backups"

@@ -7,8 +7,8 @@ per-user の Scoop 本体/bucket と global app root を分け、対象環境の
 `update *` に未確認の除外 option を足さず、除外が必要なら対象名を列挙します。
 [更新処理の一次資料](https://github.com/ScoopInstaller/Scoop/blob/master/libexec/scoop-update.ps1)
 
-hash 等で途中終了した際に、後続が実行されない/終了値が成功になる版の実測があります。
-その条件ではアプリ別の子 process に分けて結果を回収する既存 wrapper を使います。
+hash 等で途中終了すると、後続が実行されず終了値が成功になる場合があります。
+対象版の実装と結果を確認し、その条件ではアプリごとの子 process で結果を回収する既存 wrapper を使います。
 一括 command の終了値と各 app の実行済み状態を分けます。
 
 ## 実行中アプリと自己更新

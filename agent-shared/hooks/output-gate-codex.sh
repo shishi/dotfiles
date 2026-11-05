@@ -73,7 +73,7 @@ finish() {
 }
 
 UNROUTED_REASON="このセッションは Codex の設定に中継の行が無い状態で始まったため、回答を検査できない。行は書き戻したので、Codex を起動し直して。"
-ENABLE_NOTE="未達の回答を直させるには、Codex が出力ゲートの Stop hook を動かす必要がある。hooks.json を更新すると hook の hash が変わるので、Codex の /hooks で出力ゲートの hook (Stop・SessionStart・UserPromptSubmit) を信頼し直して。信頼していないセッションは続行の登録が無く、直させずに未達の項目を添えた原文を表示する。"
+ENABLE_NOTE="Codex の /hooks で出力ゲートの Stop・SessionStart・UserPromptSubmit・PreCompact・PreModelRequest hook を信頼して。信頼されていないと、中継の再起動や未達の回答の差し戻しができない。hooks.json を更新した後も信頼し直して。"
 HELD_NOTE="直させる前の原文は 24 時間まで保存し、同じセッションの次の入力で一度だけ表示する。次の入力が無い単発の codex exec では bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id] で表示できる (session_id は codex exec --json が出す thread_id)。"
 UNWRITABLE_REASON="Codex の設定に中継の行を書けないため、このセッションの回答を検査できない。設定を直すか、bash ~/.agent-shared/hooks/output-gate-codex.sh disable で出力ゲートを外してから起動し直して。"
 
@@ -397,15 +397,31 @@ case "$mode" in
     exit 0
     ;;
   enable)
+    previous_port=$port
+    state_existed=false
+    [ -e "$state_file" ] && state_existed=true
     port=${2:-$(default_port)}
+    if ! ensure_relay "$port"; then
+      printf '%s\n' "${messages[@]}" >&2
+      exit 1
+    fi
     write_state true "$port" || { echo "$state_file を書けない。" >&2; exit 1; }
-    ensure_relay "$port"
-    reconcile apply "$port"
+    if ! reconcile apply "$port"; then
+      if [ "$state_existed" = true ]; then
+        write_state "$enabled" "$previous_port" || echo "$state_file を復元できない。" >&2
+      else
+        rm -f -- "$state_file" || echo "$state_file を削除できない。" >&2
+      fi
+      printf '%s\n' "${messages[@]}" >&2
+      exit 1
+    fi
     printf '%s\n' "${messages[@]:-出力ゲートを有効にした (127.0.0.1:$port)。}" "$ENABLE_NOTE" "$HELD_NOTE"
     ;;
   disable)
     write_state false "${port:-0}" || { echo "$state_file を書けない。" >&2; exit 1; }
-    reconcile remove
+    if [ -e "$config" ] || [ -L "$config" ]; then
+      reconcile remove
+    fi
     printf '%s\n' "${messages[@]:-出力ゲートを無効にした。Codex を起動し直すと中継を通らない。}"
     ;;
   *)

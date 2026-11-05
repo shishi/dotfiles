@@ -161,6 +161,36 @@ pre_tool_use '"git push origin dev"' | bash "$HOOK" >/dev/null
   fail "only the recent user messages reach the judge"
 echo 'ok: the judge sees the recent user messages, oldest first'
 
+rm -f "$work/state/prompts/s1"
+jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"final_answer",content:[{type:"output_text",text:"DNS サーバーの設定を反映していい？"}]}}' >"$work/transcript.jsonl"
+jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
+jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
+record '進めて' --cli codex
+STUB_OUTPUT=$SAFE
+pre_tool_use '"ssh dns-host apply"' | bash "$HOOK" --cli codex >/dev/null
+grep -q 'DNS サーバーの設定を反映していい？' "$work/judge-input" && grep -q 'いい' "$work/judge-input" ||
+  fail 'the preceding assistant question and the user approval must reach the judge together'
+echo 'ok: the preceding assistant question accompanies the user approval'
+
+rm -f "$work/state/prompts/s1"
+jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"final_answer",content:[{type:"output_text",text:"古い提案"}]}}' >"$work/transcript.jsonl"
+jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"その話は中止"}]}}' >>"$work/transcript.jsonl"
+jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
+jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
+pre_tool_use '"ssh another-host apply"' | bash "$HOOK" --cli codex >/dev/null
+! grep -q '古い提案' "$work/judge-input" || fail 'an intervening user message must not attach an old proposal'
+echo 'ok: an intervening user message prevents stale proposal association'
+
+rm -f "$work/state/prompts/s1"
+record 'origin main への push を許可する' --cli codex
+long_question=$(printf '%04001d' 0)
+jq -nc --arg q "$long_question" '{type:"response_item",payload:{type:"message",role:"assistant",phase:"final_answer",content:[{type:"output_text",text:$q}]}}' >"$work/transcript.jsonl"
+jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
+rm -f "$work/state/safe/"*
+pre_tool_use '"git push origin main"' | bash "$HOOK" --cli codex >/dev/null
+! grep -q 'origin main への push を許可する' "$work/judge-input" || fail 'an omitted assistant response must not leave earlier permissions in effect'
+echo 'ok: omitted oversized context clears earlier permissions'
+
 record 'push して'
 record "push はしないで $token" >/dev/null
 pre_tool_use '"git push origin topic"' | bash "$HOOK" >/dev/null
