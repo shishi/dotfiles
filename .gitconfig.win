@@ -25,6 +25,7 @@
     fscache = true
     symlinks = true
     editor = code --wait
+	sshCommand = C:/Windows/System32/OpenSSH/ssh.exe
 # [pager]
 #     diff = delta
 #     log = delta
