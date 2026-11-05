@@ -126,7 +126,9 @@ class RelayTests(unittest.TestCase):
             time.sleep(float(os.environ.get('FAKE_CHECK_SLEEP', '0')))
             open({str(cls.tmp / 'checker-finished')!r}, 'a').write('x')
             bodies = payload.get("bodies") or [payload.get("draft", "")]
-            if os.environ.get('FAKE_CHECK_NO_REASON'):
+            if payload.get('independent_recheck') and os.path.exists({str(cls.tmp / 'recheck-fail')!r}):
+                print(json.dumps({{"status": "unchecked", "reason": "recheck unavailable", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
+            elif os.environ.get('FAKE_CHECK_NO_REASON'):
                 print(json.dumps({{"status": "unchecked", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
             elif os.environ.get('FAKE_CHECK_FAIL'):
                 shown = ["[出力ゲート: 検査できませんでした — fake failure]\\n\\n" + bodies[0]] + bodies[1:]
@@ -140,8 +142,8 @@ class RelayTests(unittest.TestCase):
                           "engine_failures": [{{"family": "claude", "reason": "claude failed first"}}],
                           "dropped": [{{"finding": {{}}, "reason": "excerpt not in source"}}],
                           "text": "\\n\\n".join(fixed), "bodies": fixed}}
-                if os.path.exists({str(cls.tmp / 'findings-on')!r}) and payload.get("final"):
-                    found = [{{"kind": "unverified_claim", "source": "draft", "excerpt": "確認済み", "evidence": []}}]
+                if os.path.exists({str(cls.tmp / 'findings-on')!r}) and payload.get("final") and not (payload.get('independent_recheck') and os.path.exists({str(cls.tmp / 'recheck-clean')!r})):
+                    found = [{{"kind": "unverified_claim", "source": "draft", "excerpt": open({str(cls.tmp / 'findings-on')!r}, encoding='utf-8').read() or "確認済み", "evidence": []}}]
                     unmet = "出力ゲート: 次の点は確かめられていません\\n- UNMET-ITEM"
                     marked = fixed[:-1] + [fixed[-1] + "\\n\\n---\\n" + unmet]
                     result.update(findings=found, unmet_text=unmet, display_text="\\n\\n".join(marked),
@@ -165,6 +167,8 @@ class RelayTests(unittest.TestCase):
         (self.tmp / 'checker-input.json').unlink(missing_ok=True)
         (self.tmp / 'checker-finished').unlink(missing_ok=True)
         (self.tmp / 'findings-on').unlink(missing_ok=True)
+        (self.tmp / 'recheck-clean').unlink(missing_ok=True)
+        (self.tmp / 'recheck-fail').unlink(missing_ok=True)
         self.port = free_port()
         self.state = Path(tempfile.mkdtemp())
         self.start_relay()
@@ -468,6 +472,14 @@ class RelayTests(unittest.TestCase):
         status, _, _ = self.call('POST', '/__gate/shutdown')
         self.assertEqual(status, 409)
         thread.join(20)
+        self.assertFalse(thread.is_alive())
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            _, _, data = self.call('GET', '/__gate/version')
+            if json.loads(data)['active'] == 0:
+                break
+            time.sleep(0.05)
+        self.assertEqual(json.loads(data)['active'], 0)
         status, _, _ = self.call('POST', '/__gate/shutdown')
         self.assertEqual(status, 200)
         self.relay.wait(5)
@@ -1000,6 +1012,14 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(checked[-1]['engine_failures'], [{'family': 'claude', 'reason': 'claude failed first'}])
         self.assertEqual(checked[-1]['dropped'], 1)
         self.assertEqual(checked[-1]['dropped_reasons'], ['excerpt not in source'])
+        self.assertEqual(checked[-1]['statuses'], ['checked'])
+
+    def test_intermediate_answer_is_logged_as_unchecked_by_design(self):
+        call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
+        self.answer('先に見るね', before=self.call_events(call), item_id='msg_a')
+        checked = [json.loads(line) for line in (self.state / 'relay.log').read_text(encoding='utf-8').splitlines()
+                   if json.loads(line).get('event') == 'checked']
+        self.assertEqual(checked[-1]['statuses'], ['skipped'])
 
     def test_steer_findings_stay_in_later_requests_of_the_turn(self):
         notice = self.substituted()
@@ -1179,6 +1199,114 @@ class RelayTests(unittest.TestCase):
         answers = [t for t in self.upstream_texts() if not t.startswith(('元の依頼', '<hook_prompt'))]
         self.assertEqual(answers, ['全部確認済みだよ', 'まだ確認済み', 'やっぱり確認済み'])
         self.assertEqual((self.gate_state()['phase'], self.gate_state()['round']), ('resolved', 3))
+
+    def test_stalled_finding_gets_an_independent_recheck(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        (self.tmp / 'recheck-clean').write_text('', encoding='utf-8')
+        for number in range(1, 4):
+            self.sent_back()
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            events = self.answer('まだ確認済み', body={'input': list(items)})
+            notice = self.final_text(events)
+        self.assertIn('まだ確認済み', notice)
+        self.assertNotIn('UNMET-ITEM', notice)
+        self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
+        self.assertEqual(self.gate_state()['phase'], 'resolved')
+
+    def test_recheck_through_relay_checker_and_stop_hook(self):
+        low = {'replacements': [], 'findings': [{'kind': 'unverified_claim', 'rule': '', 'source': 'draft',
+                'excerpt': '全部確認済みだよ', 'evidence': [{'id': None, 'state': 'absent'}]}]}
+        high = {'replacements': [], 'findings': []}
+        self.restart_with_real_checker('import json,sys\nsys.stdin.read()\n'
+            f'print(json.dumps({high!r} if "gpt-6-astra" in sys.argv else {low!r}))\n')
+        self.register()
+        xdg = Path(tempfile.mkdtemp())
+        root = xdg / 'output-gate'
+        root.mkdir()
+        (root / 'codex.json').write_text('{"enabled": true}')
+        (root / 'relay').symlink_to(self.state, target_is_directory=True)
+        hook = Path(RELAY).parent.parent / 'hooks/output-gate-codex.sh'
+        items = [self.user('元の依頼')]
+        notice = self.final_text(self.answer('全部確認済みだよ'))
+        for number in range(1, 4):
+            stopped = subprocess.run(['bash', str(hook), 'stop'], input='{"session_id":"s1","turn_id":"t1"}',
+                                     text=True, capture_output=True, env=dict(os.environ, XDG_STATE_HOME=str(xdg)), check=True)
+            self.assertEqual(json.loads(stopped.stdout)['decision'], 'block')
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">再確認</hook_prompt>')]
+            notice = self.final_text(self.answer('全部確認済みだよ', body={'input': list(items)}))
+        self.assertEqual(notice, '全部確認済みだよ')
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'resolved')
+        self.assertEqual(state['engine']['model'], 'gpt-6-astra')
+
+    def test_new_tool_evidence_is_sent_to_the_checker(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        self.sent_back()
+        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')]
+        notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+        self.sent_back()
+        call = {'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'new-call'}
+        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h2">AGENT-MSG</hook_prompt>'),
+                  call, {'type': 'function_call_output', 'call_id': 'new-call', 'output': 'new evidence'}]
+        notice = self.final_text(self.answer('もう一度確認済み', body={'input': items}))
+        self.assertNotIn('UNMET-ITEM', notice)
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
+        self.assertTrue(any(item.get('output') == 'new evidence' for item in self.checker_inputs()[-1]['evidence']))
+
+    def test_repeated_tool_results_do_not_prevent_independent_recheck(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        (self.tmp / 'recheck-clean').write_text('', encoding='utf-8')
+        for number in range(1, 4):
+            self.sent_back()
+            call_id = f'call-{number}'
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>'),
+                      {'type': 'function_call', 'name': 'shell', 'arguments': 'check', 'call_id': call_id},
+                      {'type': 'function_call_output', 'call_id': call_id, 'output': 'same result'}]
+            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+        self.assertEqual(notice, 'まだ確認済み')
+        self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
+
+    def test_new_user_request_restarts_recheck_count(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        for number in range(1, 3):
+            self.sent_back()
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+        self.sent_back()
+        (self.tmp / 'recheck-clean').write_text('', encoding='utf-8')
+        items += [self.assistant(notice), self.user('新しい利用者の指示')]
+        notice = self.final_text(self.answer('追加も確認済み', body={'input': items}))
+        self.assertNotEqual(notice, '追加も確認済み')
+        self.assertFalse(self.checker_inputs()[-1].get('independent_recheck', False))
+
+    def test_a_changed_finding_can_itself_become_stalled(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        (self.tmp / 'findings-on').write_text('別の指摘', encoding='utf-8')
+        for number in range(1, 5):
+            self.sent_back()
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            notice = self.final_text(self.answer('別の指摘も確認済み', body={'input': list(items)}))
+        self.assertNotIn('UNMET-ITEM', notice)
+        self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
+
+    def test_failed_independent_recheck_keeps_the_original_finding(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        (self.tmp / 'recheck-fail').write_text('', encoding='utf-8')
+        for number in range(1, 4):
+            self.sent_back()
+            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+        self.assertNotIn('まだ確認済み', notice)
+        self.assertIn('判定を取得できませんでした', self.gate_state()['agent_message'])
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
+
 
     def test_unwritable_state_falls_back_to_the_original(self):
         self.register()

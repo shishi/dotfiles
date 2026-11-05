@@ -655,6 +655,12 @@ class FindingTests(GateTestCase):
 
     CLAIM = finding('unverified_claim', 'draft', 'テストは全て通った', ('call_1', 'failed'))
 
+    def test_independent_recheck_uses_a_stronger_model(self):
+        self.final(answer(), independent_recheck=True)
+        args = self.launches()[0]['args']
+        self.assertIn('gpt-6-astra', args)
+        self.assertIn('model_reasoning_effort=high', ' '.join(args))
+
     def test_findings_survive_a_meaning_changing_replacement(self):
         out = self.final(answer([{'find': 'テストは全て通った', 'replace': 'テストは実行していない', 'rule': 'r',
                                   'meaning_changed': True}], [self.CLAIM]))
@@ -810,6 +816,17 @@ class FindingTests(GateTestCase):
         self.assertEqual([(f['kind'], f['rule']) for f in out['findings']], [('rule_violation', 'T9')])
         self.assertNotIn('hunter2-prod-7731', out['agent_message'])
         self.assertIsNone(out['text'])
+
+    def test_secret_in_previous_evidence_is_not_safe_to_display(self):
+        self.checked.write_text(json.dumps([{'id': 'T9', 'text': '秘密情報を出さない'}]), encoding='utf-8')
+        script = self.tmp / 'keyed-secret.py'
+        script.write_text('import json, sys\na=sys.argv\ns=open(a[a.index("--source")+1]).read()\n'
+                          'found=[{"Secret":"sample-value"}] if "credential=sample-value" in s else []\n'
+                          'open(a[a.index("--report-path")+1],"w").write(json.dumps(found))\n')
+        self.gitleaks = json.dumps([sys.executable, str(script)])
+        previous = [{'turn_id': 'old', 'items': [{'id': 'p1', 'tool': 'Read', 'output': 'credential=sample-value'}]}]
+        out = self.final(answer(), draft='以前のファイルに書かれていた値は sample-value だったよ。', previous_evidence=previous)
+        self.assertEqual([f['rule'] for f in out['findings']], ['T9'])
 
     def test_a_violation_of_a_rule_not_in_the_list_is_dropped(self):
         violation = {'kind': 'rule_violation', 'rule': 'R9', 'source': 'draft',

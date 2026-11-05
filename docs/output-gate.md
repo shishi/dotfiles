@@ -39,6 +39,8 @@ Windows と WSL はそれぞれ状態を管理します。両方で使う場合�
 
 未達がある場合は、利用可能な経路では回答を保留し、指摘をエージェントへ返して同じセッションで続行します。次の回答も検査し、未達が残る間は続行します。続行できない経路では未達の項目を添えて回答を表示します。検査役を使えない場合は、理由を添えて原文を表示します。検査役は誤判定や見落としをする場合があります。
 
+Codex の中継では、同じ指摘が 3 回の修正後も残ると、より高い推論量の別の検査役に最新の証拠を渡して再判定します。再判定で未達が残る場合は作業を続けます。再判定を取得できなかった場合は、元の指摘とその旨をエージェントへ返します。
+
 Codex はローカルの HTTP 中継で応答を検査します。中継は回答を差し替え、信頼済みの Stop hook があるセッションでは未達を直すよう続行させます。中継を通さない委譲・レビューの出力は検査しません。`/review` の JSON は説明欄だけを検査し、構造を維持します。
 
 Claude Code は mod で回答を検査します。Desktop の WSL セッションでは代わりに表示 hook と Stop hook を使います。この経路はストリーム中の原文を隠せない場合があります。mod 自体を外すには、`claude/settings.json` の `CLAUDE_CODE_PLUGIN_DIRS` を外して再起動します。
@@ -68,6 +70,8 @@ bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id]
 共通の検査処理は、既定で Claude の `opus` / low を試し、使えなければ Codex の `gpt-6.1-terra` / low を使います。そのため Codex と Claude Code の会話やツール出力は、通常は Anthropic に、代替時は OpenAI に送られます。gitleaks が検出した秘密情報以外は伏せません。Claude Code の mod の Claude 検査は、セッションの接続先を使います。
 
 検査順序とモデルは `${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/checker.json` で変更できます。`OUTPUT_GATE_SETTINGS` に別の設定ファイルを指定することもできます。各項目は省略可能です。
+
+停滞時の再判定は通常の設定とは別に Codex の `gpt-6-astra` / high を試し、失敗時は Claude の `fable` / high を試します。Cyber のアクセスプログラムを使うターンでは、対応する Codex モデルを選びます。検査の締切は既定で 120 秒で、`OUTPUT_GATE_TIMEOUT` を指定した場合はその値を使います。
 
 ```json
 {"first":"claude","claude":{"model":"opus","effort":"low"},"codex":{"model":"gpt-6.1-terra","effort":"low"}}

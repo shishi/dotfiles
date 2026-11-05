@@ -1146,6 +1146,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # 呼び出しが無くても、end_turn=false の完了と、Codex が同じターンで続ける打ち切りは最終回答ではない。
         final = not client_call and response.get('end_turn') is not False and reason not in CONTINUED_INCOMPLETE
         if not final:
+            self.check_status = 'skipped'
             # 途中の応答は検査せずに流す (待たせないため)。表示した文章は最終回答の検査に「表示済み」として渡す。
             if self.turn_key is not None:
                 try:
@@ -1155,6 +1156,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return list(bodies)
         if self.turn_key is None:
             result = run_check(checker_payload(body, bodies, final=final, continuation='none'), self.checks)
+            self.check_status = result.get('status')
             self.result_record = engine_record(result)
             return result['bodies']
         sid, tid, turn = self.turn_key
@@ -1178,8 +1180,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                            .get('shown') or [])}
         if sent_back >= 1:
             extra['previous_findings'] = gate.get('findings') or []
-        result = run_check(checker_payload(body, bodies, **extra), self.checks)
+        payload = checker_payload(body, bodies, **extra)
+        result = run_check(payload, self.checks)
+        self.check_status = result.get('status')
         self.result_record = engine_record(result)
+        requests = [input_text(item) for item in body.get('input') or [] if is_request(item)]
+        signature = hashlib.sha256(json.dumps(requests, ensure_ascii=False).encode()).hexdigest()
+        identities = {json.dumps([f.get('kind'), f.get('rule'), f.get('source'), f.get('excerpt')], ensure_ascii=False)
+                      for f in result.get('findings') or []}
+        repeated = identities
+        unchanged = 1
+        if gate and gate.get('request_signature') == signature:
+            repeated = identities.intersection(gate.get('repeated_findings') or [])
+            if repeated:
+                unchanged = int(gate.get('unchanged_rounds') or 1)
+                if sent_back > int(gate.get('checked_round') or 0):
+                    unchanged += 1
+            else:
+                repeated = identities
+        stalled = (withhold and result.get('status') == 'checked' and bool(repeated) and unchanged >= 4
+                   and result.get('display_bodies'))
+        if stalled:
+            rechecked = run_check(dict(payload, independent_recheck=True), self.checks)
+            if rechecked.get('status') == 'checked':
+                result = rechecked
+                self.check_status = 'checked'
+                self.result_record = engine_record(result)
+                if result.get('agent_message'):
+                    result['agent_message'] += '\n\n同じ指摘が続いたため別の検査役でも確認しました。利用可能な別経路と残作業を確認してください。'
+            elif result.get('agent_message'):
+                result['agent_message'] += '\n\n同じ指摘が続いたため別の検査役を試しましたが、判定を取得できませんでした。利用可能な別経路と残作業を確認してください。'
+            self.result_record['recheck'] = {'status': rechecked.get('status'), 'reason': rechecked.get('reason'),
+                                             **engine_record(rechecked)}
+            repeated = {json.dumps([f.get('kind'), f.get('rule'), f.get('source'), f.get('excerpt')], ensure_ascii=False)
+                        for f in result.get('findings') or []}
+            unchanged = 1
         texts = result.get('bodies')
         if texts is None:
             marker = f'output-gate:{tid}:{os.urandom(4).hex()}'
@@ -1187,6 +1222,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             notices = notice_entries(gate) if gate is not None else {}
             notices[marker] = {'original': original}
             state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
+                     'request_signature': signature, 'repeated_findings': sorted(repeated),
+                     'unchanged_rounds': unchanged, 'checked_round': sent_back,
                      'agent_message': result['agent_message'], 'original': original,
                      'display': result.get('display_text'), 'notice_marker': marker, 'notices': notices,
                      'created': time.time(), **self.result_record}
@@ -1225,7 +1262,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             keys = [key for key, draft in drafts.items() if draft.strip()]
             if keys:
                 try:
+                    self.check_status = None
                     texts = self.wait(self.check_answer, body, held, [drafts[key] for key in keys])
+                    statuses.append(self.check_status)
                 except Exception as error:  # 想定外の失敗でも応答を切らず、原文に理由を添えて流す
                     texts = [drafts[key] for key in keys]
                     texts[0] = UNCHECKED_PREFIX.format(f'中継の内部エラー ({type(error).__name__})') + texts[0]
@@ -1288,6 +1327,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             engine=record.get('engine'), engine_failures=record.get('engine_failures') or [],
             dropped=len(record.get('dropped') or []),
             dropped_reasons=[d.get('reason') for d in record.get('dropped') or [] if isinstance(d, dict)],
+            recheck=record.get('recheck'),
             statuses=sorted({s or '' for s in statuses}))
         return 'rewritten' if results else 'no-message'
 
