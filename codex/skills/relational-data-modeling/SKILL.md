@@ -1,6 +1,6 @@
 ---
 name: relational-data-modeling
-description: DB スキーマ・ER 図・migration・ORM の関連を設計・レビューするときに、可能な限り NULL を排除し、事実の集合と関連でデータを表現する。データモデルに関係しない API 入力や UI の空値処理だけには適用しない。
+description: DB スキーマ・ER 図・migration・データ移行・ORM の関連を設計・レビューするときに、可能な限り NULL を排除し、事実の集合と関連でデータを表現する。データモデルに関係しない API 入力や UI の空値処理だけには適用しない。
 ---
 
 # 集合と関連によるデータモデル

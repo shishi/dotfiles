@@ -207,6 +207,7 @@ open-link-in-target-preference = "external-browser"
 appshotSoundEnabled = false
 default-workspace-full-view = true
 composerPlainTextMode = true
+mac-menu-bar-enabled = true
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
