@@ -157,9 +157,9 @@ pre_tool_use '"git push origin main"' | bash "$HOOK" >/dev/null
 grep -q '修正して push までして' "$work/judge-input" || fail "a permission survives several progress checks"
 for n in $(seq 7 20); do record "進捗は？ $n"; done
 pre_tool_use '"git push origin dev"' | bash "$HOOK" >/dev/null
-! grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？ 20' "$work/judge-input" ||
-  fail "only the recent user messages reach the judge"
-echo 'ok: the judge sees the recent user messages, oldest first'
+grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？ 20' "$work/judge-input" ||
+  fail "approval context survives more than twenty progress messages"
+echo 'ok: the judge retains session messages, oldest first'
 
 rm -f "$work/state/prompts/s1"
 jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"final_answer",content:[{type:"output_text",text:"DNS サーバーの設定を反映していい？"}]}}' >"$work/transcript.jsonl"
@@ -188,8 +188,25 @@ jq -nc --arg q "$long_question" '{type:"response_item",payload:{type:"message",r
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
 rm -f "$work/state/safe/"*
 pre_tool_use '"git push origin main"' | bash "$HOOK" --cli codex >/dev/null
-! grep -q 'origin main への push を許可する' "$work/judge-input" || fail 'an omitted assistant response must not leave earlier permissions in effect'
-echo 'ok: omitted oversized context clears earlier permissions'
+grep -q 'origin main への push を許可する' "$work/judge-input" && grep -q "$long_question" "$work/judge-input" || fail 'long assistant context is retained with the earlier approval'
+echo 'ok: long assistant context preserves earlier permissions'
+
+"$py_bin" -I - "$work/transcript.jsonl" <<'PY_LARGE'
+import json, sys
+with open(sys.argv[1], 'w') as transcript:
+    transcript.write(json.dumps({'type': 'response_item', 'payload': {'type': 'message', 'role': 'assistant', 'phase': 'final_answer', 'content': [{'type': 'output_text', 'text': 'Q' * 150000 + '?'}]}}) + '\n')
+PY_LARGE
+out=$(jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt)
+[ -z "$out" ] || fail "large assistant context is recorded without shell argument limits: $out"
+rm -f "$work/state/safe/"*
+pre_tool_use '"git push origin main"' | bash "$HOOK" --cli codex >/dev/null
+"$py_bin" -I - "$work/judge-input" <<'PY_LARGE'
+import sys
+text = open(sys.argv[1]).read()
+assert 'Q' * 150000 + '?' in text, 'the complete large assistant context reaches the judge'
+assert 'origin main への push を許可する' in text, 'the earlier permission remains intact'
+PY_LARGE
+echo 'ok: assistant context is passed without shell argument limits'
 
 record 'push して'
 record "push はしないで $token" >/dev/null
@@ -205,10 +222,10 @@ now=$(date +%s)
   jq -nc --argjson at $((now - 50000)) --arg t "$(printf 'E%.0s' $(seq 3000))最新の中央" '{at: $at, text: $t}'
 } >"$work/state/prompts/s1"
 pre_tool_use '"git push origin old"' | bash "$HOOK" >/dev/null
-! grep -q '半日以上前' "$work/judge-input" && ! grep -q 'CCCC' "$work/judge-input" && ! grep -q '省略した長文の前' "$work/judge-input" &&
+grep -q '半日以上前' "$work/judge-input" && grep -q 'CCCC' "$work/judge-input" && grep -q '省略した長文の前' "$work/judge-input" &&
   grep -q '最新の中央' "$work/judge-input" ||
-  fail "old earlier messages, a long earlier message and those before it are dropped, and the latest is kept whole"
-echo 'ok: earlier messages older than the window or a long earlier message and those before it are dropped, but the latest is kept whole'
+  fail "all session messages survive age and length changes without losing approval or withdrawal"
+echo 'ok: session messages survive time and length changes'
 
 rm -f "$work/calls"
 STUB_EXIT=1 STUB_OUTPUT='boom' STUB_PROBE='' STUB_PROBE_EXIT=1

@@ -30,12 +30,7 @@ case "$cli" in claude|codex) ;; *) bad_args="--cli の値 '$cli' が claude で�
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 state_dir="${COMMAND_JUDGE_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/command-judge-${UID:-user}}"
 safe_ttl_seconds=86400
-# 判定役へ渡す利用者のメッセージの範囲。依頼と許可の後に、進捗確認や補足を何通も挟んでも許可を失わないため。
-# 古い許可を使い続けないよう、最新以外は時間でも区切る。判定役の入力を抑えるため、最新以外で recent_prompt_chars
-# 文字を超えるメッセージは、それより前と一緒に渡さない (一部だけを渡すと、省いた部分にある撤回が届かないため)。
-recent_prompts=20
-recent_prompt_seconds=43200
-recent_prompt_chars=4000
+# 承認とその後の撤回を欠かさないよう、同じセッションの履歴は時刻・件数・長さで切らない。
 judge_timeout_seconds=25
 # 判定役が失敗したときに、判定役そのものが動くかを確かめる問いの締切。実測では約 4 秒で答える。
 probe_timeout_seconds=12
@@ -172,8 +167,8 @@ if [ "$mode" = record ]; then
   session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
   valid_session "$session" || record_failed "セッション ID を読めなかった" "$blocked"
   prepare_state_dir || record_failed "状態ディレクトリ $state_dir を用意できなかった" "$blocked"
-  # 直近 recent_prompts 件のメッセージを 1 行 1 件の JSON で残す。許可は、その後の進捗確認などのメッセージを
-  # 挟んでも続くため。書き込みに失敗したら履歴ごと消す: 新しいメッセージを欠いた古い履歴を今の依頼として使わないため。
+  # メッセージを 1 行 1 件の JSON で残す。書き込みに失敗したら履歴ごと消す:
+  # 新しいメッセージを欠いた古い履歴を今の依頼として使わないため。
   prompt_path="$state_dir/prompts/$session"
   previous=""
   if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
@@ -189,7 +184,7 @@ if [ "$mode" = record ]; then
   assistant_context=""
   if [ "$cli" = codex ] && find_python; then
     assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" 2>/dev/null)
-    case $? in 0) ;; 3) previous="" ;; *) assistant_context="" ;; esac
+    case $? in 0) ;; *) assistant_context="" ;; esac
   fi
   # Claude のセッションでは、利用者のメッセージは判定役 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら保存しない。
   omitted=""
@@ -206,9 +201,9 @@ if [ "$mode" = record ]; then
     fi
   fi
   { printf '%s\n' "$previous" | jq -c 'select(type == "object" and (.at | numbers) and (.text | strings))' 2>/dev/null
-    # 本文は標準入力で渡す。引数にすると、長いメッセージで引数長の上限を超えて記録に失敗する。
-    printf '%s' "$prompt" | jq -Rsc --argjson at "$(date +%s)" --arg context "$assistant_context" '{at: $at, text: ., assistant_context: $context}'
-  } | tail -n "$recent_prompts" | write_atomic "$prompt_path" || {
+    # 本文と文脈は標準入力で渡す。引数にすると、長いメッセージで記録に失敗する。
+    printf '%s\0%s' "$prompt" "$assistant_context" | jq -Rsc --argjson at "$(date +%s)" 'split("\u0000") | {at: $at, text: .[0], assistant_context: .[1]}'
+  } | write_atomic "$prompt_path" || {
     rm -f -- "$prompt_path" 2>/dev/null
     record_failed "書き込みに失敗した" "$lost"
   }
@@ -270,13 +265,10 @@ fi
 
 user_message="(none)"
 if valid_session "$session" && [ -f "$state_dir/prompts/$session" ] && [ ! -L "$state_dir/prompts/$session" ]; then
-  # 古い順に、何分前のメッセージかを添えて並べる。最新は時間や長さに関係なく全文を渡す。
-  user_message=$(jq -rs --argjson now "$now" --argjson max_age "$recent_prompt_seconds" --argjson chars "$recent_prompt_chars" '
+  # 撤回も含む全履歴を古い順に渡し、承認範囲の判断は判定役に任せる。
+  user_message=$(jq -rs --argjson now "$now" '
     map(select(type == "object" and (.at | numbers) and (.text | strings)))
-    | (length - 1) as $last
-    | ([to_entries[] | select(.key != $last and ((.value.text | length) + ((.value.assistant_context // "") | length)) > $chars) | .key] | max // -1) as $long
-    | [to_entries[] | select(.key > $long) | select(.key == $last or $now - .value.at <= $max_age)
-       | "[\((($now - .value.at) / 60) | floor) 分前]\n" + (if (.value.assistant_context // "") != "" then "直前のアシスタントの回答（文脈）:\n\(.value.assistant_context)\n" else "" end) + "利用者:\n\(.value.text)"]
+    | map("[\((($now - .at) / 60) | floor) 分前]\n" + (if (.assistant_context // "") != "" then "直前のアシスタントの回答（文脈）:\n\(.assistant_context)\n" else "" end) + "利用者:\n\(.text)")
     | join("\n\n")' "$state_dir/prompts/$session" 2>/dev/null) ||
     user_message="(none)"
   [ -n "$user_message" ] || user_message="(none)"

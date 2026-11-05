@@ -30,10 +30,7 @@ def main():
         messages.pop()
     if messages and messages[-1][0:2] == ('assistant', 'final_answer'):
         text = messages[-1][2]
-        if len(text) <= 4000:
-            sys.stdout.buffer.write(text.encode('utf-8'))
-        else:
-            sys.exit(3)
+        sys.stdout.buffer.write(text.encode('utf-8'))
 
 
 try:
