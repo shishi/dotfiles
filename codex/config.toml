@@ -208,6 +208,7 @@ appshotSoundEnabled = false
 default-workspace-full-view = true
 composerPlainTextMode = true
 mac-menu-bar-enabled = true
+migratedFollowUpQueueToSteer = false
 
 [desktop.appearanceLightChromeTheme]
 accent = "#339cff"
