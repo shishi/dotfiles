@@ -1,10 +1,10 @@
-import { atom, read, update } from 'claude-code'
+import { atom, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallInput, ToolCallResult, TurnStepChunk, TurnStepInput } from 'claude-code'
 import type { HoldingEvidence, HoldingMessage, HoldingTurn } from '../types/index.d.ts'
 
 // 出力ゲートの Claude Code 側: モデルの応答の文字列を止め、共通の検査処理
 // (~/.agent-shared/bin/output-gate-check.py) で検査し、訂正した文字列だけを流す。
-// 流した文字列が画面と会話記録になる。検査できなければ、原文の先頭に理由を添えて流す。
+// 流した文字列が画面と会話記録になる。検査できなければ、未完了の案内と原文を流す。
 // 最終回答 (end_turn・stop_sequence の段) に未達があれば、本文を gate_findings の呼び出しに差し替え、
 // 指摘をツールの結果として返して同じターンで直させる。未達が残る間は何回目の最終回答でも直させ、未達の
 // 無くなった回答だけを表示する。証拠は tool.call で記録した呼び出しと結果。
@@ -13,7 +13,7 @@ const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 // 動いているメインのターンの ID。作業中に送られた入力を、そのターンの依頼に足すために使う。
 const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as string | null)
 
-const UNCHECKED = (reason: string) => `[出力ゲート: 検査できませんでした — ${reason}]\n\n`
+const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
 const RECENT_MESSAGES = 10
 // 検査全体の締切 (秒)。秘密情報の検査 (gitleaks) と二つの系統の検査役が、この中に収まる。先に試す系統には
 // 残りの半分、次の系統には残り全てを渡す (検査処理と同じ分け方)。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
@@ -35,7 +35,7 @@ const KEEP_MS = 24 * 3600 * 1000
 // ターンのファイルが $.fs.read の上限 (4 MiB) を超えるときは、収まるまで上限を半分にする。
 const OUTPUT_CAP = 64 * 1024
 const FILE_LIMIT = 3 * 1024 * 1024
-const ENDED_UNFIXED = '[出力ゲート: 直させている途中でターンが終わったため、検査した回答を表示します]\n\n'
+const ENDED_UNFIXED = '回答は完了前に中断されました。\n\n'
 // 一時ファイルを置き換え、古いターンのファイルと空になったセッションのディレクトリを消す ($.fs には名前の
 // 変更と削除が無い)。
 const FILE_OPS = [
@@ -92,6 +92,7 @@ type CheckResult = {
   dropped: unknown[]
   unmet_text: string | null
   display_text: string | null
+  corrected_bodies?: string[]
 }
 type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type Settings = { first: 'codex' | 'claude'; claude: { model: string; effort: Effort } }
@@ -493,7 +494,7 @@ async function claudeCheck($: EngineInterface, payload: Payload, config: Setting
 }
 
 // 先の系統には残りの半分、次の系統には残り全てを渡す。系統で検査できなければ次の系統へ移り、全て失敗すれば
-// 全ての理由を付けて例外にする (呼び出し側が原文に理由を添える)。
+// 系統ごとの失敗を例外に含める。
 async function check($: EngineInterface, payload: Payload): Promise<CheckResult> {
   const config = await settings($)
   const total = Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S
@@ -619,11 +620,9 @@ async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies
 // 書けなければ例外。呼び出し側は差し替えず、ターンの記録を書く前の値 (直させていない) で書き直す。
 async function recordSwap($: EngineInterface, turnId: string, turn: Turn, toolId: string, original: string,
     result: CheckResult) {
-  // ターンが次の最終回答を経ずに終わったときに表示する文は、検査処理の display_text (置き換え済みの本文、
-  // 未達の段落、証拠の欠けの注記) をそのまま使う。
-  const display = result.display_text ?? original
+  const display = result.corrected_bodies?.join('\n\n') ?? original
   const next: Turn = { ...turn, round: turn.round + 1, agent_message: result.agent_message, findings: result.findings,
-    original, unmet: ENDED_UNFIXED + display, gate_tool_id: toolId }
+    original, unmet: ENDED_UNFIXED + display, display_clean: true, gate_tool_id: toolId }
   await $.state.set({ plugin: 'output-gate', key: 'turn', id: turnId }, next)
   await $.state.set({ plugin: 'output-gate', key: 'issued', id: toolId }, { turn_id: turnId, agent_message: result.agent_message! })
   // 前に差し替えた呼び出しの指摘は返し終えている。turn.complete が消すのは最後の呼び出しだけなので、ここで消す。
@@ -687,7 +686,7 @@ export const register: Register = on => {
   on('tool.call', async ($, e, next) => {
     if (e.tool === GATE_TOOL) {
       const { value } = await $.state.get({ plugin: 'output-gate', key: 'issued', id: e.tool_use_id })
-      return { result: value ? value.agent_message : NOT_ISSUED }
+      return { result: '', context: [value ? value.agent_message : NOT_ISSUED] }
     }
     if (await skip($, e.agentId)) return next(e)
     let result: ToolCallResult | undefined
@@ -748,8 +747,9 @@ export const register: Register = on => {
           try {
             result = await check($, await payloadFor($, e.turnId, turn, original, final, 'withhold'))
           } catch (error) {
-            const reason = UNCHECKED(error instanceof Error ? error.message : '検査できなかった')
-            result = { status: 'unchecked', text: reason + original.join('\n\n'), bodies: [reason + original[0], ...original.slice(1)],
+            const reason = error instanceof Error ? error.message : '検査できなかった'
+            result = { status: 'unchecked', text: UNAVAILABLE + original.join('\n\n'),
+              bodies: [UNAVAILABLE + original[0], ...original.slice(1)],
               findings: [], agent_message: null, fallback_text: null, fallback_bodies: null, reason, engine: null,
               engine_failures: [], dropped: [], unmet_text: null, display_text: null }
           }
@@ -772,9 +772,15 @@ export const register: Register = on => {
               completed = true
               return { ...step.value, answer: '', toolUses: [{ name: GATE_TOOL, input: {} }], stopReason: 'tool_use' }
             }
-            result = { ...result, bodies: result.fallback_bodies ?? [result.fallback_text ?? original.join('\n\n')] }
+            const fallback = result.corrected_bodies?.length === original.length ? result.corrected_bodies : original
+            result = { ...result, status: 'unchecked', text: UNAVAILABLE + fallback.join('\n\n'),
+              bodies: [UNAVAILABLE + fallback[0], ...fallback.slice(1)] }
           }
-          const shown = perRun(result.bodies ?? [result.text ?? original.join('\n\n')], split.runs.length)
+          const fallback = result.findings.length && result.corrected_bodies?.length === original.length ?
+            result.corrected_bodies : original
+          const shown = perRun(result.status === 'unchecked' ? [UNAVAILABLE + fallback[0], ...fallback.slice(1)] :
+            result.findings.length ? result.corrected_bodies ?? original :
+              result.bodies ?? [result.text ?? original.join('\n\n')], split.runs.length)
           const shownText = turn.shown ? `${turn.shown}\n\n${shown.join('\n\n')}` : shown.join('\n\n')
           // 最終回答として検査して表示した範囲 (judged_len) は、turn.complete で判定し直さない。
           const after: Turn = final ? { ...turn, shown: shownText, judged_len: shownText.length, original: null, unmet: null }
@@ -808,8 +814,7 @@ export const register: Register = on => {
       if (isHolding) await setHolding($, -1)
     }
   }).catch(async function* ($, e, next) {
-    // hook 自体が失敗した場合 (時間超過を含む): 原文に理由を添えて流す。すでに流した断片は飛ばす。
-    const reason = UNCHECKED('出力ゲートの処理が失敗した')
+    // hook 自体が失敗した場合も、すでに流した断片は繰り返さない。
     let skipped = yielded.get(stepKey(e)) ?? 0
     yielded.delete(stepKey(e))
     let marked = false
@@ -823,7 +828,7 @@ export const register: Register = on => {
       }
       if (!marked && step.value.kind === 'text') {
         marked = true
-        yield { ...step.value, text: reason + step.value.text }
+        yield { ...step.value, text: UNAVAILABLE + step.value.text }
       } else {
         yield step.value
       }
@@ -847,7 +852,7 @@ export const register: Register = on => {
       turn = (await $.state.get({ plugin: 'output-gate', key: 'turn', id: e.turnId })).value ?? null
       if (turn?.original != null) {
         // 差し替えた後、次の最終回答を経ずに終わった: 捨てた原文と未達の項目は会話記録にも無いため、ここで出す。
-        extra = turn.unmet ?? turn.original
+        extra = turn.display_clean ? turn.unmet ?? ENDED_UNFIXED.trim() : ENDED_UNFIXED + turn.original
       } else if (turn && JUDGED_ENDS.has(e.reason) && turn.shown.slice(turn.judged_len).trim() !== '') {
         // 最終回答として検査していない文章が残ったまま終わった: 表示済みの文章を草稿にして 1〜3 を判定し、
         // 未達の項目を下に足す。
@@ -855,10 +860,9 @@ export const register: Register = on => {
         try {
           const checked = await check($, await payloadFor($, e.turnId, { ...turn, shown: '' }, [draft], true, 'none'))
           turn.checks = [...turn.checks, checkRecord(-1, true, checked)]
-          if (checked.status === 'unchecked') extra = UNCHECKED(checked.reason ?? '検査できなかった').trim()
-          else if (checked.unmet_text) extra = checked.unmet_text
-        } catch (error) {
-          extra = UNCHECKED(error instanceof Error ? error.message : '検査できなかった').trim()
+          if (checked.status === 'unchecked') extra = UNAVAILABLE.trim()
+        } catch {
+          extra = UNAVAILABLE.trim()
         }
       }
     } catch {
@@ -884,9 +888,11 @@ export const register: Register = on => {
     return extra === '' ? result : { ...result, text: extra }
   })
 
-  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
-    if ((await read($, holding)) > 0) {
-      return next({ ...e, props: { ...e.props, suffix: `${e.props.suffix} 出力ゲートで回答を確認中` } })
+  on('ui.render', async ($, e, next) => {
+    if ((e.component === 'ToolUse' || e.component === 'ToolResult') &&
+        (e.props as { tool?: string }).tool === GATE_TOOL) {
+      const { Text } = $.ui.resolve(e)
+      return Text({ children: '' })
     }
     return next(e)
   })

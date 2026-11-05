@@ -23,6 +23,7 @@ export type HoldingTurn = {
   findings: unknown[]
   original: string | null
   unmet: string | null
+  display_clean?: boolean
   gate_tool_id: string | null
   checks: HoldingCheck[]
 } | null

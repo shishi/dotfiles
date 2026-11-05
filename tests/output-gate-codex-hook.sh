@@ -222,7 +222,7 @@ write_gate() {   # session turn json
 gate_field() {   # session turn field
   python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); v=d.get(sys.argv[2]); print("" if v is None else v)' "$GATE/$1/$2.json" "$3"
 }
-SUBSTITUTED='{"phase":"substituted","round":0,"findings":[],"agent_message":"AGENT-MSG","original":"RAW-ANSWER","display":"ORIGINAL-ANSWER UNMET-ITEMS","notice_marker":"m","created":9999999999}'
+SUBSTITUTED='{"phase":"substituted","round":0,"findings":[],"agent_message":"AGENT-MSG","original":"RAW-ANSWER","display":"ORIGINAL-ANSWER","display_clean":true,"notice_marker":"m","created":9999999999}'
 
 write_gate g1 t1 "$SUBSTITUTED"
 out=$(printf '{"session_id":"g2","turn_id":"t1","stop_hook_active":false}' | bash "$HOOK" stop)
@@ -268,12 +268,12 @@ check "another session does not show or mark the state" "! printf '%s' \"\$out\"
 out=$(printf '{"session_id":"r1","turn_id":"t2"}' | bash "$HOOK" prompt)
 message=$(printf '%s' "$out" | python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("systemMessage", ""))' 2>/dev/null)
 check "the recovery shows the rewritten answer, not the raw original" "! printf '%s' \"\$message\" | grep -q RAW-ANSWER"
-check "the next turn shows the original and the unmet items" "printf '%s' \"\$message\" | grep -q ORIGINAL-ANSWER && printf '%s' \"\$message\" | grep -q UNMET-ITEMS"
+check "recovery omits gate text and findings" "printf '%s' \"\$message\" | grep -q ORIGINAL-ANSWER && ! printf '%s' \"\$message\" | grep -Eq '出力ゲート|UNMET-ITEMS'"
 check "the shown mark is set and the state is kept" "[ \"\$(gate_field r1 t1 shown)\" = True ] && [ \"\$(gate_field r1 t1 original)\" = RAW-ANSWER ] && [ \"\$(gate_field r1 t1 phase)\" = substituted ] && [ \"\$(gate_field r1 t1 round)\" = 0 ]"
 out=$(printf '{"session_id":"r1","turn_id":"t3"}' | bash "$HOOK" prompt)
 check "the original is not shown twice" "! printf '%s' \"\$out\" | grep -q ORIGINAL-ANSWER"
 # blocked のまま止まったターン (block の前に hook が止まった・続けた作業の途中で中断した) も回収する。
-write_gate r2 t1 '{"phase":"blocked","round":0,"findings":[],"agent_message":"AGENT-MSG","original":"RAW-B","display":"BLOCKED-ORIGINAL UNMET-B","notice_marker":"m","created":9999999999}'
+write_gate r2 t1 '{"phase":"blocked","round":0,"findings":[],"agent_message":"AGENT-MSG","original":"RAW-B","display":"BLOCKED-ORIGINAL","display_clean":true,"notice_marker":"m","created":9999999999}'
 out=$(printf '{"session_id":"r2","turn_id":"t2"}' | bash "$HOOK" prompt)
 check "a turn left blocked is recovered on the next input" "printf '%s' \"\$out\" | grep -q BLOCKED-ORIGINAL && [ \"\$(gate_field r2 t1 shown)\" = True ]"
 write_gate r3 t1 '{"phase":"resolved","round":1,"findings":[],"created":9999999999}'
@@ -281,7 +281,7 @@ out=$(printf '{"session_id":"r3","turn_id":"t2"}' | bash "$HOOK" prompt)
 check "a resolved turn without the original shows nothing" "! printf '%s' \"\$out\" | grep -q systemMessage"
 # Windows のコマンド行の上限 (32,767 文字) を超える原文も、表示できてから shown を付ける。
 big=$(python3 -I -c 'print("BIG-" + "x" * 40000, end="")')
-write_gate r4 t1 "{\"phase\":\"substituted\",\"round\":0,\"findings\":[],\"agent_message\":\"A\",\"original\":\"R\",\"display\":\"$big\",\"notice_marker\":\"m\",\"created\":9999999999}"
+write_gate r4 t1 "{\"phase\":\"substituted\",\"round\":0,\"findings\":[],\"agent_message\":\"A\",\"original\":\"R\",\"display\":\"$big\",\"display_clean\":true,\"notice_marker\":\"m\",\"created\":9999999999}"
 out=$(printf '{"session_id":"r4","turn_id":"t2"}' | bash "$HOOK" prompt)
 message=$(printf '%s' "$out" | python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("systemMessage", ""), end="")' 2>/dev/null)
 check "a recovery longer than the command line limit is shown" "printf '%s' \"\$message\" | grep -q 'BIG-xxxx' && [ \${#message} -gt 40000 ] && [ \"\$(gate_field r4 t1 shown)\" = True ]"
@@ -293,6 +293,9 @@ out=$(bash "$HOOK" held r2)
 check "held does not show a resolved turn" "bash '$HOOK' held r3 | grep -q '回収できる原文はありません'"
 check "held with a session id shows only that session" "printf '%s' \"\$out\" | grep -q BLOCKED-ORIGINAL && ! printf '%s' \"\$out\" | grep -q ORIGINAL-ANSWER"
 check "held keeps the states" "[ -f '$GATE/r1/t1.json' ] && [ -f '$GATE/r2/t1.json' ]"
+write_gate legacy t1 '{"phase":"substituted","round":0,"original":"RAW-OLD","display":"OLD-ANSWER UNMET-OLD","findings":[],"notice_marker":"old","created":9999999999}'
+out=$(printf '{"session_id":"legacy","turn_id":"t2"}' | bash "$HOOK" prompt)
+check "legacy recovery shows the original without findings" "printf '%s' \"\$out\" | grep -q RAW-OLD && ! printf '%s' \"\$out\" | grep -Eq 'UNMET-OLD|OLD-ANSWER|出力ゲート' && [ -f '$GATE/legacy/t1.json' ]"
 
 # 続行の登録: app-server の hooks/list で出力ゲートの Stop hook が信頼済みのときだけ書く。
 CODEXBIN="$TMP/codexbin"

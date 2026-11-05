@@ -26,7 +26,7 @@ bash ~/.agent-shared/hooks/output-gate-codex.sh enable
 bash ~/.agent-shared/hooks/output-gate-codex.sh disable
 ```
 
-有効化後と `codex/hooks.json` の更新後は、Codex の `/hooks` で出力ゲートの Stop・SessionStart・UserPromptSubmit・PreCompact・PreModelRequest hook を信頼してください。中継の再起動は hook が担うため、信頼していない状態で中継が止まると Codex は接続できません。信頼済みの Stop hook がセッション開始時に確認できない場合、未達の回答には指摘を添えて表示します。
+有効化後と `codex/hooks.json` の更新後は、Codex の `/hooks` で出力ゲートの Stop・SessionStart・UserPromptSubmit・PreCompact・PreModelRequest hook を信頼してください。中継の再起動は hook が担うため、信頼していない状態で中継が止まると Codex は接続できません。
 
 Claude Code の出力ゲートは既定で無効です。次のコマンドで切り替えます。
 
@@ -41,13 +41,13 @@ Windows と WSL はそれぞれ状態を管理します。両方で使う場合�
 
 ## 検査と表示
 
-検査役には、依頼、会話、回答、ツール呼び出しと結果、応答規則を渡します。送信前に gitleaks で秘密情報を検出し、伏せた後に再検査します。伏せられない場合は送信せず、検査できなかった理由を表示します。
+検査役には、依頼、会話、回答、ツール呼び出しと結果、応答規則を渡します。送信前に gitleaks で秘密情報を検出し、伏せた後に再検査します。伏せられない場合は送信しません。
 
-未達がある場合は、利用可能な経路では回答を保留し、指摘をエージェントへ返して同じセッションで続行します。次の回答も検査し、未達が残る間は続行します。続行できない経路では未達の項目を添えて回答を表示します。検査役を使えない場合は、理由を添えて原文を表示します。検査役は誤判定や見落としをする場合があります。
+未達がある場合は、利用可能な経路では回答を保留し、指摘をエージェントへ返して同じセッションで続行します。次の回答も検査し、未達が残る間は続行します。検査できない場合は、確認が未完了であることと原文を表示します。検査役は誤判定や見落としをする場合があります。
 
-Codex はローカルの HTTP 中継で応答を検査します。中継は回答を差し替え、信頼済みの Stop hook があるセッションでは未達を直すよう続行させます。中継を通さない委譲・レビューの出力は検査しません。`/review` の JSON は説明欄だけを検査し、構造を維持します。
+Codex はローカルの HTTP 中継で応答を検査します。未達の回答は表示せず、指摘をエージェントに渡して続行します。中継を通さない委譲・レビューの出力は検査しません。`/review` の JSON は説明欄だけを検査し、構造を維持します。
 
-Claude Code は mod で回答を検査します。Desktop の WSL セッションでは代わりに表示 hook と Stop hook を使います。この経路はストリーム中の原文を隠せない場合があります。mod 自体を外すには、`claude/settings.json` の `CLAUDE_CODE_PLUGIN_DIRS` を外して再起動します。
+Claude Code は mod で回答を検査します。Desktop の WSL セッションでは代わりに表示 hook と Stop hook を使います。この経路ではストリーム中の原文や Stop hook の指摘が表示される場合があります。mod 自体を外すには、`claude/settings.json` の `CLAUDE_CODE_PLUGIN_DIRS` を外して再起動します。
 
 途中の発言、推論、音声会話などは最終回答と同じ表示前検査の対象ではありません。クラウドや Desktop・IDE の環境では、対象の設定と hook が読み込まれるかを確認してください。
 
@@ -63,7 +63,7 @@ Claude Code は mod で回答を検査します。Desktop の WSL セッショ�
 codex --no-daemon -c 'openai_base_url=""'
 ```
 
-未達の回答を保留したままターンが終了した場合、同じセッションの次の入力時に回答と未達を表示します。次の入力がない場合は次のコマンドで回収できます。保存期間は 24 時間です。
+未達の回答を保留したままターンが終了した場合、同じセッションの次の入力時に中断された回答を表示します。旧版で保留した回答は、置き換え前の原文を表示します。次の入力がない場合は次のコマンドで回収できます。保存期間は 24 時間です。
 
 ```sh
 bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id]

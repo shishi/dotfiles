@@ -57,7 +57,7 @@ finish() {
   local joined system= printed=0
   if [ "${#messages[@]}" -gt 0 ] && [ -n "${py_bin:-}" ]; then
     joined=$(printf '%s ' "${messages[@]}")
-    system=$(json_string "[出力ゲート] ${joined% }")
+    system=$(json_string "${joined% }")
   fi
   if [ -n "$stop_reason" ]; then
     printf '{"continue": false, "stopReason": %s%s}\n' "$(json_string "[出力ゲート] $stop_reason")" \
@@ -213,11 +213,10 @@ def recoverable(state):
     return isinstance(state.get('original'), str) and state.get('phase') in ('substituted', 'blocked')
 
 def shown(session, turn, state):
-    # 利用者に見せるのは、置き換え済みの本文と検査処理の未達の文 (display)。モデルへ戻す原文 (original) は
-    # 応答の規則の置き換えの前なので見せない。
-    body = state.get('display') if isinstance(state.get('display'), str) else state['original']
-    return (f'[出力ゲート] セッション {session} のターン {turn} の回答は、直させる前の回答のまま利用者に届いていません。\n'
-            f'--- 直させる前の回答 ---\n{body}')
+    # 旧版の display は検査の指摘を含むため、旧版では原文を回収する。
+    body = state.get('display') if state.get('display_clean') is True else state.get('original')
+    heading = f'セッション {session} の前回の回答は完了前に中断されました。'
+    return heading + ('\n\n' + body if isinstance(body, str) else '')
 
 def targets(directory, turn):
     for path in sorted(Path(directory).glob('*.json')):
