@@ -1,5 +1,5 @@
 personality = "friendly"
-model = "gpt-6.1-sol"
+model = "gpt-6.1-terra"
 model_reasoning_effort = "medium"
 # gpt-6-astra の実験的な拡張枠。圧縮後の処理と出力に余裕を残す。
 model_context_window = 872000
