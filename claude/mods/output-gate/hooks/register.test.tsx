@@ -34,7 +34,8 @@ const FINDING = { kind: 'unverified_claim', excerpt: { source: 'draft', text: '�
 const unmet = (p: Payload): Result => {
   const marked = [...p.bodies.slice(0, -1), p.bodies.at(-1) + UNMET]
   const base = { ...checked(p), findings: [FINDING], unmet_text: UNMET_TEXT, display_text: marked.join('\n\n'),
-    corrected_bodies: p.bodies }
+    corrected_bodies: p.bodies,
+    progress_state: { round: p.round, stalled: 0, bodies: p.bodies, findings: [FINDING], evidence: p.evidence } }
   if (p.continuation === 'none') return { ...base, text: marked.join('\n\n'), bodies: marked }
   const fallback = ['[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\n\n' + marked[0], ...marked.slice(1)]
   return { ...base, text: null, bodies: null, agent_message: '指摘: 全部通った の証拠が無い',
@@ -79,7 +80,9 @@ function world(on: On, options: { env?: Record<string, string>; enabled?: boolea
 }
 
 const runs: { argv: string[]; env: Record<string, string> }[] = []
-type Checker = { prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result; receive?: (r: { payload: Payload; reply: string; engine: unknown; engine_failures?: unknown[] }) => Result }
+type Checker = { prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result;
+  finish?: (r: { initial: Result; rechecked: Result }) => Result;
+  receive?: (r: { payload: Payload; reply: string; engine: unknown; engine_failures?: unknown[] }) => Result }
 // 検査処理の代わり: Python の確認・ファイルの置き換えと削除は記憶のファイルで行い、検査は与えた関数で答える。
 function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), calls: Payload[] = []) {
   runs.length = 0
@@ -105,6 +108,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
       calls.push(request.payload)
       return ok(given.receive!(request))
     }
+    if (argv.includes('--finish-recheck')) return ok(given.finish!(JSON.parse(e.init.stdin)))
     const payload = JSON.parse(e.init.stdin) as Payload
     calls.push(payload)
     return ok(given.bulk!(payload))
@@ -238,6 +242,23 @@ test('a correction of abandoned text is not applied inside the kept text', async
   })
   const { result } = await run($)
   expect(result.answer).toBe(kept)
+})
+
+test('a failed continuation write preserves the kept retry answer and its findings for upper hooks', async ($, on) => {
+  const fs = world(on)
+  checker(on, fs, unmet)
+  on('state.set', (_$, e, next) => e.key === 'issued' && e.value !== null ? { deny: 'read only' } as never : next(e))
+  on('turn.step', async function* (_$, e) {
+    yield TEXT(0, '破棄する試行。')
+    yield { kind: 'thinking', index: 1, text: '再試行' }
+    yield TEXT(0, '全部通った。')
+    yield STOP()
+    return { turnId: e.turnId, index: e.index, answer: '全部通った。', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+  })
+  const { result } = await run($)
+  expect(result.answer).toContain('全部通った。')
+  expect(result.answer).toContain(UNMET_TEXT)
+  expect(result.answer).toContain('自動差戻し停止・未解決')
 })
 
 test('a machine where the gate is not enabled is not checked and has no tool', async ($, on) => {
@@ -487,6 +508,8 @@ test('findings at the final answer swap the text for the gate tool call, after t
   const second = await run($, { index: 1 })
   expect(calls[1]?.round).toBe(1)
   expect(calls[1]?.previous_findings).toEqual([FINDING])
+  expect((calls[1] as unknown as { progress_state: unknown }).progress_state).toEqual({
+    round: 0, stalled: 0, bodies: ['全部通った。'], findings: [FINDING], evidence: [] })
   // 未達が残る間は何回目でも直させる: 2 回目の最終回答も表示せず、gate_findings の呼び出しに差し替える。
   expect(second.chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
   expect(second.text).toBe('')
@@ -498,6 +521,50 @@ test('findings at the final answer swap the text for the gate tool call, after t
   expect(third.chunks.some(c => c.kind === 'tool')).toBe(false)
   expect(third.text).toBe('証拠付きで直した。')
 })
+
+test('a stopped inspection displays the unresolved answer and findings without another gate call', async ($, on) => {
+  const fs = world(on)
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
+  checker(on, fs, p => ({ ...unmet(p), stopped: true, agent_message: null,
+    text: '自動差戻し停止・未解決\n\n' + p.bodies.join('\n\n') + UNMET,
+    bodies: ['自動差戻し停止・未解決\n\n' + p.bodies.join('\n\n') + UNMET] }))
+  model(on, [[TEXT(0, '全部通った。'), STOP()]])
+  const { text, chunks } = await run($)
+  expect(text).toBe('自動差戻し停止・未解決\n\n全部通った。' + UNMET)
+  expect(chunks.some(c => c.kind === 'tool')).toBe(false)
+})
+
+for (const outcome of ['stalled', 'advanced', 'unavailable']) {
+  test(`Claude-first inspection joins its independent ${outcome} verdict with the original findings`, async ($, on) => {
+    const fs = world(on)
+    let initial: Result | undefined
+    const merged: { initial: Result; rechecked: Result }[] = []
+    const finalText = '自動差戻し停止・未解決\n\n全部通った。' + UNMET
+    const calls = checker(on, fs, {
+      receive: r => (initial = { ...unmet(r.payload), recheck_required: true }),
+      bulk: p => outcome === 'unavailable' ? codexFailed(p) : outcome === 'advanced' ? unmet(p) :
+        { ...unmet(p), stopped: true, agent_message: null, text: finalText, bodies: [finalText] },
+      finish: r => {
+        merged.push(r)
+        return outcome === 'unavailable' ? { ...r.initial, stopped: true, agent_message: null,
+          text: finalText, bodies: [finalText] } : r.rechecked
+      },
+    })
+    claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
+    tools(on)
+    model(on, [[TEXT(0, '全部通った。'), STOP()]])
+    const { text, chunks } = await run($)
+    expect(merged.length).toBe(1)
+    expect(merged[0]?.initial.findings).toEqual(initial?.findings)
+    expect(merged[0]?.initial.corrected_bodies).toEqual(['全部通った。'])
+    expect(calls.length).toBe(2)
+    expect((calls[1] as unknown as { independent_recheck: boolean }).independent_recheck).toBe(true)
+    expect(calls[1]?.engines).toBeUndefined()
+    expect(merged[0]?.rechecked.status).toBe(outcome === 'unavailable' ? 'unchecked' : 'checked')
+    expect(text).toBe(outcome === 'advanced' ? '' : finalText)
+    expect(chunks.some(c => c.kind === 'tool')).toBe(outcome === 'advanced')
+  })
+}
 
 test('a failed state write shows the original, the reason and the findings', async ($, on) => {
   const fs = world(on)
@@ -511,8 +578,9 @@ test('a failed state write shows the original, the reason and the findings', asy
   await start($)
   const { chunks, text, result } = await run($)
   expect(chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(text).toBe(UNAVAILABLE + '全部通った。')
-  expect(text).not.toContain(UNMET_TEXT)
+  expect(text).toContain('全部通った。')
+  expect(text).toContain('自動差戻し停止・未解決')
+  expect(text).toContain(UNMET_TEXT)
   expect(result?.stopReason).toBe('end_turn')
 })
 
@@ -964,8 +1032,9 @@ test('a failed write of the issued call undoes the swap', async ($, on) => {
   await start($)
   const first = await run($)
   expect(first.chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(first.text).toBe(UNAVAILABLE + '速い全部通った。')
-  expect(first.text).not.toContain(UNMET_TEXT)
+  expect(first.text).toContain('速い全部通った。')
+  expect(first.text).toContain('自動差戻し停止・未解決')
+  expect(first.text).toContain(UNMET_TEXT)
   // 直させた回数は書く前に戻っている: 同じターンの次の最終回答は、まだ直させていない (round=0) として検査する。
   await run($, { index: 1 })
   expect(calls[1]?.round).toBe(0)

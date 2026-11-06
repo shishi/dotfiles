@@ -6,6 +6,7 @@
   output-gate-check.py              標準入力の payload を検査し、結果を出す (一括の検査)
   output-gate-check.py --prepare    検査役への入力 (指示・入力・schema) を組むだけ (mod の $.model.complete 用)
   output-gate-check.py --receive    {"payload", "reply", "engine"} を受け、返答の形を確かめて結果を出す
+  output-gate-check.py --finish-recheck  {"initial", "rechecked"} を受け、独立再判定を初回の結果へ結び付ける
 
 標準入力の payload (JSON):
   origin            "claude" | "codex"。回答を書いた CLI。無ければ検査できなかった扱い
@@ -18,7 +19,9 @@
                     取得できなかった範囲は {id, unavailable: true, note}
   previous_evidence 前のターンの証拠 [{turn_id, time, items: [...]}]
   previous_findings 直させる前の検査の findings (再検査で渡す)
-  round             直させた回数 (0 以上の整数)。未達が残る間は何回目でも直させる
+  round             直させた回数 (0 以上の整数)。総回数の上限は設けない
+  progress_state    前の検査の checkpoint {round, stalled, bodies, findings, evidence}。省略可
+  independent_recheck 独立再判定か。停滞が続いたとき Astra/high → Fable/high で再判定する
   final             最終回答か。false なら応答の規則だけを検査する
   continuation      "withhold" (既定: 回答を見せずに続けさせる) | "none" (続けさせられない) |
                     "display" (表示して続けさせる: Desktop の WSL セッションの 1 回目)
@@ -33,6 +36,9 @@
   display_text / display_bodies (未達を明記した表示用の本文 = 置き換え済みの本文 + 未達の段落 + 証拠の印の
                     注記。continuation に関係なく入り、先頭の断り書きは付けない。未達が無い・
                     検査できなかったときは null),
+  progress_state (今回の checkpoint), progress ({state, reason}), recheck_required (独立再判定が必要),
+  stopped (未解決のまま自動差戻しを停止。status=checked は検査を実行した意味で、合格とは限らない),
+  independent_recheck (独立再判定の結果。試した場合のみ),
   reason, engine ({family, model, effort} or null), engine_failures, applied
 
 検査できなかったときは、一般的な未完了案内と原文を text に入れて status を unchecked にする。理由は reason に残す。
@@ -101,8 +107,11 @@ STATES = ('absent', 'failed', 'truncated', 'unrecovered')
 # 出力ゲートの mod が登録する指摘のツールの名前。モデルと tool.call には MCP の名前 (mcp__output-gate__…) で見える。
 GATE_TOOLS = frozenset({'gate_findings', 'mcp__output-gate__gate_findings'})
 CHECKER_SCHEMA = {
-    'type': 'object', 'additionalProperties': False, 'required': ['replacements', 'findings'],
+    'type': 'object', 'additionalProperties': False, 'required': ['replacements', 'findings', 'progress'],
     'properties': {
+        'progress': {'type': 'object', 'additionalProperties': False, 'required': ['state', 'reason'],
+                     'properties': {'state': {'type': 'string', 'enum': ['advanced', 'stalled', 'unknown']},
+                                    'reason': {'type': 'string'}}},
         'replacements': {'type': 'array', 'items': {
             'type': 'object', 'additionalProperties': False,
             'required': ['find', 'replace', 'rule', 'meaning_changed'],
@@ -197,13 +206,29 @@ Report each unmet point once. Treat "previous_findings" as earlier judgements, n
 unmet. Assess them afresh against the current answer and all evidence; discard an earlier finding if its premise is
 contradicted by the evidence, even when no new tool call followed it.
 """
+INSTRUCTIONS_PROGRESS = """
+Progress assessment. Compare this answer, verified findings and all available evidence with "progress_state", the
+previous checkpoint. Return "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}.
+Advanced means an unmet outcome was resolved, or a verified new fact narrowed the cause or supports a concrete next
+decision towards resolving the unmet outcome. Stalled means neither happened. Repeating checks, rephrasing an answer,
+changing wording or finding counts, or increasing tool-call counts alone is not progress. A newly discovered fact or
+finding does not justify extending the same correction loop unless it changes the cause assessment or next decision.
+A new fact must be previously unverified across the whole request, assessed against recent messages and all available
+current and previous evidence. Rediscovering an already established fact or alternating between previously tried
+answers or decisions is not advancement.
+Judge meaning and causal relevance, not exact words or numerical differences. If no checkpoint exists or comparison
+cannot be supported, return unknown. Earlier findings are judgements to reassess, not proof. This is fallible semantic
+assessment, not a guarantee that every unproductive loop can be detected. The same standard applies on independent
+recheck: assess the supplied original checkpoint afresh, rather than endorsing an earlier progress judgement.
+"""
 OUTPUT_FORMAT = """
 Reply with JSON only, no prose:
 {"replacements": [{"find": "<exact substring of the draft>", "replace": "<replacement>",
                    "rule": "<the rule it breaks, quoted briefly>", "meaning_changed": <true|false>}],
  "findings": [{"kind": "...", "rule": "<rule id or empty>", "source": "<message id>", "excerpt": "<exact substring>",
-               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered"}]}]}
-When nothing is wrong, reply {"replacements": [], "findings": []}.
+               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered"}]}],
+ "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}}
+When nothing is wrong, reply with empty replacements and findings and the progress assessment.
 """
 INSTRUCTIONS_FILE = 'checker-instructions.md'
 SCHEMA_FILE = 'checker-schema.json'
@@ -220,7 +245,8 @@ class EngineFailure(RuntimeError):
 
 
 def checker_instructions(final):
-    return INSTRUCTIONS_COMMON + (INSTRUCTIONS_FINAL if final else INSTRUCTIONS_RULES_ONLY) + OUTPUT_FORMAT
+    return (INSTRUCTIONS_COMMON + (INSTRUCTIONS_FINAL if final else INSTRUCTIONS_RULES_ONLY) +
+            INSTRUCTIONS_PROGRESS + OUTPUT_FORMAT)
 
 
 def normalize(text):
@@ -242,7 +268,8 @@ def unchecked(payload, reason, **extra):
               'findings': [], 'dropped': [], 'agent_message': None,
               'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None, 'display_text': None,
               'display_bodies': None, 'engine': None,
-              'engine_failures': [], 'applied': 0}
+              'engine_failures': [], 'applied': 0, 'progress_state': payload.get('progress_state'),
+              'recheck_required': False, 'stopped': False}
     result.update(extra)
     return result
 
@@ -375,12 +402,20 @@ def build_input(payload, rules, limit=INPUT_LIMIT):
         data['checked_rules'] = checked_rules()
     if payload.get('previous_findings'):
         data['previous_findings'] = payload['previous_findings']
+    if payload.get('progress_state') is not None:
+        data['progress_state'] = payload['progress_state']
     if payload.get('compacted_note'):
         data['notes'] = ['Earlier answers were compacted and are not available.']
     size = len(render(data).encode('utf-8'))
     if size > limit:
-        data['previous_evidence'], data['evidence'] = trim_evidence(data['previous_evidence'], data['evidence'],
-                                                                    size - limit)
+        previous = data['previous_evidence']
+        checkpoint = data.get('progress_state')
+        if checkpoint is not None:
+            previous = [{'items': checkpoint['evidence']}, *previous]
+        previous, data['evidence'] = trim_evidence(previous, data['evidence'], size - limit)
+        if checkpoint is not None:
+            data['progress_state'] = dict(checkpoint, evidence=previous.pop(0)['items'])
+        data['previous_evidence'] = previous
     return data
 
 
@@ -593,9 +628,14 @@ def parse_reply(reply, family):
         value = json.loads(text)
     except ValueError as error:
         raise EngineFailure(f'{family} の検査役の答えの形が違う (JSON ではない)') from error
-    if not (isinstance(value, dict) and set(value) == {'replacements', 'findings'} and
+    if not (isinstance(value, dict) and
+            {'replacements', 'findings'} <= set(value) <= {'replacements', 'findings', 'progress'} and
             isinstance(value['replacements'], list) and isinstance(value['findings'], list)):
         raise EngineFailure(f'{family} の検査役の答えの形が違う')
+    progress = value.setdefault('progress', {'state': 'unknown', 'reason': '検査役が進捗判定を返していない'})
+    if not (isinstance(progress, dict) and set(progress) == {'state', 'reason'} and
+            progress['state'] in ('advanced', 'stalled', 'unknown') and isinstance(progress['reason'], str)):
+        raise EngineFailure(f'{family} の検査役の答えの形が違う (進捗)')
     # 置き換えの組の欄と型の誤りは形の誤りとして次の系統へ移す。意味の変更や保護範囲への置き換えを拒む判定
     # (apply_pairs) とは分ける。
     for pair in value['replacements']:
@@ -1124,6 +1164,34 @@ def decorate(bodies, prefix='', suffix=''):
     return shown
 
 
+def progress_checkpoint(payload, bodies, findings, progress):
+    previous = payload.get('progress_state')
+    round = payload.get('round', 0)
+    stalled = previous['stalled'] if previous and round else 0
+    if previous and round > previous['round']:
+        stalled = 0 if progress['state'] == 'advanced' else stalled + 1
+    previous_evidence, current = evidence_parts(payload)
+    return {'round': round, 'stalled': stalled, 'bodies': bodies, 'findings': findings,
+            'evidence': [*(item for turn in previous_evidence for item in turn.get('items', [])), *current]}
+
+
+def stop_corrections(result, unavailable=False):
+    prefix = ('[出力ゲート: 再判定不能で自動差戻し停止・未解決]' if unavailable else
+              '[出力ゲート: 進捗を確認できないため自動差戻し停止・未解決]')
+    bodies = result['corrected_bodies']
+    shown = decorate(bodies, prefix=prefix + '\n\n', suffix='\n\n---\n' + result['unmet_text'])
+    return dict(result, stopped=True, recheck_required=False, agent_message=None, text=joined(shown), bodies=shown,
+                display_text=joined(shown), display_bodies=shown, fallback_text=None, fallback_bodies=None)
+
+
+def finish_recheck(initial, rechecked):
+    """独立再判定を初回の結果へ結び付け、不能時も初回の未達と本文を保持する。"""
+    if rechecked.get('status') == 'checked':
+        return dict(rechecked, independent_recheck=rechecked)
+    stopped = stop_corrections(initial, unavailable=True)
+    return dict(stopped, independent_recheck=rechecked)
+
+
 def judge(payload, reply_text, engine, failures):
     """検査役の返答から結果を組み立てる。返答の形が違えば EngineFailure。"""
     family = engine['family'] if engine else 'checker'
@@ -1136,7 +1204,8 @@ def judge(payload, reply_text, engine, failures):
     base = {'status': 'checked', 'reason': None, 'findings': findings, 'dropped': dropped,
             'agent_message': None, 'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None,
             'display_text': None, 'display_bodies': None, 'corrected_bodies': bodies,
-            'engine': engine, 'engine_failures': failures, 'applied': len(answer['replacements'])}
+            'engine': engine, 'engine_failures': failures, 'applied': len(answer['replacements']),
+            'progress': answer['progress'], 'recheck_required': False, 'stopped': False}
     # 回答の秘密情報は検査役の判定に依らずに確かめる。検査役の指摘が全て捨てられた場合も見逃さないよう先に行う。
     secrets = secret_findings(payload, findings) if final else []
     if answer['findings'] and final and not findings and not secrets:
@@ -1144,6 +1213,7 @@ def judge(payload, reply_text, engine, failures):
                          engine_failures=failures)
     findings += secrets
     base['findings'] = findings
+    base['progress_state'] = progress_checkpoint(payload, bodies, findings, answer['progress'])
     if not findings:
         shown = decorate(bodies)
         return dict(base, text=joined(shown), bodies=shown)
@@ -1151,6 +1221,10 @@ def judge(payload, reply_text, engine, failures):
     base['unmet_text'] = unmet
     marked = decorate(bodies, suffix='\n\n---\n' + unmet)
     base.update(display_text=joined(marked), display_bodies=marked)
+    if base['progress_state']['stalled'] >= 3:
+        if payload.get('independent_recheck'):
+            return stop_corrections(base)
+        base['recheck_required'] = True
     mode = payload.get('continuation') or 'withhold'
     if mode == 'none':
         return dict(base, text=joined(marked), bodies=marked)
@@ -1171,7 +1245,7 @@ def payload_problem(payload):
     return None
 
 
-def check(payload):
+def check(payload, deadline=None):
     problem = payload_problem(payload)
     if problem:
         return unchecked(payload, problem)
@@ -1182,11 +1256,14 @@ def check(payload):
             settings['first'] = 'codex'
             settings['codex'] = {'model': 'gpt-6-astra', 'effort': 'high'}
             settings['claude'] = {'model': 'fable', 'effort': 'high'}
-        order = engine_order(payload['origin'], payload.get('engines'), settings)
+        engines = None if payload.get('independent_recheck') else payload.get('engines')
+        order = engine_order(payload['origin'], engines, settings)
         if not order:
             return unchecked(payload, '使える検査役の系統が無い (engines)')
-        total = float(os.environ.get('OUTPUT_GATE_TIMEOUT') or (120 if payload.get('independent_recheck') else DEFAULT_TIMEOUT))
-        deadline = time.monotonic() + total
+        if deadline is None:
+            total = float(os.environ.get('OUTPUT_GATE_TIMEOUT') or
+                          (120 if payload.get('independent_recheck') else DEFAULT_TIMEOUT))
+            deadline = time.monotonic() + total
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
             workdir = Path(tmp)
             prompt = masked_input(payload, workdir)
@@ -1204,7 +1281,12 @@ def check(payload):
                                                   workdir, timeout, final)
                     else:
                         reply, engine = run_claude(prompt, settings['claude'], workdir, timeout, final)
-                    return judge(payload, reply, engine, failures)
+                    result = judge(payload, reply, engine, failures)
+                    if result.get('recheck_required'):
+                        independent = dict(payload, independent_recheck=True)
+                        independent.pop('engines', None)
+                        return finish_recheck(result, check(independent, deadline=deadline))
+                    return result
                 except EngineFailure as error:
                     failures.append({'family': family, 'reason': str(error)})
                 except (OSError, subprocess.SubprocessError, ValueError) as error:
@@ -1273,18 +1355,30 @@ def validate(payload):
             raise ValueError(f'{key} must be a list of {{role, text}}')
     if not (isinstance(payload.get('round', 0), int) and payload.get('round', 0) >= 0):
         raise ValueError('round must be a non-negative integer')
+    progress = payload.get('progress_state')
+    if progress is not None and not (isinstance(progress, dict) and
+            type(progress.get('round')) is int and progress['round'] >= 0 and
+            type(progress.get('stalled')) is int and progress['stalled'] >= 0 and
+            isinstance(progress.get('bodies'), list) and all(isinstance(b, str) for b in progress['bodies']) and
+            isinstance(progress.get('findings'), list) and isinstance(progress.get('evidence'), list)):
+        raise ValueError('progress_state must be a checkpoint with round, stalled, bodies, findings and evidence')
     if payload.get('continuation', 'withhold') not in ('withhold', 'none', 'display'):
         raise ValueError('continuation must be withhold, none or display')
 
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else None
-    if mode not in (None, '--prepare', '--receive'):
+    if mode not in (None, '--prepare', '--receive', '--finish-recheck'):
         print(f'output-gate-check: unknown option {mode}', file=sys.stderr)
         sys.exit(2)
     try:
         request = json.loads(sys.stdin.buffer.read().decode('utf-8'))
-        if mode == '--receive':
+        if mode == '--finish-recheck':
+            if not (isinstance(request, dict) and isinstance(request.get('initial'), dict) and
+                    isinstance(request.get('rechecked'), dict) and request['initial'].get('recheck_required') and
+                    request['initial'].get('corrected_bodies') and request['initial'].get('unmet_text')):
+                raise ValueError('initial recheck request and rechecked result are required')
+        elif mode == '--receive':
             if not (isinstance(request, dict) and isinstance(request.get('reply'), str)):
                 raise ValueError('reply is required')
             validate(request.get('payload'))
@@ -1293,7 +1387,8 @@ def main():
     except ValueError as error:
         print(f'output-gate-check: invalid input: {error}', file=sys.stderr)
         sys.exit(2)
-    result = {None: check, '--prepare': prepare, '--receive': receive}[mode](request)
+    result = (finish_recheck(request['initial'], request['rechecked']) if mode == '--finish-recheck' else
+              {None: check, '--prepare': prepare, '--receive': receive}[mode](request))
     sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
 
 

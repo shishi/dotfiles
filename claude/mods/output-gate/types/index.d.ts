@@ -19,6 +19,7 @@ export type HoldingTurn = {
   shown: string
   judged_len: number
   round: number
+  progress_state?: Record<string, unknown> | null
   agent_message: string | null
   findings: unknown[]
   original: string | null

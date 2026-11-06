@@ -522,6 +522,30 @@ class ClaudeHookTests(unittest.TestCase):
         self.assertIsNone(self.stop('全部通ったよ', active=True))
         self.assertIsNone(self.stop('全部通ったよ'))
 
+    def test_checkpoint_from_the_checker_survives_stop_and_the_next_answer(self):
+        self.display('全部通ったよ', final=True, FAKE_CHECK_FINDINGS='1')
+        path = self.session_file(self.pair_name('全部通ったよ') + '.result')
+        result = json.loads(path.read_text(encoding='utf-8'))
+        checkpoint = {'round': 0, 'stalled': 0, 'bodies': ['全部通ったよ'], 'findings': [], 'evidence': []}
+        result['progress_state'] = checkpoint
+        path.write_text(json.dumps(result), encoding='utf-8')
+        self.stop('全部通ったよ')
+        self.display('まだ確認中だよ', final=True, message='m2', FAKE_CHECK_FINDINGS='1')
+        self.assertEqual(self.checker_calls()[-1].get('progress_state'), checkpoint)
+
+    def test_stop_does_not_block_when_its_continuation_state_cannot_be_saved(self):
+        module = self.load_hook()
+        session = self.session_file('')
+        session.mkdir(parents=True, exist_ok=True)
+        pair = self.pair_name('全部通ったよ')
+        (session / (pair + '.result')).write_text(json.dumps({
+            'round': 0, 'turn': 'u1', 'agent_message': '指摘', 'findings': []}), encoding='utf-8')
+        shown = []
+        module.emit = shown.append
+        with mock.patch.object(module, 'write_json', side_effect=OSError('read only')):
+            module.stop({'last_assistant_message': '全部通ったよ'}, session)
+        self.assertFalse(any(item.get('decision') == 'block' for item in shown))
+
     def test_stop_without_a_pair_does_nothing(self):
         self.assertIsNone(self.stop('関係ない回答'))
 

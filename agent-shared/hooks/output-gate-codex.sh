@@ -6,7 +6,7 @@
 #   output-gate-codex.sh held [SESSION_ID]                             直させる前の原文の手動の回収 (24 時間まで)
 #
 # 差し戻し: 中継が未達の回答を案内に差し替えたターン (状態 substituted) を、Stop hook が block して同じターンで
-# 直させる (blocked)。直させた後の回答にも未達が残れば中継がまた差し替えるので、そのたびに block する。
+# 直させる (blocked)。中継が停滞と判定して未解決を表示した場合 (stopped) は block しない。
 # 続けさせてよいのは、SessionStart で app-server の hooks/list により出力ゲートの Stop hook が信頼済みと確かめ、
 # 続行の登録 (relay/continue/<session_id>) を書いたセッションだけ。原文が利用者に
 # 届かないまま終わったターンは、同じセッションの別のターンの入力で一度だけ表示し、held でいつでも表示する。

@@ -174,6 +174,36 @@ for _case, _result in [('good', _REVIEW_RESULT), ('bad', [])]:
                                              'evidence': [*_REVIEW_HISTORY, *_result, _REVIEW_TEST]}))
 
 
+_FAILED_TEST = {'id': 'test-1', 'tool': 'Bash', 'command': 'pytest', 'exit_code': 1, 'output': 'test_empty failed'}
+_CHECKPOINT = {'round': 0, 'stalled': 0, 'bodies': ['空入力のテストはまだ失敗してるよ。'],
+               'findings': [], 'evidence': [_FAILED_TEST]}
+PROGRESS_CASES = [
+    ('progress', 'stalled', {'latest_user': '空入力で落ちる不具合を直して、テストして',
+                            'draft': '空入力のテストはまだ失敗中だよ。', 'round': 1,
+                            'progress_state': _CHECKPOINT, 'evidence': [_FAILED_TEST]}),
+    ('progress', 'stalled', {'latest_user': '空入力で落ちる不具合を直して、テストして',
+                            'draft': '空入力のテストはまだ失敗してるよ。', 'round': 1,
+                            'progress_state': _CHECKPOINT,
+                            'evidence': [_FAILED_TEST, dict(_FAILED_TEST, id='test-2')]}),
+    ('progress', 'advanced', {'latest_user': '空入力で落ちる不具合を直して、テストして',
+                             'draft': '空入力の分岐で nil を渡してたのが原因だよ。修正と再テストはまだ。', 'round': 1,
+                             'progress_state': _CHECKPOINT,
+                             'evidence': [_FAILED_TEST, {'id': 'read-1', 'tool': 'Read', 'command': 'handler.rb',
+                                                        'output': 'def handle(input)\n  input.first.strip\nend\n'},
+                                          {'id': 'trace-1', 'tool': 'Bash', 'command': 'pytest -vv', 'exit_code': 1,
+                                           'output': 'test_empty: handle([]) -> input.first is nil; nil.strip raises at handler.rb:2'}]}),
+    ('progress', 'advanced', {'latest_user': '空入力の不具合を直して、単体テストとE2Eを通して',
+                             'draft': '空入力の不具合を直して単体テストは通ったよ。E2Eはまだ失敗中。', 'round': 1,
+                             'progress_state': _CHECKPOINT,
+                             'evidence': [_FAILED_TEST, {'id': 'edit-1', 'tool': 'Edit', 'command': 'handler.rb',
+                                                        'output': '- input.first.strip\n+ input.first.to_s.strip'},
+                                          {'id': 'test-2', 'tool': 'Bash', 'command': 'pytest', 'exit_code': 0,
+                                           'output': '1 passed: test_empty'},
+                                          {'id': 'e2e-1', 'tool': 'Bash', 'command': 'run e2e', 'exit_code': 1,
+                                           'output': 'e2e_empty failed'}]}),
+]
+
+
 def run(case):
     rule, kind, body = case
     payload = dict({'final': True, 'round': 0, 'continuation': 'withhold', 'evidence': [], 'origin': 'claude'}, **body)
@@ -190,13 +220,16 @@ def run(case):
     if rule in builtin:
         hit = hit or any(k == builtin[rule] for k, _ in found)
     ok = out.get('status') == 'checked' and (hit if kind == 'bad' else not hit)
+    if rule == 'progress':
+        ok = out.get('status') == 'checked' and (out.get('progress') or {}).get('state') == kind
     return {'rule': rule, 'case': kind, 'ok': ok, 'status': out.get('status'), 'engine': out.get('engine'),
-            'findings': found, 'seconds': round(time.time() - started, 1), 'reason': out.get('reason')}
+            'findings': found, 'progress': out.get('progress'),
+            'seconds': round(time.time() - started, 1), 'reason': out.get('reason')}
 
 
 if __name__ == '__main__':
     with ThreadPoolExecutor(max_workers=int(sys.argv[1]) if len(sys.argv) > 1 else 6) as pool:
-        results = list(pool.map(run, CASES))
+        results = list(pool.map(run, [*CASES, *PROGRESS_CASES]))
     for r in results:
         print(('OK ' if r['ok'] else 'NG ') + f"{r['rule']:4} {r['case']:4} {r['seconds']:5}s {r['status']} {r['findings']}")
     print('passed', sum(r['ok'] for r in results), '/', len(results))

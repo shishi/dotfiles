@@ -6,8 +6,8 @@ import type { HoldingEvidence, HoldingMessage, HoldingTurn } from '../types/inde
 // (~/.agent-shared/bin/output-gate-check.py) で検査し、訂正した文字列だけを流す。
 // 流した文字列が画面と会話記録になる。検査できなければ、未完了の案内と原文を流す。
 // 最終回答 (end_turn・stop_sequence の段) に未達があれば、本文を gate_findings の呼び出しに差し替え、
-// 指摘をツールの結果として返して同じターンで直させる。未達が残る間は何回目の最終回答でも直させ、未達の
-// 無くなった回答だけを表示する。証拠は tool.call で記録した呼び出しと結果。
+// 指摘をツールの結果として返して同じターンで直させる。停滞が続く場合は未解決を明示して表示する。
+// 証拠は tool.call で記録した呼び出しと結果。
 
 const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 // 動いているメインのターンの ID。作業中に送られた入力を、そのターンの依頼に足すために使う。
@@ -76,6 +76,7 @@ type Payload = {
   continuation: 'withhold' | 'none'
   engines: ['codex']
   cyber_program: null
+  progress_state?: Record<string, unknown> | null
 }
 type Failure = { family: string | null; reason: string }
 type CheckResult = {
@@ -93,6 +94,9 @@ type CheckResult = {
   unmet_text: string | null
   display_text: string | null
   corrected_bodies?: string[]
+  progress_state?: Record<string, unknown> | null
+  recheck_required?: boolean
+  stopped?: boolean
 }
 type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 type Settings = { first: 'codex' | 'claude'; claude: { model: string; effort: Effort } }
@@ -395,14 +399,14 @@ async function fileOps($: EngineInterface, replace: [string, string][], remove: 
 
 // --- 検査処理と検査役 ---
 
-async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive') {
+async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive' | '--finish-recheck') {
   const home = await homeDir($)
   if (!home) throw new Error('ホームディレクトリが分からない')
   return [await findPython($), '-I', `${home}/.agent-shared/bin/output-gate-check.py`, ...(mode ? [mode] : [])]
 }
 
 // budgetMs: 検査処理に渡す締切 (OUTPUT_GATE_TIMEOUT)。
-async function runChecker($: EngineInterface, input: unknown, budgetMs: number, mode?: '--prepare' | '--receive'):
+async function runChecker($: EngineInterface, input: unknown, budgetMs: number, mode?: '--prepare' | '--receive' | '--finish-recheck'):
     Promise<Record<string, unknown>> {
   const argv = await checkerArgv($, mode)
   let result
@@ -495,7 +499,7 @@ async function claudeCheck($: EngineInterface, payload: Payload, config: Setting
 
 // 先の系統には残りの半分、次の系統には残り全てを渡す。系統で検査できなければ次の系統へ移り、全て失敗すれば
 // 系統ごとの失敗を例外に含める。
-async function check($: EngineInterface, payload: Payload): Promise<CheckResult> {
+async function checkOnce($: EngineInterface, payload: Payload): Promise<CheckResult> {
   const config = await settings($)
   const total = Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S
   const deadline = Date.now() + total * 1000
@@ -568,6 +572,34 @@ function correctedAnswer(answer: string, original: Run[], checked: string[]): st
   return checked.join('')
 }
 
+function stopResult(result: CheckResult, original: string[], reason: string): CheckResult {
+  const bodies = [...(result.corrected_bodies?.length === original.length ? result.corrected_bodies : original)]
+  const last = bodies.length - 1
+  bodies[last] = `[出力ゲート: ${reason}・未解決]\n\n` + bodies[last] +
+    (result.unmet_text ? '\n\n---\n' + result.unmet_text : '')
+  return { ...result, stopped: true, recheck_required: false, agent_message: null, text: bodies.join('\n\n'), bodies }
+}
+
+async function check($: EngineInterface, payload: Payload): Promise<CheckResult> {
+  const deadline = Date.now() + (Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S) * 1000
+  const initial = await checkOnce($, payload)
+  if (!initial.recheck_required) return initial
+  const left = deadline - Date.now()
+  const { engines: _engines, ...unrestricted } = payload
+  let rechecked: Record<string, unknown>
+  try {
+    if (left <= 0) throw new Error('再判定の時間が残っていません')
+    rechecked = await runChecker($, { ...unrestricted, independent_recheck: true }, left)
+  } catch (error) {
+    rechecked = { status: 'unchecked', reason: error instanceof Error ? error.message : '再判定不能' }
+  }
+  try {
+    return asResult(await runChecker($, { initial, rechecked }, 1000, '--finish-recheck'))
+  } catch {
+    return stopResult(initial, payload.bodies, '再判定結果を取得できないため自動差戻し停止')
+  }
+}
+
 // 各区間の最初の text の断片の位置に訂正版を入れ、残りの断片は流さない。
 function* rebuilt(held: readonly TurnStepChunk[], owner: (number | undefined)[], checked: string[]):
     Generator<TurnStepChunk> {
@@ -612,6 +644,7 @@ async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies
     evidence: final ? await currentEvidence($, turn) : [],
     previous_evidence: final ? await previousEvidence($, turnId, turn) : [],
     previous_findings: turn.round >= 1 ? turn.findings : null, round: turn.round, final, continuation,
+    progress_state: turn.progress_state,
     engines: ['codex'], cyber_program: null,
   }
 }
@@ -621,7 +654,7 @@ async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies
 async function recordSwap($: EngineInterface, turnId: string, turn: Turn, toolId: string, original: string,
     result: CheckResult) {
   const display = result.corrected_bodies?.join('\n\n') ?? original
-  const next: Turn = { ...turn, round: turn.round + 1, agent_message: result.agent_message, findings: result.findings,
+  const next: Turn = { ...turn, round: turn.round + 1, progress_state: result.progress_state, agent_message: result.agent_message, findings: result.findings,
     original, unmet: ENDED_UNFIXED + display, display_clean: true, gate_tool_id: toolId }
   await $.state.set({ plugin: 'output-gate', key: 'turn', id: turnId }, next)
   await $.state.set({ plugin: 'output-gate', key: 'issued', id: toolId }, { turn_id: turnId, agent_message: result.agent_message! })
@@ -772,14 +805,13 @@ export const register: Register = on => {
               completed = true
               return { ...step.value, answer: '', toolUses: [{ name: GATE_TOOL, input: {} }], stopReason: 'tool_use' }
             }
-            const fallback = result.corrected_bodies?.length === original.length ? result.corrected_bodies : original
-            result = { ...result, status: 'unchecked', text: UNAVAILABLE + fallback.join('\n\n'),
-              bodies: [UNAVAILABLE + fallback[0], ...fallback.slice(1)] }
+            result = stopResult(result, original, '継続状態を保存できないため自動差戻し停止')
           }
           const fallback = result.findings.length && result.corrected_bodies?.length === original.length ?
             result.corrected_bodies : original
           const shown = perRun(result.status === 'unchecked' ? [UNAVAILABLE + fallback[0], ...fallback.slice(1)] :
-            result.findings.length ? result.corrected_bodies ?? original :
+            result.stopped ? result.bodies ?? original :
+              result.findings.length ? result.corrected_bodies ?? original :
               result.bodies ?? [result.text ?? original.join('\n\n')], split.runs.length)
           const shownText = turn.shown ? `${turn.shown}\n\n${shown.join('\n\n')}` : shown.join('\n\n')
           // 最終回答として検査して表示した範囲 (judged_len) は、turn.complete で判定し直さない。

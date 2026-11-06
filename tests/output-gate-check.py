@@ -656,6 +656,135 @@ class FindingTests(GateTestCase):
 
     CLAIM = finding('unverified_claim', 'draft', 'テストは全て通った', ('call_1', 'failed'))
 
+    def progress_payload(self, stalled=2, round=3, checkpoint_round=2):
+        return {'origin': 'claude', 'final': True, 'round': round,
+                'latest_user': 'テストを実行して結果を教えて',
+                'draft': 'テストは全て通ったので、変更は完了しているよ。', 'evidence': [PYTEST_FAILED],
+                'progress_state': {'round': checkpoint_round, 'stalled': stalled,
+                                   'bodies': ['前の回答'], 'findings': [self.CLAIM], 'evidence': [PYTEST_FAILED]}}
+
+    def progress_receive(self, state='stalled', payload=None, **extra):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': state, 'reason': '比較結果'})
+        return self.invoke(dict(payload=payload or self.progress_payload(), reply=json.dumps(reply),
+                                engine={'family': 'codex', 'model': 'gpt-6-astra', 'effort': 'high'}, **extra),
+                           '--receive')
+
+    def test_stagnation_requests_recheck_without_starting_an_engine_in_receive(self):
+        out = self.progress_receive()
+        self.assertEqual(out['status'], 'checked')
+        self.assertTrue(out['recheck_required'])
+        self.assertFalse(out['stopped'])
+        self.assertEqual(out['progress_state']['stalled'], 3)
+        self.assertEqual(self.launches(), [])
+
+    def test_progress_counts_only_new_correction_rounds_and_resets_on_advancement(self):
+        for state, round, checkpoint_round, want in [('advanced', 3, 2, 0), ('stalled', 2, 2, 2),
+                                                     ('unknown', 3, 2, 3), ('stalled', 0, 2, 0)]:
+            with self.subTest(state=state, round=round):
+                out = self.progress_receive(state, self.progress_payload(round=round, checkpoint_round=checkpoint_round))
+                self.assertEqual(out['progress_state']['stalled'], want)
+        out = self.progress_receive(payload={k: v for k, v in self.progress_payload().items() if k != 'progress_state'})
+        self.assertEqual(out['progress_state']['stalled'], 0)
+
+    def test_independent_stalled_recheck_stops_but_preserves_the_unresolved_answer(self):
+        payload = self.progress_payload()
+        payload['independent_recheck'] = True
+        out = self.progress_receive(payload=payload)
+        self.assertTrue(out['stopped'])
+        self.assertFalse(out['recheck_required'])
+        self.assertIsNone(out['agent_message'])
+        self.assertIn('未解決', out['text'])
+        self.assertIn('自動差戻し停止', out['text'])
+        self.assertIn(payload['draft'], out['text'])
+        self.assertIn(out['unmet_text'], out['text'])
+        resumed = self.progress_receive('advanced', payload)
+        self.assertFalse(resumed['stopped'])
+        self.assertEqual(resumed['progress_state']['stalled'], 0)
+        self.assertIsNotNone(resumed['agent_message'])
+
+    def test_receive_retains_initial_findings_when_independent_recheck_is_unavailable(self):
+        initial = self.progress_receive()
+        out = self.invoke({'initial': initial, 'rechecked': {'status': 'unchecked', 'reason': 'offline',
+                            'engine_failures': [{'family': 'codex', 'reason': 'offline'}]}}, '--finish-recheck')
+        self.assertTrue(out['stopped'])
+        self.assertIsNone(out['agent_message'])
+        self.assertEqual(out['findings'][0]['excerpt'], self.CLAIM['excerpt'])
+        self.assertIn('再判定不能', out['text'])
+        self.assertIn('未解決', out['text'])
+        self.assertEqual(out['independent_recheck']['reason'], 'offline')
+
+    def test_one_shot_stagnation_rechecks_once_using_the_independent_models(self):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': 'stalled', 'reason': '同じ未達'})
+        self.set_spec(codex={'stdout': codex_reply(reply)})
+        out = self.invoke(dict(self.progress_payload(), engines=['codex']))
+        self.assertTrue(out['stopped'])
+        launches = self.launches()
+        self.assertEqual(len(launches), 2)
+        self.assertIn('gpt-6-astra', launches[1]['args'])
+        self.assertIsNotNone(out['independent_recheck'])
+
+    def test_progress_can_continue_after_many_corrections_and_missing_assessment_is_conservative(self):
+        payload = self.progress_payload(stalled=2, round=101, checkpoint_round=100)
+        out = self.progress_receive('advanced', payload)
+        self.assertFalse(out['recheck_required'])
+        self.assertFalse(out['stopped'])
+        self.assertIsNotNone(out['agent_message'])
+        legacy = self.invoke({'payload': payload, 'reply': json.dumps(answer(findings=[self.CLAIM]))}, '--receive')
+        self.assertEqual(legacy['progress']['state'], 'unknown')
+        self.assertTrue(legacy['recheck_required'])
+
+    def test_independent_recheck_can_fall_back_to_fable_outside_the_initial_engine_constraint(self):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': 'stalled', 'reason': '未達は変わらない'})
+        self.set_spec(codex={'exit_code': 1}, claude={'stdout': claude_reply(reply)})
+        out = self.invoke(dict(self.progress_payload(), origin='codex', engines=['claude']))
+        self.assertTrue(out['stopped'])
+        launches = self.launches()
+        self.assertEqual([entry['family'] for entry in launches], ['claude', 'codex', 'claude'])
+        self.assertIn('fable', launches[-1]['args'])
+        self.assertIn('high', launches[-1]['args'])
+        self.assertEqual(out['independent_recheck']['engine']['family'], 'claude')
+
+    def test_automatic_recheck_shares_the_initial_deadline_and_preserves_findings_when_it_expires(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('output_gate_check', CHECK)
+        check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(check)
+        reply = json.dumps(dict(answer(findings=[self.CLAIM]),
+                                progress={'state': 'stalled', 'reason': '未達は変わらない'}))
+        for elapsed, expected_timeouts in [(35, [45, 5]), (45, [45])]:
+            with self.subTest(elapsed=elapsed):
+                clock = [0]
+                timeouts = []
+
+                def run_codex(prompt, config, cyber_program, workdir, timeout, final):
+                    timeouts.append(timeout)
+                    clock[0] = elapsed
+                    return reply, dict(family='codex', **config)
+
+                with patch.object(check, 'run_codex', run_codex), \
+                        patch.object(check, 'masked_input', return_value='{}'), \
+                        patch.object(check, 'secret_findings', return_value=[]), \
+                        patch.object(check.time, 'monotonic', side_effect=lambda: clock[0]), \
+                        patch.dict(os.environ, self.env(timeout=45)):
+                    out = check.check(dict(self.progress_payload(), engines=['codex']))
+                self.assertEqual(timeouts, expected_timeouts)
+                self.assertTrue(out['stopped'])
+                self.assertEqual(out['findings'][0]['excerpt'], self.CLAIM['excerpt'])
+                if elapsed == 45:
+                    self.assertEqual(out['independent_recheck']['status'], 'unchecked')
+                    self.assertIn('再判定不能', out['text'])
+
+    def test_checkpoint_is_masked_before_it_is_sent_to_a_checker(self):
+        secret = fake_secret()
+        payload = self.progress_payload()
+        payload['progress_state']['bodies'] = ['api_key=' + secret]
+        prepared = self.invoke(payload, '--prepare', gitleaks=self.fake_gitleaks([secret]))
+        self.assertEqual(prepared['status'], 'ready')
+        checkpoint = json.loads(prepared['prompt'])['progress_state']
+        self.assertNotIn(secret, json.dumps(checkpoint))
+        self.assertEqual(checkpoint['stalled'], 2)
+
     def test_independent_recheck_uses_a_stronger_model(self):
         self.final(answer(), independent_recheck=True)
         args = self.launches()[0]['args']
@@ -1117,6 +1246,18 @@ class TrimTests(GateTestCase):
         self.assertIn('omitted', first['output'])
         self.assertLessEqual(self.size(data), full - 5000)
         self.assertEqual(data['evidence'][1]['output'], 'y' * 3000)
+
+    def test_checkpoint_evidence_is_trimmed_without_changing_the_saved_checkpoint(self):
+        check = self.load()
+        old = dict(PYTEST_FAILED, output='H' * 50 + 'x' * 8000 + 'T' * 50)
+        checkpoint = {'round': 2, 'stalled': 2, 'bodies': ['前の回答'], 'findings': [], 'evidence': [old]}
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答', 'progress_state': checkpoint}
+        data = check.build_input(payload, 'rules', limit=5000)
+        output = data['progress_state']['evidence'][0]['output']
+        self.assertIn('omitted', output)
+        self.assertTrue(output.startswith('H' * 50) and output.endswith('T' * 50))
+        self.assertLessEqual(self.size(data), 5000)
+        self.assertEqual(checkpoint['evidence'][0]['output'], old['output'])
 
     def test_large_messages_count_toward_the_limit(self):
         check = self.load()

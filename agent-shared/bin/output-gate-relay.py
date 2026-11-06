@@ -31,7 +31,7 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
   gate/<session_id>/<turn_id>.json
                           差し戻しの状態 {phase, round, findings, agent_message, original, display, display_clean,
                           notice_marker, notices, shown?, created, engine, engine_failures, dropped}。
-                          phase は未達が残る間 substituted → blocked をくり返し、resolved で
+                          phase は substituted → blocked で修正を続け、resolved または停滞による stopped で
                           終わる。round は直させた回数。resolved にするときは original と agent_message を消す。
                           original は保留した置き換え前の原文、display は訂正済みの回収用本文、
                           shown は hook の回収が表示した印。notices は保留した回答ごとの
@@ -538,7 +538,8 @@ def restore_notices(items, entries):
 
 def engine_record(result):
     return {'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
-            'dropped': result.get('dropped') or []}
+            'dropped': result.get('dropped') or [], 'progress': result.get('progress'),
+            'independent_recheck': result.get('independent_recheck')}
 
 
 def kill_tree(proc):
@@ -1185,45 +1186,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                            .get('shown') or [])}
         if sent_back >= 1:
             extra['previous_findings'] = gate.get('findings') or []
+            extra['progress_state'] = gate.get('progress_state')
         payload = checker_payload(body, bodies, **extra)
         result = run_check(payload, self.checks)
         self.check_status = result.get('status')
         self.result_record = engine_record(result)
-        requests = [input_text(item) for item in body.get('input') or [] if is_request(item)]
-        signature = hashlib.sha256(json.dumps(requests, ensure_ascii=False).encode()).hexdigest()
-        identities = {json.dumps([f.get('kind'), f.get('rule'), f.get('source'), f.get('excerpt')], ensure_ascii=False)
-                      for f in result.get('findings') or []}
-        repeated = identities
-        unchanged = 1
-        if gate and gate.get('request_signature') == signature:
-            repeated = identities.intersection(gate.get('repeated_findings') or [])
-            if repeated:
-                unchanged = int(gate.get('unchanged_rounds') or 1)
-                if sent_back > int(gate.get('checked_round') or 0):
-                    unchanged += 1
-            else:
-                repeated = identities
-        stalled = (withhold and result.get('status') == 'checked' and bool(repeated) and unchanged >= 4
-                   and result.get('display_bodies'))
-        if stalled:
-            rechecked = run_check(dict(payload, independent_recheck=True), self.checks)
-            if rechecked.get('status') == 'checked':
-                result = rechecked
-                self.check_status = 'checked'
-                self.result_record = engine_record(result)
-                if result.get('agent_message'):
-                    result['agent_message'] += '\n\n同じ指摘が続いたため別の検査役でも確認しました。利用可能な別経路と残作業を確認してください。'
-            elif result.get('agent_message'):
-                result['agent_message'] += '\n\n同じ指摘が続いたため別の検査役を試しましたが、判定を取得できませんでした。利用可能な別経路と残作業を確認してください。'
-            self.result_record['recheck'] = {'status': rechecked.get('status'), 'reason': rechecked.get('reason'),
-                                             **engine_record(rechecked)}
-            repeated = {json.dumps([f.get('kind'), f.get('rule'), f.get('source'), f.get('excerpt')], ensure_ascii=False)
-                        for f in result.get('findings') or []}
-            unchanged = 1
         texts = result.get('bodies')
         if result.get('status') == 'unchecked':
             texts = [UNAVAILABLE + bodies[0], *bodies[1:]]
-        elif texts is not None and result.get('findings'):
+        elif texts is not None and result.get('findings') and not result.get('stopped'):
             corrected = result.get('corrected_bodies')
             texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
             texts[0] = UNAVAILABLE + texts[0]
@@ -1235,8 +1206,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             notices[marker] = {'original': original, 'inject': result['agent_message'],
                                'source_id': source if isinstance(source, str) else None}
             state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
-                     'request_signature': signature, 'repeated_findings': sorted(repeated),
-                     'unchanged_rounds': unchanged, 'checked_round': sent_back,
+                     'progress_state': result.get('progress_state'),
                      'agent_message': result['agent_message'], 'original': original,
                      'display': '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
                      'notice_marker': marker, 'notices': notices,
@@ -1248,13 +1218,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 log(event='substituted')
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
-                corrected = result.get('corrected_bodies')
-                texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-                texts[0] = UNAVAILABLE + texts[0]
+                fallback = result.get('fallback_bodies')
+                texts = list(fallback) if strings(fallback, len(bodies)) else [
+                    UNAVAILABLE + bodies[0], *bodies[1:]]
         elif final and gate is not None:
-            # 未達が無くなった (または続けさせられない) 回答を流す前に resolved で残す。最後の原文と指摘は回収に
+            # 本文を表示した後は最後の原文と指摘を回収に
             # 使わないので消す。各回の案内を原文に戻す notices は、同じターンの以後の要求のために残す。
-            state = dict(gate, phase='resolved', round=sent_back, findings=result.get('findings') or [],
+            state = dict(gate, phase='stopped' if result.get('stopped') else 'resolved', round=sent_back,
+                         findings=result.get('findings') or [], progress_state=result.get('progress_state'),
                          notices=notice_entries(gate), **self.result_record)
             state.pop('original', None)
             state.pop('agent_message', None)

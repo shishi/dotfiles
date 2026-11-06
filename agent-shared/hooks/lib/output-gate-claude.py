@@ -403,16 +403,16 @@ def write_json(path, value):
 
 
 def stored_round(session_dir, turn):
-    """ターンの直させた回数と、最後に直させたときの指摘を返す。記録が無い・読めなければ (0, [])。"""
+    """ターンの直させた回数と、最後に直させたときの指摘を返す。進捗比較の状態も返す。記録が無ければ初回として扱う。"""
     try:
         record = json.loads((session_dir / f'{turn}.round.json').read_text(encoding='utf-8'))
     except (OSError, ValueError):
-        return 0, []
+        return 0, [], None
     count = record.get('round') if isinstance(record, dict) else None
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-        return 0, []
+        return 0, [], None
     findings = record.get('findings')
-    return count, findings if isinstance(findings, list) else []
+    return count, findings if isinstance(findings, list) else [], record.get("progress_state")
 
 
 def check(draft, event, session_dir, stop_reason):
@@ -437,9 +437,9 @@ def check(draft, event, session_dir, stop_reason):
             shown_text = ''
         payload.update(continuation='display', evidence=turn['evidence'], shown_text=shown_text,
                        previous_evidence=turn['previous_evidence'], turn_start_context=turn['turn_start_context'])
-        count, previous = stored_round(session_dir, turn['key'])
+        count, previous, progress = stored_round(session_dir, turn['key'])
         if count:   # Stop hook で差し戻した後の再検査。直させた回数と、最後に直させたときの指摘を渡す
-            payload.update(round=count, previous_findings=previous)
+            payload.update(round=count, previous_findings=previous, progress_state=progress)
     result = run_check(payload)
     text = result['text']
     engine = {key: result.get(key) for key in ('engine', 'engine_failures', 'dropped')}
@@ -456,13 +456,14 @@ def check(draft, event, session_dir, stop_reason):
         # 未達の無い結果・検査できなかった結果も、このターンのこの回答の結果として保存する。Stop hook は、前に同じ
         # 文字列の回答で残った結果ではなく、この結果を読む。
         findings = (result.get('findings') or []) if result['status'] == 'checked' else []
-        message = result.get('agent_message') if findings else None   # 未達が残る間は、何回目でも直させる
+        message = result.get('agent_message') if findings else None
         try:
             if message:
                 (session_dir / f'{pair}.blocked').unlink(missing_ok=True)   # 前に同じ文字列で差し戻した印
             write_json(session_dir / f'{pair}.result', {'round': payload['round'], 'turn': turn['key'],
                                                         'status': result['status'], 'agent_message': message,
-                                                        'findings': findings, **engine})
+                                                        'findings': findings, 'progress_state': result.get('progress_state'),
+                                                        'stopped': result.get('stopped', False), **engine})
         except OSError:
             if message:
                 # 指摘を Stop hook へ渡せないので直させない。原文に理由と未達の項目を添えた版を表示する。
@@ -711,7 +712,7 @@ def stop_log(session_dir, pair, outcome, result=None):
     """Stop hook の判断を残す (実機で、組を引けたか・待ち切れたか・どの検査役の結果かを確かめるため)。"""
     record = {'pair': pair, 'outcome': outcome}
     if isinstance(result, dict):
-        record.update({key: result.get(key) for key in ('turn', 'round', 'engine', 'engine_failures', 'dropped')})
+        record.update({key: result.get(key) for key in ('turn', 'round', 'engine', 'engine_failures', 'dropped', 'stopped')})
     append_log(session_dir / 'stop.log', record)
 
 
@@ -766,14 +767,16 @@ def stop(event, session_dir):
     except OSError:
         stop_log(session_dir, pair, 'cannot write the blocked marker', result)
         return
-    count, _ = stored_round(session_dir, result['turn'])
+    count, _, _ = stored_round(session_dir, result['turn'])
     try:
         write_json(session_dir / f"{result['turn']}.round.json",
-                   {'round': count + 1, 'findings': result.get('findings') or []})
+                   {'round': count + 1, 'findings': result.get('findings') or [],
+                    'progress_state': result.get('progress_state')})
         outcome = 'blocked'
     except OSError:
-        # 回数を残せなくても差し戻す。次の再検査に渡す回数と前回の指摘が古くなるだけで、未達の回答を表示で終えない。
-        outcome = 'blocked without writing the round'
+        stop_log(session_dir, pair, 'cannot save continuation state', result)
+        emit({'systemMessage': '出力ゲートの継続状態を保存できないため、自動差戻しを停止しました。未達の指摘は表示した回答に残っています。'})
+        return
     stop_log(session_dir, pair, outcome, result)
     emit({'decision': 'block', 'reason': result['agent_message']})
 
