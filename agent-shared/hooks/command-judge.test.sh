@@ -54,6 +54,40 @@ fail() { echo "not ok: $1" >&2; exit 1; }
 token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")
 SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"reason":""}'
 
+generic_tool() {
+  jq -n --arg name "$1" --argjson args "$2" '{session_id:"s1",tool_name:$name,tool_input:$args}'
+}
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"reason":"共有のコメントを投稿する"}'
+for agent in claude codex; do
+  out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文\n二行目","metadata":{"labels":["確認",null],"notify":false}}' | bash "$HOOK" --cli "$agent")
+  expected=ask; [ "$agent" = codex ] && expected=deny
+  [ "$(decision "$out")" = "$expected" ] || fail "$agent judges an unauthorized MCP write: $out"
+done
+"$py_bin" -I - "$work/judge-input" <<'PY'
+import json, re, sys
+data = open(sys.argv[1]).read()
+assert re.search(r'<<<TOOL_NAME [^>]+>>>\nmcp__github__add_comment\n', data)
+match = re.search(r'<<<TOOL_INPUT [^>]+>>>\n(.*?)\n<<<END TOOL_INPUT ', data, re.S)
+assert match, "the judge receives the full tool input"
+assert json.loads(match[1]) == {"issue": 42, "body": "本文\n二行目", "metadata": {"labels": ["確認", None], "notify": False}}
+PY
+record 'issue 42 にコメントして'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"reason":"利用者がコメントを依頼している"}'
+out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文"}' | bash "$HOOK")
+[ -z "$out" ] || fail "an authorized MCP write is allowed: $out"
+grep -q 'issue 42 にコメントして' "$work/judge-input" || fail "MCP judge receives the recorded permission"
+rm -f "$work/calls" "$work/state/prompts/s1"
+STUB_OUTPUT=$SAFE
+generic_tool 'mcp__example__read' '{"id":1,"options":{"format":"text"}}' | bash "$HOOK" >/dev/null
+generic_tool 'mcp__example__read' '{"options":{"format":"text"},"id":1}' | bash "$HOOK" >/dev/null
+[ "$(calls)" = 1 ] || fail "the same tool and JSON input reuse the safe verdict"
+generic_tool 'mcp__example__other' '{"id":1,"options":{"format":"text"}}' | bash "$HOOK" >/dev/null
+generic_tool 'mcp__example__read' '{"id":1,"options":{"format":"json"}}' | bash "$HOOK" >/dev/null
+[ "$(calls)" = 3 ] || fail "tool names and nested arguments separate safe verdicts"
+out=$(generic_tool 'mcp__example__write' "{\"body\":\"$token\"}" | bash "$HOOK")
+[ "$(decision "$out")" = ask ] && [ "$(calls)" = 3 ] || fail "Claude checks the complete MCP input for secrets before sending it: $out"
+echo 'ok: generic tool input, permission decisions, cache separation and secret checks'
+
 STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"マシンを再起動する"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "danger is denied: $out"
@@ -304,7 +338,7 @@ set -e
 echo 'ok: run-judge stops a slow judge and reports a missing one'
 
 for config in claude/settings.json codex/hooks.json; do
-  jq -e '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("command-judge\\.sh"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config registers the judge for Bash"
+  jq -e '[.hooks.PreToolUse[] | select((.matcher // "") == "" or .matcher == "*") | .hooks[] | select(.command | test("command-judge\\.sh"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config registers the judge for all tools"
   jq -e '[.hooks.UserPromptSubmit[].hooks[] | select(.command | test("command-judge\\.sh .*--record-prompt"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config records the prompt"
   jq -e '[.. | strings | select(test("gh-body-file-guard"))] | length == 0' "$HOOK_DIR/../../$config" >/dev/null || fail "$config no longer runs the pattern-based gh guard"
   echo "ok: $config registers the judge and the prompt recorder"

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Bash 実行前に、コマンドを独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
+# ツール実行前に、操作を独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
 # エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
 # 外部へ軽微でなく取り返しのつかない影響を与える操作や通常の push は、許可が無ければ実行させない。
 #
 #   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の直近のメッセージを保存する
-#   command-judge.sh [--cli claude|codex]                   PreToolUse(Bash): 判定して該当すれば止める
+#   command-judge.sh [--cli claude|codex]                   PreToolUse: 判定して該当すれば止める
 #
 # コマンドの語を照合したり構文解析したりはしない。何が起きるかの判断は判定役に任せ、
-# このスクリプトはコマンド・作業エージェントが述べた目的・利用者の直近のメッセージを渡して結果を適用する。
+# このスクリプトはツール名・入力全文・作業エージェントが述べた目的・利用者の直近のメッセージを渡して結果を適用する。
 #
 # 判定できないときも黙って通さない。判定役を動かせない状態 (codex が無い、ログイン切れ等) は
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
@@ -67,7 +67,7 @@ warn() {
 
 # 判定役を動かせない: 警告して通す。
 unjudged() {
-  warn "$1" "$2ため、コマンドを判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、許可の無い push などの外部への操作も止まらない。"
+  warn "$1" "$2ため、操作を判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、許可の無い push などの外部への操作も止まらない。"
 }
 
 # このコマンドだけ判定結果を得られない: Claude は確認、Codex は止める。
@@ -216,18 +216,23 @@ if [ "$mode" = record ]; then
 fi
 
 # 判定役の codex がツールを使おうとしても、判定の連鎖を起こさない (判定役はツールを無効にして起動する)。
-[ -z "${COMMAND_JUDGE_ACTIVE:-}" ] || decide deny "判定役はコマンドを実行しない"
+[ -z "${COMMAND_JUDGE_ACTIVE:-}" ] || decide deny "判定役はツールを実行しない"
 
 [ -z "$bad_args" ] || unjudged bad-args "hook の登録の引数が正しくない ($bad_args)"
 command -v jq >/dev/null 2>&1 || unjudged no-jq "jq が見つからない"
 find_python || unjudged no-python "起動できる python が見つからない"
 
 input=$(cat)
+tool_name=$(printf '%s' "$input" | jq -ej '.tool_name | select(type == "string" and length > 0)' 2>/dev/null) ||
+  unjudged input "フックの入力からツール名を読めなかった"
+tool_input=$(printf '%s' "$input" | jq -cS 'if has("tool_input") then .tool_input else error end' 2>/dev/null) ||
+  unjudged input "フックの入力からツール入力を読めなかった"
 # Codex は argv 配列や cmd の欄で渡すことがあるため、引用した 1 行のコマンドに直して判定役へ渡す。
 command=$(printf '%s' "$input" | jq -ej '.tool_input | (.command // .cmd) |
-  if type == "array" then map(tostring) | @sh elif type == "string" then . else error end' 2>/dev/null) ||
-  unjudged input "フックの入力からコマンドを読めなかった"
-[ -n "$command" ] || exit 0
+  if type == "array" then map(tostring) | @sh elif type == "string" then . else error end' 2>/dev/null) || {
+  [ "$tool_name" != Bash ] || unjudged input "フックの入力からコマンドを読めなかった"
+  command=""
+}
 purpose=$(printf '%s' "$input" | jq -j '.tool_input.description // "" | tostring' 2>/dev/null) || purpose=""
 [ -n "$purpose" ] || purpose="(not provided)"
 session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
@@ -252,7 +257,7 @@ shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不
 
 # 判定基準を変えたら、それまでの安全判定は使わない。目的の説明や作業ディレクトリが変われば判定役が得る情報も変わるため鍵に含める。
 # 利用者のメッセージは含めない: 安全と判定したものは、利用者の依頼に関係なく安全と判定している。
-key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s' "$shell" "$command" "$purpose"; } | hash_stdin) &&
+key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s' "$shell" "$tool_name" "$tool_input"; } | hash_stdin) &&
   [ -n "$key" ] || unjudged hash "判定のキャッシュの鍵を計算できなかった"
 safe_path="$state_dir/safe/$key"
 now=$(date +%s)
@@ -280,14 +285,14 @@ nonce=$(od -An -tx1 -N8 /dev/urandom 2>/dev/null | tr -d ' \n')
 section() {
   printf '\n<<<%s %s>>>\n%s\n<<<END %s %s>>>\n' "$1" "$nonce" "$2" "$1" "$nonce"
 }
-data=$(section SHELL "$shell" && section COMMAND "$command" && section PURPOSE "$purpose")
+data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose")
 
-# Claude のセッションでは、コマンドは別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
+# Claude のセッションでは、ツール入力は別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
 # 利用者のメッセージは記録時に検査済み。Codex のセッションでは同じ内容が既に Codex のモデルに渡っている。
 if [ "$cli" = claude ]; then
   printf '%s' "$data" | has_secret
   case $? in
-    0) decide ask "コマンドか目的の説明に秘密情報らしき文字列があり、判定役 (codex) へ送らなかった。実行してよいか確認する" ;;
+    0) decide ask "ツール入力か目的の説明に秘密情報らしき文字列があり、判定役 (codex) へ送らなかった。実行してよいか確認する" ;;
     2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
   esac
 fi
@@ -333,7 +338,7 @@ verdict=$(printf '%s' "$output" | jq -R -s -c '
 
 reason=$(jq -r '.reason // "" | tostring | sub("[。.[:space:]]+$"; "")' <<<"$verdict")
 if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
-  decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をコマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
+  decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をツールの引数に直接書くか、コマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
 fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
@@ -350,5 +355,5 @@ if [ "$danger" = true ]; then
 fi
 # Claude は利用者に確認させ、その場の許可で実行させる。Codex の PreToolUse は "ask" を受け付けないので止める。
 [ "$cli" = codex ] &&
-  decide deny "このマシンの外へ影響する操作で、利用者の許可が無いため止めた: ${reason}。利用者にこの操作をしてよいか尋ね、何をどこへ行うかを書いた許可 (例: 「origin へ push してよい」) をもらい、対象 (remote・ブランチなど) をコマンドに明示して実行し直すこと"
+  decide deny "このマシンの外へ影響する操作で、利用者の許可が無いため止めた: ${reason}。利用者にこの操作をしてよいか尋ね、何をどこへ行うかを書いた許可 (例: 「origin へ push してよい」) をもらい、対象 (remote・ブランチなど) をツール入力に明示して実行し直すこと"
 decide ask "このマシンの外へ影響する操作のため、実行してよいか確認する: ${reason}"

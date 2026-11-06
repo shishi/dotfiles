@@ -19,7 +19,7 @@ bash setup.sh
 | モデル間の委譲 | [codex-delegate](../claude/skills/codex-delegate/SKILL.md)、[claude-delegate](../codex/skills/claude-delegate/SKILL.md) |
 | 独立レビュー | [review-gate](../codex/skills/review-gate/SKILL.md)、[codex-review](../claude/skills/codex-review/SKILL.md)、[claude-review](../codex/skills/claude-review/SKILL.md) |
 
-`command-judge.sh` は Bash のコマンドを実行前に判定します。判定役が利用できない場合は警告して通し、個別の判定が失敗した場合は確認または停止することがあります。外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。対象と制限は各スクリプトを参照してください。
+`command-judge.sh` は両 CLI のツール呼び出しを実行前に判定します。ツール名・引数と利用者の依頼から、操作の影響と承認の有無を判定します。Codex の `write_stdin` による追加入力など、実行前 hook が発火しない経路は対象外です。判定役が利用できない場合は警告して通し、個別の判定が失敗した場合は確認または停止することがあります。外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。対象と制限は各スクリプトを参照してください。
 
 ## 外部 skill
 

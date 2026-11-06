@@ -172,14 +172,18 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/command-judge.sh",
             "timeout": 60,
-            "statusMessage": "コマンドの影響を判定中..."
-          },
+            "statusMessage": "操作の影響を判定中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
@@ -453,15 +457,9 @@
   "language": "日本語",
   "sandbox": {
     "filesystem": {
-      "allowWrite": [
-        "~/dev/src/github.com/shishi/agent-memory"
-      ]
+      "allowWrite": ["~/dev/src/github.com/shishi/agent-memory"]
     },
-    "excludedCommands": [
-      "git:*",
-      "gh:*",
-      "codex:*"
-    ]
+    "excludedCommands": ["git:*", "gh:*", "codex:*"]
   },
   "spinnerVerbs": {
     "mode": "replace",
@@ -496,13 +494,6 @@
   "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "autoMode": {
-    "hard_deny": [
-      "$defaults",
-      "Unrequested repository publication: block any action that sends commits or updates refs in a remote repository unless the user's conversation authorizes that publication. Assess the effect of scripts, wrappers, aliases, APIs and delegated tools too. Delegated repository work must retain native authorization review. A request to edit, test or commit does not authorize publication, and a trusted destination does not supply consent. Interpret the user's meaning in context; no fixed wording, branch spelling or command form is required. Prior authorization remains valid within its scope until fulfilled or withdrawn, and does not authorize later work. This rule does not block an authorized publication; other safety rules still apply. Standing permission for personal-memory saves covers only the private memory repository's own configured origin and the memory commit sent by its write protocol, not publication from ordinary repositories."
-    ],
-    "classifyAllShell": true
-  },
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345

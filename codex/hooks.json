@@ -56,12 +56,11 @@
           {
             "command": "bash ~/.agent-shared/hooks/command-judge.sh --cli codex",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/command-judge.sh --cli codex'",
-            "statusMessage": "コマンドの影響を判定中...",
+            "statusMessage": "操作の影響を判定中...",
             "timeout": 60,
             "type": "command"
           }
-        ],
-        "matcher": "Bash"
+        ]
       },
       {
         "hooks": [
@@ -101,9 +100,9 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "commandWindows": "& (Join-Path $HOME '.codex/herdr-agent-state.ps1') session",
-            "timeout": 10,
+            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-start",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-start'",
+            "timeout": 15,
             "type": "command"
           }
         ]
@@ -111,10 +110,9 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-start",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-start'",
-            "timeout": 15,
-            "type": "command"
+            "type": "command",
+            "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "timeout": 10
           }
         ]
       }
