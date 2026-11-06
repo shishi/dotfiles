@@ -186,8 +186,9 @@ class GateTestCase(unittest.TestCase):
     def assert_unchecked(self, out, draft):
         self.assertEqual(out['status'], 'unchecked')
         self.assertTrue(out['reason'])
+        self.assertTrue(out['text'].startswith('回答の確認を完了できませんでした。'))
         self.assertTrue(out['text'].endswith(draft))
-        self.assertIn(out['reason'], out['text'])
+        self.assertNotIn(out['reason'], out['text'])
 
 
 class CheckTests(GateTestCase):
@@ -785,6 +786,7 @@ class FindingTests(GateTestCase):
         marked = self.final(answer([], [self.CLAIM]), evidence=evidence, continuation='none')
         self.assertEqual(out['display_text'], marked['text'])
         self.assertEqual(out['display_bodies'], marked['bodies'])
+        self.assertEqual(out.get('corrected_bodies'), ['テストは全て通ったので、変更は完了しているよ。'])
         self.assertEqual(out['display_text'].count(out['unmet_text']), 1)
         self.assertFalse(out['display_text'].startswith('[出力ゲート'))
         self.assertIsNone(self.final(answer(), evidence=evidence)['display_text'])

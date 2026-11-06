@@ -18,6 +18,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 RELAY = REPO / 'agent-shared/bin/output-gate-relay.py'
 PREFIX = '/backend-api/codex'
+UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
 
 
 def free_port():
@@ -147,7 +148,7 @@ class RelayTests(unittest.TestCase):
                     unmet = "出力ゲート: 次の点は確かめられていません\\n- UNMET-ITEM"
                     marked = fixed[:-1] + [fixed[-1] + "\\n\\n---\\n" + unmet]
                     result.update(findings=found, unmet_text=unmet, display_text="\\n\\n".join(marked),
-                                  display_bodies=marked)
+                                  display_bodies=marked, corrected_bodies=fixed)
                     if payload.get("continuation") == "none":
                         result.update(text="\\n\\n".join(marked), bodies=marked)
                     else:
@@ -299,8 +300,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn(kind=None)
         text = self.final_text(events)
-        self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'))
-        self.assertTrue(text.endswith('これは効く。'))
+        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
 
     def test_compaction_kind_passes(self):
         item = {'id': 'cmp_1', 'type': 'compaction', 'encrypted_content': 'ENC'}
@@ -374,6 +374,11 @@ class RelayTests(unittest.TestCase):
         return {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': text}]}
 
     @staticmethod
+    def assistant_notice(marker):
+        return {'id': marker, 'type': 'message', 'role': 'assistant',
+                'content': [{'type': 'output_text', 'text': ''}]}
+
+    @staticmethod
     def user(text):
         return {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text': text}]}
 
@@ -439,7 +444,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn(extra_headers={'x-openai-subagent': 'review'})
         out = json.loads(self.final_text(events))
-        self.assertTrue(out['overall_explanation'].startswith('[出力ゲート: 検査できませんでした'))
+        self.assertEqual(out['overall_explanation'], UNAVAILABLE + '効く説明')
         self.assertEqual(out['findings'][0]['title'], '効くタイトル')
 
     def test_other_subagent_passthrough(self):
@@ -649,7 +654,7 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn(extra_headers={'x-openai-subagent': 'review'})
         text = self.final_text(events)
         out = json.loads(text[text.index('{'):text.rindex('}') + 1])
-        self.assertTrue(out['overall_explanation'].startswith('[出力ゲート: 検査できませんでした'))
+        self.assertEqual(out['overall_explanation'], UNAVAILABLE + '効く説明')
 
     # ---- 検査処理の終了・環境・検査結果の形 ------------------------------------------------------------
     def test_tool_call_after_message_keeps_order_and_arguments(self):
@@ -703,8 +708,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn()
         text = self.final_text(events)
-        self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
-        self.assertTrue(text.endswith('これは効く。'))
+        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
 
     def test_partial_answer_not_kept_for_compaction(self):
         partials = [dict(self.assistant(f'断片{n}'), phase='partial_answer') for n in range(3)]
@@ -814,9 +818,7 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn(timeout=40)
         elapsed = time.time() - started
         text = self.final_text(events)
-        self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
-        self.assertIn('codex login', text)
-        self.assertTrue(text.endswith('これは効く。'))
+        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
         self.assertLess(elapsed, 3, f'took {elapsed:.1f} s')
 
     def test_checker_recovering_from_auth_errors_is_not_stopped(self):
@@ -894,8 +896,7 @@ class RelayTests(unittest.TestCase):
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn()
         text = self.final_text(events)
-        self.assertTrue(text.startswith('[出力ゲート: 検査できませんでした'), text)
-        self.assertTrue(text.endswith('これは効く。'))
+        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
 
 
     # ---- 未達の差し戻し・証拠・状態-----------------------------------------------------------
@@ -962,28 +963,29 @@ class RelayTests(unittest.TestCase):
         received = time.time()
         self.assertNotIn('全部確認済みだよ', self.all_text(events))
         notice = self.final_text(events)
-        self.assertIn('出力ゲート', notice)
+        self.assertEqual(notice, '')
+        self.assertFalse([e for e in events if e['type'] == 'response.completed'][0]['response']['end_turn'])
         state = self.gate_state()
         self.assertEqual(state['phase'], 'substituted')
         self.assertEqual(state['round'], 0)
         self.assertEqual(state['original'], '全部確認済みだよ')
         self.assertEqual(state['agent_message'], 'AGENT-MSG: 確かめて')
-        self.assertIn(state['notice_marker'], notice)
+        done = [e for e in events if e['type'] == 'response.output_item.done'][-1]['item']
+        self.assertEqual(done['id'], state['notice_marker'])
         self.assertLessEqual(state['created'], received)
         self.assertEqual(self.checker_inputs()[-1]['continuation'], 'withhold')
 
-    def test_recovery_text_is_the_rewritten_answer_with_the_checker_unmet_text(self):
-        # 利用者に見せる回収の本文は置き換え済みの本文と検査処理の未達の文。モデルへ戻す原文は置き換え前のまま。
+    def test_recovery_text_is_the_rewritten_answer_without_findings(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         self.answer('全部確認済みで効く')
         state = self.gate_state()
         self.assertEqual(state['original'], '全部確認済みで効く')
         # 検査処理が返す表示用の本文 (display_text) をそのまま使う
-        self.assertEqual(state['display'], '全部確認済みで速い\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
+        self.assertEqual(state['display'], '全部確認済みで速い')
         self.assertNotIn('unmet_text', state)
 
-    def test_recovery_of_an_answer_with_an_evidence_gap_has_the_unmet_paragraph_once(self):
+    def test_recovery_of_an_answer_with_an_evidence_gap_hides_the_findings(self):
         # 実物の検査処理で、Web 検索 (結果の本文を取得できない印) を含む回答を差し戻す。
         self.register()
         reply = json.dumps({'replacements': [], 'findings': [
@@ -995,7 +997,7 @@ class RelayTests(unittest.TestCase):
         self.answer('全部確認済みだよ', before=self.call_events(search))
         display = self.gate_state()['display']
         self.assertTrue(display.startswith('全部確認済みだよ'), display)
-        self.assertEqual(display.count('出力ゲート: 次の点は確かめられていません'), 1)
+        self.assertNotIn('出力ゲート', display)
         self.assertNotIn('出力ゲート: 証拠の一部を確認できませんでした', display)
 
     def test_engines_and_dropped_findings_are_recorded(self):
@@ -1060,15 +1062,14 @@ class RelayTests(unittest.TestCase):
         self.answer('途中まで', end=end)
         self.assertEqual(self.checker_inputs(), [])
 
-    def test_findings_without_registration_show_the_original_with_unmet_items(self):
+    def test_findings_without_stop_registration_continue_silently(self):
         self.register('other-session')
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         events = self.answer('全部確認済みだよ')
         text = self.final_text(events)
-        self.assertTrue(text.startswith('全部確認済みだよ'), text)
-        self.assertIn('UNMET-ITEM', text)
-        self.assertEqual(self.checker_inputs()[-1]['continuation'], 'none')
-        self.assertIsNone(self.gate_state())
+        self.assertEqual(text, '')
+        self.assertEqual(self.checker_inputs()[-1]['continuation'], 'withhold')
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
 
     def test_incomplete_content_filter_is_not_final(self):
         # Codex は content_filter の打ち切りだけ同じターンで要求し直し、届いた出力を残す (Codex のソース)。
@@ -1083,7 +1084,7 @@ class RelayTests(unittest.TestCase):
         self.answer('続きの回答')
         self.assertIn('途中まで', self.checker_inputs()[-1]['shown_text'])
 
-    def test_incomplete_that_ends_the_turn_is_final_but_not_withheld(self):
+    def test_incomplete_that_ends_the_turn_hides_the_findings(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
@@ -1092,13 +1093,19 @@ class RelayTests(unittest.TestCase):
         sent = self.checker_inputs()[-1]
         self.assertTrue(sent['final'])
         self.assertEqual(sent['continuation'], 'none')
-        self.assertIn('UNMET-ITEM', self.final_text(events))
+        self.assertEqual(self.final_text(events), UNAVAILABLE + '全部確認済み')
         self.assertIsNone(self.gate_state())
+
+    def test_missing_turn_identifier_hides_the_findings(self):
+        (self.tmp / 'findings-on').write_text('', encoding='utf-8')
+        text = self.final_text(self.answer('全部確認済みだよ', turn_id=None))
+        self.assertEqual(text, UNAVAILABLE + '全部確認済みだよ')
 
     def substituted(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
-        return self.final_text(self.answer('全部確認済みだよ'))
+        self.answer('全部確認済みだよ')
+        return self.gate_state()['notice_marker']
 
     def sent_back(self):
         """Stop hook が block したときと同じく、状態を blocked にして直させた回数を 1 つ増やす。"""
@@ -1111,20 +1118,50 @@ class RelayTests(unittest.TestCase):
 
     def test_continued_request_restores_the_original(self):
         notice = self.substituted()
-        self.sent_back()
-        hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG: 確かめて</hook_prompt>')
-        self.answer('確かめ直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
+        self.answer('確かめ直したよ', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
         texts = self.upstream_texts()
         self.assertIn('全部確認済みだよ', texts)
         self.assertNotIn(notice, texts)
+        self.assertTrue(any('AGENT-MSG: 確かめて' in text for text in texts))
+        sent = json.loads(Upstream.requests[-1][2])
+        self.assertEqual([item['id'] for item in sent['input'] if item.get('role') == 'assistant'], ['msg_f'])
         payload = self.checker_inputs()[-1]
         self.assertEqual(payload['latest_user'], '元の依頼')
         self.assertEqual(payload['round'], 1)
 
+    def test_compaction_preserves_pending_answer_and_findings(self):
+        notice = self.substituted()
+        compacted = {'id': 'cmp', 'type': 'compaction', 'encrypted_content': 'ENC-PENDING'}
+        Upstream.script = [(0, {'type': 'response.output_item.done', 'output_index': 0, 'item': compacted}),
+                           (0, completed([compacted]))]
+        self.turn({'input': [self.user('元の依頼'), self.assistant_notice(notice)]},
+                  kind='compaction', session='s1', turn_id='t1')
+        sent = self.upstream_texts()
+        self.assertIn('全部確認済みだよ', sent)
+        self.assertTrue(any('AGENT-MSG: 確かめて' in text for text in sent))
+        self.assertEqual((self.gate_state()['phase'], self.gate_state()['round']), ('substituted', 0))
+        self.answer('確かめ直したよ', body={'input': [self.user('元の依頼'), compacted]})
+        sent = self.upstream_texts()
+        self.assertIn('全部確認済みだよ', sent)
+        self.assertTrue(any('AGENT-MSG: 確かめて' in text for text in sent))
+        self.assertEqual(self.checker_inputs()[-1]['round'], 1)
+
+    def test_subagent_compaction_does_not_receive_parent_findings(self):
+        notice = self.substituted()
+        compacted = {'id': 'cmp', 'type': 'compaction', 'encrypted_content': 'ENC-CHILD'}
+        Upstream.script = [(0, {'type': 'response.output_item.done', 'output_index': 0, 'item': compacted}),
+                           (0, completed([compacted]))]
+        self.turn({'input': [self.user('元の依頼'), self.assistant_notice(notice)]},
+                  kind='compaction', session='s1', turn_id='t1', extra_headers={'x-openai-subagent': 'review'})
+        sent = self.upstream_texts()
+        self.assertNotIn('全部確認済みだよ', sent)
+        self.assertFalse(any('AGENT-MSG: 確かめて' in text for text in sent))
+        self.assertEqual((self.gate_state()['phase'], self.gate_state()['round']), ('substituted', 0))
+
     def test_steer_without_stop_hook_adds_the_findings_and_sends_back_again(self):
         notice = self.substituted()
         first = self.gate_state()
-        body = {'input': [self.user('元の依頼'), self.assistant(notice), self.user('ついでにこれも')]}
+        body = {'input': [self.user('元の依頼'), self.assistant_notice(notice), self.user('ついでにこれも')]}
         events = self.answer('追加分も確認済み', body=body)
         texts = self.upstream_texts()
         self.assertIn('全部確認済みだよ', texts)
@@ -1133,16 +1170,15 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(payload['round'], 1)
         self.assertEqual(payload['previous_findings'], first['findings'])
         # 未達が残る間は、直させた後の回答も案内にして直させ続ける
-        second = self.final_text(events)
         state = self.gate_state()
-        self.assertNotIn('UNMET-ITEM', second)
-        self.assertIn(state['notice_marker'], second)
+        self.assertEqual(self.final_text(events), '')
+        second = state['notice_marker']
         self.assertNotEqual(state['notice_marker'], first['notice_marker'])
         self.assertEqual((state['phase'], state['round'], state['original']), ('substituted', 1, '追加分も確認済み'))
         # 次の回でも、前の回の案内は原文に戻り、Codex の履歴に無い指摘は足し直す
         self.sent_back()
         hook = self.user('<hook_prompt hook_run_id="h2">AGENT-MSG: 確かめて</hook_prompt>')
-        later = {'input': body['input'] + [self.assistant(second), hook]}
+        later = {'input': body['input'] + [self.assistant_notice(second), hook]}
         self.answer('直したよ', body=later)
         texts = self.upstream_texts()
         self.assertEqual(texts[:5], ['元の依頼', '全部確認済みだよ',
@@ -1158,14 +1194,16 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn('previous_findings', self.checker_inputs()[-1])
         state = self.gate_state()
         self.assertEqual((state['phase'], state['round']), ('substituted', 0))
-        self.assertIn(state['notice_marker'], self.final_text(events))
+        self.assertEqual(self.final_text(events), '')
+        self.assertEqual([e for e in events if e['type'] == 'response.output_item.done'][-1]['item']['id'],
+                         state['notice_marker'])
 
     def test_second_answer_resolves_from_blocked_and_drops_the_original(self):
         notice = self.substituted()
         self.sent_back()
         (self.tmp / 'findings-on').unlink()
         hook = self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')
-        events = self.answer('直したよ', body={'input': [self.user('元の依頼'), self.assistant(notice), hook]})
+        events = self.answer('直したよ', body={'input': [self.user('元の依頼'), self.assistant_notice(notice), hook]})
         self.assertEqual(self.final_text(events), '直したよ')
         state = self.gate_state()
         self.assertEqual(state['phase'], 'resolved')
@@ -1173,25 +1211,34 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn('original', state)   # 原文はエージェントに届いた: 回収の対象から外す
         self.assertNotIn('agent_message', state)
 
+    def test_failed_recheck_does_not_recover_the_old_answer(self):
+        notice = self.substituted()
+        self.restart_relay(check_fail='1')
+        events = self.answer('確認し直したよ', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertEqual(self.final_text(events), UNAVAILABLE + '確認し直したよ')
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'resolved')
+        self.assertNotIn('original', state)
+        self.assertNotIn('agent_message', state)
+
     def test_every_answer_with_findings_is_sent_back_until_none_remain(self):
         items = [self.user('元の依頼')]
         notice = self.substituted()
         for number, draft in enumerate(['まだ確認済み', 'やっぱり確認済み'], 1):
             self.sent_back()
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
             previous = self.gate_state()['findings']
             events = self.answer(draft, body={'input': list(items)})
             payload = self.checker_inputs()[-1]
             self.assertEqual(payload['round'], number)
             self.assertEqual(payload['previous_findings'], previous)
-            notice = self.final_text(events)
             state = self.gate_state()
-            self.assertNotIn('UNMET-ITEM', notice)
-            self.assertIn(state['notice_marker'], notice)
+            self.assertEqual(self.final_text(events), '')
+            notice = state['notice_marker']
             self.assertEqual((state['phase'], state['round'], state['original']), ('substituted', number, draft))
         self.sent_back()
         (self.tmp / 'findings-on').unlink()
-        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h3">AGENT-MSG</hook_prompt>')]
+        items += [self.assistant_notice(notice), self.user('<hook_prompt hook_run_id="h3">AGENT-MSG</hook_prompt>')]
         events = self.answer('全部直したよ', body={'input': items})
         self.assertEqual(self.final_text(events), '全部直したよ')
         self.assertEqual(self.checker_inputs()[-1]['round'], 3)
@@ -1205,13 +1252,19 @@ class RelayTests(unittest.TestCase):
         notice = self.substituted()
         (self.tmp / 'recheck-clean').write_text('', encoding='utf-8')
         for number in range(1, 4):
-            self.sent_back()
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            items.append(self.assistant_notice(notice))
             events = self.answer('まだ確認済み', body={'input': list(items)})
-            notice = self.final_text(events)
-        self.assertIn('まだ確認済み', notice)
-        self.assertNotIn('UNMET-ITEM', notice)
-        self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
+            payload = self.checker_inputs()[-1]
+            self.assertEqual(payload['round'], number)
+            self.assertEqual(self.gate_state()['round'], number)
+            self.assertEqual(bool(payload.get('independent_recheck')), number == 3)
+            self.assertEqual(sum('AGENT-MSG: 確かめて' in text for text in self.upstream_texts()), number)
+            text = self.final_text(events)
+            if number < 3:
+                self.assertEqual(text, '')
+                self.assertEqual(self.gate_state()['phase'], 'substituted')
+                notice = self.gate_state()['notice_marker']
+        self.assertEqual(text, 'まだ確認済み')
         self.assertEqual(self.gate_state()['phase'], 'resolved')
 
     def test_recheck_through_relay_checker_and_stop_hook(self):
@@ -1228,14 +1281,19 @@ class RelayTests(unittest.TestCase):
         (root / 'relay').symlink_to(self.state, target_is_directory=True)
         hook = Path(RELAY).parent.parent / 'hooks/output-gate-codex.sh'
         items = [self.user('元の依頼')]
-        notice = self.final_text(self.answer('全部確認済みだよ'))
+        self.answer('全部確認済みだよ')
+        notice = self.gate_state()['notice_marker']
         for number in range(1, 4):
             stopped = subprocess.run(['bash', str(hook), 'stop'], input='{"session_id":"s1","turn_id":"t1"}',
                                      text=True, capture_output=True, env=dict(os.environ, XDG_STATE_HOME=str(xdg)), check=True)
             self.assertEqual(json.loads(stopped.stdout)['decision'], 'block')
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">再確認</hook_prompt>')]
-            notice = self.final_text(self.answer('全部確認済みだよ', body={'input': list(items)}))
-        self.assertEqual(notice, '全部確認済みだよ')
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">再確認</hook_prompt>')]
+            events = self.answer('全部確認済みだよ', body={'input': list(items)})
+            self.assertEqual(self.upstream_texts().count('全部確認済みだよ'), number)
+            if number < 3:
+                self.assertEqual(self.final_text(events), '')
+            notice = self.gate_state().get('notice_marker')
+        self.assertEqual(self.final_text(events), '全部確認済みだよ')
         state = self.gate_state()
         self.assertEqual(state['phase'], 'resolved')
         self.assertEqual(state['engine']['model'], 'gpt-6-astra')
@@ -1244,14 +1302,16 @@ class RelayTests(unittest.TestCase):
         items = [self.user('元の依頼')]
         notice = self.substituted()
         self.sent_back()
-        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')]
-        notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+        items += [self.assistant_notice(notice), self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')]
+        self.answer('まだ確認済み', body={'input': list(items)})
+        notice = self.gate_state()['notice_marker']
         self.sent_back()
         call = {'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'new-call'}
-        items += [self.assistant(notice), self.user('<hook_prompt hook_run_id="h2">AGENT-MSG</hook_prompt>'),
+        items += [self.assistant_notice(notice), self.user('<hook_prompt hook_run_id="h2">AGENT-MSG</hook_prompt>'),
                   call, {'type': 'function_call_output', 'call_id': 'new-call', 'output': 'new evidence'}]
-        notice = self.final_text(self.answer('もう一度確認済み', body={'input': items}))
-        self.assertNotIn('UNMET-ITEM', notice)
+        events = self.answer('もう一度確認済み', body={'input': items})
+        text = self.final_text(events)
+        self.assertNotIn('UNMET-ITEM', text)
         self.assertEqual(self.gate_state()['phase'], 'substituted')
         self.assertTrue(any(item.get('output') == 'new evidence' for item in self.checker_inputs()[-1]['evidence']))
 
@@ -1262,11 +1322,13 @@ class RelayTests(unittest.TestCase):
         for number in range(1, 4):
             self.sent_back()
             call_id = f'call-{number}'
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>'),
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>'),
                       {'type': 'function_call', 'name': 'shell', 'arguments': 'check', 'call_id': call_id},
                       {'type': 'function_call_output', 'call_id': call_id, 'output': 'same result'}]
-            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
-        self.assertEqual(notice, 'まだ確認済み')
+            events = self.answer('まだ確認済み', body={'input': list(items)})
+            notice = self.gate_state().get('notice_marker')
+        text = self.final_text(events)
+        self.assertEqual(text, 'まだ確認済み')
         self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
 
     def test_new_user_request_restarts_recheck_count(self):
@@ -1274,13 +1336,15 @@ class RelayTests(unittest.TestCase):
         notice = self.substituted()
         for number in range(1, 3):
             self.sent_back()
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
-            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            events = self.answer('まだ確認済み', body={'input': list(items)})
+            notice = self.gate_state().get('notice_marker')
         self.sent_back()
         (self.tmp / 'recheck-clean').write_text('', encoding='utf-8')
-        items += [self.assistant(notice), self.user('新しい利用者の指示')]
-        notice = self.final_text(self.answer('追加も確認済み', body={'input': items}))
-        self.assertNotEqual(notice, '追加も確認済み')
+        items += [self.assistant_notice(notice), self.user('新しい利用者の指示')]
+        events = self.answer('追加も確認済み', body={'input': items})
+        text = self.final_text(events)
+        self.assertNotEqual(text, '追加も確認済み')
         self.assertFalse(self.checker_inputs()[-1].get('independent_recheck', False))
 
     def test_a_changed_finding_can_itself_become_stalled(self):
@@ -1289,9 +1353,11 @@ class RelayTests(unittest.TestCase):
         (self.tmp / 'findings-on').write_text('別の指摘', encoding='utf-8')
         for number in range(1, 5):
             self.sent_back()
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
-            notice = self.final_text(self.answer('別の指摘も確認済み', body={'input': list(items)}))
-        self.assertNotIn('UNMET-ITEM', notice)
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            events = self.answer('別の指摘も確認済み', body={'input': list(items)})
+            notice = self.gate_state().get('notice_marker')
+        text = self.final_text(events)
+        self.assertNotIn('UNMET-ITEM', text)
         self.assertTrue(self.checker_inputs()[-1]['independent_recheck'])
         self.assertEqual(self.gate_state()['phase'], 'substituted')
 
@@ -1301,9 +1367,11 @@ class RelayTests(unittest.TestCase):
         (self.tmp / 'recheck-fail').write_text('', encoding='utf-8')
         for number in range(1, 4):
             self.sent_back()
-            items += [self.assistant(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
-            notice = self.final_text(self.answer('まだ確認済み', body={'input': list(items)}))
-        self.assertNotIn('まだ確認済み', notice)
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">AGENT-MSG</hook_prompt>')]
+            events = self.answer('まだ確認済み', body={'input': list(items)})
+            notice = self.gate_state().get('notice_marker')
+        text = self.final_text(events)
+        self.assertNotIn('まだ確認済み', text)
         self.assertIn('判定を取得できませんでした', self.gate_state()['agent_message'])
         self.assertEqual(self.gate_state()['phase'], 'substituted')
 
@@ -1313,9 +1381,7 @@ class RelayTests(unittest.TestCase):
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         (self.state / 'gate').write_text('not a directory', encoding='utf-8')
         text = self.final_text(self.answer('全部確認済みだよ'))
-        self.assertIn('全部確認済みだよ', text)
-        self.assertIn('指摘を保存できなかった', text)
-        self.assertIn('UNMET-ITEM', text)
+        self.assertEqual(text, UNAVAILABLE + '全部確認済みだよ')
 
     def test_evidence_is_saved_in_order_with_failures_and_truncation(self):
         out1 = 'Script failed\nExit code: 3\nboom'

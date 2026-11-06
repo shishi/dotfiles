@@ -21,7 +21,7 @@ class ConfigTests(unittest.TestCase):
         result = subprocess.run([sys.executable, '-I', str(TOOL), *args, str(self.path)],
                                 capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout.strip()
+        return result.stdout
 
     def parsed(self):
         return tomllib.loads(self.path.read_text(encoding='utf-8'))
@@ -37,6 +37,13 @@ class ConfigTests(unittest.TestCase):
 
     def test_apply_is_idempotent(self):
         self.path.write_text('model = "m"\n[features]\nhooks = true\n', encoding='utf-8')
+        self.run_tool('apply', '--port', '18800')
+        before = self.path.read_bytes()
+        self.assertEqual(self.run_tool('apply', '--port', '18800'), 'unchanged')
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_apply_without_features_is_idempotent(self):
+        self.path.write_text('model = "m"\n', encoding='utf-8')
         self.run_tool('apply', '--port', '18800')
         before = self.path.read_bytes()
         self.assertEqual(self.run_tool('apply', '--port', '18800'), 'unchanged')

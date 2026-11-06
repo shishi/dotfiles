@@ -3,6 +3,7 @@ import type { On, TurnStepChunk } from 'claude-code'
 
 const STEP = { turnId: 't1', index: 0, model: 'm', messageCount: 2 } as const
 const PREFIX = '[出力ゲート: 検査できませんでした'
+const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
 const GATE_TOOL = 'mcp__output-gate__gate_findings'
 const NOT_ISSUED = '出力ゲートが出した呼び出しではなく、検査は行われていない'
 const UNMET_TEXT = '出力ゲート: 次の点は確かめられていません\n- 確認していない主張: 「全部通った」'
@@ -32,7 +33,8 @@ const FINDING = { kind: 'unverified_claim', excerpt: { source: 'draft', text: '�
 // 未達あり: 続けさせられるなら何回目 (round) でもエージェントへの指摘、続けさせられない場合は未達の項目付きの本文。
 const unmet = (p: Payload): Result => {
   const marked = [...p.bodies.slice(0, -1), p.bodies.at(-1) + UNMET]
-  const base = { ...checked(p), findings: [FINDING], unmet_text: UNMET_TEXT, display_text: marked.join('\n\n') }
+  const base = { ...checked(p), findings: [FINDING], unmet_text: UNMET_TEXT, display_text: marked.join('\n\n'),
+    corrected_bodies: p.bodies }
   if (p.continuation === 'none') return { ...base, text: marked.join('\n\n'), bodies: marked }
   const fallback = ['[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\n\n' + marked[0], ...marked.slice(1)]
   return { ...base, text: null, bodies: null, agent_message: '指摘: 全部通った の証拠が無い',
@@ -186,8 +188,7 @@ test('a failed check shows the original with the reason', async ($, on) => {
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 test('an unchecked result without a reason gets one', async ($, on) => {
@@ -195,8 +196,7 @@ test('an unchecked result without a reason gets one', async ($, on) => {
   checker(on, fs, p => ({ status: 'unchecked', text: p.bodies.join(''), bodies: p.bodies }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 test('text resent after a retry marker is checked with the rest in one call', async ($, on) => {
@@ -317,7 +317,7 @@ test('two text blocks of a final answer are checked in one call', async ($, on) 
   expect(calls[0]?.bodies).toEqual(['前は効く。', '後も効く。'])
 })
 
-test('the spinner says the answer is being checked while it is held', async ($, on) => {
+test('the spinner does not show inspection details while the answer is held', async ($, on) => {
   const fs = world(on)
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -338,13 +338,32 @@ test('the spinner says the answer is being checked while it is held', async ($, 
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   await run($)
-  expect(seen).toContain('出力ゲート')
+  expect(seen).toBe('Working…')
   const ui = await $.ui.mount({
     plugin: 'output-gate', surface: 'terminal', component: 'Spinner', requestId: 'main',
     props: { word: 'Working', message: null, suffix: '…', mode: 'responding' },
   })
   expect((await ui.find({ type: 'Text' }))?.text).toBe('Working…')
   await ui.unmount()
+})
+
+test('only the inspection tool cards are hidden', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    const props = e.props as { tool?: string; output?: string }
+    return <Text>{`${props.tool}:${props.output ?? ''}`}</Text>
+  })
+  for (const component of ['ToolUse', 'ToolResult'] as const) {
+    for (const tool of [GATE_TOOL, 'mcp__other__tool']) {
+      const ui = await $.ui.mount({
+        plugin: 'output-gate', surface: 'terminal', component, requestId: 'toolu_test',
+        props: { tool, output: 'DETAIL', tool_use_id: 'toolu_test' },
+      })
+      const text = (await ui.find({ type: 'Text' }))?.text ?? ''
+      expect(text).toBe(tool === GATE_TOOL ? '' : `${tool}:DETAIL`)
+      await ui.unmount()
+    }
+  }
 })
 
 test('the session is marked so that the display hook leaves it to the mod', async ($, on) => {
@@ -363,8 +382,7 @@ test('a checker call that is cut off shows the original with the reason', async 
   })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 test('a failure of the hook itself shows the original with the reason', async ($, on) => {
@@ -374,8 +392,7 @@ test('a failure of the hook itself shows the original with the reason', async ($
   on('process.run', () => ({ value: { ...done, exitCode: 0, stdout: '' } }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 // --- 検査役の系統 ---
@@ -428,10 +445,7 @@ test('when both checkers fail, the original is shown with both reasons', async (
   claudeModel(on, () => ({ isAnswered: false, reason: 'api-error', status: 401, error: 'authentication_failed', usage: usage(0) }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text).toContain('codex 不調')
-  expect(text).toContain('authentication_failed')
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 // --- 未達のときに直させる ---
@@ -467,7 +481,8 @@ test('findings at the final answer swap the text for the gate tool call, after t
   expect(calls[0]?.round).toBe(0)
   // gate_findings は指摘を返し、次の end_turn は round=1 で検査される。
   const answer = await $.tool.call({ tool: GATE_TOOL, tool_use_id: tool.id } as never)
-  expect((answer as { result: unknown }).result).toBe('指摘: 全部通った の証拠が無い')
+  expect((answer as { result: unknown }).result).toBe('')
+  expect((answer as { context?: string[] }).context).toEqual(['指摘: 全部通った の証拠が無い'])
   script.steps = [[TEXT(0, '全部通った。')], [TEXT(0, '直した。全部通った。'), STOP()], [TEXT(0, '証拠付きで直した。'), STOP()]]
   const second = await run($, { index: 1 })
   expect(calls[1]?.round).toBe(1)
@@ -496,8 +511,8 @@ test('a failed state write shows the original, the reason and the findings', asy
   await start($)
   const { chunks, text, result } = await run($)
   expect(chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(text).toContain('指摘を保存できなかった')
-  expect(text).toContain('全部通った。' + UNMET)
+  expect(text).toBe(UNAVAILABLE + '全部通った。')
+  expect(text).not.toContain(UNMET_TEXT)
   expect(result?.stopReason).toBe('end_turn')
 })
 
@@ -517,7 +532,8 @@ test('a second final answer with findings is sent back again even when the tool 
   expect(calls[1]?.previous_findings).toEqual([FINDING])
   // 新しく差し替えた後は、前の gate_findings の呼び出しにはもう指摘を返さない。
   const old = await $.tool.call({ tool: GATE_TOOL, tool_use_id: firstId } as never)
-  expect((old as { result: unknown }).result).toBe(NOT_ISSUED)
+  expect((old as { result: unknown }).result).toBe('')
+  expect((old as { context?: string[] }).context).toEqual([NOT_ISSUED])
   const third = await run($, { index: 2 })
   expect(third.chunks.some(c => c.kind === 'tool')).toBe(true)
   expect(calls[2]?.round).toBe(2)
@@ -531,7 +547,8 @@ test('a gate_findings call the gate did not make gets the fixed answer', async (
   await start($)
   await run($)
   const answer = await $.tool.call({ tool: GATE_TOOL, tool_use_id: 'toolu_self' } as never)
-  expect((answer as { result: unknown }).result).toBe(NOT_ISSUED)
+  expect((answer as { result: unknown }).result).toBe('')
+  expect((answer as { context?: string[] }).context).toEqual([NOT_ISSUED])
   await run($, { index: 1 })
   expect(calls.at(-1)?.evidence).toEqual([])
 })
@@ -545,27 +562,45 @@ for (const reason of ['aborted', 'error']) {
     await start($)
     const { chunks } = await run($)
     const end = await complete($, reason)
-    expect(end.text).toContain('全部通った。' + UNMET)
+    expect(end.text).toContain('全部通った。')
+    expect(end.text).not.toContain(UNMET_TEXT)
+    expect(end.text).not.toContain('出力ゲート')
     // ターンの終わりに指摘を消す: 同じ呼び出しには、もう指摘を返さない。
     const id = (chunks.find(c => c.kind === 'tool') as { id: string }).id
     const answer = await $.tool.call({ tool: GATE_TOOL, tool_use_id: id } as never)
-    expect((answer as { result: unknown }).result).toBe(NOT_ISSUED)
+    expect((answer as { result: unknown }).result).toBe('')
+    expect((answer as { context?: string[] }).context).toEqual([NOT_ISSUED])
   })
 }
 
-test('the text shown when the turn ends is the checker display_text, with the unmet paragraph once', async ($, on) => {
-  // 表示するのは検査処理の display_text そのもの (置き換え済みの本文と未達の段落)。
+test('the interrupted answer is shown without findings', async ($, on) => {
   const fs = world(on)
   const display = `速い全部通った。${UNMET}`
-  checker(on, fs, p => ({ ...unmet(p), display_text: display, fallback_text: '(断り書きの形が違う)' }))
+  checker(on, fs, p => ({ ...unmet(p), display_text: display, corrected_bodies: ['速い全部通った。'],
+    fallback_text: '(断り書きの形が違う)' }))
   tools(on)
   model(on, [[TEXT(0, '効く全部通った。'), STOP()]])
   await start($)
   await run($)
   const end = await complete($, 'aborted')
-  expect(end.text).toContain(display)
-  expect(end.text.split(UNMET_TEXT).length - 1).toBe(1)
+  expect(end.text).toContain('速い全部通った。')
+  expect(end.text).not.toContain(UNMET_TEXT)
+  expect(end.text).not.toContain('出力ゲート')
   expect(end.text).not.toContain('効く')
+})
+
+test('a legacy interrupted turn does not show its stored findings', async ($, on) => {
+  world(on)
+  tools(on)
+  const swapped = { latest_user: '設定を教えて', turn_start_context: [], started_at: Date.now(), tool_ids: [], shown: '',
+    judged_len: 0, round: 1, agent_message: '指摘', findings: [FINDING], original: '全部通った。',
+    unmet: '[出力ゲート] SECRET-FINDING', gate_tool_id: 'toolu_outputgate_x', checks: [] }
+  on('state.get', (_$, e, next) => (e.key === 'turn' && e.id === 't1' ?
+    { value: { value: swapped, version: 1 } } as never : next(e)))
+  const end = await complete($, 'aborted')
+  expect(end.text).toContain('全部通った。')
+  expect(end.text).not.toContain('出力ゲート')
+  expect(end.text).not.toContain('SECRET-FINDING')
 })
 
 test('an interrupted turn without a swap is not checked again', async ($, on) => {
@@ -613,7 +648,7 @@ test('a turn that ends at max_tokens is checked at turn.complete without a swap'
   expect(last.continuation).toBe('none')
   expect(last.bodies).toEqual(['全部通った。'])
   // 足すのは検査処理が返す未達の段落 (unmet_text) だけ。
-  expect(end.text).toBe(UNMET_TEXT)
+  expect(end.text).not.toContain(UNMET_TEXT)
 })
 
 // --- 証拠 ---
@@ -816,9 +851,7 @@ for (const [name, content] of [['unreadable', '{"first": '], ['wrongly shaped', 
     const calls = checker(on, fs, replaceKiku)
     model(on, [[TEXT(0, 'これは効く。'), STOP()]])
     const { text } = await run($)
-    expect(text.startsWith(PREFIX)).toBe(true)
-    expect(text).toContain('検査役の設定')
-    expect(text.endsWith('これは効く。')).toBe(true)
+    expect(text).toBe(UNAVAILABLE + 'これは効く。')
     expect(calls.length).toBe(0)
   })
 }
@@ -839,10 +872,7 @@ test('a failed prepare is the Claude checker failing, and both reasons are shown
   checker(on, fs, { prepare: () => ({ value: { ...done, exitCode: 1, stdout: '' } }), bulk: codexFailed })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text.startsWith(PREFIX)).toBe(true)
-  expect(text).toContain('codex 不調')
-  expect(text).toContain('claude')
-  expect(text.endsWith('これは効く。')).toBe(true)
+  expect(text).toBe(UNAVAILABLE + 'これは効く。')
 })
 
 // --- ターンの終わり ---
@@ -861,7 +891,7 @@ ${p.bodies[0]}`,
   await start($)
   await run($)
   const end = await complete($, 'error')
-  expect(end.text).toBe(`${PREFIX} — 置き換えの組がコードの中]`)
+  expect(end.text).toBe(UNAVAILABLE.trim())
 })
 
 test('a final step without text leaves the shown text to be judged at turn.complete', async ($, on) => {
@@ -875,7 +905,7 @@ test('a final step without text leaves the shown text to be judged at turn.compl
   const end = await complete($, 'answer')
   expect(calls.at(-1)?.final).toBe(true)
   expect(calls.at(-1)?.bodies).toEqual(['全部通った。'])
-  expect(end.text).toBe(UNMET_TEXT)
+  expect(end.text).not.toContain(UNMET_TEXT)
 })
 
 test('a final answer already judged and shown is not judged again when a text-less final step ends the turn', async ($, on) => {
@@ -890,7 +920,7 @@ test('a final answer already judged and shown is not judged again when a text-le
   model(on, [[TEXT(0, '全部通った。'), STOP()], [STOP()]])
   await start($)
   const first = await run($)
-  expect(first.text).toBe('全部通った。' + UNMET)
+  expect(first.text).toBe('全部通った。')
   await run($, { index: 1 })
   const before = calls.length
   const end = await complete($, 'answer')
@@ -927,14 +957,15 @@ test('the gate keeps no file of the withheld answer, and old sessions are cleane
 
 test('a failed write of the issued call undoes the swap', async ($, on) => {
   const fs = world(on)
-  const calls = checker(on, fs, unmet)
+  const calls = checker(on, fs, p => ({ ...unmet(p), corrected_bodies: p.bodies.map(s => s.replaceAll('効く', '速い')) }))
   tools(on)
   on('state.set', (_$, e, next) => (e.key === 'issued' && e.value !== null ? { deny: 'state is broken' } as never : next(e)))
-  model(on, [[TEXT(0, '全部通った。'), STOP()]])
+  model(on, [[TEXT(0, '効く全部通った。'), STOP()]])
   await start($)
   const first = await run($)
   expect(first.chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(first.text).toContain('全部通った。' + UNMET)
+  expect(first.text).toBe(UNAVAILABLE + '速い全部通った。')
+  expect(first.text).not.toContain(UNMET_TEXT)
   // 直させた回数は書く前に戻っている: 同じターンの次の最終回答は、まだ直させていない (round=0) として検査する。
   await run($, { index: 1 })
   expect(calls[1]?.round).toBe(0)

@@ -35,5 +35,3 @@ From the second round on, the caller supplies the diff since the previous round 
 - No count limit: the "one strong finding over several weak ones" principle
   replaces a numeric cap. If safe, give the verdict with brief evidence for the main assumptions.
   Report missing inputs or unverified connections separately; do not count them as a safe result.
-
-End with one line of JSON giving the counts: `{"review_counts":{"blocker":<n>,"should":<n>,"note":<n>}}`. Count a finding that must be fixed before the change can land as blocker and other material findings as should; a safe verdict is all zeros. The review-rounds hook reads this line.

@@ -22,26 +22,21 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
 - 回答の項目の暗号化された出力 (encrypted_content) は、要求と応答の両方から取り除く。
 - 上流の失敗や切断は、そのまま Codex に伝える (Codex 本来の再試行に任せる)。
 
-未達のとき: 最終回答 (クライアント側の呼び出しを含まない応答) で検査処理が未達を返し、セッションが続行の登録を
-持っていれば、回答を短い案内に差し替えて流し、指摘と原文を状態に書く (substituted)。Codex の Stop hook
-(output-gate-codex.sh stop) がそれを読んで block し、直させた回数 (round) を 1 つ増やす (blocked)。同じターンの
-以後の要求では、どの回の案内も原文に戻して上流へ送る。次の最終回答は直させた回数を round に、前の指摘を
-previous_findings に入れて検査し、未達が残る限り何回目でも同じく案内に差し替える。未達が無くなった回答だけを
-そのまま流して resolved にする。
+未達のとき: 最終回答を空の message に差し替え、指摘と原文を保存して end_turn=false で続行する。
+同じターンの次の要求では、空の message を原文に戻し、指摘を上流の入力へ加える。未達がなくなるまで繰り返す。
 
 状態ディレクトリ:
   delegated/<session_id>  委譲の子セッションの登録 (hook が書く)。24 時間以内のものは検査せずに流す。
-  continue/<session_id>   続行の登録 (SessionStart hook が Stop hook の信頼を確かめて書く)。24 時間以内のものだけ
-                          案内に差し替える。
+  continue/<session_id>   旧版中継の続行登録。24 時間で消去する。
   gate/<session_id>/<turn_id>.json
-                          差し戻しの状態 {phase, round, findings, agent_message, original, display,
+                          差し戻しの状態 {phase, round, findings, agent_message, original, display, display_clean,
                           notice_marker, notices, shown?, created, engine, engine_failures, dropped}。
-                          phase は未達が残る間 substituted → blocked (Stop hook が書く) をくり返し、resolved で
+                          phase は未達が残る間 substituted → blocked をくり返し、resolved で
                           終わる。round は直させた回数。resolved にするときは original と agent_message を消す。
-                          original は最後に案内へ差し替えた置き換え前の原文、display は利用者に回収で見せる表示用の
-                          本文 (検査処理の display_text)、shown は hook の回収が表示した印。notices は案内の印ごとの
+                          original は保留した置き換え前の原文、display は訂正済みの回収用本文、
+                          shown は hook の回収が表示した印。notices は保留した回答ごとの
                           {original, inject?} で、同じターンの以後の要求で各回の案内を原文に戻すために使う。inject は
-                          Stop hook を経ずに続いた回に足した指摘で、Codex の履歴に入らないため要求ごとに足し直す。
+                          Codex の履歴に入らないため要求ごとに足し直す指摘。
   turns/<session_id>/<turn_id>.json
                           ターンの証拠 {turn_id, time, records, shown, start}。records は呼び出しと出力 (と取得
                           できなかった範囲の印) を起きた順に、shown は表示済みの途中の文章、start はターンの開始時の
@@ -86,7 +81,7 @@ HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorizat
        'accept-encoding'}
 PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
-UNCHECKED_PREFIX = '[出力ゲート: 検査できませんでした — {}]\n\n'
+UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
 RECENT_MESSAGES = 10
 # Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
 INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
@@ -112,8 +107,6 @@ CALL_TYPES = CLIENT_CALLS | {'local_shell_call', 'web_search_call', 'tool_search
 CONTINUED_INCOMPLETE = {'interrupted', 'content_filter'}
 OUTPUT_TYPES = {'function_call_output', 'custom_tool_call_output', 'tool_search_output'}
 UNKNOWN_TURN = '前のターン (区別不明)'
-NOTICE = ('[出力ゲート] 回答に確かめられていない点が見つかったため、エージェントに作業を続けさせています。'
-          '直した回答をこの後に表示します。({})')
 SAFE_ID = re.compile(r'[0-9A-Za-z_.-]{1,128}')
 EXIT_CODE = re.compile(r'(?:exit code|exited with code|exit status)\s*:?\s*(-?\d+)', re.I)
 REVIEW_MARK = '\n<<<OUTPUT-GATE-FIELD-{}>>>\n'
@@ -338,14 +331,6 @@ def gate_path(sid, tid):
     return Settings.state_dir / 'gate' / sid / f'{tid}.json'
 
 
-def registered(sid):
-    """続行の登録 (Stop hook が動くことを SessionStart が確かめたセッション) があるか。"""
-    try:
-        return time.time() - (Settings.state_dir / 'continue' / sid).stat().st_mtime < STATE_TTL
-    except OSError:
-        return False
-
-
 def output_text(item):
     out = item.get('output')
     if isinstance(out, dict):
@@ -537,10 +522,15 @@ def restore_notices(items, entries):
             continue
         text = input_text(item)
         for marker, entry in entries.items():
-            if marker in text:
+            if item.get('id') == marker or marker in text:
                 parts = [p for p in item.get('content') or [] if isinstance(p, dict) and 'text' in p]
                 for number, part in enumerate(parts):
                     part['text'] = entry['original'] if number == 0 else ''
+                if item.get('id') == marker and 'source_id' in entry:
+                    if entry['source_id'] is None:
+                        item.pop('id', None)
+                    else:
+                        item['id'] = entry['source_id']
                 found[marker] = index
                 break
     return found
@@ -612,7 +602,7 @@ def strings(value, count):
 
 
 def run_check(payload, checks):
-    """検査処理を 1 回呼ぶ。形の違う結果と実行の失敗は、原文に理由を添えた unchecked にする。"""
+    """検査処理を 1 回呼ぶ。形の違う結果と実行の失敗は unchecked にする。"""
     count = len(payload['bodies'])
     try:
         out = json.loads(checks.run(payload).decode('utf-8'))
@@ -626,8 +616,7 @@ def run_check(payload, checks):
         return out
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         reason = f'検査処理を実行できなかった ({type(error).__name__})'
-        bodies = list(payload['bodies'])
-        bodies[0] = UNCHECKED_PREFIX.format(reason) + bodies[0]
+        bodies = [UNAVAILABLE + payload['bodies'][0], *payload['bodies'][1:]]
         return {'status': 'unchecked', 'bodies': bodies, 'reason': reason, 'findings': []}
 
 
@@ -697,8 +686,7 @@ def check_review(body, draft, checks):
     else:
         status = 'unchecked'
     if status == 'unchecked':
-        review['overall_explanation'] = UNCHECKED_PREFIX.format(result.get('reason') or '検査できなかった') + \
-            (review.get('overall_explanation') or '')
+        review['overall_explanation'] = UNAVAILABLE + (review.get('overall_explanation') or '')
     # JSON の外側の文字列は Codex が捨てるので、そのまま残す
     return draft[:start] + json.dumps(review, ensure_ascii=False) + draft[end:], status
 
@@ -888,9 +876,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             log(event='unreadable-body', error=type(error).__name__)
             return self.reply_error(400, f'cannot read the request body ({error}); the answer was not sent unchecked')
         mode, reason, kind = self.classify(body)
-        self.turn_key, self.result_record = None, None
-        if mode == 'check':
-            self.prepare_turn(body)
+        self.turn_key, self.result_record, self.silent_item = None, None, None
+        if mode in ('check', 'compact'):
+            self.prepare_turn(body, advance=kind != 'compaction')
         for item in body.get('input') or []:
             if isinstance(item, dict) and item.get('role') == 'assistant':
                 strip_message_ciphertext(item)
@@ -939,8 +927,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             meta = {}
         return meta if isinstance(meta, dict) else {}
 
-    def prepare_turn(self, body):
-        """通常のターンの要求: 案内を原文に戻し、Stop hook を経ずに続いた要求には指摘を足し、証拠を保存する。"""
+    def prepare_turn(self, body, *, advance=True):
+        """通常のターンの要求: 保留した回答を復元し、指摘と証拠を加える。"""
         meta = self.meta()
         sid, tid = meta.get('session_id'), meta.get('turn_id')
         if not (safe_id(sid) and safe_id(tid)):
@@ -958,17 +946,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         entries = notice_entries(gate)
         positions = restore_notices(items, entries)
         current = gate.get('notice_marker')
-        if gate.get('phase') == 'substituted' and current in positions \
-                and any(is_request(i) for i in items[positions[current] + 1:]):
-            # 案内の後に利用者の入力 (steer) が待っていて、Codex が Stop hook を動かさずに続けた。指摘を Stop hook
-            # の reason と同じ形で足し、直させた回として数える。
+        compaction = next((i for i in range(len(items) - 1, -1, -1)
+                           if isinstance(items[i], dict) and items[i].get('type') in COMPACTION_TYPES), None)
+        if current in entries and current not in positions and compaction is not None and \
+                gate.get('phase') in ('substituted', 'blocked'):
+            if isinstance(gate.get('agent_message'), str):
+                entries[current]['inject'] = gate['agent_message']
+            index = compaction + 1
+            items.insert(index, {'type': 'message', 'role': 'assistant',
+                                 'content': [{'type': 'output_text', 'text': entries[current]['original']}]})
+            positions[current] = index
+        if gate.get('phase') == 'substituted' and current in positions:
             entries[current]['inject'] = gate.get('agent_message') or ''
+        if advance and gate.get('phase') == 'substituted' and current in positions:
+            # 同じ回答を受信し直しただけでは数えず、次の要求に保留した回答が含まれてから数える。
             try:
                 write_json(gate_path(sid, tid), dict(gate, phase='blocked', round=int(gate.get('round') or 0) + 1,
                                                      notices=entries))
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
-            log(event='steer-continued')
+            log(event='continued')
         # 足した指摘は Codex の履歴に入らないので、同じターンの以後の要求にも足し直す。後ろから入れて位置を保つ。
         for marker, index in sorted(positions.items(), key=lambda pair: pair[1], reverse=True):
             inject = entries[marker].get('inject')
@@ -977,7 +974,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              f'<hook_prompt hook_run_id="output-gate">{inject}</hook_prompt>'}]})
 
     def classify(self, body):
-        """要求をどう扱うかを決める: check (検査する) / review / unchecked (理由を添える) / pass (そのまま)。"""
+        """要求を check / review / compact / unchecked / pass に分ける。"""
         meta = self.meta()
         kind = meta.get('request_kind')
         text = body.get('text')
@@ -985,6 +982,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return 'pass', None, kind   # 出力の形式を指定した要求: 機械が読む
         if self.delegated(meta.get('session_id')):
             return 'pass', None, kind   # 委譲の子セッション: 親が出力を読む
+        if kind == 'compaction' and not self.headers.get('x-openai-subagent'):
+            return 'compact', None, kind
         if kind in PASS_KINDS:
             return 'pass', None, kind
         if kind != 'turn':
@@ -1071,7 +1070,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if kind == 'compaction' and etype == 'response.output_item.done' and isinstance(item, dict) \
                     and item.get('type') in COMPACTION_TYPES:
                 compaction_items.append(item)
-            if mode == 'pass':
+            if mode in ('pass', 'compact'):
                 if etype == 'response.completed' and kind == 'compaction':
                     output = (obj.get('response') or {}).get('output') or []
                     try:
@@ -1158,6 +1157,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             result = run_check(checker_payload(body, bodies, final=final, continuation='none'), self.checks)
             self.check_status = result.get('status')
             self.result_record = engine_record(result)
+            if result.get('status') == 'unchecked':
+                return [UNAVAILABLE + bodies[0], *bodies[1:]]
+            if result.get('findings'):
+                corrected = result.get('corrected_bodies')
+                shown = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
+                shown[0] = UNAVAILABLE + shown[0]
+                return shown
             return result['bodies']
         sid, tid, turn = self.turn_key
         gate = read_json(gate_path(sid, tid))
@@ -1169,10 +1175,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except OSError as error:
             log(event='turn-store-failed', error=type(error).__name__)
         evidence, previous = turn_evidence(sid, tid)
-        # 直させた回数。Stop hook が block したとき (と steer で続いたとき) に増える。案内を流した後に Codex が
-        # 同じ要求を送り直した回 (substituted のまま) は、まだ直させていないので増えない。
+        # Codex が同じ要求を送り直した回は、まだ直させていないので数えない。
         sent_back = int(gate.get('round') or 0) if gate is not None else 0
-        withhold = final and not incomplete and registered(sid)
+        withhold = final and not incomplete
         extra = {'final': final, 'round': sent_back,
                  'continuation': 'withhold' if withhold else 'none', 'evidence': evidence,
                  'previous_evidence': previous, 'turn_start_context': (turn or {}).get('start') or [],
@@ -1216,24 +1221,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         for f in result.get('findings') or []}
             unchanged = 1
         texts = result.get('bodies')
+        if result.get('status') == 'unchecked':
+            texts = [UNAVAILABLE + bodies[0], *bodies[1:]]
+        elif texts is not None and result.get('findings'):
+            corrected = result.get('corrected_bodies')
+            texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
+            texts[0] = UNAVAILABLE + texts[0]
         if texts is None:
-            marker = f'output-gate:{tid}:{os.urandom(4).hex()}'
+            source = next(key[0] for key, value in collect_drafts(held).items() if value.strip())
+            marker = 'msg_' + os.urandom(16).hex()
             original = '\n\n'.join(bodies)
             notices = notice_entries(gate) if gate is not None else {}
-            notices[marker] = {'original': original}
+            notices[marker] = {'original': original, 'inject': result['agent_message'],
+                               'source_id': source if isinstance(source, str) else None}
             state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
                      'request_signature': signature, 'repeated_findings': sorted(repeated),
                      'unchanged_rounds': unchanged, 'checked_round': sent_back,
                      'agent_message': result['agent_message'], 'original': original,
-                     'display': result.get('display_text'), 'notice_marker': marker, 'notices': notices,
+                     'display': '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
+                     'notice_marker': marker, 'notices': notices,
                      'created': time.time(), **self.result_record}
             try:
                 write_json(gate_path(sid, tid), state)
-                texts = [NOTICE.format(marker)] + [''] * (len(bodies) - 1)
+                self.silent_item = (source, marker)
+                texts = [''] * len(bodies)
                 log(event='substituted')
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
-                texts = result['fallback_bodies']
+                corrected = result.get('corrected_bodies')
+                texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
+                texts[0] = UNAVAILABLE + texts[0]
         elif final and gate is not None:
             # 未達が無くなった (または続けさせられない) 回答を流す前に resolved で残す。最後の原文と指摘は回収に
             # 使わないので消す。各回の案内を原文に戻す notices は、同じターンの以後の要求のために残す。
@@ -1253,8 +1270,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         results, statuses = {}, []
         check_started = time.time()
         if mode == 'unchecked':
-            for key, draft in drafts.items():
-                results[key] = UNCHECKED_PREFIX.format(reason) + draft
+            results.update({key: (UNAVAILABLE if i == 0 else '') + draft
+                            for i, (key, draft) in enumerate(drafts.items())})
         elif mode == 'check':
             # 空白だけのパートは規則に反しようがないので、検査処理に渡さずにそのまま流す。本文の要素が複数あっても
             # 検査処理は 1 回だけ呼び、1〜3 を本文全体で判定させる。
@@ -1265,9 +1282,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.check_status = None
                     texts = self.wait(self.check_answer, body, held, [drafts[key] for key in keys])
                     statuses.append(self.check_status)
-                except Exception as error:  # 想定外の失敗でも応答を切らず、原文に理由を添えて流す
-                    texts = [drafts[key] for key in keys]
-                    texts[0] = UNCHECKED_PREFIX.format(f'中継の内部エラー ({type(error).__name__})') + texts[0]
+                except Exception:
+                    texts = [UNAVAILABLE + drafts[keys[0]], *[drafts[key] for key in keys[1:]]]
                     statuses.append('unchecked')
                 results.update(zip(keys, texts))
         else:
@@ -1283,9 +1299,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for key, future in futures.items():
                     try:
                         results[key], status = future.result()
-                    except Exception as error:  # 想定外の失敗でも応答を切らず、原文に理由を添えて流す
-                        reason = f'中継の内部エラー ({type(error).__name__})'
-                        results[key], status = UNCHECKED_PREFIX.format(reason) + drafts[key], 'unchecked'
+                    except Exception:
+                        results[key], status = UNAVAILABLE + drafts[key], 'unchecked'
                     statuses.append(status)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
@@ -1317,10 +1332,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     obj['part']['text'] = new
                 raw = encode_event(etype, obj)
             elif etype in ('response.completed', 'response.incomplete') and isinstance(obj, dict):
+                if self.silent_item and etype == 'response.completed':
+                    obj['response']['end_turn'] = False
                 for position, item in enumerate((obj.get('response') or {}).get('output') or []):
                     if isinstance(item, dict) and item.get('type') == 'message':
                         replace_item_text(item, item_key_of(item, position), results)
                 raw = encode_event(etype, obj)
+            if self.silent_item and isinstance(obj, dict):
+                source, marker = self.silent_item
+                changed = False
+                if key == source:
+                    if isinstance(obj.get('item'), dict):
+                        obj['item']['id'] = marker
+                        changed = True
+                    if etype.startswith(TEXT_EVENT_PREFIXES):
+                        obj['item_id'] = marker
+                        changed = True
+                if etype in ('response.completed', 'response.incomplete'):
+                    for position, item in enumerate((obj.get('response') or {}).get('output') or []):
+                        if isinstance(item, dict) and item.get('type') == 'message' and item_key_of(item, position) == source:
+                            item['id'] = marker
+                            changed = True
+                if changed:
+                    raw = encode_event(etype, obj)
             self.send_chunk(self.stripped(etype, obj, raw))
         record = self.result_record or {}
         log(event='checked', mode=mode, items=len(results), check_dur=round(time.time() - check_started, 3),
@@ -1508,8 +1542,8 @@ def self_test():
         state = read_json(gate_path('self-test', 'turn-1')) or {}
         if SELF_TEST_UNMET in body or not state.get('notice_marker') or state['notice_marker'] not in body:
             return False, 'the unmet answer was not replaced with the notice'
-        notice = {'type': 'message', 'role': 'assistant',
-                  'content': [{'type': 'output_text', 'text': NOTICE.format(state['notice_marker'])}]}
+        notice = {'id': state['notice_marker'], 'type': 'message', 'role': 'assistant',
+                  'content': [{'type': 'output_text', 'text': ''}]}
         hook = {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text': '<hook_prompt>x</hook_prompt>'}]}
         post(relay.server_port, {'input': [request, notice, hook]}, meta)
         sent = json.loads(received[-1].decode('utf-8') if zstd is None else zstd.decompress(received[-1]))

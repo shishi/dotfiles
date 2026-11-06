@@ -476,10 +476,8 @@ jq -e --arg pre "& (Join-Path \$HOME '.agent-shared/bin/invoke-git-bash-hook.ps1
     | select(.timeout == (if (.command | test("stop-check$|pre-wait$")) then 30 else 10 end))
     | select(.type == "command" and .commandWindows == ($pre + (.command | sub("^bash "; "")) + $suf))]
   | length == 6' "$CX" >/dev/null || fail "registration matches the design (Codex commandWindows)"
-# 既存の出力ゲートと review-rounds の登録が残っている。
+# 既存の出力ゲートの登録が残っている。
 jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-claude\\.sh stop"))] | length == 1' "$CS" >/dev/null \
-  && jq -e '[.hooks.SubagentStop[] | select(.matcher != null) | .hooks[] | select(.command | test("review-rounds\\.sh stop"))] | length == 1' "$CS" >/dev/null \
   && jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-codex\\.sh stop"))] | length == 1' "$CX" >/dev/null \
-  && jq -e '[.hooks.SubagentStop[] | select(.matcher != null) | .hooks[] | select(.command | test("review-rounds\\.sh stop"))] | length == 1' "$CX" >/dev/null \
-  || fail "registration keeps the output gate and review-rounds hooks"
+  || fail "registration keeps the output gate hooks"
 ok "registration matches the design"

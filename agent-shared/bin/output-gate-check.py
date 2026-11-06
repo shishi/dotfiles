@@ -29,12 +29,13 @@
   findings, dropped (捨てた finding と理由), agent_message (エージェントへの指摘 or null),
   fallback_text / fallback_bodies (呼び出し側が状態を書けなかった場合に表示する文字列),
   unmet_text (表示する未達の段落 = 見出しと項目。未達の段落そのもの (後ろに証拠の欠けの注記が続くことがある)。未達が無ければ null),
+  corrected_bodies (指摘を付ける前の、置き換え済みの本文),
   display_text / display_bodies (未達を明記した表示用の本文 = 置き換え済みの本文 + 未達の段落 + 証拠の印の
-                    注記。continuation に関係なく入り、先頭の断り書きは付けない。中継の回収で見せる。未達が無い・
+                    注記。continuation に関係なく入り、先頭の断り書きは付けない。未達が無い・
                     検査できなかったときは null),
   reason, engine ({family, model, effort} or null), engine_failures, applied
 
-検査できなかったときは、原文の先頭に理由を添えた文字列を text に入れて status を unchecked にする。
+検査できなかったときは、一般的な未完了案内と原文を text に入れて status を unchecked にする。理由は reason に残す。
 入力が壊れているときだけ 2 で終える。
 
 検査役は全文を書き直さず、「原文中の文字列 → 置き換える文字列」の組と、未達の項目 (種類・抜粋・証拠の参照
@@ -236,8 +237,7 @@ def joined(bodies):
 
 def unchecked(payload, reason, **extra):
     bodies = body_list(payload)
-    prefix = f'[出力ゲート: 検査できませんでした — {reason}]\n\n'
-    shown = [prefix + bodies[0], *bodies[1:]]
+    shown = ['回答の確認を完了できませんでした。\n\n' + bodies[0], *bodies[1:]]
     result = {'status': 'unchecked', 'text': joined(shown), 'bodies': shown, 'reason': reason,
               'findings': [], 'dropped': [], 'agent_message': None,
               'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None, 'display_text': None,
@@ -1112,8 +1112,7 @@ def agent_message(findings, pairs, evidence):
 
 
 def unmet_paragraph(findings):
-    """表示する未達の段落 (見出しと項目)。戻り値の unmet_text にも同じ文字列を入れ、呼び出し側が回収の表示などで
-    組み立て直さずに使えるようにする。"""
+    """未達の段落 (見出しと項目) を内部結果に保存する。"""
     return UNMET_HEADING + '\n' + '\n'.join(
         f'- {finding_label(f)}: 「{shown_excerpt(f["excerpt"])}」' for f in findings)
 
@@ -1136,7 +1135,8 @@ def judge(payload, reply_text, engine, failures):
     findings, dropped = verify_findings(payload, answer['findings']) if final else ([], [])
     base = {'status': 'checked', 'reason': None, 'findings': findings, 'dropped': dropped,
             'agent_message': None, 'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None,
-            'display_text': None, 'display_bodies': None, 'engine': engine, 'engine_failures': failures, 'applied': len(answer['replacements'])}
+            'display_text': None, 'display_bodies': None, 'corrected_bodies': bodies,
+            'engine': engine, 'engine_failures': failures, 'applied': len(answer['replacements'])}
     # 回答の秘密情報は検査役の判定に依らずに確かめる。検査役の指摘が全て捨てられた場合も見逃さないよう先に行う。
     secrets = secret_findings(payload, findings) if final else []
     if answer['findings'] and final and not findings and not secrets:
@@ -1212,7 +1212,7 @@ def check(payload):
                                      'reason': f'{family} の検査役を実行できない ({type(error).__name__}: {error})'})
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         return unchecked(payload, str(error) or type(error).__name__, engine_failures=failures)
-    except Exception as error:  # 想定外の失敗も、原文に理由を添えて返す (呼び出し側が理由を表示できるように)
+    except Exception as error:
         return unchecked(payload, f'検査処理の内部エラー ({type(error).__name__})', engine_failures=failures)
     return unchecked(payload, ' / '.join(f['reason'] for f in failures), engine_failures=failures)
 
