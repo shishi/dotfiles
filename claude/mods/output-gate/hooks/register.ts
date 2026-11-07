@@ -13,7 +13,7 @@ const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 // 動いているメインのターンの ID。作業中に送られた入力を、そのターンの依頼に足すために使う。
 const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as string | null)
 
-const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+const UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
 // 検査全体の締切 (秒)。秘密情報の検査 (gitleaks) と二つの系統の検査役が、この中に収まる。先に試す系統には
 // 残りの半分、次の系統には残り全てを渡す (検査処理と同じ分け方)。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
 const DEFAULT_TIMEOUT_S = 45

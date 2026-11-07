@@ -41,7 +41,7 @@
   independent_recheck (独立再判定の結果。試した場合のみ),
   reason, engine ({family, model, effort} or null), engine_failures, applied
 
-検査できなかったときは、一般的な未完了案内と原文を text に入れて status を unchecked にする。理由は reason に残す。
+検査できなかったときは、出力検査を実行できなかった案内と生成済みの原文を text に入れて status を unchecked にする。理由は reason に残す。
 入力が壊れているときだけ 2 で終える。
 
 検査役は全文を書き直さず、「原文中の文字列 → 置き換える文字列」の組と、未達の項目 (種類・抜粋・証拠の参照
@@ -208,7 +208,8 @@ contradicted by the evidence, even when no new tool call followed it.
 """
 INSTRUCTIONS_PROGRESS = """
 Progress assessment. Compare this answer, verified findings and all available evidence with "progress_state", the
-previous checkpoint. Return "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}.
+previous checkpoint. Its "evidence_refs" lists unchanged evidence IDs found in the current or previous evidence;
+include those items when comparing the checkpoint. Return "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}.
 Advanced means an unmet outcome was resolved, or a verified new fact narrowed the cause or supports a concrete next
 decision towards resolving the unmet outcome. Stalled means neither happened. Repeating checks, rephrasing an answer,
 changing wording or finding counts, or increasing tool-call counts alone is not progress. A newly discovered fact or
@@ -240,6 +241,10 @@ AGENT_CLOSING = ('確認できることは確認してから答え直してく�
                  'このターンで表示済みの文章に確かめていない主張があれば、答え直す回答で撤回するか確かめてください。')
 
 
+class InputLimitError(ValueError):
+    pass
+
+
 class EngineFailure(RuntimeError):
     """一つの系統で検査できなかった。もう一方の系統へ移る。"""
 
@@ -263,9 +268,9 @@ def joined(bodies):
 
 def unchecked(payload, reason, **extra):
     bodies = body_list(payload)
-    shown = ['回答の確認を完了できませんでした。\n\n' + bodies[0], *bodies[1:]]
+    shown = ['出力検査を実行できなかったため、生成済みの回答を表示します。\n\n' + bodies[0], *bodies[1:]]
     result = {'status': 'unchecked', 'text': joined(shown), 'bodies': shown, 'reason': reason,
-              'findings': [], 'dropped': [], 'agent_message': None,
+              'failure_kind': 'unavailable', 'findings': [], 'dropped': [], 'agent_message': None,
               'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None, 'display_text': None,
               'display_bodies': None, 'engine': None,
               'engine_failures': [], 'applied': 0, 'progress_state': payload.get('progress_state'),
@@ -406,7 +411,7 @@ def render(data):
 
 
 def build_input(payload, rules, limit=INPUT_LIMIT):
-    """検査役への入力 (JSON にする前の値) を組む。入力の全体が limit (バイト) を超えるときだけ、証拠の出力を省く。"""
+    """検査役への入力 (JSON にする前の値) を組む。同一の checkpoint 証拠は参照で共有し、全体が limit (バイト) を超えるときだけ証拠の出力を省く。"""
     previous, current = evidence_parts(payload)
     data = {'final': bool(payload.get('final')), 'round': payload.get('round') or 0, 'response_rules': rules,
             'messages': messages(payload), 'protected_parts_of_draft': protected_parts(joined(body_list(payload))),
@@ -416,7 +421,15 @@ def build_input(payload, rules, limit=INPUT_LIMIT):
     if payload.get('previous_findings'):
         data['previous_findings'] = payload['previous_findings']
     if payload.get('progress_state') is not None:
-        data['progress_state'] = payload['progress_state']
+        checkpoint = payload['progress_state']
+        available = {item['id']: item for item in [*current, *(i for t in previous for i in t.get('items', []))]
+                     if isinstance(item.get('id'), str)}
+        shared = [item['id'] for item in checkpoint['evidence'] if item.get('id') in available
+                  and item == available[item['id']]]
+        data['progress_state'] = dict(checkpoint,
+                                      evidence=[item for item in checkpoint['evidence']
+                                                if item.get('id') not in shared],
+                                      evidence_refs=shared)
     if payload.get('compacted_note'):
         data['notes'] = ['Earlier answers were compacted and are not available.']
     size = len(render(data).encode('utf-8'))
@@ -430,7 +443,7 @@ def build_input(payload, rules, limit=INPUT_LIMIT):
             data['progress_state'] = dict(checkpoint, evidence=previous.pop(0)['items'])
         data['previous_evidence'] = previous
     if len(render(data).encode('utf-8')) > limit:
-        raise ValueError('会話を省かずに検査役の入力上限へ収められないため、検査を実行できない')
+        raise InputLimitError('会話を省かずに検査役の入力上限へ収められないため、検査を実行できない')
     return data
 
 
@@ -1307,6 +1320,8 @@ def check(payload, deadline=None):
                 except (OSError, subprocess.SubprocessError, ValueError) as error:
                     failures.append({'family': family,
                                      'reason': f'{family} の検査役を実行できない ({type(error).__name__}: {error})'})
+    except InputLimitError as error:
+        return unchecked(payload, str(error), failure_kind='input_limit')
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         return unchecked(payload, str(error) or type(error).__name__, engine_failures=failures)
     except Exception as error:
@@ -1322,6 +1337,8 @@ def prepare(payload):
     try:
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
             prompt = masked_input(payload, Path(tmp))
+    except InputLimitError as error:
+        return unchecked(payload, str(error), failure_kind='input_limit')
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         return unchecked(payload, str(error) or type(error).__name__)
     except Exception as error:

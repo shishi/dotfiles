@@ -186,7 +186,7 @@ class GateTestCase(unittest.TestCase):
     def assert_unchecked(self, out, draft):
         self.assertEqual(out['status'], 'unchecked')
         self.assertTrue(out['reason'])
-        self.assertTrue(out['text'].startswith('回答の確認を完了できませんでした。'))
+        self.assertTrue(out['text'].startswith('出力検査を実行できなかったため、生成済みの回答を表示します。'))
         self.assertTrue(out['text'].endswith(draft))
         self.assertNotIn(out['reason'], out['text'])
 
@@ -1259,6 +1259,30 @@ class TrimTests(GateTestCase):
         self.assertLessEqual(self.size(data), 5000)
         self.assertEqual(checkpoint['evidence'][0]['output'], old['output'])
 
+    def test_checkpoint_shares_unchanged_evidence_instead_of_exhausting_the_input_budget(self):
+        check = self.load()
+        items = [dict(PYTEST_FAILED, id=f'e{n}', output='x' * 1000) for n in range(5)]
+        checkpoint = {'round': 1, 'stalled': 1, 'bodies': ['前の回答'], 'findings': [], 'evidence': items}
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答',
+                   'evidence': items, 'progress_state': checkpoint}
+        data = check.build_input(payload, 'rules', limit=10000)
+        self.assertLessEqual(self.size(data), 10000)
+        self.assertEqual(data['evidence'], items)
+        self.assertEqual(data['progress_state']['evidence'], [])
+        self.assertEqual(data['progress_state']['evidence_refs'], [f'e{n}' for n in range(5)])
+        self.assertEqual(checkpoint['evidence'], items)
+
+    def test_changed_checkpoint_evidence_remains_available_for_progress_comparison(self):
+        check = self.load()
+        old = dict(PYTEST_FAILED, output='old failure')
+        current = dict(PYTEST_FAILED, output='new failure')
+        payload = {'origin': 'claude', 'draft': '回答', 'evidence': [current],
+                   'progress_state': {'round': 1, 'stalled': 1, 'bodies': ['前の回答'],
+                                      'findings': [], 'evidence': [old]}}
+        data = check.build_input(payload, 'rules')
+        self.assertEqual(data['progress_state']['evidence'], [old])
+        self.assertEqual(data['progress_state'].get('evidence_refs', []), [])
+
     def test_large_messages_count_toward_the_limit(self):
         check = self.load()
         payload = {'origin': 'claude', 'final': True, 'draft': 'd' * 20000,
@@ -1298,6 +1322,7 @@ class TrimTests(GateTestCase):
             'recent_messages': [{'role': 'user', 'text': 'a' * 410000}]})
         self.assertEqual(out['status'], 'unchecked')
         self.assertIn('会話を省かずに', out['reason'])
+        self.assertEqual(out['failure_kind'], 'input_limit')
         self.assertEqual(self.launches(), [])
 
 
