@@ -145,24 +145,21 @@ def queued_input(entry):
 
 
 def message_texts(transcript_path):
-    """会話記録から、利用者と Claude の直近 RECENT_MESSAGES 件の発言 (古い順) と、利用者の最新の依頼を返す。
+    """会話記録から、利用者と Claude の発言 (古い順) と、利用者の最新の依頼を返す。
     最新の依頼は、ターンを始めた利用者の入力と、その後の作業中に送られた入力をつないだもの。依頼を何通かに
-    分けて送ることがあるため。ツールの結果と利用者の入力ではない行は除く。両方がそろうところまで末尾から読む。"""
+    分けて送ることがあるため。ツールの結果と利用者の入力ではない行は除く。"""
     recent = []
     queued = []
     latest_user = None
     try:
         for line in lines_from_end(transcript_path):
-            if len(recent) >= RECENT_MESSAGES and latest_user is not None:
-                break
             try:
                 entry = json.loads(line)
             except ValueError:
                 continue
             text = queued_input(entry)
             if text is not None:
-                if len(recent) < RECENT_MESSAGES:
-                    recent.append({'role': 'user', 'text': text})
+                recent.append({'role': 'user', 'text': text})
                 if latest_user is None:
                     queued.append(text)
                 continue
@@ -173,8 +170,7 @@ def message_texts(transcript_path):
             text = content_text(message.get('content'))
             if not text.strip():
                 continue
-            if len(recent) < RECENT_MESSAGES:
-                recent.append({'role': role, 'text': text})
+            recent.append({'role': role, 'text': text})
             if role == 'user' and latest_user is None:
                 latest_user = '\n\n'.join([text, *queued[::-1]])
     except (OSError, TypeError, ValueError):

@@ -239,13 +239,16 @@ class ClaudeHookTests(unittest.TestCase):
         self.hook('prompt', {'hook_event_name': 'UserPromptSubmit', 'prompt': '次'})
         self.assertEqual(self.shown(self.display('これは効く。', final=True)), 'これは速い。')
 
-    def test_only_the_end_of_a_long_transcript_is_read(self):
-        # 検査役に渡すのは直近の発言と最新の利用者の発言だけなので、記録の前の方は読まない。渡す内容は変えない。
+    def test_conversation_history_survives_many_assistant_messages(self):
+        self.transcript.write_text('', encoding='utf-8')
         filler = {'type': 'user', 'message': {'role': 'user', 'content': [
             {'type': 'tool_result', 'tool_use_id': 'toolu_1', 'content': 'x' * 1000}]}}
         answers = [{'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': f'回答{i}'}]}}
                    for i in range(12)]
-        self.record(*[filler] * 4000, {'type': 'user', 'message': {'role': 'user', 'content': '最新の依頼'}}, *answers)
+        earlier = [{'type': 'user', 'message': {'role': 'user', 'content': text}} for text in
+                   ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに']]
+        self.record(*earlier, *[filler] * 4000,
+                    {'type': 'user', 'message': {'role': 'user', 'content': '許可は取り消す。C の説明だけして'}}, *answers)
         spec = importlib.util.spec_from_file_location('output_gate_claude', HOOK)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -280,9 +283,13 @@ class ClaudeHookTests(unittest.TestCase):
 
         module.Path = CountingPath
         recent, latest_user = module.message_texts(str(self.transcript))
-        self.assertEqual(latest_user, '最新の依頼')
-        self.assertEqual(recent, [{'role': 'assistant', 'text': f'回答{i}'} for i in range(2, 12)])
-        self.assertLess(read[0], self.transcript.stat().st_size // 4)
+        self.assertEqual(latest_user, '許可は取り消す。C の説明だけして')
+        self.assertEqual([m['text'] for m in recent if m['role'] == 'user'],
+                         ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに',
+                          '許可は取り消す。C の説明だけして'])
+        self.assertEqual(recent[-12:], [{'role': 'assistant', 'text': f'回答{i}'} for i in range(12)])
+        self.display('C を説明する', final=True)
+        self.assertEqual(self.checker_calls()[-1]['recent_messages'], recent)
 
     def test_input_sent_while_working_joins_the_request(self):
         # 作業中に送られた入力は、会話記録に queued_command の添付として残る。ターンを始めた入力とつないで依頼にする。

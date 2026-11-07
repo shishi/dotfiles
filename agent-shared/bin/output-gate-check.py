@@ -338,10 +338,23 @@ def messages(payload):
     """検査役へ渡す発言に ID を付ける。抜粋の出どころの照合にも同じ一覧を使う。"""
     items = [{'id': 'request', 'role': 'user', 'origin': 'latest_request', 'text': payload.get('latest_user') or ''}]
     recent = payload.get('recent_messages') or []
-    items += [{'id': f'recent-{n}', 'role': m.get('role', '?'), 'origin': 'recent', 'text': m.get('text', '')}
-              for n, m in enumerate(recent, 1)]
-    items += [{'id': f'start-{n}', 'role': m.get('role', '?'), 'origin': 'turn_start', 'text': m.get('text', '')}
-              for n, m in enumerate(payload.get('turn_start_context') or [], 1)]
+    start = payload.get('turn_start_context') or []
+    recent_items = [{'id': f'recent-{n}', 'role': m.get('role', '?'), 'origin': 'recent', 'text': m.get('text', '')}
+                    for n, m in enumerate(recent, 1)]
+    start_items = [{'id': f'start-{n}', 'role': m.get('role', '?'), 'origin': 'turn_start', 'text': m.get('text', '')}
+                   for n, m in enumerate(start, 1)]
+    prefix = 0
+    while prefix < min(len(start), len(recent)) and start[prefix] == recent[prefix]:
+        prefix += 1
+    contained = start and any(recent[n:n + len(start)] == start for n in range(len(recent) - len(start) + 1))
+    if contained:
+        items += recent_items
+    elif prefix:
+        items += recent_items[:prefix] + start_items[prefix:] + recent_items[prefix:]
+    else:
+        overlap = next((n for n in range(min(len(start), len(recent)), 0, -1)
+                        if start[-n:] == recent[:n]), 0)
+        items += start_items[:len(start) - overlap] + recent_items
     items.append({'id': 'draft', 'role': 'assistant', 'origin': 'draft', 'text': joined(body_list(payload))})
     if payload.get('shown_text'):
         items.append({'id': 'shown', 'role': 'assistant', 'origin': 'shown_text', 'text': payload['shown_text']})
@@ -416,6 +429,8 @@ def build_input(payload, rules, limit=INPUT_LIMIT):
         if checkpoint is not None:
             data['progress_state'] = dict(checkpoint, evidence=previous.pop(0)['items'])
         data['previous_evidence'] = previous
+    if len(render(data).encode('utf-8')) > limit:
+        raise ValueError('会話を省かずに検査役の入力上限へ収められないため、検査を実行できない')
     return data
 
 

@@ -41,7 +41,7 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
                           ターンの証拠 {turn_id, time, records, shown, start}。records は呼び出しと出力 (と取得
                           できなかった範囲の印) を起きた順に、shown は表示済みの途中の文章、start はターンの開始時の
                           会話。セッションごとに直近 10 ターン・24 時間を残す。
-  compaction.json         サーバー側の compaction の項目 (暗号化データの SHA-256) と、その時点の直近の回答の組。
+  compaction.json         サーバー側の compaction の項目 (暗号化データの SHA-256) と、その時点の利用者と assistant の会話の組。
                           compaction の後は要求本文から前の回答が消えるため、検査役へはここから渡す。
   relay.log               種類・判定・時刻の記録。
 """
@@ -82,14 +82,9 @@ HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorizat
 PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
 UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
-RECENT_MESSAGES = 10
 # Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
 INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
 COMPACTION_TYPES = {'compaction', 'context_compaction'}
-KEEP_ANSWERS = 3
-# compaction の組に残す回答の phase。途中経過 (commentary) と回答の断片 (partial_answer) は残さない。
-# phase の無い項目は、phase を送らない版の最終回答として残す。
-FINAL_PHASES = (None, 'final_answer')
 STORE_LIMIT = 1000
 DELEGATED_TTL = 24 * 3600
 STATE_TTL = 24 * 3600      # 差し戻しの状態・続行の登録・保存した証拠を残す時間
@@ -214,8 +209,8 @@ def split_at_compaction(items):
     return items[last], items[last + 1:]
 
 
-def stored_answers(compaction_item):
-    """compaction の項目に結び付けた回答。組が無ければ None。"""
+def stored_conversation(compaction_item):
+    """旧版の answers には依頼と古い回答が無いため、復元できた発言にも欠落の印を付ける。"""
     key = compaction_key(compaction_item)
     if key is None:
         return None
@@ -229,7 +224,9 @@ def stored_answers(compaction_item):
             save_store(store)
         except OSError:
             pass
-    return list(entry.get('answers') or [])
+    if isinstance(entry.get('conversation'), list):
+        return list(entry['conversation']), bool(entry.get('incomplete'))
+    return [{'role': 'assistant', 'text': a} for a in entry.get('answers') or []], True
 
 
 def save_store(store):
@@ -243,17 +240,12 @@ def save_store(store):
 
 
 def remember_compaction(body, output_items):
-    """compaction の応答の項目と、その要求本文の直近の回答を組にして保存する。失敗は OSError。"""
-    compaction_item, rest = split_at_compaction(body.get('input') or [])
-    answers = (stored_answers(compaction_item) or []) if compaction_item else []
-    answers += [input_text(i) for i in rest if isinstance(i, dict) and i.get('type') == 'message'
-                and i.get('role') == 'assistant' and i.get('phase') in FINAL_PHASES]
-    answers = answers[-KEEP_ANSWERS:]
+    conversation, incomplete = conversation_with_compaction(body.get('input') or [])
     with Settings.store_lock:
         store = load_store()
         for item in output_items:
             if isinstance(item, dict) and item.get('type') in COMPACTION_TYPES and compaction_key(item):
-                store[compaction_key(item)] = {'answers': answers, 'used': time.time()}
+                store[compaction_key(item)] = {'conversation': conversation, 'incomplete': incomplete, 'used': time.time()}
         save_store(store)
 
 
@@ -276,29 +268,36 @@ def request_index(items):
 def conversation_of(items, end=None):
     """会話の発言 (依頼と回答) を {role, text} で返す。end までの項目だけを見る。"""
     return [{'role': i['role'], 'text': input_text(i)} for i in items[:end]
-            if is_request(i) or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant')]
+            if is_request(i) or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant'
+                                 and i.get('phase') != 'partial_answer')]
+
+
+def conversation_with_compaction(items):
+    compaction_item, rest = split_at_compaction(items)
+    if compaction_item is None:
+        return conversation_of(items), False
+    saved = stored_conversation(compaction_item)
+    if saved is None:
+        log(event='compaction-pair-missing')
+        return conversation_of(items), True
+    conversation, incomplete = saved
+    before = conversation_of(items[:len(items) - len(rest)])
+    cursor, extra = 0, []
+    # Codex は過去の user 発言を compaction の前にも残す。位置を進めて照合し、同じ回答の別の出現は区別する。
+    for message in before:
+        found = next((n for n in range(cursor, len(conversation)) if conversation[n] == message), None)
+        if found is None:
+            extra.append(message)
+        else:
+            cursor = found + 1
+    return conversation + extra + conversation_of(rest), incomplete or bool(extra)
 
 
 def checker_payload(body, bodies, **extra):
-    items = body.get('input') or []
-    compaction_item, rest = split_at_compaction(items)
-    after = len(items) - len(rest)
-    # 利用者の発言は compaction より前にも保持されて届く。回答は compaction より前の分を保存済みの組から取る。
-    # AGENTS.md・環境の情報と Stop hook の reason は、利用者の依頼ではないので数える前に除く。
-    messages = [i for n, i in enumerate(items) if is_request(i)
-                or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant' and n >= after)]
-    users = [m for m in messages if m.get('role') == 'user']
-    conversation = [{'role': m['role'], 'text': input_text(m)} for m in messages[-RECENT_MESSAGES:]]
-    compacted_note = False
-    if compaction_item is not None:
-        answers = stored_answers(compaction_item)
-        if answers is None:
-            compacted_note = True
-            log(event='compaction-pair-missing')
-        else:
-            conversation = [{'role': 'assistant', 'text': a} for a in answers] + conversation
+    conversation, compacted_note = conversation_with_compaction(body.get('input') or [])
+    users = [m for m in conversation if m.get('role') == 'user']
     programs = body.get('access_programs') or {}
-    payload = {'origin': 'codex', 'latest_user': input_text(users[-1]) if users else '',
+    payload = {'origin': 'codex', 'latest_user': users[-1]['text'] if users else '',
                'recent_messages': conversation, 'bodies': list(bodies), 'final': False,
                'cyber_program': programs.get('cyber') if isinstance(programs, dict) else None,
                'compacted_note': compacted_note}
@@ -455,6 +454,7 @@ def record_turn(sid, tid, items):
     """要求ごとに、利用者の最新の依頼より後の呼び出しと出力のうち保存していないものを足す。新しいターンの最初の
     要求では、ターンの開始時の会話を保存する。セッションに保存済みの証拠が無ければ、依頼より前の呼び出しを
     「前のターン (区別不明)」として取り込む。失敗は OSError。"""
+    start, _ = conversation_with_compaction(items)
     with Settings.store_lock:
         directory = Settings.state_dir / 'turns' / sid
         path = directory / f'{tid}.json'
@@ -464,7 +464,7 @@ def record_turn(sid, tid, items):
         if turn is None:
             known_turns = list(directory.glob('*.json')) if directory.exists() else []
             turn = {'turn_id': tid, 'time': time.time(), 'records': [], 'shown': [],
-                    'start': conversation_of(items, None if index is None else index + 1)[-5:]}
+                    'start': start}
             if not known_turns and index is not None:
                 before = records_from(items[:index])
                 if has_compaction(items[:index]):

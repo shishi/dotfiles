@@ -784,6 +784,26 @@ test('the start of the turn keeps the request a later answer is checked against'
   }
 })
 
+test('earlier requests and authorization reach the checker after many reports, including resume', async ($, on) => {
+  const texts = ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに']
+  const messages: Message[] = texts.map(text => ({ role: 'user', text, toolUses: [] }))
+  const fs = world(on, { messages })
+  const calls = checker(on, fs, checked)
+  tools(on)
+  model(on, [[TEXT(0, '説明する。'), STOP()]])
+  await start($, 'C の説明もして')
+  for (let n = 0; n < 12; n++) messages.push({ role: 'assistant', text: `途中報告${n}`, toolUses: [] })
+  messages.push({ role: 'user', text: '許可は取り消す。C の説明だけして', toolUses: [] })
+  await run($)
+  await run($, { turnId: 'resumed-turn', index: 1 })
+  for (const payload of calls) {
+    expect(payload.recent_messages.filter(m => m.role === 'user').map(m => m.text))
+      .toEqual([...texts, '許可は取り消す。C の説明だけして'])
+    expect(payload.turn_start_context.filter(m => m.role === 'user').map(m => m.text)).toEqual(
+      payload.latest_user === 'C の説明もして' ? [...texts, 'C の説明もして'] : [...texts, '許可は取り消す。C の説明だけして'])
+  }
+})
+
 test('previous turns come from the turn files, kept for 10 turns and 24 hours', async ($, on) => {
   const fs = world(on)
   const now = Date.now()

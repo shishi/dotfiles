@@ -3,11 +3,11 @@
 # エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
 # 外部へ軽微でなく取り返しのつかない影響を与える操作や通常の push は、許可が無ければ実行させない。
 #
-#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の直近のメッセージを保存する
+#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の発言と会話文脈を保存する
 #   command-judge.sh [--cli claude|codex]                   PreToolUse: 判定して該当すれば止める
 #
 # コマンドの語を照合したり構文解析したりはしない。何が起きるかの判断は判定役に任せ、
-# このスクリプトはツール名・入力全文・作業エージェントが述べた目的・利用者の直近のメッセージを渡して結果を適用する。
+# このスクリプトはツール名・入力全文・目的・利用者の発言と会話文脈を渡して結果を適用する。
 #
 # 判定できないときも黙って通さない。判定役を動かせない状態 (codex が無い、ログイン切れ等) は
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
@@ -82,8 +82,8 @@ undecided() {
 run_codex() {
   env -u OPENAI_BASE_URL -u OPENAI_API_KEY -u CODEX_API_KEY COMMAND_JUDGE_ACTIVE=1 \
     "$py_bin" -I "$hook_dir/lib/run-judge.py" "$1" "$judge_cwd" \
-    codex exec --ignore-user-config --ephemeral --ignore-rules -s read-only --skip-git-repo-check \
-    -m gpt-6-luna -c model_reasoning_effort=high -c approval_policy=never -c project_doc_max_bytes=0 \
+    codex exec --ignore-user-config -c 'openai_base_url=""' --ephemeral --ignore-rules -s read-only --skip-git-repo-check \
+    -m gpt-6.1-sol -c model_reasoning_effort=medium -c approval_policy=never -c project_doc_max_bytes=0 \
     --disable shell_tool --disable unified_exec --disable view_image --disable apps --disable plugins \
     -c 'web_search="disabled"' -
 }
@@ -182,7 +182,7 @@ if [ "$mode" = record ]; then
   [ -z "${AGENT_DELEGATED_SESSION:-}" ] || exit 0
   prompt=$(printf '%s' "$input" | jq -j '.prompt // ""' 2>/dev/null)
   assistant_context=""
-  if [ "$cli" = codex ] && find_python; then
+  if find_python; then
     assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" 2>/dev/null)
     case $? in 0) ;; *) assistant_context="" ;; esac
   fi
@@ -198,10 +198,16 @@ if [ "$mode" = record ]; then
     if [ -n "$omitted" ]; then
       prompt="(利用者のメッセージは${omitted}ため省略した)"
       previous=""
+      assistant_context=""
+    else
+      printf '%s' "$assistant_context" | has_secret
+      case $? in
+        0|2) assistant_context="" ;;
+      esac
     fi
   fi
   { printf '%s\n' "$previous" | jq -c 'select(type == "object" and (.at | numbers) and (.text | strings))' 2>/dev/null
-    # 本文と文脈は標準入力で渡す。引数にすると、長いメッセージで記録に失敗する。
+    # 本文と文脈は標準入力で渡し、長い発言を引数の長さ制限へ載せない。
     printf '%s\0%s' "$prompt" "$assistant_context" | jq -Rsc --argjson at "$(date +%s)" 'split("\u0000") | {at: $at, text: .[0], assistant_context: .[1]}'
   } | write_atomic "$prompt_path" || {
     rm -f -- "$prompt_path" 2>/dev/null
@@ -255,12 +261,37 @@ case "$workdir" in
 esac
 shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不明)}"
 
+now=$(date +%s)
+user_history=""
+prompt_path="$state_dir/prompts/$session"
+if valid_session "$session" && [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
+  user_history=$(cat -- "$prompt_path" 2>/dev/null) || user_history=""
+fi
+if [ -n "${AGENT_DELEGATED_SESSION:-}" ]; then
+  user_history=""
+fi
+user_message="(none)"
+if [ -n "$user_history" ]; then
+  # 撤回も含む全履歴を古い順に渡し、承認範囲の判断は判定役に任せる。
+  user_message=$(printf '%s' "$user_history" | jq -rs --argjson now "$now" '
+    map(select(type == "object" and (.at | numbers) and (.text | strings)))
+    | map({minutes_ago: ((($now - .at) / 60) | floor),
+           input: .text, input_context: (.assistant_context // "")})' 2>/dev/null) ||
+    user_message="(none)"
+  [ -n "$user_message" ] || user_message="(none)"
+fi
+
+
+context_args=(--context)
+[ "$cli" != claude ] || context_args+=(--mask)
+assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" 2>/dev/null) ||
+  undecided "会話文脈を秘密情報を伏せた状態で取得できなかった"
+
 # 判定基準を変えたら、それまでの安全判定は使わない。目的の説明や作業ディレクトリが変われば判定役が得る情報も変わるため鍵に含める。
-# 利用者のメッセージは含めない: 安全と判定したものは、利用者の依頼に関係なく安全と判定している。
-key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s' "$shell" "$tool_name" "$tool_input"; } | hash_stdin) &&
+# 会話から実際の効果や宛先を判断するため、その文脈が変わったら再判定する。
+key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s\0%s\0%s' "$shell" "$tool_name" "$tool_input" "$user_message" "$assistant_context"; } | hash_stdin) &&
   [ -n "$key" ] || unjudged hash "判定のキャッシュの鍵を計算できなかった"
 safe_path="$state_dir/safe/$key"
-now=$(date +%s)
 if [ -f "$safe_path" ] && [ ! -L "$safe_path" ] && IFS= read -r cached_at <"$safe_path"; then
   case "$cached_at" in
     ""|*[!0-9]*) ;;
@@ -268,16 +299,6 @@ if [ -f "$safe_path" ] && [ ! -L "$safe_path" ] && IFS= read -r cached_at <"$saf
   esac
 fi
 
-user_message="(none)"
-if valid_session "$session" && [ -f "$state_dir/prompts/$session" ] && [ ! -L "$state_dir/prompts/$session" ]; then
-  # 撤回も含む全履歴を古い順に渡し、承認範囲の判断は判定役に任せる。
-  user_message=$(jq -rs --argjson now "$now" '
-    map(select(type == "object" and (.at | numbers) and (.text | strings)))
-    | map("[\((($now - .at) / 60) | floor) 分前]\n" + (if (.assistant_context // "") != "" then "直前のアシスタントの回答（文脈）:\n\(.assistant_context)\n" else "" end) + "利用者:\n\(.text)")
-    | join("\n\n")' "$state_dir/prompts/$session" 2>/dev/null) ||
-    user_message="(none)"
-  [ -n "$user_message" ] || user_message="(none)"
-fi
 
 # 節の区切りを入力から推測できないようにし、データ側から節を閉じて指示を足せないようにする。
 nonce=$(od -An -tx1 -N8 /dev/urandom 2>/dev/null | tr -d ' \n')
@@ -285,7 +306,7 @@ nonce=$(od -An -tx1 -N8 /dev/urandom 2>/dev/null | tr -d ' \n')
 section() {
   printf '\n<<<%s %s>>>\n%s\n<<<END %s %s>>>\n' "$1" "$nonce" "$2" "$1" "$nonce"
 }
-data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose")
+data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose" && section CONTEXT "$assistant_context")
 
 # Claude のセッションでは、ツール入力は別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
 # 利用者のメッセージは記録時に検査済み。Codex のセッションでは同じ内容が既に Codex のモデルに渡っている。
@@ -299,7 +320,6 @@ fi
 data="$data$(section USER "$user_message")"
 
 # 判定役は両 CLI 共通で codex exec にする。Claude Desktop から起動した子の claude -p は認証できないため。
-# モデルは応答時間を優先して gpt-6-luna にし、推論は high にする (low では変数を経由した再起動を見逃した)。
 # 送信先は既定の OpenAI に固定し (--ignore-user-config で config.toml の接続先も読まない)、認証は利用者が
 # codex login で選んだもの (CODEX_HOME の auth.json) だけを使う。環境変数の API キーへは切り替えない。
 judge_cwd="$state_dir/judge-cwd"
@@ -343,15 +363,15 @@ fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
 if [ "$danger" = false ] && [ "$external" = false ]; then
-  # 利用者のメッセージに関係なく安全と判定したものだけを再利用する。
+  # 同じ操作と会話文脈で安全と判定した結果だけを再利用する。
   printf '%s\n' "$now" | write_atomic "$safe_path" || true
   exit 0
 fi
 [ "$(jq -r .user_requested <<<"$verdict")" = true ] && exit 0
 if [ "$danger" = true ]; then
   [ "$external" = true ] &&
-    decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで、両方の操作を対象を明示して依頼してもらってから実行し直すこと"
-  decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで明示的に依頼してもらってから実行し直すこと"
+    decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけ両方の操作と対象への許可を得ること"
+  decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけこの操作と対象への許可を得ること"
 fi
 # Claude は利用者に確認させ、その場の許可で実行させる。Codex の PreToolUse は "ask" を受け付けないので止める。
 [ "$cli" = codex ] &&

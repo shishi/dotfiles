@@ -14,7 +14,6 @@ const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as string | null)
 
 const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
-const RECENT_MESSAGES = 10
 // 検査全体の締切 (秒)。秘密情報の検査 (gitleaks) と二つの系統の検査役が、この中に収まる。先に試す系統には
 // 残りの半分、次の系統には残り全てを渡す (検査処理と同じ分け方)。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
 const DEFAULT_TIMEOUT_S = 45
@@ -181,12 +180,10 @@ async function sessionMessages($: EngineInterface): Promise<Said[]> {
 
 const spoken = (messages: Said[]) => messages.filter(m => m.text.trim() !== '').map(m => ({ role: m.role, text: m.text }))
 
-// 利用者の入力の直前の 1 往復 (最後の利用者の発言とその後の回答)。今の入力が記録の末尾にあれば除く。
-function lastExchange(messages: Said[], prompt: string): HoldingMessage[] {
+function precedingConversation(messages: Said[], prompt: string): HoldingMessage[] {
   const said = spoken(messages)
   if (said.at(-1)?.role === 'user' && said.at(-1)?.text === prompt) said.pop()
-  const lastUser = said.map(m => m.role).lastIndexOf('user')
-  return lastUser < 0 ? said.slice(-2) : said.slice(lastUser)
+  return said
 }
 
 const newTurn = (latestUser: string, context: HoldingMessage[], now: number): Turn => ({
@@ -200,7 +197,7 @@ async function readTurn($: EngineInterface, turnId: string): Promise<Turn> {
   // turn.start を聞いていない (mod が途中で読み込まれた、resume の後など): 記録から作る。
   const said = spoken(await sessionMessages($))
   const latest = said.filter(m => m.role === 'user').at(-1)?.text ?? ''
-  return newTurn(latest, [], Date.now())
+  return newTurn(latest, said, Date.now())
 }
 
 // --- 証拠 ---
@@ -639,7 +636,7 @@ async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies
     continuation: 'withhold' | 'none'): Promise<Payload> {
   const said = spoken(await sessionMessages($))
   return {
-    origin: 'claude', bodies, latest_user: turn.latest_user, recent_messages: said.slice(-RECENT_MESSAGES),
+    origin: 'claude', bodies, latest_user: turn.latest_user, recent_messages: said,
     turn_start_context: turn.turn_start_context, shown_text: turn.shown,
     evidence: final ? await currentEvidence($, turn) : [],
     previous_evidence: final ? await previousEvidence($, turnId, turn) : [],
@@ -687,7 +684,7 @@ export const register: Register = on => {
     if (await skip($, e.agentId)) return next(e)
     try {
       const messages = await sessionMessages($)
-      const context = [...lastExchange(messages, e.text), ...(e.text ? [{ role: 'user', text: e.text }] : [])]
+      const context = [...precedingConversation(messages, e.text), ...(e.text ? [{ role: 'user', text: e.text }] : [])]
       const latest = e.text || (spoken(messages).filter(m => m.role === 'user').at(-1)?.text ?? '')
       await $.state.set({ plugin: 'output-gate', key: 'turn', id: e.turnId }, newTurn(latest, context, Date.now()))
       if (e.agentId === undefined) await update($, active, () => e.turnId)

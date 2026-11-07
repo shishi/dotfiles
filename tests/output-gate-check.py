@@ -1274,6 +1274,32 @@ class TrimTests(GateTestCase):
         data = check.build_input(payload, 'rules', limit=10**9)
         self.assertEqual(data['evidence'], payload['evidence'])
 
+    def test_overlapping_start_and_current_history_is_sent_once(self):
+        check = self.load()
+        history = [{'role': 'user', 'text': 'A を変更して'}, {'role': 'assistant', 'text': '実行していい？'},
+                   {'role': 'user', 'text': 'y'}, {'role': 'assistant', 'text': 'B も変更していい？'},
+                   {'role': 'user', 'text': 'y'}]
+        payload = {'draft': '進める', 'recent_messages': history, 'turn_start_context': history[:3]}
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+        payload['turn_start_context'] = history[2:4]
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+        payload['turn_start_context'] = history[:3]
+        payload['recent_messages'] = history[2:]
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+
+    def test_untrimmable_history_returns_unchecked_without_starting_an_engine(self):
+        out = self.run_check('説明する', json.dumps(answer()), extra={
+            'recent_messages': [{'role': 'user', 'text': 'a' * 410000}]})
+        self.assertEqual(out['status'], 'unchecked')
+        self.assertIn('会話を省かずに', out['reason'])
+        self.assertEqual(self.launches(), [])
+
 
 class EngineTests(GateTestCase):
     """検査役の系統の順序、代わりの系統への切り替え、起動行と環境。"""

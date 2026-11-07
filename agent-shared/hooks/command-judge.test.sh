@@ -204,6 +204,19 @@ STUB_OUTPUT=$SAFE
 pre_tool_use '"ssh dns-host apply"' | bash "$HOOK" --cli codex >/dev/null
 grep -q 'DNS サーバーの設定を反映していい？' "$work/judge-input" && grep -q 'いい' "$work/judge-input" ||
   fail 'the preceding assistant question and the user approval must reach the judge together'
+"$py_bin" -I - "$work/judge-input" <<'PY_PAIRED'
+import json, re, sys
+text = open(sys.argv[1]).read()
+user = re.search(r'<<<USER ([^>]+)>>>\n(.*?)\n<<<END USER \1>>>', text, re.S).group(2)
+try:
+    rows = json.loads(user)
+except ValueError:
+    raise AssertionError('USER must preserve each input with its recorded context')
+assert rows[0]['input'] == 'いい'
+assert rows[0]['input_context'] == 'DNS サーバーの設定を反映していい？'
+context = re.search(r'<<<CONTEXT ([^>]+)>>>\n(.*?)\n<<<END CONTEXT \1>>>', text, re.S).group(2)
+assert 'DNS サーバーの設定を反映していい？' not in context
+PY_PAIRED
 echo 'ok: the preceding assistant question accompanies the user approval'
 
 rm -f "$work/state/prompts/s1"
@@ -211,9 +224,10 @@ jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"fi
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"その話は中止"}]}}' >>"$work/transcript.jsonl"
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
-pre_tool_use '"ssh another-host apply"' | bash "$HOOK" --cli codex >/dev/null
-! grep -q '古い提案' "$work/judge-input" || fail 'an intervening user message must not attach an old proposal'
-echo 'ok: an intervening user message prevents stale proposal association'
+pre_tool_use '"ssh another-host apply"' | jq --arg t "$work/transcript.jsonl" '. + {transcript_path:$t}' | bash "$HOOK" --cli codex >/dev/null
+grep -q '古い提案' "$work/judge-input" && grep -q 'その話は中止' "$work/judge-input" || fail 'the judge needs both the proposal and its cancellation'
+jq -se '.[-1].text == "いい" and .[-1].assistant_context == ""' "$work/state/prompts/s1" >/dev/null || fail 'a cancelled proposal must not become the context of a later answer'
+echo 'ok: cancellation is retained without attaching the old proposal to a later answer'
 
 rm -f "$work/state/prompts/s1"
 record 'origin main への push を許可する' --cli codex
@@ -241,6 +255,13 @@ assert 'Q' * 150000 + '?' in text, 'the complete large assistant context reaches
 assert 'origin main への push を許可する' in text, 'the earlier permission remains intact'
 PY_LARGE
 echo 'ok: assistant context is passed without shell argument limits'
+
+record 'origin main への push を許可する'
+jq -nc --arg token "$token" '{type:"attachment",attachment:{type:"queued_command",origin:{kind:"human"},prompt:("push は取り消す。送信しないで " + $token)}}' >"$work/transcript.jsonl"
+pre_tool_use '"git push origin main"' | jq --arg t "$work/transcript.jsonl" '. + {transcript_path:$t}' | bash "$HOOK" >/dev/null
+grep -q 'push は取り消す。送信しないで' "$work/judge-input" || fail 'queued revocation survives secret masking'
+! grep -q "$token" "$work/judge-input" || fail 'queued secret is never sent'
+echo 'ok: queued revocation survives while its secret is masked'
 
 record 'push して'
 record "push はしないで $token" >/dev/null
@@ -343,3 +364,12 @@ for config in claude/settings.json codex/hooks.json; do
   jq -e '[.. | strings | select(test("gh-body-file-guard"))] | length == 0' "$HOOK_DIR/../../$config" >/dev/null || fail "$config no longer runs the pattern-based gh guard"
   echo "ok: $config registers the judge and the prompt recorder"
 done
+
+rm -f "$work/calls" "$work/state/safe/"* "$work/state/judge-down-"*
+STUB_EXIT=0 STUB_AUTH_FAIL= STUB_OUTPUT=$SAFE
+record 'この作業の状態を調べて' --cli codex
+pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
+record '宛先の変更はせず、引き続き確認して' --cli codex
+pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
+[ "$(calls)" = 2 ] || fail 'a changed conversation must be presented to the judge instead of reusing the old verdict'
+echo 'ok: a safe verdict is bound to the conversation used to judge its effect'

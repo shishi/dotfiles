@@ -404,6 +404,34 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(texts, ['答え1', '答え2'])
         self.assertFalse(sent['compacted_note'])
 
+    def test_compaction_keeps_requests_questions_and_answers_in_order(self):
+        original = [self.user('A と B を修正して'), self.assistant('push まで進めていい？')]
+        original += [self.assistant(f'追加の説明{n}') for n in range(5)]
+        self.compact(original, 'ENC-CONTEXT')
+        compacted = [self.user('A と B を修正して'),
+                     {'type': 'compaction', 'encrypted_content': 'ENC-CONTEXT'}, self.user('うん')]
+        sent = self.turn_after(compacted)
+        expected = [{'role': m['role'], 'text': input_text(m)} for m in original] + [{'role': 'user', 'text': 'うん'}]
+        self.assertEqual(sent['recent_messages'], expected)
+        self.assertFalse(sent['compacted_note'])
+        store = json.loads((self.state / 'compaction.json').read_text(encoding='utf-8'))
+        entry = next(iter(store.values()))
+        self.assertEqual(entry['conversation'], expected[:-1])
+        self.assertNotIn('answers', entry)
+
+    def test_legacy_compaction_answers_remain_available_with_a_gap_notice(self):
+        import hashlib
+        key = hashlib.sha256(b'ENC-LEGACY').hexdigest()
+        (self.state / 'compaction.json').write_text(json.dumps({key: {'answers': ['以前の回答'], 'used': time.time()}}),
+                                                    encoding='utf-8')
+        sent = self.turn_after([self.user('以前の依頼'), {'type': 'compaction', 'encrypted_content': 'ENC-LEGACY'},
+                                self.user('続けて')])
+        self.assertIn({'role': 'assistant', 'text': '以前の回答'}, sent['recent_messages'])
+        self.assertTrue(sent['compacted_note'])
+        self.compact([{'type': 'compaction', 'encrypted_content': 'ENC-LEGACY'}, self.user('追記')], 'ENC-NEW')
+        sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC-NEW'}, self.user('続けて')])
+        self.assertTrue(sent['compacted_note'])
+
     def test_compaction_pairs_survive_restart(self):
         self.compact([self.user('q1'), self.assistant('答え1')], 'ENC1')
         self.restart_relay()
@@ -605,13 +633,13 @@ class RelayTests(unittest.TestCase):
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC9'}, self.user('q2')])
         self.assertIn('答え1', [t['text'] for t in sent['recent_messages']])
 
-    def test_commentary_not_kept_for_compaction(self):
-        commentary = dict(self.assistant('途中経過'), phase='commentary')
+    def test_commentary_keeps_questions_and_plans_for_compaction(self):
+        commentary = dict(self.assistant('この計画で進めていい？'), phase='commentary')
         self.compact([self.user('q1'), self.assistant('答え1'), commentary], 'ENC7')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC7'}, self.user('q2')])
         texts = [t['text'] for t in sent['recent_messages']]
         self.assertIn('答え1', texts)
-        self.assertNotIn('途中経過', texts)
+        self.assertIn('この計画で進めていい？', texts)
 
     def test_multi_part_message_checked_per_part(self):
         texts = ['これは効く。', '次も効く。']
@@ -867,7 +895,7 @@ class RelayTests(unittest.TestCase):
         self.turn(body={'model': 'm', 'stream': True, 'input': items})
         payload = self.checker_inputs()[-1]
         texts = [turn['text'] for turn in payload['recent_messages']]
-        self.assertEqual(texts, [t for n in range(1, 6) for t in (f'質問{n}', f'回答{n}')])
+        self.assertEqual(texts, [t for n in range(6) for t in (f'質問{n}', f'回答{n}')])
         self.assertEqual(payload['latest_user'], '質問5')
 
     def review_with_finding(self, **changes):
@@ -1412,6 +1440,18 @@ class RelayTests(unittest.TestCase):
             self.assertIn('元の依頼: A と B を直して', texts)
             self.assertIn('計画: A を直して B を直す', texts)
             self.assertEqual(sent['latest_user'], 'じゃあ進めて')
+
+    def test_earlier_requests_and_authorization_survive_long_conversations(self):
+        start = [self.user('A と B を修正して'), self.user('この作業の push は許可する'),
+                 self.assistant('A から作業する'), self.user('B も忘れずに')]
+        start += [self.assistant(f'途中報告{n}') for n in range(12)]
+        start += [self.user('その許可は取り消す。今は C の説明だけして')]
+        self.answer('C の説明', body={'input': start})
+        sent = self.checker_inputs()[-1]
+        for field in ('recent_messages', 'turn_start_context'):
+            self.assertEqual([m['text'] for m in sent[field] if m['role'] == 'user'],
+                             ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに',
+                              'その許可は取り消す。今は C の説明だけして'])
 
     def test_compaction_keeps_the_saved_evidence(self):
         items = [self.user('元の依頼'), self.exec_call('c1', 'await exec("make test")'), self.exec_output('c1', 'passed')]
