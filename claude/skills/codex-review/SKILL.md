@@ -5,6 +5,8 @@ description: 最上位の Claude Code から Codex CLI へ correctness・adversa
 
 # Codex レビューエンジンの接続
 
+担当の割当・起動前に `agent-delegation` を使い、該当する参照本文で認証・送信先・モデル選択・実行記録を確認します。
+
 Codex CLI を独立レビューエンジンとして使う。観点はこの skill には無い —
 `~/.claude/agents/<perspective>-reviewer.md` が単一ソース(Claude エンジンと共用)。
 
@@ -24,7 +26,7 @@ subagent が結果を返さないときの差し替え先として使う。前�
 
 ## 実行条件
 
-送信の許可と承認要求の組成は AGENTS.md の「相互委譲の事前承認」に従う。
+送信の許可と承認要求の組成は AGENTS.md の事前送信承認と `agent-delegation` の認証・送信先確認に従う。
 OpenAI の公式サービスへの対象範囲内の送信は事前承認済み。プロンプトと、CLI が追加取得する
 共通指示・関連記憶・対象ファイル・コマンド出力を含めて範囲を確認する。
 
@@ -51,7 +53,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    (例: `${TMPDIR:-/tmp}/codex-review-prompt.md`。repo 内に置くと untracked としてレビュー対象に
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
-   失敗しうるため使わない)。モデルは呼び出し側が AGENTS.md と `review-gate` の許容候補から選ぶ。
+   失敗しうるため使わない)。モデルは呼び出し側が `agent-delegation` と `review-gate` の許容候補から選ぶ。
    以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` を
    `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
    `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
@@ -82,7 +84,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    ```
    Git repo 外で実行する場合は、上のコマンドに `--skip-git-repo-check` を付ける。
    `--json` のイベントと `-o` の最終レビュー本文を分離し、既存の本文受領を維持します。
-   記録は AGENTS.md の private state 書込経路を使います。保存失敗なら結果を保全して
+   記録は `agent-delegation` の実行記録の書込経路を使います。保存失敗なら結果を保全して
    記録だけを回復します。終了コード 0 と空でない最終本文を確認し、イベントに失敗がある場合や
    hook 拒否・入力不足の返答は clean と扱いません。取得できる実モデルの metadata と指定値を
    照合し、取得できなければ実モデル未確認とします。CLI 成功はレビュー合格ではなく、本文と
