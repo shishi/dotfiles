@@ -81,7 +81,7 @@ HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorizat
        'accept-encoding'}
 PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
-UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
 # Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
 INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
 COMPACTION_TYPES = {'compaction', 'context_compaction'}
@@ -537,7 +537,10 @@ def restore_notices(items, entries):
 
 
 def engine_record(result):
-    return {'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
+    failure = result.get('failure_kind')
+    if failure not in ('input_limit', 'unavailable'):
+        failure = 'unavailable' if result.get('status') == 'unchecked' else None
+    return {'failure_kind': failure, 'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
             'dropped': result.get('dropped') or [], 'progress': result.get('progress'),
             'independent_recheck': result.get('independent_recheck')}
 
@@ -1160,11 +1163,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.result_record = engine_record(result)
             if result.get('status') == 'unchecked':
                 return [UNAVAILABLE + bodies[0], *bodies[1:]]
-            if result.get('findings'):
-                corrected = result.get('corrected_bodies')
-                shown = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-                shown[0] = UNAVAILABLE + shown[0]
-                return shown
             return result['bodies']
         sid, tid, turn = self.turn_key
         gate = read_json(gate_path(sid, tid))
@@ -1194,10 +1192,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         texts = result.get('bodies')
         if result.get('status') == 'unchecked':
             texts = [UNAVAILABLE + bodies[0], *bodies[1:]]
-        elif texts is not None and result.get('findings') and not result.get('stopped'):
-            corrected = result.get('corrected_bodies')
-            texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-            texts[0] = UNAVAILABLE + texts[0]
         if texts is None:
             source = next(key[0] for key, value in collect_drafts(held).items() if value.strip())
             marker = 'msg_' + os.urandom(16).hex()
@@ -1330,6 +1324,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         record = self.result_record or {}
         log(event='checked', mode=mode, items=len(results), check_dur=round(time.time() - check_started, 3),
             engine=record.get('engine'), engine_failures=record.get('engine_failures') or [],
+            failure_kind=record.get('failure_kind'),
             dropped=len(record.get('dropped') or []),
             dropped_reasons=[d.get('reason') for d in record.get('dropped') or [] if isinstance(d, dict)],
             recheck=record.get('recheck'),

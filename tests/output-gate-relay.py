@@ -18,7 +18,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 RELAY = REPO / 'agent-shared/bin/output-gate-relay.py'
 PREFIX = '/backend-api/codex'
-UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
 
 
 def free_port():
@@ -739,6 +739,9 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn()
         text = self.final_text(events)
         self.assertEqual(text, UNAVAILABLE + 'これは効く。')
+        checked = [json.loads(line) for line in (self.state / 'relay.log').read_text().splitlines()
+                   if json.loads(line).get('event') == 'checked']
+        self.assertEqual(checked[-1]['failure_kind'], 'unavailable')
 
     def test_partial_answer_not_kept_for_compaction(self):
         partials = [dict(self.assistant(f'断片{n}'), phase='partial_answer') for n in range(3)]
@@ -1114,7 +1117,7 @@ class RelayTests(unittest.TestCase):
         self.answer('続きの回答')
         self.assertIn('途中まで', self.checker_inputs()[-1]['shown_text'])
 
-    def test_incomplete_that_ends_the_turn_hides_the_findings(self):
+    def test_incomplete_that_ends_the_turn_preserves_the_checked_findings(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
@@ -1123,13 +1126,13 @@ class RelayTests(unittest.TestCase):
         sent = self.checker_inputs()[-1]
         self.assertTrue(sent['final'])
         self.assertEqual(sent['continuation'], 'none')
-        self.assertEqual(self.final_text(events), UNAVAILABLE + '全部確認済み')
+        self.assertEqual(self.final_text(events), '全部確認済み\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
         self.assertIsNone(self.gate_state())
 
-    def test_missing_turn_identifier_hides_the_findings(self):
+    def test_missing_turn_identifier_preserves_the_checked_findings(self):
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         text = self.final_text(self.answer('全部確認済みだよ', turn_id=None))
-        self.assertEqual(text, UNAVAILABLE + '全部確認済みだよ')
+        self.assertEqual(text, '全部確認済みだよ\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
 
     def substituted(self):
         self.register()

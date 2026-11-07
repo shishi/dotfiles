@@ -3,7 +3,7 @@ import type { On, TurnStepChunk } from 'claude-code'
 
 const STEP = { turnId: 't1', index: 0, model: 'm', messageCount: 2 } as const
 const PREFIX = '[出力ゲート: 検査できませんでした'
-const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+const UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
 const GATE_TOOL = 'mcp__output-gate__gate_findings'
 const NOT_ISSUED = '出力ゲートが出した呼び出しではなく、検査は行われていない'
 const UNMET_TEXT = '出力ゲート: 次の点は確かめられていません\n- 確認していない主張: 「全部通った」'
