@@ -39,6 +39,8 @@ description: 変更作業の着手時・工程の切替時と、superpowers の�
 
 原因調査・テストは次の条件で作業へ組み込みます。
 
+- 方式選定・実装着手・高コスト処理・再試行の前に、判断を左右する未確認事項があれば [investigation-discipline](../investigation-discipline/SKILL.md) の「次の操作を選ぶ前に確認する」を使います。既存資料・現物で得られる事実を回収してから、その結果に基づいて次の工程を選びます。
+
 - 不具合・想定外の挙動では、修正案の前に [investigation-discipline](../investigation-discipline/SKILL.md) と `superpowers:systematic-debugging` で観測・原因・既存保証を確認し、原因に対応する設計・計画へ戻します。調査だけの依頼を実装へ広げません。
 - テストを作成・変更すると決めたら [test-red-first](../test-red-first/SKILL.md) と `superpowers:test-driven-development` で赤 → 緑 → 必要な整理を進めます。既存実装を機械的に削除せず、必要な旧版で赤を確認します。テストを追加するかは共通指示で判断し、文書変更に製品テストを一律に増やしません。
 - 受入の準備は工程 1 から `review-gate` に従って独立担当が始めます。上流の手順と別の実装・レビューを重ねず、同じ対象・目的・前提・証拠が一致する結果を組み込みます。
