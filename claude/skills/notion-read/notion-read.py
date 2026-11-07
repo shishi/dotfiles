@@ -82,7 +82,12 @@ def to_id(arg):
 
 
 def rich_text(payload):
-    return "".join(x.get("plain_text", "") for x in payload.get("rich_text", []))
+    parts = []
+    for item in payload.get("rich_text", []):
+        text = item.get("plain_text", "")
+        href = item.get("href")
+        parts.append(f"[{text}]({href})" if href and href != text else text)
+    return "".join(parts)
 
 
 PREFIX = {
@@ -91,7 +96,6 @@ PREFIX = {
     "heading_3": "### ",
     "bulleted_list_item": "- ",
     "numbered_list_item": "- ",
-    "to_do": "- [ ] ",
     "quote": "> ",
     "toggle": "▸ ",
     "callout": "! ",
@@ -114,17 +118,28 @@ def walk(block_id, depth, state):
                 txt = f"[child_page: {payload.get('title', '')}] id={b['id']}"
             elif t == "child_database":
                 txt = f"[child_database: {payload.get('title', '')}] id={b['id']}"
+            elif t == "link_to_page":
+                reference_type = payload.get("type", "")
+                txt = f"[link_to_page: {reference_type}] id={payload.get(reference_type, b['id'])}"
             elif t == "table_row":
                 txt = " | ".join(
-                    "".join(x.get("plain_text", "") for x in cell)
+                    rich_text({"rich_text": cell})
                     for cell in payload.get("cells", [])
                 )
             elif t == "code":
                 txt = "```\n" + rich_text(payload) + "\n```"
+            elif isinstance(payload.get("url"), str):
+                caption = rich_text({"rich_text": payload.get("caption", [])})
+                txt = (caption + " " if caption else "") + payload["url"]
             else:
                 txt = rich_text(payload)
+                if "rich_text" not in payload:
+                    txt = f"[{t}: テキスト表示の対象外] id={b['id']}"
             if txt:
-                print("  " * depth + PREFIX.get(t, "") + txt)
+                prefix = PREFIX.get(t, "")
+                if t == "to_do":
+                    prefix = "- [x] " if payload.get("checked") else "- [ ] "
+                print("  " * depth + prefix + txt)
                 state["n"] += 1
             if b.get("has_children") and t not in ("child_page", "child_database"):
                 if depth < state["max_depth"]:

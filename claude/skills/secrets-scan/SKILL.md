@@ -19,21 +19,31 @@ worktree vs HEAD の全変更 + untracked ファイル。staged だけを見る�
 
 ## 手順
 
-1. 対象列挙:
+1. repo ルートへ移動した同じサブシェルで、対象の列挙と検査を行う。
+   NUL 区切りで空白入りの名前を扱い、一時一覧は実行ごとに分ける。
+   `.gitleaks.toml` は明示指定し、対象の読取失敗を検出ゼロとして扱わない。
    ```bash
-   { git diff --name-only -z --diff-filter=d HEAD; git ls-files --others --exclude-standard -z; } > "${TMPDIR:-/tmp}/secrets-scan-files.z"
-   ```
-2. 各対象ファイルを検査(NUL 区切りで空白入りファイル名にも安全。repo ルートの
-   `.gitleaks.toml` は明示指定しないと読まれない。検出があれば最終 exit 1):
-   ```bash
-   cfg=(); [ -f "$(git rev-parse --show-toplevel)/.gitleaks.toml" ] && cfg=(-c "$(git rev-parse --show-toplevel)/.gitleaks.toml")
+   (
+   scan_root=$(git rev-parse --show-toplevel) || exit 1
+   cd "$scan_root" || exit 1
+   scan_list=$(mktemp "${TMPDIR:-/tmp}/secrets-scan.XXXXXX") || exit 1
+   trap 'rm -f "$scan_list"' EXIT
+   { git diff --name-only -z --diff-filter=d HEAD && git ls-files --others --exclude-standard -z; } > "$scan_list" || exit 1
+   cfg=(); [ ! -f .gitleaks.toml ] || cfg=(-c "$scan_root/.gitleaks.toml")
    found=0
    while IFS= read -r -d '' f; do
-     gitleaks detect --no-git --source "$f" "${cfg[@]}" --exit-code 1 --no-banner || { echo "LEAK: $f"; found=1; }
-   done < "${TMPDIR:-/tmp}/secrets-scan-files.z"
+     if [ ! -f "$f" ] || [ ! -r "$f" ]; then
+       printf 'READ FAILED: %s\n' "$f" >&2
+       found=1
+       continue
+     fi
+     gitleaks detect --no-git --source "$f" "${cfg[@]}" --exit-code 1 --no-banner || { printf 'SCAN FAILED: %s\n' "$f" >&2; found=1; }
+   done < "$scan_list"
    [ "$found" -eq 0 ]
+   )
    ```
-3. 検出があれば該当箇所を除去・置換して再スキャン。**検出ゼロになるまで通過しない。**
+2. 検出があれば該当箇所を除去・置換して再スキャン。読取・実行失敗は原因を解消する。
+   **全対象を読み取って検査でき、検出ゼロになるまで通過しない。**
 
 ## gitleaks が無い場合
 

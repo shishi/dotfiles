@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # claude/skills と codex/skills の両方に存在する skill は、エージェント固有名
-# (claude / codex)の差し替えを除いて同一内容である契約を検証する。
-# skill はディレクトリ走査で発見され path 参照できないため複製配置が必然であり、
-# この検査が複製間の意味的ドリフトを検出する唯一の機構になる。
+# (claude / codex)とホスト固有の frontmatter を除いて同一内容である契約を検証する。
+# 両ホストが各自のディレクトリから skill を発見するため、配布間のドリフトを検査する。
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -10,20 +9,17 @@ PASS=0
 FAIL=0
 
 normalize() { # $1=file
-  LC_ALL=C sed -e 's/[Cc][Ll][Aa][Uu][Dd][Ee]/AGENT/g' -e 's/[Cc][Oo][Dd][Ee][Xx]/AGENT/g' "$1"
+  # Codex の policy を宣言する agents/openai.yaml は同ファイル同士で比較する。
+  LC_ALL=C awk '
+    $0 == "---" { delimiters++ }
+    !(delimiters == 1 && /^disable-model-invocation:/) { print }
+  ' "$1" | LC_ALL=C sed -e 's/[Cc][Ll][Aa][Uu][Dd][Ee]/AGENT/g' -e 's/[Cc][Oo][Dd][Ee][Xx]/AGENT/g'
 }
-
-# 固有名の差し替えを超えて、プラットフォーム機構の違いで本文が構造的に異なる
-# ペア。除外は「意図した差」の宣言であり、追加時は理由を書く。
-# - grill-me: Claude は Skill tool 呼び出し + disable-model-invocation、
-#   codex は相対パスで grilling を読む指示
-exempt="grill-me"
 
 for dir in "$REPO"/codex/skills/*/; do
   name=$(basename "$dir")
   other="$REPO/claude/skills/$name"
   [ -d "$other" ] || continue
-  case " $exempt " in *" $name "*) continue ;; esac
 
   # ファイル構成の一致
   files_codex=$(cd "$dir" && find . -type f | sort)
