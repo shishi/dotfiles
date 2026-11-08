@@ -202,7 +202,7 @@ class ContextTests(unittest.TestCase):
     def test_joint_judgment_retains_new_live_items_without_duplicate_keep_output(self):
         ready=self.ready();data=self.packet(ready);user=data['users'][0]['ref']
         item=dict(id='encoding',kind='constraint',text='Use UTF-8',refs=[user],related=[],target=dict(name='output',revision_refs=[]),validity='current')
-        result=self.reply(ready,dict(kind='judgment',user_coverage=[data['user_scope']['ref']],additions=[item],decisions=[],catalog_coverage=[],unresolved=[],focus_refs=[],answer_coverage=[a['ref'] for a in data['answers']],item_coverage=['encoding'],claims=[dict(id='answer',answer_ref=data['answers'][0]['ref'],text='Done.',requirement_ids=['encoding'],evidence=[],verdict='nonfactual')],findings=[],replacements=[],progress=dict(state='unknown',reason='fixture'),focus_candidates=[]))
+        result=self.reply(ready,dict(kind='judgment',additions=[item],decisions=[],catalog_coverage=[],unresolved=[],focus_refs=[],claims=[dict(id='answer',answer_ref=data['answers'][0]['ref'],text='Done.',requirement_ids=['encoding'],evidence=[],verdict='nonfactual')],findings=[],replacements=[],progress=dict(state='unknown',reason='fixture'),focus_candidates=[]))
         self.assertEqual(result['status'],'checked',result.get('reason'))
         self.assertEqual(result['context_state']['items'],[item])
         self.assertEqual(len(result['context_metrics']['inputs']),1)
@@ -443,6 +443,15 @@ class ContextTests(unittest.TestCase):
         self.assertNotIn('users', data)
         self.assertEqual(first['progress_state']['evidence'], [])
         self.assertEqual(first['progress_state']['bodies'], [])
+
+    def test_live_assessment_binds_original_to_existing_obligation_once(self):
+        self.live_state()
+        self.payload.update(turn_id='follow-up', request_id='follow-up', latest_user='Keep using UTF-8.')
+        ready = self.ready(); data = self.packet(ready); user = data['users'][0]['ref']
+        result = self.reply(ready, dict(kind='update', user_assessments=[dict(refs=[user], disposition='live', item_ids=['encoding'], resolution_refs=[], reason='Reaffirms the active encoding constraint')], decisions=[dict(item_id='encoding', action='keep', basis='current', refs=[], reason='Still active')], additions=[], catalog_coverage=[], unresolved=[], focus_refs=[]))
+        self.assertEqual(result['status'], 'ready')
+        self.assertIsNone(self.packet(result)['validation_feedback'])
+        self.assertIn(user, result['transaction']['candidate_state']['items'][0]['refs'])
 
     def test_new_user_cannot_silently_drop_old_constraint(self):
         self.live_state()
