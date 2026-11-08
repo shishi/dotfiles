@@ -1,6 +1,6 @@
 ---
 name: agent-delegation
-description: 同じツール内の子や別 CLI へ作業・レビュー・受入を割り当てる前、委譲や長いバックグラウンド実行を起動・観測するとき、利用不能なモデルを代替するときに使います。
+description: 同じツール内の子や別 CLI へ作業・レビュー・受入を割り当てる前、委譲や長いバックグラウンド実行を起動・観測するとき、待機へ移る直前、利用不能なモデルを代替するときに使います。
 ---
 
 # エージェントへの作業割当
@@ -13,7 +13,7 @@ description: 同じツール内の子や別 CLI へ作業・レビュー・受�
 
 | 場面 | 必須の参照 |
 |---|---|
-| 委譲・レビュー・受入・長いバックグラウンド実行の割当と観測 | [作業の割当・観測・利用枠と履歴](references/execution.md) |
+| 委譲・レビュー・受入・長いバックグラウンド実行の割当、観測、待機直前の判断 | [作業の割当・観測・利用枠と履歴](references/execution.md) |
 | Codex 内の子を起動 | [Codex の子とモデル選択](references/codex-children.md) |
 | Claude 内の子、または最上位の Claude から Codex への委譲を選択 | [Claude Code の委譲とモデル選択](references/claude-children.md) |
 | 別 CLI を一般作業・レビュー・対話で起動 | [認証方式と送信先の確認](references/authentication.md) |

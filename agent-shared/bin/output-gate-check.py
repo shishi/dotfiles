@@ -64,20 +64,25 @@
   {"first": "claude" | "codex" | "opposite" | "same", "codex": {"model": ..., "effort": ...}, "claude": {"model": ..., "effort": ...}}
 """
 import json
+import importlib.util
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import deepcopy
 import os
 from pathlib import Path
 import re
 import subprocess
+import threading
 import sys
 import tempfile
 import time
 import unicodedata
 
 BIN_DIR = Path(__file__).resolve().parent
+_context_spec = importlib.util.spec_from_file_location('output_gate_context', BIN_DIR / 'output_gate_context.py')
+context = importlib.util.module_from_spec(_context_spec)
+_context_spec.loader.exec_module(context)
 RUN_JUDGE = BIN_DIR.parent / 'hooks' / 'lib' / 'run-judge.py'
 DEFAULT_TIMEOUT = 45
-# 先に試す系統に渡す、全体の締切の割合。明示的な失敗ならすぐ次へ移り、残りの時間を全て次の系統に渡す。
-# 値は検査役の時間の測定で決め直す。
 FIRST_ENGINE_SHARE = 0.5
 # 検査役への入力の全体の上限 (バイト)。超えるときだけ古いツールの出力から中ほどを省く。値は検査役の時間と
 # 利用枠の測定で決める。
@@ -344,9 +349,9 @@ def messages(payload):
     items = [{'id': 'request', 'role': 'user', 'origin': 'latest_request', 'text': payload.get('latest_user') or ''}]
     recent = payload.get('recent_messages') or []
     start = payload.get('turn_start_context') or []
-    recent_items = [{'id': f'recent-{n}', 'role': m.get('role', '?'), 'origin': 'recent', 'text': m.get('text', '')}
+    recent_items = [{'id': f'recent-{n}', 'role': m.get('role', '?'), 'origin': 'recent', 'text': m.get('text', ''), **{k: m[k] for k in ('native_id', 'source_id', 'turn_id', 'displayed') if k in m}}
                     for n, m in enumerate(recent, 1)]
-    start_items = [{'id': f'start-{n}', 'role': m.get('role', '?'), 'origin': 'turn_start', 'text': m.get('text', '')}
+    start_items = [{'id': f'start-{n}', 'role': m.get('role', '?'), 'origin': 'turn_start', 'text': m.get('text', ''), **{k: m[k] for k in ('native_id', 'source_id', 'turn_id', 'displayed') if k in m}}
                    for n, m in enumerate(start, 1)]
     prefix = 0
     while prefix < min(len(start), len(recent)) and start[prefix] == recent[prefix]:
@@ -402,8 +407,13 @@ def evidence_parts(payload):
 
 def evidence_index(payload):
     previous, current = evidence_parts(payload)
-    return {item['id']: item for item in [*current, *(i for t in previous for i in t.get('items', []))]
-            if isinstance(item.get('id'), str)}
+    index = {item['id']: item for item in [*current, *(i for t in previous for i in t.get('items', []))]
+             if isinstance(item.get('id'), str)}
+    for source in (payload.get('_context_sources') or {}).values():
+        if source['kind'] in ('evidence', 'gap'):
+            index[source['id']] = {'id': source['id'], **json.loads(source['fields'].get('call', '{}')),
+                **source.get('metadata', {}), 'output': source['fields'].get('output', '')}
+    return index
 
 
 def render(data):
@@ -575,16 +585,43 @@ def codex_command(model, effort, cyber_program, workdir):
 def claude_command(model, effort, instructions):
     command = ['-p', '--model', model, '--effort', effort, '--tools', '', '--setting-sources', '',
                '--strict-mcp-config', '--no-session-persistence', '--system-prompt', instructions,
-               '--output-format', 'json', '--json-schema', json.dumps(CHECKER_SCHEMA)]
+               '--output-format', 'json', '--json-schema', context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if context.INSTRUCTIONS in instructions else json.dumps(CHECKER_SCHEMA)]
     return command_from_env('OUTPUT_GATE_CLAUDE_CMD', ['claude']) + command
 
 
-def run_judge(command, prompt, workdir, timeout, env):
+def run_judge(command, prompt, workdir, timeout, env, cancel=None):
     """run-judge.py で検査役を起動し、(終了コード, 標準出力) を返す。締切とプロセスの後始末は run-judge.py に任せる。"""
-    result = subprocess.run([sys.executable, '-I', str(RUN_JUDGE), f'{timeout:.3f}', str(workdir), *command],
-                            input=prompt.encode('utf-8'), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            env=env, timeout=timeout + 30)
-    return result.returncode, result.stdout.decode('utf-8', 'replace')
+    args = [sys.executable, '-I', str(RUN_JUDGE), f'{timeout:.3f}', str(workdir), *command]
+    if cancel is None:
+        result = subprocess.run(args, input=prompt.encode('utf-8'), stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, env=env, timeout=timeout + 30)
+        return result.returncode, result.stdout.decode('utf-8', 'replace')
+    if cancel.is_set():
+        return 130, ''
+    process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, env=env)
+    given = prompt.encode('utf-8')
+    expires = time.monotonic() + timeout + 30
+    try:
+        while not cancel.is_set():
+            try:
+                out, _ = process.communicate(input=given, timeout=0.05)
+                return process.returncode, out.decode('utf-8', 'replace')
+            except subprocess.TimeoutExpired:
+                given = None
+                if time.monotonic() >= expires:
+                    break
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        else:
+            process.terminate()
+        process.communicate(timeout=5)
+        return 130, ''
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
 
 
 def judge_failure(family, code, timeout):
@@ -599,12 +636,12 @@ def judge_failure(family, code, timeout):
     return f'{family} の検査役が失敗した (終了コード {code})'
 
 
-def run_codex(prompt, config, cyber_program, workdir, timeout, final):
+def run_codex(prompt, config, cyber_program, workdir, timeout, final, cancel=None):
     model = checker_model(cyber_program, config['model'])
-    (workdir / INSTRUCTIONS_FILE).write_text(checker_instructions(final), encoding='utf-8')
-    (workdir / SCHEMA_FILE).write_text(json.dumps(CHECKER_SCHEMA), encoding='utf-8')
+    (workdir / INSTRUCTIONS_FILE).write_text((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), encoding='utf-8')
+    (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
     env = {k: v for k, v in os.environ.items() if k not in CODEX_DROPPED_ENV}
-    code, out = run_judge(codex_command(model, config['effort'], cyber_program, workdir), prompt, workdir, timeout, env)
+    code, out = run_judge(codex_command(model, config['effort'], cyber_program, workdir), prompt, workdir, timeout, env, cancel)
     if code != 0:
         raise EngineFailure(judge_failure('codex', code, timeout))
     return out, {'family': 'codex', 'model': model, 'effort': config['effort']}
@@ -614,12 +651,12 @@ CLAUDE_AUTH_ERROR = re.compile(r'/login|invalid api key|authenticat|not logged i
 LIMIT_ERROR = re.compile(r'usage limit|rate limit|limit reached|\b429\b|out of (?:extra )?usage|credit balance', re.I)
 
 
-def run_claude(prompt, config, workdir, timeout, final):
+def run_claude(prompt, config, workdir, timeout, final, cancel=None):
     env = {k: v for k, v in os.environ.items() if k not in CLAUDE_DROPPED_ENV}
     # 検査役のセッションで出力ゲートの mod が動き、検査役の回答をまた検査しないようにする。
     env['AGENT_DELEGATED_SESSION'] = '1'
-    code, out = run_judge(claude_command(config['model'], config['effort'], checker_instructions(final)),
-                          prompt, workdir, timeout, env)
+    code, out = run_judge(claude_command(config['model'], config['effort'], (INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final)),
+                          prompt, workdir, timeout, env, cancel)
     engine = {'family': 'claude', 'model': config['model'], 'effort': config['effort']}
     try:
         result = json.loads(out)
@@ -1048,6 +1085,9 @@ def apply_pairs(bodies, pairs):
 def verify_findings(payload, raw_findings):
     """findings の根拠を確かめ、(残す findings, 捨てた findings と理由) を返す。"""
     sources = {m['id']: m for m in messages(payload)}
+    for source in (payload.get('_context_sources') or {}).values():
+        if source['kind'] == 'user':
+            sources[source['id']] = {'role': 'user', 'origin': 'recent', 'text': source['fields']['text']}
     evidence = evidence_index(payload)
     rules = {r['id']: r['text'] for r in checked_rules()}
     kept, dropped = [], []
@@ -1198,6 +1238,11 @@ def progress_checkpoint(payload, bodies, findings, progress):
     stalled = previous['stalled'] if previous and round else 0
     if previous and round > previous['round']:
         stalled = 0 if progress['state'] == 'advanced' else stalled + 1
+    if payload.get('_context_checkpoint') is not None:
+        state = payload['_context_checkpoint']
+        return {'round': round, 'stalled': stalled, 'bodies': [], 'findings': findings, 'evidence': [],
+                'context_generation': state['generation'], 'source_cursor': state['archive_cursor'],
+                'items': state['items']}
     previous_evidence, current = evidence_parts(payload)
     return {'round': round, 'stalled': stalled, 'bodies': bodies, 'findings': findings,
             'evidence': [*(item for turn in previous_evidence for item in turn.get('items', [])), *current]}
@@ -1273,7 +1318,7 @@ def payload_problem(payload):
     return None
 
 
-def check(payload, deadline=None):
+def legacy_check(payload, deadline=None):
     problem = payload_problem(payload)
     if problem:
         return unchecked(payload, problem)
@@ -1329,7 +1374,7 @@ def check(payload, deadline=None):
     return unchecked(payload, ' / '.join(f['reason'] for f in failures), engine_failures=failures)
 
 
-def prepare(payload):
+def legacy_prepare(payload):
     """mod が $.model.complete で検査役を呼ぶための入力を組む。秘密情報は一括の検査と同じく伏せる。"""
     problem = payload_problem(payload)
     if problem:
@@ -1347,7 +1392,7 @@ def prepare(payload):
             'schema': CHECKER_SCHEMA}
 
 
-def receive(request):
+def legacy_receive(request):
     """$.model.complete などの検査役の返答を受け、形を確かめて一括の検査と同じ結果を返す。
     request: {"payload", "reply", "engine": {family, model, effort}, "engine_failures"?}"""
     payload, engine = request['payload'], request.get('engine')
@@ -1362,6 +1407,230 @@ def receive(request):
         return unchecked(payload, ' / '.join(f['reason'] for f in failures), engine_failures=failures)
     except Exception as error:
         return unchecked(payload, f'検査処理の内部エラー ({type(error).__name__})', engine_failures=failures)
+
+
+def context_ready(tx, expected_step=None):
+    ready = context.plan_unit(tx, INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS,
+                              context.protocol_schema(CHECKER_SCHEMA))
+    with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
+        data = context.expand_wire(json.loads(ready['prompt']))
+        masked = mask_secrets(data, Path(tmp))
+        if masked != data:
+            raise ValueError('context packet mask changed; source/state rebuild required')
+    context.save_transaction(tx, expected_step)
+    return ready
+
+
+def with_pending_sources(payload):
+    if not payload.get('context_dir'):
+        return payload
+    previous = {str(t.get('turn_id')): t for t in payload.get('previous_evidence') or []}
+    for path in sorted((Path(payload['context_dir']) / 'pending-turns').glob('*.json')):
+        try:
+            pending = context.read(path)
+            if not isinstance(pending, dict) or not isinstance(pending.get('items'), list):
+                raise ValueError('pending source shape')
+            if str(pending.get('turn_id')) == str(payload.get('turn_id')):
+                continue
+            previous[str(pending['turn_id'])] = {'turn_id': pending['turn_id'], 'time': pending.get('time'), 'items': pending['items']}
+        except (OSError, ValueError, KeyError):
+            previous['pending-gap-' + path.name] = {'turn_id': path.stem,
+                'items': [{'id': 'pending-gap-' + path.name, 'unavailable': True, 'note': 'Pending original source could not be read.'}]}
+    return dict(payload, previous_evidence=list(previous.values()))
+
+
+def prepare(payload):
+    started = time.time()
+    if not payload.get('final'):
+        return legacy_prepare(payload)
+    problem = payload_problem(payload)
+    if problem:
+        return unchecked(payload, problem)
+    try:
+        with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
+            safe_payload = mask_secrets(with_pending_sources(payload), Path(tmp))
+            tx = context.begin(safe_payload, messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
+                               response_rules(), checked_rules(), payload.get('context_dir'),
+                               len((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS).encode()) + len(context.encoded(context.protocol_schema(CHECKER_SCHEMA))), context.digest(payload))
+            tx['payload_rev'] = context.digest(payload)
+            tx['deadline'] = min(tx['deadline'], started + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or DEFAULT_TIMEOUT))
+        return context_ready(tx)
+    except Exception as error:
+        return unchecked(payload, str(error) or type(error).__name__)
+
+
+def ingest(payload):
+    try:
+        with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
+            safe = mask_secrets(with_pending_sources(payload), Path(tmp))
+            result = context.begin(safe, messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
+                                   '', [], payload.get('context_dir'), archive_only=True)
+        return dict(result, status='ingested')
+    except Exception as error:
+        return unchecked(payload, str(error) or type(error).__name__)
+
+
+def receive(request):
+    payload = request['payload']
+    if not payload.get('final'):
+        return legacy_receive(request)
+    tx = request.get('transaction')
+    if not isinstance(tx, dict):
+        return unchecked(payload, 'context transaction required; coverage cannot be inferred')
+    baseline_tx = deepcopy(tx)
+    validation_entered = False
+    try:
+        if context.digest([response_rules(), checked_rules()]) != tx.get('rules_source_rev'):
+            raise ValueError('context rules snapshot changed')
+        if context.digest(payload) != tx.get('payload_rev'):
+            raise ValueError('context payload snapshot changed')
+        context.assert_transaction_current(tx)
+        validation_entered = True
+        text = request['reply'].strip()
+        fenced = FENCE.fullmatch(text)
+        answer = json.loads(fenced.group(1) if fenced else text)
+        if answer.get('kind') == 'judgment':
+            validation_payload = dict(payload, _context_sources=tx['sources'])
+            source_messages = {m['id']: m for m in messages(payload)}
+            source_messages.update({s['id']: {'role': 'user', 'origin': 'recent', 'text': s['fields']['text']}
+                                    for s in tx['sources'].values() if s['kind'] == 'user'})
+            rules = {r['id']: r['text'] for r in checked_rules()}
+            answer['_valid_findings'] = [n for n, f in enumerate(answer.get('findings', []))
+                if finding_problem(f, source_messages, evidence_index(validation_payload), rules) is None]
+        previous_step = tx.get('step', 0)
+        complete = context.accept(tx, answer)
+        tx['step'] = previous_step + 1
+        tx.pop('validation_feedback', None)
+        tx.pop('validation_failures', None)
+        if not complete:
+            return context_ready(tx, previous_step)
+        judge_payload = dict(payload)
+        judge_payload['_context_sources'] = tx['sources']
+        judge_payload['_context_checkpoint'] = tx['candidate_state']
+        reply = json.dumps({k: tx[k] for k in ('replacements', 'findings', 'progress')})
+        result = judge(judge_payload, reply, request.get('engine'), request.get('engine_failures') or [])
+        if result['status'] == 'checked':
+            result['context_state'] = context.commit(tx, result.get('text'))
+            result['claims'] = tx['claims']
+            result['check_obligations'] = tx['obligation_items']
+            result['context_metrics'] = tx['metrics']
+            result['source_cursor'] = tx['source_end']
+            if tx['id'] in result['context_state'].get('pending_display', {}):
+                result['display_receipt'] = tx['id']
+        return result
+    except Exception as error:
+        reason = str(error) or type(error).__name__
+        fatal = any(word in reason for word in ('CAS', 'deadline', 'input limit', 'snapshot', 'archive', 'mask', 'source/state'))
+        if validation_entered and isinstance(error, (ValueError, KeyError, TypeError, EngineFailure)) and not fatal:
+            failures = dict(baseline_tx.get('validation_failures', {}))
+            failures[reason] = failures.get(reason, 0) + 1
+            baseline_tx['validation_failures'] = failures
+            if failures[reason] < 3:
+                baseline_tx['validation_feedback'] = reason
+                previous_step = baseline_tx.get('step', 0)
+                baseline_tx['step'] = previous_step + 1
+                try:
+                    return context_ready(baseline_tx, previous_step)
+                except Exception:
+                    pass
+        return unchecked(payload, reason, source_cursor=tx.get('source_end'))
+
+
+def context_engine_reply(prompt, payload, settings, order, workdir, deadline, failures):
+    cancel = threading.Event()
+    pool = ThreadPoolExecutor(max_workers=len(order))
+    pending = {}
+    next_engine = 0
+    fallback_at = time.monotonic() + max(0, deadline - time.monotonic()) * FIRST_ENGINE_SHARE
+
+    def invoke(family):
+        directory = workdir / family
+        directory.mkdir(exist_ok=True)
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise EngineFailure('context deadline exhausted')
+        if family == 'codex':
+            value = run_codex(prompt, settings['codex'], payload.get('cyber_program'), directory, left, True, cancel)
+        else:
+            value = run_claude(prompt, settings['claude'], directory, left, True, cancel)
+        try:
+            parsed = json.loads(value[0])
+        except ValueError as error:
+            raise EngineFailure('検査役の返答が決めた形に合わない (JSON)') from error
+        if not isinstance(parsed, dict) or 'kind' not in parsed:
+            raise EngineFailure('検査役の返答が決めた形に合わない (context coverage missing)')
+        return value
+
+    def start_next():
+        nonlocal next_engine
+        family = order[next_engine]
+        next_engine += 1
+        pending[pool.submit(invoke, family)] = family
+
+    try:
+        start_next()
+        while pending:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            delay = min(left, max(0, fallback_at - time.monotonic())) if next_engine < len(order) else left
+            done, _ = wait(pending, timeout=delay, return_when=FIRST_COMPLETED)
+            for future in sorted(done, key=lambda f: order.index(pending[f])):
+                family = pending.pop(future)
+                try:
+                    result = future.result()
+                    if family != order[0] and order[0] in pending.values():
+                        failures.append({'family': order[0], 'reason': '初期待機の締切を超えた先行処理を取消し、代替の返答を採用しました', 'cancelled': True})
+                    return result
+                except (EngineFailure, OSError, ValueError, subprocess.SubprocessError) as error:
+                    failures.append({'family': family, 'reason': str(error)})
+            if next_engine < len(order) and (not pending or time.monotonic() >= fallback_at):
+                start_next()
+        return None, None
+    finally:
+        cancel.set()
+        pool.shutdown(wait=True, cancel_futures=True)
+
+
+def check(payload, deadline=None):
+    if not payload.get('final'):
+        return legacy_check(payload, deadline)
+    if deadline is None:
+        deadline = time.monotonic() + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or DEFAULT_TIMEOUT)
+    prepared = prepare(payload)
+    if prepared['status'] != 'ready':
+        return prepared
+    prepared['transaction']['deadline'] = time.time() + max(0, deadline - time.monotonic())
+    failures = []
+    try:
+        settings = load_settings()
+        if payload.get('independent_recheck'):
+            settings.update(first='codex', codex={'model': 'gpt-6-astra', 'effort': 'high'},
+                            claude={'model': 'fable', 'effort': 'high'})
+        order = engine_order(payload['origin'], None if payload.get('independent_recheck') else payload.get('engines'), settings)
+        if not order:
+            return unchecked(payload, '使える検査役の系統が無い (engines)')
+        with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
+            workdir = Path(tmp)
+            while prepared['status'] == 'ready':
+                reply, engine = context_engine_reply(prepared['prompt'], payload, settings, order,
+                                                     workdir, deadline, failures)
+                if reply is None:
+                    return unchecked(payload, 'context deadline/engine failure', engine_failures=failures,
+                                     source_cursor=prepared['transaction']['source_end'])
+                available = [f for f in order if f not in {failure['family'] for failure in failures if not failure.get('cancelled')}] or order
+                selected = (engine or {}).get('family')
+                order = ([selected] + [f for f in available if f != selected]) if selected in available else available
+                prepared = receive({'payload': payload, 'reply': reply, 'engine': engine,
+                                    'engine_failures': failures, 'transaction': prepared['transaction']})
+            if prepared.get('recheck_required'):
+                independent = dict(payload, independent_recheck=True, check_obligations=prepared.get('check_obligations', []))
+                independent.pop('context_state', None)
+                independent.pop('engines', None)
+                return finish_recheck(prepared, check(independent, deadline))
+            return prepared
+    except Exception as error:
+        return unchecked(payload, str(error) or type(error).__name__, engine_failures=failures)
 
 
 def is_turns(value):
@@ -1400,12 +1669,15 @@ def validate(payload):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else None
-    if mode not in (None, '--prepare', '--receive', '--finish-recheck'):
+    if mode not in (None, '--prepare', '--receive', '--finish-recheck', '--ingest', '--confirm-display'):
         print(f'output-gate-check: unknown option {mode}', file=sys.stderr)
         sys.exit(2)
     try:
         request = json.loads(sys.stdin.buffer.read().decode('utf-8'))
-        if mode == '--finish-recheck':
+        if mode == '--confirm-display':
+            if not all(isinstance(request.get(k), str) for k in ('context_dir', 'token', 'text')):
+                raise ValueError('display context, token and emitted text required')
+        elif mode == '--finish-recheck':
             if not (isinstance(request, dict) and isinstance(request.get('initial'), dict) and
                     isinstance(request.get('rechecked'), dict) and request['initial'].get('recheck_required') and
                     request['initial'].get('corrected_bodies') and request['initial'].get('unmet_text')):
@@ -1419,8 +1691,9 @@ def main():
     except ValueError as error:
         print(f'output-gate-check: invalid input: {error}', file=sys.stderr)
         sys.exit(2)
-    result = (finish_recheck(request['initial'], request['rechecked']) if mode == '--finish-recheck' else
-              {None: check, '--prepare': prepare, '--receive': receive}[mode](request))
+    result = (context.confirm_display(request['context_dir'], request['token'], request['text']) if mode == '--confirm-display' else
+              finish_recheck(request['initial'], request['rechecked']) if mode == '--finish-recheck' else
+              {None: check, '--prepare': prepare, '--receive': receive, '--ingest': ingest}[mode](request))
     sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
 
 

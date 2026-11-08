@@ -2,7 +2,7 @@
 export type Holding = number
 
 /** A message of the conversation as the checker reads it. */
-export type HoldingMessage = { role: string; text: string }
+export type HoldingMessage = { role: string; text: string; native_id?: string }
 
 /**
  * What the gate keeps for one turn of the main loop, by its turnId; null once the turn ended.
@@ -13,6 +13,7 @@ export type HoldingMessage = { role: string; text: string }
  */
 export type HoldingTurn = {
   latest_user: string
+  current_request_id?: string
   turn_start_context: HoldingMessage[]
   started_at: number
   tool_ids: string[]

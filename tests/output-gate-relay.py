@@ -4,6 +4,7 @@ import http.client
 import http.server
 import json
 import os
+import runpy
 from pathlib import Path
 import socket
 import struct
@@ -19,6 +20,44 @@ REPO = Path(__file__).resolve().parents[1]
 RELAY = REPO / 'agent-shared/bin/output-gate-relay.py'
 PREFIX = '/backend-api/codex'
 UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
+
+
+def protocol_checker_source(source, family, cache_path, log_path):
+    protocol = runpy.run_path(str(REPO / 'tests/output-gate-check.py'))['PROTOCOL_MOCK']
+    return protocol + textwrap.dedent(f'''\
+        import io, json, os, sys
+        prompt = sys.stdin.read()
+        original_stdout = sys.stdout
+        sys.stdin = io.StringIO(prompt)
+        sys.stdout = io.StringIO()
+        exit_code = 0
+        try:
+            exec({source!r}, {{'__name__': '__main__'}})
+        except SystemExit as stopped:
+            exit_code = stopped.code
+        reply = sys.stdout.getvalue()
+        sys.stdout = original_stdout
+        with open({str(log_path)!r}, 'a', encoding='utf-8') as log:
+            log.write(json.dumps({{'family': {family!r}, 'prompt': prompt}}) + '\\n')
+        try:
+            data, obj = json.loads(prompt), json.loads(reply)
+            wrapper = obj if {family!r} == 'claude' else None
+            legacy = obj.get('structured_output') if wrapper else obj
+            if data.get('stage') in ('update', 'update_and_judge', 'judge') and isinstance(legacy, dict):
+                path = {str(cache_path)!r}
+                cache = json.load(open(path)) if os.path.exists(path) else {{'catalog': {{}}, 'served': [], 'aliases': {{}}}}
+                obj = protocol_reply(data, legacy, cache['catalog'], cache['served'], cache['aliases'])
+                json.dump(cache, open(path, 'w'))
+                if wrapper:
+                    wrapper['structured_output'] = obj
+                    wrapper['result'] = json.dumps(obj, ensure_ascii=False)
+                    obj = wrapper
+                reply = json.dumps(obj, ensure_ascii=False)
+        except (ValueError, TypeError, KeyError):
+            pass
+        sys.stdout.write(reply)
+        sys.exit(exit_code)
+        ''')
 
 
 def free_port():
@@ -123,6 +162,16 @@ class RelayTests(unittest.TestCase):
         cls.checker.write_text(textwrap.dedent(f'''\
             import json, sys, time, os
             payload = json.load(sys.stdin)
+            if '--ingest' in sys.argv:
+                import subprocess
+                no_secrets = 'import json,sys; from pathlib import Path; Path(sys.argv[sys.argv.index("--report-path") + 1]).write_text("[]")'
+                command = [sys.executable, '-I', {str(RELAY.with_name('output-gate-check.py'))!r}, '--ingest']
+                result = subprocess.run(command, input=json.dumps(payload), text=True, capture_output=True,
+                    env=dict(os.environ, OUTPUT_GATE_GITLEAKS=json.dumps([sys.executable, '-I', '-c', no_secrets])))
+                open({str(cls.tmp / 'ingest-input.json')!r}, 'a', encoding='utf-8').write(json.dumps(payload) + "\\n")
+                sys.stdout.write(result.stdout)
+                sys.stderr.write(result.stderr)
+                sys.exit(result.returncode)
             open({str(cls.tmp / 'checker-input.json')!r}, 'a', encoding='utf-8').write(json.dumps(payload) + "\\n")
             time.sleep(float(os.environ.get('FAKE_CHECK_SLEEP', '0')))
             open({str(cls.tmp / 'checker-finished')!r}, 'a').write('x')
@@ -168,6 +217,9 @@ class RelayTests(unittest.TestCase):
     def setUp(self):
         Upstream.script, Upstream.requests, Upstream.plain = [], [], None
         (self.tmp / 'checker-input.json').unlink(missing_ok=True)
+        (self.tmp / 'ingest-input.json').unlink(missing_ok=True)
+        (self.tmp / 'real-checker-prompts.jsonl').unlink(missing_ok=True)
+        (self.tmp / 'protocol-cache.json').unlink(missing_ok=True)
         (self.tmp / 'checker-finished').unlink(missing_ok=True)
         (self.tmp / 'findings-on').unlink(missing_ok=True)
         (self.tmp / 'recheck-clean').unlink(missing_ok=True)
@@ -311,6 +363,7 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn(kind='compaction')
         self.assertEqual(events[0]['item']['encrypted_content'], 'ENC')
         self.assertFalse((self.tmp / 'checker-input.json').exists())
+        self.assertEqual(len((self.tmp / 'ingest-input.json').read_text().splitlines()), 1)
 
     def test_websocket_upgrade_426(self):
         status, _, _ = self.call('GET', PREFIX + '/responses',
@@ -412,11 +465,24 @@ class RelayTests(unittest.TestCase):
                      {'type': 'compaction', 'encrypted_content': 'ENC-CONTEXT'}, self.user('うん')]
         sent = self.turn_after(compacted)
         expected = [{'role': m['role'], 'text': input_text(m)} for m in original] + [{'role': 'user', 'text': 'うん'}]
-        self.assertEqual(sent['recent_messages'], expected)
+        self.assertEqual([{k: m[k] for k in ('role', 'text')} for m in sent['recent_messages']], expected)
         self.assertFalse(sent['compacted_note'])
         store = json.loads((self.state / 'compaction.json').read_text(encoding='utf-8'))
         entry = next(iter(store.values()))
-        self.assertEqual(entry['conversation'], expected[:-1])
+        import hashlib
+        restored = []
+        self.assertTrue(entry['source_refs'])
+        for ref in entry['source_refs']:
+            key = json.dumps([ref['id'], ref['rev']], ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode()
+            source = json.loads((Path(entry['context_dir']) / 'sources' / (hashlib.sha256(key).hexdigest() + '.json')).read_text())
+            self.assertEqual((source['id'], source['rev']), (ref['id'], ref['rev']))
+            self.assertEqual((ref['start'], ref['end']), (0, len(source['fields']['text'].encode())))
+            restored.append({'role': source['kind'], 'text': source['fields']['text']})
+        self.assertEqual(restored, expected[:-1])
+        self.assertEqual(len({ref['id'] for ref in entry['source_refs']}), len(expected) - 1)
+        self.assertIn('source_cursor', entry)
+        self.assertIn('context_generation', entry)
+        self.assertNotIn('conversation', entry)
         self.assertNotIn('answers', entry)
 
     def test_legacy_compaction_answers_remain_available_with_a_gap_notice(self):
@@ -810,12 +876,14 @@ class RelayTests(unittest.TestCase):
         中継は origin=codex を渡すため、既定では Claude の系統が先に動く。偽の claude を渡さない試験は、設定
         (first=same) で Codex の系統を先にし、Claude の系統は未ログインですぐ失敗させる。"""
         fake = self.tmp / 'fake-codex.py'
-        fake.write_text(fake_codex_source, encoding='utf-8')
+        cache, log = self.tmp / 'protocol-cache.json', self.tmp / 'real-checker-prompts.jsonl'
+        cache.unlink(missing_ok=True)
+        fake.write_text(protocol_checker_source(fake_codex_source, 'codex', cache, log), encoding='utf-8')
         claude = self.tmp / 'fake-claude.py'
-        claude.write_text(fake_claude_source or (
+        claude.write_text(protocol_checker_source(fake_claude_source or (
             'import json, sys\nsys.stdin.read()\n'
             'print(json.dumps({"is_error": True, "result": "Not logged in - Please run /login"}))\n'),
-            encoding='utf-8')
+            'claude', cache, log), encoding='utf-8')
         # 本物の gitleaks と同じく、検査した入力に残っている秘密情報だけを報告する。検査処理は伏せた後の入力に
         # もう一度 gitleaks をかけ、検出が残れば検査役を起動しないため。
         gitleaks = self.tmp / 'gitleaks-fake.py'
@@ -1532,8 +1600,18 @@ class RelayTests(unittest.TestCase):
                  {'type': 'function_call_output', 'call_id': 'c1', 'output': f'token={secret}'}]
         self.answer('終わったよ', body={'input': items})
         prompt = prompt_file.read_text(encoding='utf-8')
-        self.assertIn('token=', prompt)
         self.assertNotIn(secret, prompt)
+        packets = [json.loads(json.loads(line)['prompt']) for line in
+                   (self.tmp / 'real-checker-prompts.jsonl').read_text().splitlines()]
+        self.assertTrue(any(packet.get('stage') in ('judge', 'update_and_judge') for packet in packets))
+        served = [entry for packet in packets for entry in packet.get('answers', []) + packet.get('retrieved', [])]
+        self.assertTrue(any('見るね [REDACTED]' in entry['text'] for entry in served))
+        archived = [json.loads(path.read_text()) for path in (self.state / 'context' / 's1' / 'sources').glob('*.json')]
+        evidence = [source for source in archived if source.get('native_id') == 'c1']
+        self.assertTrue(evidence)
+        self.assertTrue(any(source['fields']['output'] == 'token=[REDACTED]' for source in evidence))
+        self.assertNotIn(secret, json.dumps(packets))
+        self.assertNotIn(secret, json.dumps(archived))
 
     def test_self_test_covers_the_notice_and_restore(self):
         # 自己試験の偽の検査処理が未達を返し、案内への差し替えと、続けた要求での原文への戻しを通す。
@@ -1541,6 +1619,29 @@ class RelayTests(unittest.TestCase):
                                  '--self-test'], capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('notice', result.stdout)
+
+
+class CompactionIngestionTests(unittest.TestCase):
+    def test_ingestion_failure_preserves_the_original_conversation(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('compaction_relay', RELAY)
+        relay = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(relay)
+        with tempfile.TemporaryDirectory() as directory:
+            relay.Settings.state_dir = Path(directory)
+            body = {'input': [{'type': 'message', 'role': 'user',
+                              'content': [{'type': 'input_text', 'text': 'Keep this request'}]}]}
+            failures = [subprocess.CompletedProcess([], 1, b'{"status":"unchecked"}'),
+                        subprocess.TimeoutExpired('ingest', 45)]
+            for n, failure in enumerate(failures):
+                item = {'type': 'compaction', 'encrypted_content': 'failed-' + str(n)}
+                option = {'side_effect': failure} if isinstance(failure, Exception) else {'return_value': failure}
+                with patch.object(relay.subprocess, 'run', **option):
+                    relay.remember_compaction(body, [item], 'session')
+                conversation, incomplete = relay.stored_conversation(item)
+                self.assertTrue(incomplete)
+                self.assertEqual([(m['role'], m['text']) for m in conversation], [('user', 'Keep this request')])
 
 
 class RunJudgeTests(unittest.TestCase):

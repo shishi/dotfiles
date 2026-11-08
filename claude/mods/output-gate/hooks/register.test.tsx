@@ -10,6 +10,7 @@ const UNMET_TEXT = '出力ゲート: 次の点は確かめられていません\
 const UNMET = '\n\n---\n' + UNMET_TEXT
 
 type Payload = {
+  session_id?: string; turn_id?: string; context_dir?: string; request_id?: string
   origin: string; latest_user: string; recent_messages: { role: string; text: string }[]; bodies: string[]
   turn_start_context: { role: string; text: string }[]; shown_text: string; final: boolean; round: number
   continuation?: string; engines?: string[]; previous_findings?: unknown
@@ -81,8 +82,9 @@ function world(on: On, options: { env?: Record<string, string>; enabled?: boolea
 
 const runs: { argv: string[]; env: Record<string, string> }[] = []
 type Checker = { prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result;
+  confirm?: (r: { context_dir: string; token: string; text: string }) => Result;
   finish?: (r: { initial: Result; rechecked: Result }) => Result;
-  receive?: (r: { payload: Payload; reply: string; engine: unknown; engine_failures?: unknown[] }) => Result }
+  receive?: (r: { payload: Payload; reply: string; transaction?: unknown; engine: unknown; engine_failures?: unknown[] }) => Result }
 // 検査処理の代わり: Python の確認・ファイルの置き換えと削除は記憶のファイルで行い、検査は与えた関数で答える。
 function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), calls: Payload[] = []) {
   runs.length = 0
@@ -108,6 +110,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
       calls.push(request.payload)
       return ok(given.receive!(request))
     }
+    if (argv.includes('--confirm-display')) return ok(given.confirm?.(JSON.parse(e.init.stdin)) ?? { status: 'confirmed' })
     if (argv.includes('--finish-recheck')) return ok(given.finish!(JSON.parse(e.init.stdin)))
     const payload = JSON.parse(e.init.stdin) as Payload
     calls.push(payload)
@@ -1130,4 +1133,83 @@ test('a mod loaded afresh with only $.state sends back again, counting on from t
   expect(calls[0]?.round).toBe(1)
   expect(calls[0]?.previous_findings).toEqual([FINDING])
   expect((written.at(-1) as { round: number }).round).toBe(2)
+})
+
+
+test('identical queued human messages remain separate inputs', async ($, on) => {
+  const fs = world(on)
+  const calls = checker(on, fs, replaceKiku)
+  tools(on)
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await start($)
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  expect(calls.at(-1)?.latest_user).toBe('設定を教えて\n\n同じ確認をして\n\n同じ確認をして')
+})
+
+test('semantic prepare receive rounds preserve their transaction and shared session directory', async ($, on) => {
+  const fs = world(on, { env: { OUTPUT_GATE_SETTINGS: '/checker.json' } })
+  fs.set('/checker.json', JSON.stringify({ first: 'claude' }))
+  let count = 0
+  const transactions: unknown[] = []
+  const calls = checker(on, fs, {
+    prepare: () => ok({ status: 'ready', system: 'SYSTEM', prompt: 'UPDATE', schema: {}, transaction: { id: 'one' } }),
+    receive: r => {
+      transactions.push(r.transaction)
+      count += 1
+      return count === 1 ? { status: 'ready', system: 'SYSTEM', prompt: 'JUDGE', schema: {}, transaction: { id: 'two' } } : checked(r.payload)
+    },
+  })
+  const completed = claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(1) }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await run($)
+  expect(completed.map(c => c.prompt)).toEqual(['UPDATE', 'JUDGE'])
+  expect(transactions).toEqual([{ id: 'one' }, { id: 'two' }])
+  expect(calls.map(c => c.context_dir)).toEqual(['/state/output-gate/claude-context/sess-1', '/state/output-gate/claude-context/sess-1'])
+})
+
+test('display confirmation follows the emitted text and uses its exact body', async ($, on) => {
+  const fs = world(on)
+  let emitted = ''
+  let confirmed = false
+  checker(on, fs, {
+    bulk: p => ({ ...checked(p), display_receipt: 'receipt' }),
+    confirm: r => {
+      expect(emitted).toBe('回答')
+      expect(r.text).toBe(emitted)
+      expect(r.token).toBe('receipt')
+      expect(r.context_dir).toBe('/state/output-gate/claude-context/sess-1')
+      confirmed = true
+      return { status: 'confirmed' }
+    },
+  })
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  const stream = $.turn.step(STEP)
+  for (;;) {
+    const part = await stream.next()
+    if (part.done) break
+    if (part.value.kind === 'text') emitted += part.value.text
+  }
+  expect(confirmed).toBe(true)
+})
+
+
+test('each accepted queued human event carries its own request identity even with identical text', async ($, on) => {
+  const fs = world(on)
+  const calls = checker(on, fs, replaceKiku)
+  tools(on)
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await start($)
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  const first = calls.at(-1)?.request_id
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  const second = calls.at(-1)?.request_id
+  expect(first?.startsWith('t1:queued:')).toBe(true)
+  expect(second?.startsWith('t1:queued:')).toBe(true)
+  expect(second).not.toBe(first)
 })

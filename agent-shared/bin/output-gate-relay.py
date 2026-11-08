@@ -224,6 +224,16 @@ def stored_conversation(compaction_item):
             save_store(store)
         except OSError:
             pass
+    if isinstance(entry.get('source_refs'), list):
+        conversation = []
+        directory = Path(entry['context_dir'])
+        for ref in entry['source_refs']:
+            key = json.dumps([ref['id'], ref['rev']], ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode()
+            source = read_json(directory / 'sources' / (hashlib.sha256(key).hexdigest() + '.json'))
+            if not source:
+                return conversation, True
+            conversation.append({'role': source['kind'], 'text': source['fields']['text'], 'native_id': source['native_id'], 'displayed': source.get('metadata', {}).get('displayed', False)})
+        return conversation, bool(entry.get('incomplete'))
     if isinstance(entry.get('conversation'), list):
         return list(entry['conversation']), bool(entry.get('incomplete'))
     return [{'role': 'assistant', 'text': a} for a in entry.get('answers') or []], True
@@ -239,13 +249,30 @@ def save_store(store):
     os.replace(tmp, path)
 
 
-def remember_compaction(body, output_items):
+def remember_compaction(body, output_items, session_id=None):
     conversation, incomplete = conversation_with_compaction(body.get('input') or [])
+    snapshot = None
+    if safe_id(session_id):
+        directory = Settings.state_dir / 'context' / session_id
+        payload = checker_payload(body, [''], final=True, session_id=session_id, context_dir=str(directory))
+        try:
+            result = subprocess.run([*Settings.check_cmd, '--ingest'], input=json.dumps(payload).encode(),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+            snapshot = json.loads(result.stdout)
+            if result.returncode or snapshot.get('status') != 'ingested':
+                raise ValueError('compaction source ingestion failed')
+            snapshot = {k: snapshot[k] for k in ('source_cursor', 'context_generation', 'source_refs')}
+            snapshot['context_dir'] = str(directory)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            snapshot = None
+            incomplete = True
+
     with Settings.store_lock:
         store = load_store()
         for item in output_items:
             if isinstance(item, dict) and item.get('type') in COMPACTION_TYPES and compaction_key(item):
-                store[compaction_key(item)] = {'conversation': conversation, 'incomplete': incomplete, 'used': time.time()}
+                store[compaction_key(item)] = {**(snapshot if snapshot is not None else {'conversation': conversation}),
+                                               'incomplete': incomplete, 'used': time.time()}
         save_store(store)
 
 
@@ -267,7 +294,7 @@ def request_index(items):
 
 def conversation_of(items, end=None):
     """会話の発言 (依頼と回答) を {role, text} で返す。end までの項目だけを見る。"""
-    return [{'role': i['role'], 'text': input_text(i)} for i in items[:end]
+    return [{'role': i['role'], 'text': input_text(i), **({'native_id': i['id']} if i.get('id') else {})} for i in items[:end]
             if is_request(i) or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant'
                                  and i.get('phase') != 'partial_answer')]
 
@@ -285,7 +312,10 @@ def conversation_with_compaction(items):
     cursor, extra = 0, []
     # Codex は過去の user 発言を compaction の前にも残す。位置を進めて照合し、同じ回答の別の出現は区別する。
     for message in before:
-        found = next((n for n in range(cursor, len(conversation)) if conversation[n] == message), None)
+        found = next((n for n in range(cursor, len(conversation))
+                      if all(conversation[n].get(k) == message.get(k) for k in ('role', 'text'))
+                      and (not conversation[n].get('native_id') or not message.get('native_id')
+                           or conversation[n]['native_id'] == message['native_id'])), None)
         if found is None:
             extra.append(message)
         else:
@@ -295,9 +325,19 @@ def conversation_with_compaction(items):
 
 def checker_payload(body, bodies, **extra):
     conversation, compacted_note = conversation_with_compaction(body.get('input') or [])
+    sid = extra.get('session_id')
+    if safe_id(sid):
+        hidden = [entry for path in (Settings.state_dir / 'gate' / sid).glob('*.json')
+                  for entry in notice_entries(read_json(path) or {}).values()]
+        for message in conversation:
+            if message.get('role') == 'assistant' and any(
+                    (entry.get('source_id') and entry['source_id'] == message.get('native_id')) or
+                    (not entry.get('source_id') and entry.get('original') == message.get('text')) for entry in hidden):
+                message['displayed'] = False
     users = [m for m in conversation if m.get('role') == 'user']
     programs = body.get('access_programs') or {}
-    payload = {'origin': 'codex', 'latest_user': users[-1]['text'] if users else '',
+    payload = {'origin': 'codex', 'source_collector': 'codex-relay', 'source_mode': 'partial' if compacted_note else 'snapshot',
+               'request_id': users[-1].get('native_id') if users else None, 'latest_user': users[-1]['text'] if users else '',
                'recent_messages': conversation, 'bodies': list(bodies), 'final': False,
                'cyber_program': programs.get('cyber') if isinstance(programs, dict) else None,
                'compacted_note': compacted_note}
@@ -402,11 +442,11 @@ def evidence_items(records, prefix):
     items, calls = [], {}
     for record in records:
         if record['kind'] == 'gap':
-            items.append({'id': f'{prefix}{len(items) + 1}', 'unavailable': True, 'note': record['note']})
+            items.append({'id': f'{prefix}{len(items) + 1}', 'native_id': record['key'], 'unavailable': True, 'note': record['note']})
             continue
         item = calls.get(record.get('call_id')) if record['kind'] == 'output' else None
         if item is None:
-            item = {'id': f'{prefix}{len(items) + 1}', 'tool': record.get('tool')}
+            item = {'id': f'{prefix}{len(items) + 1}', 'native_id': record.get('call_id') or record['key'], 'tool': record.get('tool')}
             items.append(item)
             if record.get('call_id') is not None:
                 calls[record['call_id']] = item
@@ -447,7 +487,12 @@ def sweep(force=False):
                        key=lambda pair: pair[0], reverse=True)
         for rank, (stamp, path) in enumerate(turns):
             if rank >= KEEP_TURNS or now - stamp > STATE_TTL:
-                path.unlink(missing_ok=True)
+                pending = root / 'context' / session.name / 'pending-turns' / path.name
+                pending.parent.mkdir(parents=True, exist_ok=True)
+                record = read_json(path)
+                if record is not None:
+                    write_json(pending, dict(record, items=evidence_items(record.get('records') or [], '')) )
+                    path.unlink(missing_ok=True)
 
 
 def record_turn(sid, tid, items):
@@ -485,8 +530,10 @@ def turn_evidence(sid, tid):
     """(今のターンの証拠, 前のターンの証拠) を返す。ID はターンごとの接頭辞で全体を通して一意にする。"""
     directory = Settings.state_dir / 'turns' / sid
     current = read_json(directory / f'{tid}.json') or {'records': []}
-    others = sorted((t for p in directory.glob('*.json') if p.stem != tid for t in [read_json(p)] if t),
-                    key=lambda t: float(t.get('time') or 0))[-KEEP_TURNS:]
+    pending = Settings.state_dir / 'context' / sid / 'pending-turns'
+    paths = {p.stem: p for p in [*pending.glob('*.json'), *directory.glob('*.json')]}
+    others = sorted((t for key, p in paths.items() if key != tid for t in [read_json(p)] if t),
+                    key=lambda t: float(t.get('time') or 0))
     previous = []
     for number, turn in enumerate(others, 1):
         items = evidence_items(turn.get('records') or [], f'p{number}-')
@@ -1078,7 +1125,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if etype == 'response.completed' and kind == 'compaction':
                     output = (obj.get('response') or {}).get('output') or []
                     try:
-                        remember_compaction(body, compaction_items + list(output))
+                        remember_compaction(body, compaction_items + list(output), self.meta().get('session_id'))
                     except OSError as error:
                         # 組を保存できないまま compaction を確定させない。Codex の再試行に任せる。
                         log(event='compaction-store-failed', error=type(error).__name__)
@@ -1179,7 +1226,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         withhold = final and not incomplete
         extra = {'final': final, 'round': sent_back,
                  'continuation': 'withhold' if withhold else 'none', 'evidence': evidence,
-                 'previous_evidence': previous, 'turn_start_context': (turn or {}).get('start') or [],
+                 'previous_evidence': previous, 'session_id': sid, 'turn_id': tid,
+                 'context_dir': str(Settings.state_dir / 'context' / sid), 'turn_start_context': (turn or {}).get('start') or [],
                  'shown_text': '\n\n'.join((read_json(Settings.state_dir / 'turns' / sid / f'{tid}.json') or {})
                                            .get('shown') or [])}
         if sent_back >= 1:
@@ -1187,6 +1235,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             extra['progress_state'] = gate.get('progress_state')
         payload = checker_payload(body, bodies, **extra)
         result = run_check(payload, self.checks)
+        if result.get('display_receipt') and result.get('text') is not None:
+            self.context_delivery = {'context_dir': payload['context_dir'], 'token': result['display_receipt'], 'text': result['text']}
         self.check_status = result.get('status')
         self.result_record = engine_record(result)
         texts = result.get('bodies')
@@ -1321,6 +1371,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if changed:
                     raw = encode_event(etype, obj)
             self.send_chunk(self.stripped(etype, obj, raw))
+        delivery = getattr(self, 'context_delivery', None)
+        if delivery is not None and not self.silent_item:
+            try:
+                subprocess.run([*Settings.check_cmd, '--confirm-display'], input=json.dumps(delivery).encode(),
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            self.context_delivery = None
         record = self.result_record or {}
         log(event='checked', mode=mode, items=len(results), check_dur=round(time.time() - check_started, 3),
             engine=record.get('engine'), engine_failures=record.get('engine_failures') or [],

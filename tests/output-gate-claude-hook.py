@@ -289,7 +289,10 @@ class ClaudeHookTests(unittest.TestCase):
                           '許可は取り消す。C の説明だけして'])
         self.assertEqual(recent[-12:], [{'role': 'assistant', 'text': f'回答{i}'} for i in range(12)])
         self.display('C を説明する', final=True)
-        self.assertEqual(self.checker_calls()[-1]['recent_messages'], recent)
+        collected = self.checker_calls()[-1]
+        self.assertEqual([{k: m[k] for k in ('role', 'text')} for m in collected['recent_messages']], recent)
+        self.assertEqual(len({source['native_id'] for source in collected['sources']}), len(recent))
+        self.assertEqual([source['fields']['text'] for source in collected['sources']], [m['text'] for m in recent])
 
     def test_input_sent_while_working_joins_the_request(self):
         # 作業中に送られた入力は、会話記録に queued_command の添付として残る。ターンを始めた入力とつないで依頼にする。
@@ -553,6 +556,42 @@ class ClaudeHookTests(unittest.TestCase):
             module.stop({'last_assistant_message': '全部通ったよ'}, session)
         self.assertFalse(any(item.get('decision') == 'block' for item in shown))
 
+    def test_transcript_cursor_keeps_distinct_queued_duplicates_without_rescanning(self):
+        module = self.load_hook()
+        context = self.tmp / 'cursor-context'
+        context.mkdir()
+        first, _, _, cursor = module.transcript_delta(str(self.transcript), context)
+        self.assertTrue(first)
+        (context / 'collector-hook.json').write_text(json.dumps(cursor), encoding='utf-8')
+        self.record({'type': 'attachment', 'uuid': 'queued-1', 'attachment': {'type': 'queued_command', 'prompt': '同じ入力'}},
+                    {'type': 'attachment', 'uuid': 'queued-2', 'attachment': {'type': 'queued_command', 'prompt': '同じ入力'}})
+        second, _, latest, second_cursor = module.transcript_delta(str(self.transcript), context)
+        self.assertEqual([s['native_id'] for s in second], ['queued-1', 'queued-2'])
+        self.assertEqual([s['fields']['text'] for s in second], ['同じ入力', '同じ入力'])
+        self.assertTrue(latest.endswith('同じ入力\n\n同じ入力'))
+        self.assertEqual(cursor['source_mode'], 'bootstrap')
+        self.assertEqual(second_cursor['source_mode'], 'delta')
+        second_cursor['invalid'] = True
+        (context / 'collector-hook.json').write_text(json.dumps(second_cursor), encoding='utf-8')
+        reset, _, _, reset_cursor = module.transcript_delta(str(self.transcript), context)
+        self.assertTrue(any(source['kind'] == 'gap' for source in reset))
+        self.assertEqual(reset_cursor['source_mode'], 'bootstrap')
+
+    def test_transcript_ingestion_pins_tool_originals_before_legacy_turn_limit(self):
+        module = self.load_hook()
+        self.transcript.write_text('', encoding='utf-8')
+        self.record({'type': 'user', 'uuid': 'old-user', 'message': {'role': 'user', 'content': '古い確認'}},
+            {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'old-call', 'name': 'Bash', 'input': {'command': 'check'}}]}},
+            {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'tool_result', 'tool_use_id': 'old-call', 'is_error': True, 'content': 'FAILED original'}]}})
+        for number in range(15):
+            self.record({'type': 'user', 'uuid': f'later-{number}', 'message': {'role': 'user', 'content': f'別件 {number}'}})
+        sources, _, _, _ = module.transcript_delta(str(self.transcript), self.tmp / 'new-context')
+        old = next(source for source in sources if source['native_id'] == 'old-call')
+        self.assertEqual(old['fields']['output'], 'FAILED original')
+        self.assertTrue(old['metadata']['failed'])
+        self.assertEqual(old['turn_id'], 'old-user')
+        self.assertLess(old['metadata']['call_position'], old['metadata']['result_position'])
+
     def test_stop_without_a_pair_does_nothing(self):
         self.assertIsNone(self.stop('関係ない回答'))
 
@@ -677,8 +716,10 @@ class ClaudeHookTests(unittest.TestCase):
         reply = {'replacements': [], 'findings': [{'kind': 'unverified_claim', 'source': 'draft',
                                                    'excerpt': 'テストは全部通ったよ', 'evidence': [{'id': None, 'state': 'absent'}]}]}
         (self.tmp / 'claude.py').write_text(
-            'import json, sys\nsys.stdin.read()\n'
-            f'print(json.dumps({{"is_error": False, "stop_reason": "end_turn", "structured_output": {reply!r}}}))\n',
+            'import json, sys, runpy\n'
+            f'helper = runpy.run_path({str(REPO / "tests/output-gate-check.py")!r})\n'
+            f'reply = helper["protocol_reply"](json.load(sys.stdin), {reply!r}, {{}}, [])\n'
+            'print(json.dumps({"is_error": False, "stop_reason": "end_turn", "structured_output": reply}))\n',
             encoding='utf-8')
         (self.tmp / 'gitleaks.py').write_text(
             'import sys\nargs = sys.argv[1:]\nopen(args[args.index("--report-path") + 1], "w").write("[]")\n',

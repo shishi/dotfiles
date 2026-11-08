@@ -144,7 +144,7 @@ def queued_input(entry):
     return text if isinstance(text, str) and text.strip() else None
 
 
-def message_texts(transcript_path):
+def message_texts(transcript_path, provenance=False):
     """会話記録から、利用者と Claude の発言 (古い順) と、利用者の最新の依頼を返す。
     最新の依頼は、ターンを始めた利用者の入力と、その後の作業中に送られた入力をつないだもの。依頼を何通かに
     分けて送ることがあるため。ツールの結果と利用者の入力ではない行は除く。"""
@@ -159,7 +159,7 @@ def message_texts(transcript_path):
                 continue
             text = queued_input(entry)
             if text is not None:
-                recent.append({'role': 'user', 'text': text})
+                recent.append({'role': 'user', 'text': text, **({'native_id': entry['uuid']} if provenance and entry.get('uuid') else {})})
                 if latest_user is None:
                     queued.append(text)
                 continue
@@ -170,7 +170,7 @@ def message_texts(transcript_path):
             text = content_text(message.get('content'))
             if not text.strip():
                 continue
-            recent.append({'role': role, 'text': text})
+            recent.append({'role': role, 'text': text, **({'native_id': entry['uuid']} if provenance and entry.get('uuid') else {})})
             if role == 'user' and latest_user is None:
                 latest_user = '\n\n'.join([text, *queued[::-1]])
     except (OSError, TypeError, ValueError):
@@ -178,6 +178,105 @@ def message_texts(transcript_path):
     if latest_user is None and queued:
         latest_user = '\n\n'.join(queued[::-1])
     return recent[::-1], latest_user or ''
+
+
+def transcript_delta(transcript_path, directory, current_message_id=None, current_draft=None):
+    cursor_path = directory / 'collector-hook.json'
+    try:
+        cursor = json.loads(cursor_path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        cursor = {}
+    except (OSError, ValueError):
+        cursor = {'invalid': True}
+    sources, said = [], []
+    source_mode = 'delta' if cursor else 'bootstrap'
+    latest = cursor.get('latest_user', '')
+    current_turn = cursor.get('turn_id', 'unknown-turn')
+    pending_calls = dict(cursor.get('pending_calls', {}))
+    collected = {}
+    positions = {}
+    try:
+        with Path(transcript_path).open('rb') as stream:
+            stat = os.fstat(stream.fileno())
+            identity = [stat.st_dev, stat.st_ino]
+            offset = cursor.get('offset', 0)
+            if cursor and (cursor.get('identity') != identity or offset > stat.st_size or cursor.get('invalid')):
+                sources.append({'kind': 'gap', 'native_id': 'transcript-reset-' + str(stat.st_mtime_ns),
+                    'fields': {'text': 'Transcript identity changed or its cursor could not be recovered.'}, 'available': False})
+                offset = 0
+                source_mode = 'bootstrap'
+                pending_calls = {}
+                current_turn = 'unknown-turn'
+            stream.seek(offset)
+            while True:
+                start = stream.tell()
+                line = stream.readline()
+                if not line:
+                    break
+                if not line.endswith(b'\n'):
+                    stream.seek(start)
+                    break
+                offset = stream.tell()
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    sources.append({'kind': 'gap', 'native_id': f'line:{identity}:{start}',
+                        'fields': {'text': 'Transcript row is not valid JSON.'}, 'available': False})
+                    continue
+                if not isinstance(entry, dict) or entry.get('isSidechain'):
+                    continue
+                queued = queued_input(entry)
+                message = entry.get('message')
+                role = message.get('role') if isinstance(message, dict) else None
+                content = message.get('content') if isinstance(message, dict) else None
+                if role == 'user' and is_user_input(entry, content):
+                    current_turn = turn_key(entry, content_text(content))
+                for block in content if isinstance(content, list) else []:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get('type') == 'tool_use' and isinstance(block.get('id'), str) and block.get('name') not in ('gate_findings', 'mcp__output-gate__gate_findings'):
+                        pending_calls[block['id']] = {'call': block, 'turn_id': current_turn, 'position': start}
+                        collected[(current_turn, block['id'])] = evidence_item(block, None)
+                        positions[(current_turn, block['id'])] = (start, None)
+                    elif block.get('type') == 'tool_result' and block.get('tool_use_id') in pending_calls:
+                        saved = pending_calls.pop(block['tool_use_id'])
+                        collected[(saved['turn_id'], block['tool_use_id'])] = evidence_item(saved['call'], (block, entry.get('toolUseResult')))
+                        positions[(saved['turn_id'], block['tool_use_id'])] = (saved.get('position', start), start)
+                if queued is not None:
+                    role, text = 'user', queued
+                    latest = '\n\n'.join(x for x in (latest, text) if x)
+                elif role in ('user', 'assistant'):
+                    if role == 'user' and not is_user_input(entry, message.get('content')):
+                        continue
+                    if entry.get('isMeta') or entry.get('isCompactSummary'):
+                        continue
+                    text = content_text(message.get('content'))
+                    if role == 'user':
+                        latest = text
+                else:
+                    continue
+                if not text.strip():
+                    continue
+                native = entry.get('uuid') or f'line:{identity}:{start}'
+                source = {'kind': role, 'native_id': native, 'turn_id': current_turn, 'fields': {'text': text}, '_position': start, 'metadata': {'position': start, 'displayed': role == 'assistant' and text != current_draft and (not current_message_id or message.get('id') != current_message_id)}}
+                sources.append(source)
+                said.append({'role': role, 'text': text, 'native_id': native})
+            next_cursor = {'identity': identity, 'offset': offset, 'latest_user': latest,
+                           'turn_id': current_turn, 'pending_calls': pending_calls, 'source_mode': source_mode}
+    except (OSError, TypeError):
+        sources.append({'kind': 'gap', 'native_id': 'transcript-unavailable',
+            'fields': {'text': 'Transcript cannot be read.'}, 'available': False})
+        next_cursor = None
+    for (turn_id, call_id), item in collected.items():
+        call = {k: item[k] for k in ('tool', 'command', 'input') if k in item}
+        metadata = {k: item[k] for k in ('tool', 'failed', 'exit_code', 'note', 'unavailable', 'truncated', 'target') if k in item}
+        sources.append({'kind': 'evidence', 'native_id': call_id, 'alias': call_id, 'turn_id': turn_id,
+            'raw_evidence': item, 'fields': {'call': json.dumps(call, ensure_ascii=False),
+                'output': str(item.get('output') or ''), 'metadata': json.dumps(metadata, ensure_ascii=False)},
+            'metadata': {**metadata, 'call_position': positions[(turn_id, call_id)][0], 'result_position': positions[(turn_id, call_id)][1]},
+            '_position': positions[(turn_id, call_id)][0], 'available': True, 'producer_truncated': bool(item.get('truncated'))})
+    sources.sort(key=lambda source: source.get('_position', -1))
+    return sources, said, latest, next_cursor
 
 
 def squash(text):
@@ -416,7 +515,8 @@ def check(draft, event, session_dir, stop_reason):
     指摘を Stop hook へ渡す。直させた回数は Stop hook が block した時点で進める (途中の応答を最終回答と取り違えても
     block しなければ回数を進めないため)。"""
     transcript_path = event.get('transcript_path')
-    said, latest_user = message_texts(transcript_path)
+    context_dir = state_root() / 'claude-context' / (event.get('session_id') or session_dir.name)
+    sources, said, latest_user, collector_cursor = transcript_delta(transcript_path, context_dir, event.get('message_id'), draft)
     final = stop_reason in FINAL_STOP_REASONS or stop_reason is None
     turn = read_turns(transcript_path, None, PREVIOUS_TURNS + 1 if final else 1)
     if turn['key'] is None:   # 証拠は遡り切れなくても、ターンの鍵は最新の利用者の入力の行から作る
@@ -424,8 +524,12 @@ def check(draft, event, session_dir, stop_reason):
             ('t-' + event['turn_id'] if safe(event.get('turn_id')) else 'unknown-turn')
     shown_path = session_dir / f"{turn['key']}.shown"
     pair = pair_name(draft)
-    payload = {'origin': 'claude', 'draft': draft, 'latest_user': latest_user, 'recent_messages': said,
-               'final': final, 'cyber_program': None, 'round': 0}
+    payload = {'origin': 'claude', 'draft': draft, 'latest_user': latest_user, 'recent_messages': said, 'sources': sources,
+               'source_collector': 'claude-hook',
+               'source_mode': (collector_cursor or {}).get('source_mode', 'bootstrap'),
+               'final': final, 'cyber_program': None, 'round': 0,
+               'session_id': event.get('session_id') or session_dir.name, 'turn_id': turn['key'],
+               'context_dir': str(context_dir)}
     if final:
         try:
             shown_text = shown_path.read_text(encoding='utf-8').strip()
@@ -437,6 +541,9 @@ def check(draft, event, session_dir, stop_reason):
         if count:   # Stop hook で差し戻した後の再検査。直させた回数と、最後に直させたときの指摘を渡す
             payload.update(round=count, previous_findings=previous, progress_state=progress)
     result = run_check(payload)
+    if collector_cursor is not None and result.get('source_cursor'):
+        context_dir.mkdir(parents=True, exist_ok=True)
+        write_json(context_dir / 'collector-hook.json', collector_cursor)
     text = result['text']
     engine = {key: result.get(key) for key in ('engine', 'engine_failures', 'dropped')}
     append_log(session_dir / 'check.log', {'pair': pair, 'turn': turn['key'], 'final': final, 'round': payload['round'],
@@ -459,6 +566,7 @@ def check(draft, event, session_dir, stop_reason):
             write_json(session_dir / f'{pair}.result', {'round': payload['round'], 'turn': turn['key'],
                                                         'status': result['status'], 'agent_message': message,
                                                         'findings': findings, 'progress_state': result.get('progress_state'),
+                                                        'display_receipt': result.get('display_receipt'), 'context_dir': str(context_dir),
                                                         'stopped': result.get('stopped', False), **engine})
         except OSError:
             if message:
@@ -652,6 +760,15 @@ def display(event, session_dir, mod_runs):
                 draft = settle()
         text = UNCHECKED_PREFIX.format(f'出力ゲートの処理が失敗した ({type(error).__name__})') + draft
     emit({'hookSpecificOutput': {'hookEventName': 'MessageDisplay', 'displayContent': text}})
+    try:
+        saved = json.loads((session_dir / f'{pair_name(draft)}.result').read_text(encoding='utf-8'))
+        if saved.get('display_receipt'):
+            command = json.loads(os.environ['OUTPUT_GATE_CHECK_CMD']) if os.environ.get('OUTPUT_GATE_CHECK_CMD') else [sys.executable, '-I', str(CHECK_SCRIPT)]
+            subprocess.run([*command, '--confirm-display'], input=json.dumps({'context_dir': saved['context_dir'],
+                'token': saved['display_receipt'], 'text': text}).encode(), stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=5)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
 
 
 def clean_old_state(current):
