@@ -496,17 +496,19 @@ def sweep(force=False):
             if rank >= KEEP_TURNS or now - stamp > STATE_TTL:
                 pending = root / 'context' / session.name / 'pending-turns' / path.name
                 pending.parent.mkdir(parents=True, exist_ok=True)
-                record = read_json(path)
-                if record is not None:
-                    write_json(pending, dict(record, items=evidence_items(record.get('records') or [], '')) )
-                    path.unlink(missing_ok=True)
+                with Settings.store_lock, context.locked(pending.parent.parent):
+                    record = read_json(path)
+                    if record is not None:
+                        write_json(pending, dict(record, items=evidence_items(record.get('records') or [], '')) )
+                        path.unlink(missing_ok=True)
 
 
 def record_turn(sid, tid, items):
     """未保存の呼び出しと結果を取り込む。依頼が割り込んだ場合も既知の呼び出しのターンへ結果を戻し、
     所属不明の過去の記録は区別不明のターンへ保全する。失敗は OSError。"""
     start, _ = conversation_with_compaction(items)
-    with Settings.store_lock:
+    context_dir = Settings.state_dir / 'context' / sid
+    with Settings.store_lock, context.locked(context_dir):
         directory = Settings.state_dir / 'turns' / sid
         path = directory / f'{tid}.json'
         pending = Settings.state_dir / 'context' / sid / 'pending-turns'
@@ -522,21 +524,60 @@ def record_turn(sid, tid, items):
                 turn['records'].append(gap_record('compaction で消えたこのターンの範囲 (中継が保存していない)'))
         first_snapshot = not history
         history[path] = turn
-        saved = {r['key'] for t in history.values() for r in t['records']}
-        owners = {r['call_id']: p for p, t in history.items() for r in t['records'] if r.get('call_id')}
         unknown = directory / 'unknown.json'
         if unknown not in history and pending / 'unknown.json' in history:
             unknown = pending / 'unknown.json'
+        relocated = []
+        for previous_path, value in list(history.items()):
+            if value['turn_id'] == UNKNOWN_TURN and previous_path != unknown:
+                bucket = history.setdefault(unknown, dict(value, records=[]))
+                bucket['records'] = list({r['key']: r for r in [*value['records'], *bucket['records']]}.values())
+                history.pop(previous_path)
+                relocated.append(previous_path)
+        archived = context.read(context_dir / 'record-index.json', {})
+        archived_sources = {}
+        for source in context.read(context_dir / 'manifest.json', []):
+            if source['kind'] not in ('evidence', 'gap'):
+                continue
+            previous = archived_sources.get(source['native_id'])
+            if previous is None or previous['id'] == source['id']:
+                archived_sources[source['native_id']] = source
+        saved = set(archived) | {r['key'] for t in history.values() for r in t['records']}
+        turn_paths = {str(t['turn_id']): p for p, t in history.items()}
+        turn_paths[UNKNOWN_TURN] = unknown
+        owners = {s['native_id']: turn_paths.get(s['turn_id'], directory / f'{s["turn_id"]}.json') for s in archived_sources.values()}
+        owners.update({r['call_id']: turn_paths.get(r['turn_id'], directory / f'{r["turn_id"]}.json')
+                       for r in archived.values() if r.get('call_id')})
+        owners.update({r['call_id']: p for p, t in history.items() for r in t['records'] if r.get('call_id')})
         before = records_from(items[:index]) if index is not None else []
         if first_snapshot and index is not None and has_compaction(items[:index]):
             before.insert(0, gap_record('compaction で消えた前のターンの範囲 (中継が保存していない)'))
-        changed = set()
+        changed = {unknown} if relocated else set()
         for records, default in ((before, unknown), (records_from(after), path)):
             for record in records:
                 if record['key'] in saved:
                     continue
-                target = owners.get(record.get('call_id'), default)
-                history.setdefault(target, {'turn_id': UNKNOWN_TURN, 'time': time.time() - 1, 'records': []})['records'].append(record)
+                legacy = archived_sources.get(record.get('call_id') or record['key'])
+                target = owners.get(record.get('call_id') or record['key'], default)
+                original = [r for r in archived.values() if record.get('call_id') and r.get('call_id') == record['call_id']]
+                if not original and legacy and legacy['kind'] == 'evidence':
+                    fields = (['call'] if legacy.get('metadata', {}).get('tool') is not None else []) + (['output'] if legacy['fields'].get('output') else [])
+                    original = [dict(key=f'archive:{legacy["id"]}:{legacy["rev"]}:{field}', kind=field,
+                                     call_id=record['call_id'], turn_id=legacy['turn_id'],
+                                     source={'id': legacy['id'], 'rev': legacy['rev']}) for field in fields]
+                owner_turn = history.setdefault(target, {'turn_id': original[0]['turn_id'] if original else legacy['turn_id'] if legacy else UNKNOWN_TURN,
+                                                        'time': time.time() - 1, 'records': []})
+                existing = {r['key'] for r in owner_turn['records']}
+                for prior in original:
+                    if prior['key'] in existing:
+                        continue
+                    source = context.read(context_dir / 'sources' / (context.digest([prior['source']['id'], prior['source']['rev']]) + '.json'))
+                    if source is None:
+                        raise OSError('archived tool original is missing')
+                    fields = json.loads(source['fields']['call']) if prior['kind'] == 'call' else {'output': source['fields']['output']}
+                    owner_turn['records'].append(dict(key=prior['key'], kind=prior['kind'], call_id=prior['call_id'], **fields))
+                    existing.add(prior['key'])
+                owner_turn['records'].append(record)
                 if record.get('call_id'):
                     owners[record['call_id']] = target
                 saved.add(record['key'])
@@ -544,6 +585,8 @@ def record_turn(sid, tid, items):
         for target in changed - {path}:
             write_json(target, dict(history[target], items=evidence_items(history[target]['records'], '')))
         write_json(path, turn)
+        for previous_path in relocated:
+            previous_path.unlink(missing_ok=True)
     sweep()
     return turn
 

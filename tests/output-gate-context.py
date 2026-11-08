@@ -916,6 +916,7 @@ class ContextTests(unittest.TestCase):
         ready = self.reply(rejected, dict(kind='need_refs', refs=[second], additions=[observation]))
         self.assertIsNone(self.packet(ready)['validation_feedback'])
         self.assertTrue(any(e['ref'] == second for e in self.packet(ready)['retrieved']))
+        observation = dict(observation, id=ready['transaction']['retrieval_observations'][0]['id'])
         self.assertEqual(ready['transaction']['retrieval_observations'], [observation])
         self.assertFalse(any(e['ref'] == first for e in self.packet(ready)['retrieved']))
         self.payload['draft'] = 'Updated answer after inspecting both originals.'
@@ -944,9 +945,11 @@ class ContextTests(unittest.TestCase):
         ready = self.reply(ready, dict(kind='need_refs', refs=[third], additions=[one]))
         self.assertEqual(ready['status'], 'ready', ready.get('reason'))
         self.assertIn('grounded observation', self.packet(ready)['validation_feedback'] or '')
+        one = dict(one, id=ready['transaction']['retrieval_observations'][0]['id'])
         self.assertEqual(ready['transaction']['retrieval_observations'], [one])
         ready = self.reply(ready, dict(kind='need_refs', refs=[third], additions=[two]))
         self.assertIsNone(self.packet(ready)['validation_feedback'])
+        two = dict(two, id=ready['transaction']['retrieval_observations'][1]['id'])
         self.assertEqual(ready['transaction']['retrieval_observations'], [one, two])
         self.assertTrue(any(e['ref'] == third for e in self.packet(ready)['retrieved']))
 

@@ -1,4 +1,5 @@
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 import random
 import unittest
@@ -195,7 +196,7 @@ class AbsenceTests(unittest.TestCase):
         original = next(e for e in f.packet(ready)['retrieved'] if 'VERIFIED' in e['text'])
         observation = dict(id='observed-result', kind='fact', text='The original result says VERIFIED.', refs=[original['ref']], related=[], target=dict(name='result', revision_refs=[]), validity='current')
         ready = f.reply(ready, dict(lookup, additions=[observation]))
-        self.assertIn(observation, ready['transaction']['retrieval_observations'])
+        self.assertTrue(any(o['text'] == observation['text'] and o['refs'] == observation['refs'] for o in ready['transaction']['retrieval_observations']))
 
     def test_completed_judgment_keeps_grounded_interpretations_for_the_next_answer(self):
         f = self.fixture
@@ -206,12 +207,144 @@ class AbsenceTests(unittest.TestCase):
         original = next(e for e in f.packet(ready)['retrieved'] if 'VERIFIED' in e['text'])
         observation = dict(id='observed-result', kind='fact', text='The original result says VERIFIED.', refs=[original['ref']], related=[], target=dict(name='result', revision_refs=[]), validity='current')
         ready = f.reply(ready, dict(kind='need_refs', refs=[original['ref']], additions=[observation]))
+        stored = ready['transaction']['retrieval_observations'][0]
         checked = f.judgment(ready)
         self.assertEqual(checked['status'], 'checked')
         f.payload['draft'] = 'A revised answer.'
         resumed = f.ready()
-        self.assertIn(observation, f.packet(resumed)['retrieval_observations'])
+        self.assertIn(stored, f.packet(resumed)['retrieval_observations'])
         self.assertTrue(fixtures.checker.context.covered(original['ref'], resumed['transaction']['served_refs']))
+
+    def test_completed_shown_prefix_is_not_rejudged_but_new_bytes_are(self):
+        f = self.fixture
+        f.payload['shown_text'] = '確認したよ。'
+        ready = f.update(f.ready())
+        self.assertEqual(f.judgment(ready)['status'], 'checked')
+        f.payload['draft'] = 'A revised answer.'
+        ready = f.ready()
+        self.assertEqual([a['answer_role'] for a in f.packet(ready)['answers']], ['draft'])
+        f.payload['shown_text'] += '追加。'
+        ready = f.ready()
+        shown = [a for a in f.packet(ready)['answers'] if a['answer_role'] == 'shown']
+        self.assertEqual([a['text'] for a in shown], ['追加。'])
+        self.assertEqual(shown[0]['ref']['start'], len('確認したよ。'.encode()))
+        f.payload['shown_text'] = '変更したよ。追加。'
+        ready = f.ready()
+        self.assertEqual([a['text'] for a in f.packet(ready)['answers'] if a['answer_role'] == 'shown'], ['変更したよ。追加。'])
+        f.payload.update(turn_id='another-turn', shown_text='確認したよ。')
+        ready = f.ready()
+        self.assertEqual([a['text'] for a in f.packet(ready)['answers'] if a['answer_role'] == 'shown'], ['確認したよ。'])
+
+    def test_unfinished_shown_assessment_is_not_reused(self):
+        f = self.fixture
+        f.payload['shown_text'] = '確認したよ。'
+        f.update(f.ready())
+        f.payload['draft'] = 'A revised answer.'
+        ready = f.ready()
+        self.assertEqual([a['text'] for a in f.packet(ready)['answers'] if a['answer_role'] == 'shown'], ['確認したよ。'])
+
+    def test_new_bounded_originals_are_supplied_without_refetching_committed_history(self):
+        f = self.fixture
+        f.payload['evidence'] = [{'id': 'earlier', 'output': 'Earlier operation.'}]
+        self.assertEqual(f.judgment(f.update(f.ready()))['status'], 'checked')
+        rng = random.Random(71)
+        small = ''.join(rng.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=65000))
+        large = ''.join(rng.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=150000))
+        f.payload['evidence'] += [{'id': 'fresh', 'output': small}, {'id': 'oversized', 'output': large}]
+        f.payload['draft'] = 'The latest result.'
+        ready = f.ready()
+        originals = f.packet(ready)['retrieved']
+        self.assertTrue(any(e['text'] == small for e in originals))
+        self.assertFalse(any(e['text'] in (large, 'Earlier operation.') for e in originals))
+        self.assertLessEqual(sum(len(fixtures.checker.context.wire_encoded(e)) for e in originals), fixtures.checker.context.UNIT_BYTES)
+
+    def test_observation_ids_are_local_to_a_reply_not_global_state_keys(self):
+        f = self.fixture
+        f.payload['evidence'] = [{'id': 'verification', 'output': 'VERIFIED'}]
+        ready = f.update(f.ready())
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        original = fixtures.checker.context.ref(source, 'output')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original]))
+        observation = dict(id='obs-1', kind='fact', text='The result says VERIFIED.', refs=[original], related=[], target=dict(name='result', revision_refs=[]), validity='current')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original], additions=[observation]))
+        self.assertEqual(f.judgment(ready)['status'], 'checked')
+        f.payload['draft'] = 'A revised answer.'
+        ready = f.ready()
+        observation = dict(observation, text='The result does not measure latency.')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original], additions=[observation]))
+        self.assertEqual({o['text'] for o in ready['transaction']['retrieval_observations']}, {'The result says VERIFIED.', 'The result does not measure latency.'})
+
+    def test_observation_history_is_retained_without_exhausting_the_model_input(self):
+        f = self.fixture
+        f.payload['evidence'] = [{'id': 'verification', 'output': 'VERIFIED'}]
+        ready = f.update(f.ready())
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        original = fixtures.checker.context.ref(source, 'output')
+        rng = random.Random(71)
+        ready['transaction']['retrieval_observations'] = [dict(id=f'observation-{n}', kind='fact',
+            text=''.join(rng.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=2000)), refs=[original], related=[],
+            target=dict(name='result', revision_refs=[]), validity='current') for n in range(250)]
+        ready = fixtures.checker.context_ready(ready['transaction'])
+        self.assertEqual(ready['status'], 'ready')
+        data = f.packet(ready)
+        self.assertEqual(len(ready['transaction']['retrieval_observations']), 250)
+        self.assertGreater(data['retrieval_observations_omitted'], 0)
+        self.assertEqual(len(data['retrieval_observations']) + data['retrieval_observations_omitted'], 250)
+
+    def test_cached_source_lookup_has_the_same_result_shape(self):
+        f = self.fixture
+        f.payload['evidence'] = [{'id': 'verification', 'output': 'VERIFIED'}]
+        ready = f.update(f.ready())
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        query = dict(id=source['id'], rev=source['rev'], field='output', literal='VERIFIED', after=0)
+        ready = f.reply(ready, dict(kind='need_refs', refs=[query]))
+        original = f.packet(ready)['locator_results']
+        ready = f.reply(ready, dict(kind='need_refs', refs=[query]))
+        self.assertEqual(f.packet(ready)['locator_results'], original)
+
+    def test_persistent_observations_require_original_sources_not_generated_views(self):
+        f = self.fixture
+        ready = f.ready()
+        scope = f.packet(ready)['user_scope']['ref']
+        observation = dict(id='summary', kind='unresolved', text='The generated view needs interpretation.', refs=[scope],
+                           related=[], target=dict(name='view', revision_refs=[]), validity='current')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[scope], additions=[observation]))
+        self.assertEqual(ready['transaction'].get('retrieval_observations', []), [])
+        self.assertIn('original', f.packet(ready)['validation_feedback'])
+
+    def test_joint_grounding_leaves_room_for_the_next_original(self):
+        f = self.fixture
+        rng = random.Random(115)
+        text = lambda n: ''.join(rng.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=n))
+        f.payload['evidence'] = [dict(id='ground', output=text(380000)), dict(id='needed', output='NEEDED' * 200)]
+        rules = text(70000)
+        with fixtures.patch.object(fixtures.checker, 'response_rules', lambda: rules):
+            base = f.ready()['transaction']
+            sources = sorted((s for s in base['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+            low, high, best = 0, 380000, None
+            while low <= high:
+                length = (low + high) // 2
+                tx = deepcopy(base)
+                wanted = fixtures.checker.context.ref(sources[0], 'output', 0, length)
+                fact = dict(id='prior-fact', kind='fact', text='This original contains ASCII fixture data.', refs=[wanted],
+                            related=[], target=dict(name='fixture', revision_refs=[]), validity='current')
+                tx['candidate_state']['items'] = [fact]
+                try:
+                    ready = fixtures.checker.context_ready(tx)
+                except ValueError as error:
+                    self.assertIn('context input limit', str(error))
+                    high = length - 1
+                    continue
+                if any(g['ref'] == wanted for g in f.packet(ready).get('grounding', [])):
+                    best, low = ready, length + 1
+                else:
+                    high = length - 1
+            self.assertIsNotNone(best)
+            ready = fixtures.checker.context_ready(best['transaction'])
+            needed = fixtures.checker.context.ref(sources[1], 'output')
+            ready = f.reply(ready, dict(kind='need_refs', refs=[needed]))
+            self.assertEqual(ready['status'], 'ready', ready.get('reason'))
+            self.assertTrue(any(e['ref'] == needed for e in f.packet(ready)['retrieved']))
 
     def test_cached_lookup_can_fetch_an_original_that_is_no_longer_visible(self):
         f = self.fixture
