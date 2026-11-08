@@ -1641,6 +1641,7 @@ class EngineTests(GateTestCase):
                           if k != 'OPENAI_BASE_URL'})
         self.assertIn('openai_base_url=""', codex['args'])
         self.assertIsNone(codex['env']['OPENAI_BASE_URL'])
+        self.assertEqual(codex['env']['AGENT_DELEGATED_SESSION'], '1')
 
     def test_claude_answer_with_stop_reason_tool_use_is_not_a_failure(self):
         # claude -p --json-schema は、構造化出力をツール呼び出しで返し、stop_reason が tool_use になる (実測)。

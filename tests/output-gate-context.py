@@ -52,6 +52,25 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(result['status'], 'ready')
         self.assertIn('coverage', json.loads(result['prompt'])['validation_feedback'])
 
+    def test_discovery_annotation_does_not_add_a_catalog_obligation(self):
+        for has_operation in [False, True]:
+            with self.subTest(has_operation=has_operation):
+                self.payload['context_dir'] = str(Path(self.tmp.name) / str(has_operation))
+                self.payload['evidence'] = [{'id': 'op', 'tool': 'exec', 'output': 'result'}] if has_operation else []
+                ready = self.ready()
+                data = checker.context.expand_wire(json.loads(ready['prompt']))
+                discovery = data['catalog_refs'][0]
+                result = self.reply(ready, {'kind': 'update', 'user_coverage': [u['ref'] for u in data['users']],
+                    'catalog_coverage': [{'id': discovery['id'], 'rev': discovery['rev'],
+                        'disposition': 'unrelated', 'related_item_ids': [], 'reason': 'Discovery index annotation',
+                        'grounding_refs': [discovery]}],
+                    'decisions': [], 'additions': [], 'unresolved': [], 'focus_refs': []})
+                feedback = json.loads(result['prompt']).get('validation_feedback')
+                if has_operation:
+                    self.assertIn('catalog coverage incomplete', feedback)
+                else:
+                    self.assertIsNone(feedback)
+
     def test_foreign_reference_is_not_absence(self):
         result = self.reply(self.ready(), {'kind': 'need_refs', 'refs': [
             {'id': 'foreign', 'rev': 'x', 'field': 'text', 'start': 0, 'end': 1}]})

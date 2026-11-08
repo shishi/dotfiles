@@ -641,6 +641,7 @@ def run_codex(prompt, config, cyber_program, workdir, timeout, final, cancel=Non
     (workdir / INSTRUCTIONS_FILE).write_text((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), encoding='utf-8')
     (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
     env = {k: v for k, v in os.environ.items() if k not in CODEX_DROPPED_ENV}
+    env['AGENT_DELEGATED_SESSION'] = '1'
     code, out = run_judge(codex_command(model, config['effort'], cyber_program, workdir), prompt, workdir, timeout, env, cancel)
     if code != 0:
         raise EngineFailure(judge_failure('codex', code, timeout))

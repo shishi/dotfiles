@@ -838,6 +838,7 @@ def accept_update(tx, answer):
     if bulk:
         explicit = {c.get('id', '') + ':' + c.get('rev', ''): c for c in cs if c is not bulk}
         cs = [explicit.get(key, dict(bulk, id=c['id'], rev=c['rev'])) for key, c in catalogs.items()]
+    cs = [c for c in cs if c.get('id', '') + ':' + c.get('rev', '') in catalogs]
     if {c.get('id', '') + ':' + c.get('rev', '') for c in cs} != set(catalogs):
         raise ValueError('catalog coverage incomplete')
     for c in cs:
@@ -1180,7 +1181,7 @@ completion. Standing constraints survive task completion. For a request whose ac
 from an incomplete fragment. Do not add a long historical summary. Retain only live facts and current obligations.
 Short approvals refer to pending proposals/questions, not the last assistant report. Fetch focus originals and resolve
 that relation; retrieve adjacent assistant originals from catalog when needed. Return focus_refs for every old focus
-when processing users. Put only explicitly answered/cancelled focus refs in focus_resolved. Only new tool/gap entries are eager catalog obligations. Assistant history remains in catalog_refs for discovery, not automatic retirement. A short approval without a confirmed focus requires fetching the relevant proposal/question there before interpreting the approval. Catalog disposition unrelated needs a concrete semantic reason; unknown operation targets,
+when processing users. Put only explicitly answered/cancelled focus refs in focus_resolved. Only new tool/gap entries are eager catalog obligations. Return catalog_coverage only for entries in the supplied catalog list (or its catalog_scope); catalog_refs and their retrieved discovery pages are not additional coverage obligations. Assistant history remains in catalog_refs for discovery, not automatic retirement. A short approval without a confirmed focus requires fetching the relevant proposal/question there before interpreting the approval. Catalog disposition unrelated needs a concrete semantic reason; unknown operation targets,
 failures, modifications after old success and candidate recovery require original retrieval or retain_unresolved.
 
 For stage judge return {kind:"judgment",answer_coverage:[Ref],item_coverage:[item_id],claims:[{id,answer_ref:Ref,text,
