@@ -702,6 +702,7 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
                 tx['pending_units'] = merged
                 tx['retrieved'] = saved['retrieved']
                 tx['remaining_refs'] = saved.get('remaining_refs', [])
+                tx['archive_searches'] = saved.get('archive_searches', [])
                 tx['resumed_update_units'] = sum(u.get('stage') == 'update' for u in tx['completed_units'])
     if not tx['pending_units']:
         start_judge(tx)
@@ -818,6 +819,33 @@ def retrieval_page(tx, data, overhead):
     data.update(retrieved=supplied, remaining_refs=queue)
 
 
+def lookup_progress(tx, answers, visible):
+    progress, seen = [], set()
+    for search in reversed(tx.get('archive_searches', [])):
+        focus = search['focus_refs']
+        if search['source_end'] != tx['source_end'] or not any(
+                all(r[k] == a['ref'][k] for k in ('id', 'rev', 'field'))
+                and r['start'] < a['ref']['end'] and a['ref']['start'] < r['end']
+                for r in focus for a in answers):
+            continue
+        key = digest([search['query'], sorted(digest(r) for r in focus)])
+        if key in seen:
+            continue
+        seen.add(key)
+        next_queries = []
+        if search.get('remaining_before_seq') is not None:
+            next_queries.append(dict(search['query'], before_seq=search['remaining_before_seq']))
+        if search.get('remaining_after') is not None:
+            next_queries.append(dict(search['query'], after=search['remaining_after']))
+        if search['query'].get('scope') == 'archive':
+            next_queries.extend(dict(m['locator'], after=m['remaining_after'])
+                                for m in search['matches'] if m.get('remaining_after') is not None)
+        progress.append(dict(query=search['query'], focus_refs=focus, next_queries=next_queries,
+            not_found=search.get('not_found', False),
+            originals_visible=all(covered(r, visible) for r in search['ranges'])))
+    return progress
+
+
 def plan_unit(tx, instructions, schema):
     if time.time() >= tx['deadline']:
         raise ValueError('context deadline exhausted')
@@ -875,7 +903,6 @@ def plan_unit(tx, instructions, schema):
             'evidence_obligations': tx['evidence_obligations'], 'retrieved': tx['retrieved'],
             'remaining_refs': tx.get('remaining_refs', []), 'retrieval_observations': tx.get('retrieval_observations', []),
             'locator_results': tx.get('locator_results', []),
-            'archive_searches': tx.get('archive_searches', []),
             'aliases': aliases, 'source_end': tx['source_end'],
             'catalog_refs': tx.get('catalog_refs', []),
             'evidence_frontier': {'count': sum(s['kind'] == 'evidence' for s in tx['sources'].values()), 'last_seq': max((s['seq'] for s in tx['sources'].values() if s['kind'] == 'evidence'), default=0), 'reviewed': False},
@@ -906,7 +933,21 @@ def plan_unit(tx, instructions, schema):
                             joint = proposed
             unit['_joint'] = {'answers': answers, 'items': check_items, 'grounding': joint['grounding']}
             data = joint
+    data['evidence_search_status'] = [dict(answer_ref=a['ref'], complete=searched_claim_originals(tx, a['ref']))
+                                      for a in data.get('answers', data.get('answer_preview', []))]
+    visible = [e['ref'] for e in data.get('grounding', []) + data.get('catalog_grounding', []) + tx['retrieved']]
+    progress = lookup_progress(tx, data.get('answers', data.get('answer_preview', [])), visible)
+    data['lookup_progress'] = []
+    for entry in progress:
+        entry = dict(entry, originals_visible=False)
+        candidate = dict(data, lookup_progress=[*data['lookup_progress'], entry])
+        if len(wire_encoded(candidate)) + len(instructions.encode()) + len(encoded(schema)) + UNIT_BYTES > LIMIT:
+            break
+        data['lookup_progress'].append(entry)
+    data['lookup_progress_omitted'] = len(progress) - len(data['lookup_progress'])
     retrieval_page(tx, data, len(instructions.encode()) + len(encoded(schema)))
+    visible = [e['ref'] for e in data.get('grounding', []) + data.get('catalog_grounding', []) + tx['retrieved']]
+    data['lookup_progress'] = lookup_progress(tx, data.get('answers', data.get('answer_preview', [])), visible)[:len(data['lookup_progress'])]
     packet,handles = compact_references(wire_value(data))
     tx['reference_handles']=handles
     if expand_wire(packet) != data:
@@ -1333,11 +1374,19 @@ def accept(tx, answer, checkpoint=None):
         resolve_refs(tx, focus_refs, True)
         for request in requests:
             if isinstance(request, dict) and 'literal' in request:
-                ranges, result = locate_archive(tx, request, min(8192, UNIT_BYTES // 4 // max(1, sum(r.get('scope') == 'archive' for r in requests if isinstance(r, dict))))) if request.get('scope') == 'archive' else locate_refs(tx, request)
+                prior = next((s for s in tx.get('archive_searches', []) if s['query'] == request
+                              and s['source_end'] == tx['source_end']
+                              and {digest(r) for r in s['focus_refs']} == {digest(r) for r in focus_refs}), None)
+                if prior is not None:
+                    ranges = prior['ranges']
+                    result = {k: v for k, v in prior.items() if k not in ('ranges', 'focus_refs', 'source_end')}
+                else:
+                    ranges, result = locate_archive(tx, request, min(8192, UNIT_BYTES // 4 // max(1, sum(r.get('scope') == 'archive' for r in requests if isinstance(r, dict))))) if request.get('scope') == 'archive' else locate_refs(tx, request)
                 refs.extend(ranges)
                 located.append(result)
-                tx.setdefault('archive_searches', []).append(dict(result, query=request, ranges=ranges,
-                    focus_refs=focus_refs, source_end=deepcopy(tx['source_end'])))
+                if prior is None:
+                    tx.setdefault('archive_searches', []).append(dict(result, query=request, ranges=ranges,
+                        focus_refs=focus_refs, source_end=deepcopy(tx['source_end'])))
             else:
                 resolve_refs(tx, [request])
                 refs.append(request)
@@ -1487,7 +1536,7 @@ from the host. Reference slots accept the supplied {$source_ref:"@N"} objects ma
 NOT its original text. catalog_grounding and grounding ARE exact original ranges already supplied; do not fetch them again. Request original text with {kind:"need_refs",refs:[...]}; use the field lengths in catalog.
 Large requests are paged to fit the input: remaining_refs explicitly lists bytes NOT yet supplied. Request the needed remaining ranges, never infer success there. Before requesting another page, additions may record compact fact/unresolved observations grounded ONLY in already served originals; these observations are carried across pages, not unexamined raw text. A precise failure counterexample can contradict an all-success claim without reading unrelated remaining bytes. For unknown locations in a large known source, need_refs.refs may instead contain {id,rev,field,literal,after:0}: you choose an exact literal to locate (not a regex). The host searches ONLY that masked field and returns exact matching ranges with nearby original text. locator_results gives matches, searched byte range and remaining_after for further matches. A no-match result is not evidence that an operation succeeded or that unavailable source content is absent. Use returned ORIGINAL range refs, never the locator object, in coverage/claims/findings. Do not invent paths, commands, sources or source content. Read only originals relevant to active requirements,
 constraints, unresolved failures, changes of target revision and answer claims. Unrelated tool bodies need not be read.
-Before judging unread evidence absent, return need_refs with focus_refs covering that answer claim and semantically relevant archive queries in refs. Read the returned originals and finish search pagination before judging absence. archive_searches records the completed search pages and their claim scopes; a search for one claim does not establish absence for another.
+Before judging unread evidence absent, return need_refs with focus_refs covering that answer claim and semantically relevant archive queries in refs. Read the returned originals and finish search pagination before judging absence. The host retains all search receipts; evidence_search_status summarizes completed lookup for the presented answer ranges. This is lookup coverage, not evidence of success. lookup_progress lists prior queries, whether their originals are already visible, and continuation queries; use those originals or advance the cursor instead of repeating a completed visible query. Omitted lookup summaries are counted, not forgotten by the host. locator_results contains the current search results and continuation cursors.
 
 For stage update ONLY (not update_and_judge) with new users, complete their meaning assessment FIRST. answer_preview shows the draft only to plan evidence lookup for the subsequent judgment. If evidence is needed to judge it, return kind update WITH refs containing the needed archive queries/ranges, alongside the complete user accounting. The host applies that meaning update and retrieves those originals BEFORE asking for judgment. refs is the evidence lookup PLAN for the factual assertions in answer_preview: populate it when the supplied originals do not establish those assertions. Do not postpone this planning until the judgment call. Do not return need_refs just to look up answer evidence while leaving all user interpretation pending. Use need_refs before updating only when user meaning itself cannot be resolved without the originals (such as a short approval to an unknown proposal).
 For stage update_and_judge, if claim evidence needs lookup but user meaning is already clear, return need_refs WITH the complete user update fields and the needed refs; the host keeps that completed interpretation before fetching evidence. Return kind judgment with BOTH the update fields below and the judgment fields. Interpret user/catalog changes first, then judge against check_items plus all additions. Return decisions for every pre-existing item. New additions already declare retention, so a duplicate keep decision is unnecessary; the host keeps them unless an explicit validated retirement is supplied. Existing item decisions serve both phases; current-answer answered retire is deferred until the host confirms display. This is one integrated assessment, not permission to omit either coverage. For stage update return {kind:"update",refs:[planned evidence queries/ranges],focus_refs:[Ref],
@@ -1516,8 +1565,9 @@ The answers array is the complete evaluated output set. Process EVERY entry, inc
 existing item with a grounded decisions entry. Keep unmet/non-applicable obligations; retire fulfilled one-shot requests only after assessing all answer claims. answered is only for actual textual deliverables, completed/resolved require action result evidence. Standing constraints remain. Include requirements completed during this check: retirement cannot erase this answer's obligations.
 A factual ordinary answer from general knowledge, without a claim of verification and unrelated to required work,
 can be outside_scope with a reason; it is not nonfactual and does not need artificial tool evidence. Each claim must be one independently verifiable assertion. Do not bundle facts needing different evidence or scopes into one claim. Claims of actions,
-checks, fixes, current state or all-results success require matching original evidence and target revision. A tool can print agent-authored completion notes: that is evidence of writing the note, not of the operations it asserts. Trace each reported action to its actual execution/result originals. A machine-produced exhaustive test summary may establish the tests it actually ran; an agent-authored audit/ledger/completion document cannot establish its own asserted success. A small fixture or component test proves only that scope, not untested ordinary host/session behavior. Use the grounding originals already supplied with active items; do not fetch them again. catalog_summary gives exact archived source counts: zero evidence means no hidden tool evidence to search. Fetch
-other originals using need_refs. When evidence IDs are unknown, use the archive literal lookup first. catalog_refs are only a fallback source manifest for relationships that cannot be found by an archive query; do not fetch the whole manifest merely because IDs are unknown. All declared claim evidence and every addition/unresolved item need actual original refs. Unavailable gap originals in catalog_grounding still provide a real reference for the uncertainty; refs:[] is invalid. All declared claim evidence must have been served. Do not infer whole-source success from
+checks, fixes, current state or all-results success require matching original evidence and target revision. A tool can print agent-authored completion notes: that is evidence of writing the note, not of the operations it asserts. Trace each reported action to its actual execution/result originals. A machine-produced exhaustive test summary may establish the tests it actually ran; an agent-authored audit/ledger/completion document cannot establish its own asserted success. A small fixture or component test proves only that scope, not untested ordinary host/session behavior.
+For each operation claim, identify the asserted operation, target revision and primary execution/result needed to decide it. Reuse supplied grounding and grounded observations of originals already read. Retrieve only the missing link to that primary result. Once a relevant completed lookup cannot supply the matching result, classify the claim as unverified and identify the missing result; verification does not require proving that no imaginable source exists. Keep every claim and requirement in the final judgment, including unresolved ones. The checker classifies the supplied answer; it does not rescue the answer by investigating unrelated matches. catalog_summary gives exact archived source counts: zero evidence means no hidden tool evidence to search.
+Use need_refs for necessary originals. When evidence IDs are unknown, locate the operation/result through the archive lookup first. catalog_refs are a fallback for unresolved source relationships, not an inventory to exhaust. All declared claim evidence and every addition/unresolved item need actual original refs. Unavailable gap originals in catalog_grounding still provide a real reference for the uncertainty; refs:[] is invalid. All declared claim evidence must have been served. Do not infer whole-source success from
 head/tail or catalog metadata. Unread, truncated or unavailable evidence is not absence and cannot support success.
 Candidate_refs identify potentially relevant source ranges, not a demand to read every byte. Ground support or contradiction in the exact ranges necessary for that claim. For all-results success, the ranges must establish every claimed result (or an explicitly exhaustive authoritative summary), never extrapolate from unread pages. Judge known failure/recovery at the same target/scope; later unrelated success does not resolve it. Resolve evidence
 obligations explicitly. Missing target/version information remains uncertain. Findings cite exact served original

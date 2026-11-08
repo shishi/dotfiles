@@ -444,13 +444,14 @@ def evidence_items(records, prefix):
         if record['kind'] == 'gap':
             items.append({'id': f'{prefix}{len(items) + 1}', 'native_id': record['key'], 'unavailable': True, 'note': record['note']})
             continue
-        item = calls.get(record.get('call_id')) if record['kind'] == 'output' else None
+        item = calls.get(record.get('call_id'))
         if item is None:
             item = {'id': f'{prefix}{len(items) + 1}', 'native_id': record.get('call_id') or record['key'], 'tool': record.get('tool')}
             items.append(item)
             if record.get('call_id') is not None:
                 calls[record['call_id']] = item
         if record['kind'] == 'call':
+            item['tool'] = record.get('tool')
             item['input'] = record.get('input')
             if record.get('command'):
                 item['command'] = record['command']
@@ -496,31 +497,46 @@ def sweep(force=False):
 
 
 def record_turn(sid, tid, items):
-    """要求ごとに、利用者の最新の依頼より後の呼び出しと出力のうち保存していないものを足す。新しいターンの最初の
-    要求では、ターンの開始時の会話を保存する。セッションに保存済みの証拠が無ければ、依頼より前の呼び出しを
-    「前のターン (区別不明)」として取り込む。失敗は OSError。"""
+    """未保存の呼び出しと結果を取り込む。依頼が割り込んだ場合も既知の呼び出しのターンへ結果を戻し、
+    所属不明の過去の記録は区別不明のターンへ保全する。失敗は OSError。"""
     start, _ = conversation_with_compaction(items)
     with Settings.store_lock:
         directory = Settings.state_dir / 'turns' / sid
         path = directory / f'{tid}.json'
-        turn = read_json(path)
+        pending = Settings.state_dir / 'context' / sid / 'pending-turns'
+        history = {p: value for p in [*pending.glob('*.json'), *directory.glob('*.json')]
+                   if (value := read_json(p)) is not None}
+        turn = history.get(path)
         index = request_index(items)
         after = items[index + 1:] if index is not None else items
         if turn is None:
-            known_turns = list(directory.glob('*.json')) if directory.exists() else []
             turn = {'turn_id': tid, 'time': time.time(), 'records': [], 'shown': [],
                     'start': start}
-            if not known_turns and index is not None:
-                before = records_from(items[:index])
-                if has_compaction(items[:index]):
-                    before.insert(0, gap_record('compaction で消えた前のターンの範囲 (中継が保存していない)'))
-                if before:
-                    write_json(directory / 'unknown.json', {'turn_id': UNKNOWN_TURN, 'time': time.time() - 1,
-                                                            'records': before})
             if has_compaction(after):
                 turn['records'].append(gap_record('compaction で消えたこのターンの範囲 (中継が保存していない)'))
-        saved = {record['key'] for record in turn['records']}
-        turn['records'] += [record for record in records_from(after) if record['key'] not in saved]
+        first_snapshot = not history
+        history[path] = turn
+        saved = {r['key'] for t in history.values() for r in t['records']}
+        owners = {r['call_id']: p for p, t in history.items() for r in t['records'] if r.get('call_id')}
+        unknown = directory / 'unknown.json'
+        if unknown not in history and pending / 'unknown.json' in history:
+            unknown = pending / 'unknown.json'
+        before = records_from(items[:index]) if index is not None else []
+        if first_snapshot and index is not None and has_compaction(items[:index]):
+            before.insert(0, gap_record('compaction で消えた前のターンの範囲 (中継が保存していない)'))
+        changed = set()
+        for records, default in ((before, unknown), (records_from(after), path)):
+            for record in records:
+                if record['key'] in saved:
+                    continue
+                target = owners.get(record.get('call_id'), default)
+                history.setdefault(target, {'turn_id': UNKNOWN_TURN, 'time': time.time() - 1, 'records': []})['records'].append(record)
+                if record.get('call_id'):
+                    owners[record['call_id']] = target
+                saved.add(record['key'])
+                changed.add(target)
+        for target in changed - {path}:
+            write_json(target, dict(history[target], items=evidence_items(history[target]['records'], '')))
         write_json(path, turn)
     sweep()
     return turn
