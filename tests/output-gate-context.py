@@ -22,7 +22,7 @@ class ContextTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        for name, value in [('mask_secrets', lambda data, path: data), ('response_rules', lambda: ''),
+        for name, value in [('mask_secrets', lambda data, path, *args: data), ('response_rules', lambda: ''),
                             ('checked_rules', lambda: [])]:
             p = patch.object(checker, name, value)
             p.start()
@@ -206,6 +206,46 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(result['status'],'checked',result.get('reason'))
         self.assertEqual(result['context_state']['items'],[item])
         self.assertEqual(len(result['context_metrics']['inputs']),1)
+
+    def test_claims_cover_both_draft_and_shown_without_duplicate_coverage(self):
+        self.payload['shown_text'] = 'Earlier progress.'
+        ready = self.ready(); data = self.packet(ready)
+        answer = dict(kind='judgment', user_coverage=[data['user_scope']['ref']], additions=[], decisions=[], catalog_coverage=[], unresolved=[], focus_refs=[], item_coverage=[], claims=[dict(id=str(n), answer_ref=a['ref'], text=a['text'], requirement_ids=[], evidence=[], verdict='nonfactual') for n, a in enumerate(data['answers'])], findings=[], replacements=[], focus_candidates=[])
+        result = self.reply(ready, answer)
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual(len(result['context_metrics']['inputs']), 1)
+
+    def test_missing_shown_claims_cannot_pass_even_with_answer_coverage(self):
+        self.payload['shown_text'] = 'Earlier progress.'
+        ready = self.ready(); data = self.packet(ready)
+        draft = next(a for a in data['answers'] if a['text'] == 'Done.')
+        result = self.reply(ready, dict(kind='judgment', user_coverage=[data['user_scope']['ref']], additions=[], decisions=[], catalog_coverage=[], unresolved=[], focus_refs=[], answer_coverage=[a['ref'] for a in data['answers']], item_coverage=[], claims=[dict(id='draft', answer_ref=draft['ref'], text=draft['text'], requirement_ids=[], evidence=[], verdict='nonfactual')], findings=[], replacements=[], focus_candidates=[]))
+        self.assertEqual(result['status'], 'ready')
+        self.assertIn('claim coverage incomplete', self.packet(result)['validation_feedback'])
+        self.assertEqual(self.packet(result)['stage'], 'judge')
+        self.assertNotIn('users', self.packet(result))
+
+    def test_prepare_masks_normalized_sources_and_all_model_metadata_once(self):
+        self.payload.update(progress_state=dict(note='sensitive'), previous_findings=[dict(note='sensitive')], check_obligations=[])
+        calls = []
+        def mask(data, path, *args):
+            calls.append(data)
+            return checker.replace_leaves(data, lambda text: text.replace('sensitive', '[REDACTED]'))
+        with patch.object(checker, 'mask_secrets', side_effect=mask):
+            ready = self.ready()
+        self.assertEqual(len(calls), 3)
+        tx = ready['transaction']
+        self.assertEqual(tx['progress_state']['note'], '[REDACTED]')
+        self.assertEqual(tx['previous_findings'][0]['note'], '[REDACTED]')
+
+    def test_unchanged_archived_sources_are_reused_but_packet_is_scanned(self):
+        self.ready()
+        calls = []
+        with patch.object(checker, 'mask_secrets', side_effect=lambda data, path, *args: calls.append(json.loads(json.dumps(data))) or data):
+            ready = self.ready()
+        self.assertEqual(calls[1]['sources'], [])
+        self.assertIn('answers', calls[-1])
+        self.assertEqual(ready['status'], 'ready')
 
     def test_empty_coverage_cannot_pass(self):
         result = self.reply(self.ready(), {'kind': 'update', 'user_coverage': [], 'focus_refs': [],
@@ -1039,6 +1079,47 @@ class ContextTests(unittest.TestCase):
         users = self.packet(ready)['users']
         self.assertEqual(len(users), 1)
         self.assertFalse(users[0].get('identity_gap'))
+
+
+    def test_masked_bootstrap_cannot_replay_an_uncorrelated_authorization(self):
+        def mask(data, path, *args):
+            return checker.replace_leaves(data, lambda text: text.replace('secret-marker', '[REDACTED]'))
+        with patch.object(checker, 'mask_secrets', side_effect=mask):
+            self.payload.update(origin='claude', latest_user='Proceed using secret-marker.')
+            self.judgment(self.update(self.ready()))
+            self.payload.update(source_collector='claude-hook', source_mode='bootstrap',
+                sources=[dict(kind='user', native_id='uncorrelated-uuid', fields=dict(text='Proceed using secret-marker.'))])
+            ready = self.ready()
+            user = self.packet(ready)['users'][0]
+            self.assertTrue(user.get('identity_gap'))
+            authorization = dict(id='authorization', kind='authorization', text='Proceed', refs=[user['ref']],
+                related=[], target=dict(name='action', revision_refs=[]), validity='current')
+            rejected = self.update(ready, [authorization])
+            self.assertIn('uncertain source identity', self.packet(rejected)['validation_feedback'])
+            self.assertEqual(rejected['transaction']['candidate_state']['items'], [])
+
+    def test_rejected_completion_checkpoint_keeps_requirement_after_retry(self):
+        ready = self.ready()
+        user = self.packet(ready)['users'][0]['ref']
+        item = dict(id='req', kind='requirement', text='Do the work', refs=[user], related=[],
+            target=dict(name='work', revision_refs=[]), validity='current')
+        self.judgment(self.update(ready, [item]))
+        self.payload.update(turn_id='next', request_id='next', latest_user='Continue.',
+            evidence=[dict(id='operation', tool='exec', output='Operation incomplete')])
+        ready = self.ready()
+        data = self.packet(ready)
+        evidence = next(entry['ref'] for entry in data['catalog_grounding'] if entry['ref']['field'] == 'output')
+        claims = [dict(id='claim', answer_ref=a['ref'], text=a['text'], requirement_ids=['req'], evidence=[],
+            verdict='unverified') for a in data['answers']]
+        rejected = self.reply(ready, dict(kind='judgment', user_coverage=[data['user_scope']['ref']],
+            additions=[], decisions=[dict(item_id='req', action='retire', basis='completed', refs=[evidence], reason='operation done')],
+            catalog_coverage=[], unresolved=[], focus_refs=[], item_coverage=['req'], claims=claims,
+            findings=[], replacements=[], focus_candidates=[]))
+        self.assertIn('unverified claim cannot close', self.packet(rejected)['validation_feedback'])
+        self.assertEqual(self.packet(rejected)['stage'], 'judge')
+        result = self.judgment(rejected, claims=claims)
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual(result['context_state']['items'], [item])
 
 
 if __name__ == '__main__':

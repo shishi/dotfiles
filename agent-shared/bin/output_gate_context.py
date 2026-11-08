@@ -331,6 +331,7 @@ def normalize_sources(payload, message_list, evidence_parts, archive):
                 'fields': {'call': json.dumps(call, ensure_ascii=False), 'output': str(e.get('output') or ''),
                            'metadata': json.dumps(metadata, ensure_ascii=False)}, 'metadata': metadata,
                 'available': not e.get('unavailable'), 'producer_truncated': bool(e.get('truncated'))})
+    latest_archive = {a['id']: a for a in archive if not a['id'].startswith('answer-')}
     for row in rows:
         kind = row.get('kind')
         if kind not in ('user', 'assistant', 'evidence', 'gap'):
@@ -350,7 +351,6 @@ def normalize_sources(payload, message_list, evidence_parts, archive):
             metadata['request_id'] = row['_request_id']
         fingerprint = digest({'kind': kind, 'fields': fields})
         occurrences[fingerprint] = occurrences.get(fingerprint, 0) + 1
-        latest_archive = {a['id']: a for a in archive if not a['id'].startswith('answer-')}
         matching = [a for a in latest_archive.values() if a['kind'] == kind and a.get('fields') == fields]
         anchor = matching[occurrences[fingerprint] - 1] if occurrences[fingerprint] <= len(matching) else None
         if not native and row.get('_current_request') and (row.get('turn_id') or row.get('_request_id')):
@@ -542,7 +542,7 @@ def pack(rows, budget=UNIT_BYTES, extra_bytes=None):
     return [*pages, page] if page else pages
 
 
-def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directory=None, planning_overhead=0, payload_identity=None, archive_only=False):
+def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directory=None, planning_overhead=0, payload_identity=None, archive_only=False, mask_payload=None):
     directory = Path(directory) if directory else None
     old = read(directory / 'state.json') if directory else payload.get('context_state')
     archive = read(directory / 'manifest.json', []) if directory else []
@@ -555,13 +555,24 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
             if manifest_entry(source) != entry or digest({k: source[k] for k in ('kind', 'fields', 'available', 'producer_truncated')}) != source['rev']:
                 raise ValueError('source archive revision mismatch')
             archived_sources.append(source)
+    if mask_payload is not None:
+        payload = mask_payload(payload, archived_sources)
     stream, normalized, aliases = normalize_sources(payload, messages, evidence_parts, archived_sources)
     if archive_only:
         normalized = [s for s in normalized if not s['id'].startswith('answer-')]
+    archived_by_key = {source_key(source): source for source in archived_sources}
+    reusable = {source_key(source) for source in normalized
+                if source_key(source) in archived_by_key and
+                source == {k: v for k, v in archived_by_key[source_key(source)].items() if k != 'seq'}}
+    masked = mask({'sources': [source for source in normalized if source_key(source) not in reusable], 'rules': rules, 'checked_rules': checked_rules,
+                   'stream': stream, 'aliases': aliases, 'obligations': payload.get('check_obligations', []),
+                   'previous_findings': payload.get('previous_findings', []),
+                   'progress_state': {k: v for k, v in (payload.get('progress_state') or {}).items() if k not in ('bodies', 'evidence')}})
+    masked['sources'].extend(deepcopy(archived_by_key[key]) for key in reusable)
+    stream, aliases = masked['stream'], masked['aliases']
     state = validate_context_state(old, stream) if old is not None else initial(stream)
     if payload.get('context_state') is not None and directory and payload['context_state'] != state:
         raise ValueError('stale context snapshot')
-    masked = mask({'sources': normalized, 'rules': rules, 'checked_rules': checked_rules})
     sources = {source_key(s): s for s in archived_sources}
     seq = max([s['seq'] for s in sources.values()], default=0)
     for source in masked['sources']:
@@ -623,10 +634,10 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
           'deadline': time.time() + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or 45), 'stage': 'update',
           'candidate_state': candidate, 'sources': sources, 'aliases': aliases, 'served_refs': [], 'retrieved': [],
           'rules': masked['rules'], 'checked_rules': masked['checked_rules'], 'directory': str(directory) if directory else None,
-          'pending_units': [], 'completed_units': [], 'obligation_items': list({i['id']: i for i in [*deepcopy(state['items']), *payload.get('check_obligations', [])]}.values()),
+          'pending_units': [], 'completed_units': [], 'obligation_items': list({i['id']: i for i in [*deepcopy(state['items']), *masked['obligations']]}.values()),
           'evidence_obligations': [], 'claims': [], 'findings': [], 'replacements': [], 'focus_candidates': [], 'judge_decisions': [],
           'metrics': {'inputs': [], 'retrieved_bytes': 0}, 'final': bool(payload.get('final')),
-          'payload_rev': payload_identity or digest(payload), 'previous_findings': payload.get('previous_findings', []), 'progress_state': {k: v for k, v in (payload.get('progress_state') or {}).items() if k not in ('bodies', 'evidence')}}
+          'payload_rev': payload_identity or digest(payload), 'previous_findings': masked['previous_findings'], 'progress_state': masked['progress_state']}
     answer_ids = {a['id'] for k, a in aliases.items() if k in ('draft', 'shown')}
     users = [r for s in sources.values() if s['kind'] == 'user' and s['seq'] > state['meaning_cursor']['user_seq'] and not s.get('metadata', {}).get('replay_of') for r in chunks(s)]
     catalog = [manifest_entry(s) for s in sources.values() if s['kind'] == 'gap' and s['id'] not in answer_ids and
@@ -708,7 +719,7 @@ def start_judge(tx):
         a = tx['aliases'][alias]
         source = tx['sources'][a['id'] + ':' + a['rev']]
         if source['fields']['text'] or alias == 'draft':
-            answers.extend(resolve_refs(tx, chunks(source)))
+            answers.extend(dict(original, answer_role=alias) for original in resolve_refs(tx, chunks(source)))
     for ap in pack(answers):
         for ip in pack(tx['obligation_items']) or [[]]:
             grounds = []
@@ -862,7 +873,7 @@ def plan_unit(tx, instructions, schema):
             a = tx['aliases'][alias]
             source = tx['sources'][a['id'] + ':' + a['rev']]
             if source['fields']['text'] or alias == 'draft':
-                answers.extend(resolve_refs(tx, [ref(source)]))
+                answers.extend(dict(original, answer_role=alias) for original in resolve_refs(tx, [ref(source)]))
         joint = dict(data, stage='update_and_judge', answers=answers, check_items=check_items, grounding=[])
         joint.pop('answer_preview',None)
         overhead = len(instructions.encode()) + len(encoded(schema))
@@ -1064,10 +1075,7 @@ def accept_update(tx, answer):
 
 def accept_judgment(tx, answer):
     unit = tx['pending_units'][0]
-    coverage = answer.get('answer_coverage', [])
-    resolve_refs(tx, coverage, True)
-    if any(not covered(a['ref'], coverage) for a in unit['answers']):
-        raise ValueError('answer coverage incomplete')
+    coverage = [c['answer_ref'] for c in answer.get('claims', [])]
     if set(answer.get('item_coverage', [])) != {i['id'] for i in unit['items']}:
         raise ValueError('active item coverage incomplete')
     decisions = answer.get('decisions', [])
@@ -1149,8 +1157,9 @@ def accept_judgment(tx, answer):
             raise ValueError('outside-scope claim needs reason')
         if c['verdict'] == 'supported' and not any(e.get('relation') == 'supports' for e in evidence):
             raise ValueError('supported claim has no served evidence')
-    if any(not covered(a['ref'], [c['answer_ref'] for c in claims]) for a in unit['answers']):
-        raise ValueError('claim coverage incomplete')
+    missing = [a for a in unit['answers'] if not covered(a['ref'], [c['answer_ref'] for c in claims])]
+    if missing:
+        raise ValueError('claim coverage incomplete: ' + encoded([{'answer_role': a.get('answer_role'), 'ref': a['ref']} for a in missing]).decode())
     normalize_excerpt = lambda value: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value)).strip()
     valid_findings = [f for n, f in enumerate(answer.get('findings', [])) if n in answer.get('_valid_findings', [])]
     assessments = answer.get('rule_assessments', [])
@@ -1241,7 +1250,7 @@ def accept_judgment(tx, answer):
     tx['completed_units'].append({'stage': 'judge', 'answer_coverage': coverage, 'item_coverage': answer['item_coverage']})
 
 
-def accept(tx, answer):
+def accept(tx, answer, checkpoint=None):
     if time.time() >= tx['deadline']:
         raise ValueError('context deadline exhausted')
     if answer.get('kind') == 'need_refs':
@@ -1290,13 +1299,15 @@ def accept(tx, answer):
         decisions = []
         for d in answer.get('decisions', []):
             if d.get('item_id') in old_ids:
-                if d.get('action') == 'retire' and d.get('basis') == 'answered':
+                if d.get('action') == 'retire' and d.get('basis') in ('answered', 'completed', 'resolved'):
                     decisions.append(dict(d, action='keep', basis='current', reason='Current answer is judged before delivery confirmation.'))
                 else:
                     decisions.append(d)
         displayed_originals = [*joint['grounding'], *unit.get('catalog_grounding', []), *tx['retrieved']]
         accept_update(tx, dict(answer, kind='update', decisions=decisions))
         tx['pending_units'] = [{'items': tx['obligation_items'], 'answers': joint['answers'], 'grounding': displayed_originals}]
+        if checkpoint is not None:
+            checkpoint(tx)
         accept_judgment(tx, answer)
         return True
     if answer.get('kind') != ('update' if tx['stage'] == 'update' else 'judgment'):
@@ -1423,12 +1434,12 @@ failures, modifications after old success and candidate recovery require origina
 
 For unknown evidence IDs, need_refs.refs accepts {scope:"archive",field:"call|output|text|metadata",literal:"exact text",before_seq:0}. This searches the immutable masked archive through source_end from newest to oldest and returns ORIGINAL ranges. before_seq=0 starts at source_end; a continuation value searches strictly older sources. Empty literal requests complete fields for reviewing operations. remaining_before_seq indicates more older sources; per-source remaining_after indicates additional matches using the ordinary locator. Search only locates evidence; no match never proves success, unchanged state, or absence of failures.
 For every supported claim classify temporal_scope historical (explicitly past result), current (present state, completion or all-results assertion), or not_applicable (non-state fact). freshness is {basis:"changes_reviewed|reverified|unresolved|not_applicable",through_seq,refs:[],reason}. For current claims, older support cannot establish the present while later operations remain unreviewed: either inspect ALL later call/output originals and read their full ranges and cite grounding for EACH operation with changes_reviewed through the frontier, or cite a same-target/version re-verification output at the frontier establishing EVERY fact in that claim. Assess independent facts separately; a newer success for one target cannot refresh another target. The freshness boundary starts with the oldest supporting tool evidence, never a later auxiliary reference. Otherwise verdict is unverified/contradicted, never supported. A historical statement must actually be bounded to that past state; do not relabel a current completion as historical. Acknowledging an unmet correction is not fulfilling an executable correction request. Rule edits and reads establish storage/loading, never changed behavior; require actual normal-path outcomes for behavioral improvement claims.
-For stage judge return {kind:"judgment",answer_coverage:[Ref],item_coverage:[item_id],claims:[{id,answer_ref:Ref,text,
+For stage judge return {kind:"judgment",item_coverage:[item_id],claims:[{id,answer_ref:Ref,text,
 requirement_ids:[],evidence:[{ref:Ref,relation:"supports|contradicts|unresolved"}],
 verdict:"supported|contradicted|unverified|qualified|nonfactual|outside_scope",reason}],
 obligations:[{candidate_refs:[Ref],result:"verified|unrelated|unavailable",grounding_refs:[Ref],reason}],
 decisions:[{item_id,action:"keep|retire",basis:"current|cancelled|corrected|completed|resolved|answered|irrelevant",refs:[Ref],reason}],focus_candidates:[Ref],replacements:[],findings:[],progress:{state:"advanced|stalled|unknown",reason}}.
-Partition ALL supplied answer bytes, including whitespace, into claim/nonfactual/outside_scope ranges. Cover every
+The answers array is the complete evaluated output set. Process EVERY entry, including answer_role="shown": this is already displayed progress in THIS turn, not historical conversation. Returning only draft claims is invalid. Partition EACH answer entry, including whitespace, into claim/nonfactual/outside_scope ranges using its supplied ref. Before returning, check each answer ref against your claims; every entry must have full coverage. Cover every
 item with both item_coverage and a grounded decisions entry. Keep unmet/non-applicable obligations; retire fulfilled one-shot requests only after assessing all answer claims. answered is only for actual textual deliverables, completed/resolved require action result evidence. Standing constraints remain. Include requirements completed during this check: retirement cannot erase this answer's obligations.
 A factual ordinary answer from general knowledge, without a claim of verification and unrelated to required work,
 can be outside_scope with a reason; it is not nonfactual and does not need artificial tool evidence. Each claim must be one independently verifiable assertion. Do not bundle facts needing different evidence or scopes into one claim. Claims of actions,
@@ -1461,7 +1472,7 @@ def protocol_schema(legacy):
         'temporal_scope': enum('historical', 'current', 'not_applicable'),
         'freshness': obj({'basis': enum('changes_reviewed', 'reverified', 'unresolved', 'not_applicable'), 'through_seq': {'type': 'integer'}, 'refs': arr(r), 'reason': string})})
     properties = {'kind': enum('need_refs', 'update', 'judgment'),
-        **{k: arr(r) for k in ('refs', 'user_coverage', 'focus_refs', 'answer_coverage', 'focus_candidates', 'focus_resolved')},
+        **{k: arr(r) for k in ('refs', 'user_coverage', 'focus_refs', 'focus_candidates', 'focus_resolved')},
         'remaining_users': obj({'disposition': enum('context_only','pending'), 'reason': string}),
         'user_assessments': arr(obj({'refs': arr(r), 'disposition': enum('live', 'resolved', 'context_only'), 'item_ids': arr(string), 'resolution_refs': arr(r), 'reason': string})),
         'rule_assessments': arr(obj({'rule': string, 'result': enum('pass','violation','not_applicable'), 'reason': string})),

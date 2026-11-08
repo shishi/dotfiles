@@ -497,13 +497,14 @@ def replace_leaves(value, change):
     return value
 
 
-def mask_secrets(data, workdir):
+def mask_secrets(data, workdir, known_texts=()):
     """gitleaks で秘密情報を探し、見つかった値を伏せた data を返す。実行できなければ例外にする。
     文字列の値を素のまま並べて検査する。JSON にした形では引用符が \\" になり、鍵の名前と値の組
     ("password": "…") で見つける規則に一致しないため (gitleaks 8.30.1 で実測)。伏せるのは文字列の値ごとなので、
     値の境目をまたぐ秘密情報・辞書の鍵にある秘密情報・エンコードされた秘密情報 (gitleaks はデコードして見つけ、
-    Secret は平文になる) は伏せられない。伏せた後の入力をもう一度検査し、検出が残れば送らずに例外にする。"""
-    findings = run_gitleaks('\n\n'.join(scanned_texts(data)).encode('utf-8'), workdir)
+    Secret は平文になる) は伏せられない。伏せた後の入力をもう一度検査し、検出が残れば送らずに例外にする。
+    known_texts は検証済みのマスク済み archive と同じ断片だけ。送信直前の packet は除外なしで検査する。"""
+    findings = run_gitleaks('\n\n'.join(text for text in scanned_texts(data) if text not in known_texts).encode('utf-8'), workdir)
     leaves = list(string_leaves(data))
     secrets = set()
     for finding in findings:
@@ -1447,10 +1448,9 @@ def prepare(payload):
         return unchecked(payload, problem)
     try:
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
-            safe_payload = mask_secrets(with_pending_sources(payload), Path(tmp))
-            tx = context.begin(safe_payload, messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
+            tx = context.begin(with_pending_sources(payload), messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
                                response_rules(), checked_rules(), payload.get('context_dir'),
-                               len((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS).encode()) + len(context.encoded(context.protocol_schema(CHECKER_SCHEMA))), context.digest(payload))
+                               len((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS).encode()) + len(context.encoded(context.protocol_schema(CHECKER_SCHEMA))), context.digest(payload), mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))))
             tx['payload_rev'] = context.digest(payload)
             tx['deadline'] = min(tx['deadline'], started + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or DEFAULT_TIMEOUT))
         return context_ready(tx)
@@ -1461,9 +1461,9 @@ def prepare(payload):
 def ingest(payload):
     try:
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
-            safe = mask_secrets(with_pending_sources(payload), Path(tmp))
-            result = context.begin(safe, messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
-                                   '', [], payload.get('context_dir'), archive_only=True)
+            result = context.begin(with_pending_sources(payload), messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
+                                   '', [], payload.get('context_dir'), archive_only=True,
+                                   mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))))
         return dict(result, status='ingested')
     except Exception as error:
         return unchecked(payload, str(error) or type(error).__name__)
@@ -1520,7 +1520,10 @@ def receive(request):
             answer['_valid_findings'] = [n for n, f in enumerate(answer.get('findings', []))
                 if finding_problem(f, source_messages, evidence_index(validation_payload), rules) is None]
         previous_step = tx.get('step', 0)
-        complete = context.accept(tx, answer)
+        def checkpoint(validated):
+            nonlocal baseline_tx
+            baseline_tx = deepcopy(validated)
+        complete = context.accept(tx, answer, checkpoint)
         tx['step'] = previous_step + 1
         tx.pop('validation_feedback', None)
         tx.pop('validation_failures', None)
