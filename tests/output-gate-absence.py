@@ -197,6 +197,22 @@ class AbsenceTests(unittest.TestCase):
         ready = f.reply(ready, dict(lookup, additions=[observation]))
         self.assertIn(observation, ready['transaction']['retrieval_observations'])
 
+    def test_completed_judgment_keeps_grounded_interpretations_for_the_next_answer(self):
+        f = self.fixture
+        f.payload['evidence'] = [{'id': 'verification', 'output': 'VERIFIED'}]
+        ready = f.update(f.ready())
+        answer = f.packet(ready)['answers'][0]
+        ready = f.reply(ready, dict(kind='need_refs', focus_refs=[answer['ref']], refs=[dict(scope='archive', field='output', literal='VERIFIED', before_seq=0)]))
+        original = next(e for e in f.packet(ready)['retrieved'] if 'VERIFIED' in e['text'])
+        observation = dict(id='observed-result', kind='fact', text='The original result says VERIFIED.', refs=[original['ref']], related=[], target=dict(name='result', revision_refs=[]), validity='current')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original['ref']], additions=[observation]))
+        checked = f.judgment(ready)
+        self.assertEqual(checked['status'], 'checked')
+        f.payload['draft'] = 'A revised answer.'
+        resumed = f.ready()
+        self.assertIn(observation, f.packet(resumed)['retrieval_observations'])
+        self.assertTrue(fixtures.checker.context.covered(original['ref'], resumed['transaction']['served_refs']))
+
     def test_cached_lookup_can_fetch_an_original_that_is_no_longer_visible(self):
         f = self.fixture
         noise = ''.join(random.Random(71).choices('abcdefghijklmnopqrstuvwxyz0123456789', k=20000))

@@ -632,7 +632,9 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
           'base_meaning_cursor': deepcopy(state['meaning_cursor']), 'source_end': cursor, 'draft_rev': aliases['draft']['rev'],
           'rules_rev': digest([masked['rules'], masked['checked_rules']]), 'rules_source_rev': digest([rules, checked_rules]),
           'deadline': time.time() + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or 45), 'stage': 'update',
-          'candidate_state': candidate, 'sources': sources, 'aliases': aliases, 'served_refs': [], 'retrieved': [],
+          'candidate_state': candidate, 'sources': sources, 'aliases': aliases,
+          'served_refs': [deepcopy(r) for item in state.get('retrieval_observations', []) for r in item['refs']], 'retrieved': [],
+          'retrieval_observations': deepcopy(state.get('retrieval_observations', [])),
           'rules': masked['rules'], 'checked_rules': masked['checked_rules'], 'directory': str(directory) if directory else None,
           'pending_units': [], 'completed_units': [], 'obligation_items': list({i['id']: i for i in [*deepcopy(state['items']), *masked['obligations']]}.values()),
           'evidence_obligations': [], 'claims': [], 'findings': [], 'replacements': [], 'focus_candidates': [], 'judge_decisions': [],
@@ -1474,6 +1476,7 @@ def save_transaction(tx, expected_step=None):
 
 def commit(tx, display_text):
     state = tx['candidate_state']
+    state['retrieval_observations'] = deepcopy(tx.get('retrieval_observations', []))
     state['generation'] = tx['base_generation'] + 1
     pending_retirements = {}
     for item in list(state['items']):
