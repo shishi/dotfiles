@@ -226,7 +226,8 @@ def run(case):
     out = json.loads(proc.stdout.decode('utf-8'))
     found = [(f['kind'], f.get('rule', '')) for f in out.get('findings') or []]
     # 一覧から外して既定の種類に任せた項目は、その種類の検出で判定する。統合した項目は統合先の規則で判定する。
-    builtin = {'W8': 'concealment', 'T12': 'unverified_claim', 'missing_request': 'missing_request'}
+    builtin = {'W8': 'concealment', 'T2': 'unverified_claim', 'T12': 'unverified_claim',
+               'missing_request': 'missing_request'}
     target = {'T8': 'T7', 'T6': 'W4'}.get(rule, rule)
     hit = any(k == 'rule_violation' and r == target for k, r in found)
     if rule in builtin:
