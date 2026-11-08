@@ -336,9 +336,14 @@ class GateTestCase(unittest.TestCase):
     def assert_unchecked(self, out, draft):
         self.assertEqual(out['status'], 'unchecked')
         self.assertTrue(out['reason'])
-        self.assertTrue(out['text'].startswith('出力検査を実行できなかったため、生成済みの回答を表示します。'))
-        self.assertTrue(out['text'].endswith(draft))
-        self.assertNotIn(out['reason'], out['text'])
+        # 検査できなかった回答は公開しない。続行できる間は本文を出さずに理由をエージェントへ返し、
+        # 続行できないときは保留の案内だけを出す。
+        shown = out['fallback_text'] if out['text'] is None else out['text']
+        self.assertTrue(shown.startswith('出力検査が完了していないため、最終回答を保留しています。'))
+        self.assertNotIn(draft, shown)
+        self.assertNotIn(out['reason'], shown)
+        if out['text'] is None:
+            self.assertIn(out['reason'], out['agent_message'])
 
 
 class CheckTests(GateTestCase):
@@ -1048,7 +1053,12 @@ class FindingTests(GateTestCase):
         evidence = [PYTEST_FAILED, dict(gate, id='g1', tool='gate_findings'),
                     dict(gate, id='g2', tool='mcp__output-gate__gate_findings')]
         self.final(answer(), evidence=evidence, previous_evidence=previous)
-        catalog = [c for entry in self.launches() for c in json.loads(entry['stdin']).get('catalog', [])]
+        # 証拠の一覧は catalog か、原文として渡す catalog の行 (JSONL) のどちらかで届く。
+        packets = [json.loads(entry['stdin']) for entry in self.launches()]
+        catalog = [c for data in packets for c in data.get('catalog', [])]
+        catalog += [json.loads(line) for data in packets for g in data.get('catalog_grounding', [])
+                    if g['kind'] == 'catalog' for line in g['text'].splitlines()]
+        catalog = [c for c in catalog if c['kind'] == 'evidence']
         self.assertEqual({c['native_id'] for c in catalog}, {'call_1', 'old_1'})
         self.assertEqual(next(c['turn_id'] for c in catalog if c['native_id'] == 'old_1'), 't-1')
         self.assertNotIn('指摘の本文', ''.join(e['stdin'] for e in self.launches()))
@@ -1151,8 +1161,10 @@ class FindingTests(GateTestCase):
         out = self.invoke({'origin': 'claude', 'engines': ['codex'], 'final': True,
                            'bodies': ['A は効く。', 'B も効く。']})
         self.assertEqual(len(self.launches()), 1)
-        draft = next(a for a in self.checker_input()['answers']
-                     if a['ref']['id'] == self.checker_input()['aliases']['draft']['id'])['text']
+        data = self.checker_input()
+        handles = data.get('_reference_handles', {})
+        draft = next(a for a in data['answers']
+                     if handles.get(a['ref'].get('$source_ref'), a['ref'])['id'] == data['aliases']['draft']['id'])['text']
         self.assertIn('A は効く。', draft)
         self.assertIn('B も効く。', draft)
         self.assertEqual(out['bodies'], ['A は速い。', 'B も速い。'])
@@ -1445,7 +1457,7 @@ class TrimTests(GateTestCase):
         check = self.load()
         old = dict(PYTEST_FAILED, output='old failure')
         current = dict(PYTEST_FAILED, output='new failure')
-        payload = {'origin': 'claude', 'draft': '回答', 'evidence': [current],
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答', 'evidence': [current],
                    'progress_state': {'round': 1, 'stalled': 1, 'bodies': ['前の回答'],
                                       'findings': [], 'evidence': [old]}}
         data = check.build_input(payload, 'rules')
