@@ -59,6 +59,9 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
    この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
    以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
+   Claude Code の Bash の前景実行は既定・最大の上限で打ち切られ、review-gate の上限に届かない。
+   このブロックは `run_in_background` で起動し、`bash ~/.agent-shared/hooks/stall-guard.sh deadline <task id> <分> --watch "$REVIEW_EVENTS"`
+   で events を登録する。確認ごとに示される追記内容 (reviewer の発言・コマンド・結果) で進捗を判断する。
    **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
    REVIEW_MODEL=gpt-6-astra

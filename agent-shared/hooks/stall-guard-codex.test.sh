@@ -211,8 +211,35 @@ reset; a=$(stop p1); b=$(prewait 10000 p1); c=$(inject p1)
 ok "empty session is silent"
 
 reset; child_a; out=$(stop p1)
-blocked "$out" && [[ "$(field .reason "$out")" == *"/root/child_a"* ]] && [[ "$(field .reason "$out")" == *1200000* ]] || fail "run accepted in this turn blocks the turn: $out"
+blocked "$out" && [[ "$(field .reason "$out")" == *"/root/child_a"* ]] && [[ "$(field .reason "$out")" == *180000* ]] || fail "run accepted in this turn blocks the turn: $out"
 ok "run accepted in this turn blocks the turn"
+
+# 子の rollout の内容 (発言・ツールの呼出し・結果) を示し、更新時刻では示さない。
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"差分の 3 件目を照合した"}]}}' \
+  '{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"rg -n review src"}}' \
+  '{"type":"response_item","payload":{"type":"function_call_output","output":"src/a.rb:3: review"}}' \
+  '{"type":"response_item","payload":{"type":"reasoning","encrypted_content":"gAAAA"}}' >>"$R"
+out=$(stop p1); r=$(field .reason "$out"); c=$(ctx "$(inject p2)")
+for t in "$r" "$c"; do
+  [[ "$t" == *"差分の 3 件目を照合した"* && "$t" == *"[tool exec] rg -n review src"* && "$t" == *"src/a.rb:3: review"* \
+    && "$t" != *gAAAA* && "$t" != *最終更新* ]] || fail "run facts show the child's content: $t"
+done
+ok "run facts show the child's content"
+
+# wait_agent から戻ると、その時点の子の内容を示す (待機が内容の確認点になる)。
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"4 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ "$(field .hookSpecificOutput.hookEventName "$out")" = PostToolUse ] && [[ "$(field .hookSpecificOutput.additionalContext "$out")" == *"4 件目を確認中"* ]] \
+  || fail "returning from wait_agent shows the child's content: $out"
+complete "$R" c1 5; out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ -z "$out" ] || fail "returning from wait_agent after the run ended is silent: $out"
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"5 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p2)
+[[ "$(field .hookSpecificOutput.additionalContext "$out")" == *"5 件目を確認中"* ]] || fail "returning from wait_agent shows a carried-over child's content: $out"
+ok "returning from wait_agent shows the child's content"
 
 reset; child_a; complete "$R" c1 5; adv; out=$(stop p1)
 [ -z "$out" ] || fail "closed run does not: $out"
@@ -223,7 +250,7 @@ reset; child_a; a=$(stop p2); b=$(prewait 10000 p2); c=$(inject p2)
 ok "carried-over run does not block"
 
 reset; child_a; out=$(prewait 10000 p1); out2=$(prewait 1200000 p1)
-[ "$(field .hookSpecificOutput.permissionDecision "$out")" = deny ] && [[ "$(field .hookSpecificOutput.permissionDecisionReason "$out")" == *1200000* ]] \
+[ "$(field .hookSpecificOutput.permissionDecision "$out")" = deny ] && [[ "$(field .hookSpecificOutput.permissionDecisionReason "$out")" == *180000* ]] \
   && [ -z "$out2" ] || fail "short wait is denied: $out / $out2"
 ok "short wait is denied"
 

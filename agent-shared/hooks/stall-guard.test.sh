@@ -135,7 +135,7 @@ wake() { post ScheduleWakeup "{\"scheduledFor\":$(($1 * 1000))}" | jq -c --arg k
 cron_of() { local mh; mh=$(date -d "@$1" '+%-M %-H'); echo "{\"id\":\"x$1\",\"schedule\":\"$mh * * *\",\"recurring\":false,\"prompt\":\"p\"}"; }
 decision() { if [ -n "$1" ]; then field '.decision // "none"' "$1"; else echo none; fi; }
 reason() { field '.reason // ""' "$1"; }
-has() { grep -q -- "$1" <<<"$2"; }
+has() { grep -qF -- "$1" <<<"$2"; }
 
 reset; out=$(stop '[]')
 [ -z "$out" ] && [ ! -e "$D" ] || fail "empty session is silent"
@@ -310,9 +310,11 @@ stop_watch $W
 ok "the margin leaves room for the scheduled wake-up"
 
 reset; STALL_GUARD_NOW=$(($(rnow) - 3000)) agent a1; t=$(($(rnow) - 1321)); printf '{"at":%s,"event":"stop"}\n' "$t" >>"$D/turns.jsonl"
+jq -nc '{type:"assistant",message:{content:[{type:"text",text:"差分の 2 件目を照合中"}]}}' >"$work/a1.jsonl"
 STALL_GUARD_WATCH_STARTED=$t watch_bg "$(bt a1:subagent)"
-ends_within 2 $W && [ "$WC" = 2 ] && grep -q a1 "$work/w1.err" && [ "$(field .event "$(last "$D/turns.jsonl")")" = watch ] || fail "due task wakes the model (${WC:-running})"
-ok "due task wakes the model"
+ends_within 2 $W && [ "$WC" = 2 ] && grep -q a1 "$work/w1.err" && grep -q '差分の 2 件目を照合中' "$work/w1.err" \
+  && [ "$(field .event "$(last "$D/turns.jsonl")")" = watch ] || fail "due task wakes the model with its added content (${WC:-running})"
+ok "due task wakes the model with its added content"
 
 reset; agent a1; printf '{"at":%s,"event":"stop"}\n' "$(($(rnow) - 5000))" >>"$D/turns.jsonl"
 watch_bg "$(bt a1:subagent)"
@@ -396,15 +398,55 @@ reset; out=$(inject)
 [ -z "$out" ] && [ ! -e "$D" ] || fail "inject is silent without tasks"
 ok "inject is silent without tasks"
 
-reset; agent a1; seen '["a1"]'; printf 'start\n' >"$work/result.txt"
+reset; rm -f "$work/a1.jsonl"; agent a1; seen '["a1"]'; printf 'start\n' >"$work/result.txt"
 cs deadline a1 5 --watch "$work/result.txt" || fail "deadline with a watch path"
-printf '0123456789' >>"$work/result.txt"
+printf '0123456789\nabc' >>"$work/result.txt"
 out=$(inject); c=$(ctx "$out")
-[ "$(field .hookSpecificOutput.hookEventName "$out")" = UserPromptSubmit ] && has a1 "$c" && has '+10' "$c" && has 'result.txt' "$c" \
-  && [ "$(field .event "$(last "$D/turns.jsonl")")" = prompt ] || fail "inject reports facts and growth: $out"
+[ "$(field .hookSpecificOutput.hookEventName "$out")" = UserPromptSubmit ] && has a1 "$c" && has '0123456789' "$c" && has 'result.txt' "$c" \
+  && ! has 'start' "$c" && [ "$(field .event "$(last "$D/turns.jsonl")")" = prompt ] || fail "inject reports the content added since the deadline: $out"
+has '書きかけ' "$c" && ! has 'abc' "$c" || fail "inject holds a partial line for the next check: $c"
+printf 'def\n' >>"$work/result.txt"
 c=$(ctx "$(inject)")
-has '+0' "$c" || fail "inject reports growth since the previous prompt: $c"
-ok "inject reports facts and growth"
+has 'abcdef' "$c" && ! has '0123456789' "$c" || fail "inject reports the held line once it is complete: $c"
+c=$(ctx "$(inject)")
+has '追加なし' "$c" || fail "inject reports only the content added since the previous prompt: $c"
+cs deadline a1 7 --watch "$work/result.txt" >/dev/null; printf 'ghi\n' >>"$work/result.txt"
+c=$(ctx "$(inject)")
+has 'ghi' "$c" || fail "re-running deadline keeps the shown position: $c"
+ok "inject reports the added content"
+
+# 会話記録 (JSONL) は、発言・ツールの呼出し・結果の本文で示す。
+reset; agent a1; seen '["a1"]'
+jq -nc '{type:"assistant",message:{content:[{type:"text",text:"spec を読み終えた"},{type:"tool_use",name:"Read",input:{file_path:"/x/review.md"}}]}}' >"$work/a1.jsonl"
+jq -nc '{type:"user",message:{content:[{type:"tool_result",content:"review.md の 3 行目"}]}}' >>"$work/a1.jsonl"
+c=$(ctx "$(inject)")
+has 'spec を読み終えた' "$c" && has '[tool Read]' "$c" && has '/x/review.md' "$c" && has 'review.md の 3 行目' "$c" && ! has '"type"' "$c" \
+  || fail "inject shows a transcript as messages and tool calls: $c"
+ok "inject shows a transcript as messages and tool calls"
+
+# 会話記録でない JSONL (codex exec --json のイベントなど) は行をそのまま示す。
+reset; agent a1; seen '["a1"]'; : >"$work/ev.jsonl"
+cs deadline a1 5 --watch "$work/ev.jsonl" >/dev/null
+printf '%s\n' '{"type":"error","message":"Reconnecting... 1/5"}' >>"$work/ev.jsonl"
+c=$(ctx "$(inject)")
+has 'Reconnecting... 1/5' "$c" || fail "inject shows events of a non-transcript JSONL: $c"
+printf '%s\n' '{"level":"info","message":"migration completed","payload":{"rows":42}}' >>"$work/ev.jsonl"
+c=$(ctx "$(inject)")
+has 'migration completed' "$c" || fail "inject shows a JSON log line that has a payload field: $c"
+# 64 KiB を超える 1 行の結果も、本文を取り出して示す。
+big=$(head -c 70000 /dev/zero | tr '\0' 'x')
+jq -nc --arg o "結果の先頭 $big" '{type:"response_item",payload:{type:"function_call_output",output:$o}}' >>"$work/ev.jsonl"
+c=$(ctx "$(inject)")
+has '結果の先頭 xxx' "$c" || fail "inject shows a record longer than 64 KiB: $(head -c 400 <<<"$c")"
+ok "inject shows events of a non-transcript JSONL"
+
+# 4 MiB を超える範囲は末尾の窓だけを読み、窓の先頭で切れた行の断片を示さない。改行の無い大きな行では位置を進めない。
+f="$work/huge.txt"; { head -c 5000000 /dev/zero | tr '\0' 'q'; printf '\nlast line\n'; } >"$f"
+out=$(bash -c '. "$1"; sg_added "$2" 0' _ "$HOOK" "$f")
+[[ "$out" == *"last line"* && "$out" != *qqqq* ]] || fail "a window larger than 4 MiB drops the cut line: $(head -c 200 <<<"$out")"
+head -c 5000000 /dev/zero | tr '\0' 'q' >"$f"
+[ "$(bash -c '. "$1"; sg_line_end "$2" 0 5000000' _ "$HOOK" "$f")" = 0 ] || fail "a line longer than the window without a newline keeps the position"
+ok "a window larger than 4 MiB drops the cut line and keeps the position without a newline"
 
 reset; agent a1; f=$((NOW + 1200)); wake $f
 stop "$(bt a1:subagent)" "[$(cron_of $f)]" >/dev/null

@@ -19,7 +19,7 @@ bash setup.sh
 | モデル間の委譲 | [codex-delegate](../claude/skills/codex-delegate/SKILL.md)、[claude-delegate](../codex/skills/claude-delegate/SKILL.md) |
 | 独立レビュー | [review-gate](../codex/skills/review-gate/SKILL.md)、[codex-review](../claude/skills/codex-review/SKILL.md)、[claude-review](../codex/skills/claude-review/SKILL.md) |
 
-`command-judge.sh` は両 CLI のツール呼び出しを実行前に判定します。ツール名・引数と利用者の依頼から、操作の影響と承認の有無を判定します。Codex の `write_stdin` による追加入力など、実行前 hook が発火しない経路は対象外です。判定役が利用できない場合は警告して通し、個別の判定が失敗した場合は確認または停止することがあります。外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。対象と制限は各スクリプトを参照してください。
+`command-judge.sh` は両 CLI のツール呼び出しを実行前に判定します。ツール名・引数と利用者の依頼から、操作の影響と承認の有無、処理を通常の所要時間に余裕のない根拠のない短い上限で打ち切らせるかを判定します。短い上限は進んでいる処理まで止めるため、十分に長い上限と内容による進捗の確認へ誘導します。Codex の `write_stdin` による追加入力など、実行前 hook が発火しない経路は対象外です。判定役が利用できない場合は警告して通し、個別の判定が失敗した場合は確認または停止することがあります。外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。対象と制限は各スクリプトを参照してください。
 
 ## 外部 skill
 
@@ -47,7 +47,7 @@ Claude Code では `~/.claude/memory` を指定します。同期できない場
 
 ## 背景作業の確認
 
-`stall-guard.sh` は、背景作業の進捗確認が行われないままターンが終わることを検出します。Claude Code と Codex では終了を止める条件が異なります。`deadline` は確認間隔を設定し、`keep` は意図して継続する背景 Bash を確認対象から外します。`deadline` と `keep` は対象セッションの Claude Code の Bash から実行します。
+`stall-guard.sh` は、背景作業の進捗確認が行われないままターンが終わることを検出します。Claude Code と Codex では終了を止める条件が異なります。Claude Code では、確認を促すたびに、`--watch` の成果物と会話記録へ前回の確認以後に追記された内容の末尾を示します。Codex では、子の run の事実と `wait_agent` から戻るたびに、子の rollout の最新の発言・ツール呼出し・結果を示します。`wait_agent` の最低の待ち時間は内容を確かめる間隔の 3 分です。ファイルの大きさや更新時刻の変化では進捗を判断できないためです。`deadline` は確認間隔を設定し、`keep` は意図して継続する背景 Bash を確認対象から外します。`deadline` と `keep` は対象セッションの Claude Code の Bash から実行します。
 
 ```sh
 bash ~/.agent-shared/hooks/stall-guard.sh deadline <id> <1〜30 分> [--watch <path>]

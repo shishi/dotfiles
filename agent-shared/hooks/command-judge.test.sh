@@ -52,12 +52,12 @@ decision() { [ -n "$1" ] || { echo none; return; }; jq -r '.hookSpecificOutput.p
 reason() { jq -r '.hookSpecificOutput.permissionDecisionReason // .systemMessage // ""' <<<"$1"; }
 fail() { echo "not ok: $1" >&2; exit 1; }
 token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")
-SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"reason":""}'
+SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":""}'
 
 generic_tool() {
   jq -n --arg name "$1" --argjson args "$2" '{session_id:"s1",tool_name:$name,tool_input:$args}'
 }
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"reason":"共有のコメントを投稿する"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"共有のコメントを投稿する"}'
 for agent in claude codex; do
   out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文\n二行目","metadata":{"labels":["確認",null],"notify":false}}' | bash "$HOOK" --cli "$agent")
   expected=ask; [ "$agent" = codex ] && expected=deny
@@ -72,7 +72,7 @@ assert match, "the judge receives the full tool input"
 assert json.loads(match[1]) == {"issue": 42, "body": "本文\n二行目", "metadata": {"labels": ["確認", None], "notify": False}}
 PY
 record 'issue 42 にコメントして'
-STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"reason":"利用者がコメントを依頼している"}'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"利用者がコメントを依頼している"}'
 out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文"}' | bash "$HOOK")
 [ -z "$out" ] || fail "an authorized MCP write is allowed: $out"
 grep -q 'issue 42 にコメントして' "$work/judge-input" || fail "MCP judge receives the recorded permission"
@@ -88,7 +88,7 @@ out=$(generic_tool 'mcp__example__write' "{\"body\":\"$token\"}" | bash "$HOOK")
 [ "$(decision "$out")" = ask ] && [ "$(calls)" = 3 ] || fail "Claude checks the complete MCP input for secrets before sending it: $out"
 echo 'ok: generic tool input, permission decisions, cache separation and secret checks'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"マシンを再起動する"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"マシンを再起動する"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "danger is denied: $out"
 reason "$out" | grep -q 'マシンを再起動する' || fail "deny reason carries the judge reason"
@@ -104,7 +104,7 @@ grep -q '状態を確認する' "$work/judge-input" || fail "judge input contain
 grep -q 'エージェント: claude' "$work/judge-input" || fail "judge input names the shell and the agent"
 echo 'ok: a safe command is allowed silently'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"cache must not be bypassed"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"cache must not be bypassed"}'
 out=$(pre_tool_use '"git status"' | bash "$HOOK")
 [ -z "$out" ] && [ "$(calls)" = 1 ] || fail "second identical command reuses the safe verdict"
 out=$(pre_tool_use '"git status"' | bash "$HOOK" --cli codex)
@@ -120,7 +120,7 @@ echo 'ok: a safe verdict is reused only for the same command, purpose, shell, ag
 
 rm -f "$work/calls"
 record 'このマシンを再起動して'
-STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"external":false,"reason":"利用者が再起動を依頼している"}'
+STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"利用者が再起動を依頼している"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ -z "$out" ] || fail "an explicitly requested effect is allowed: $out"
 grep -q 'このマシンを再起動して' "$work/judge-input" || fail "judge input contains the recorded user message"
@@ -130,7 +130,7 @@ echo 'ok: the recorded user message reaches the judge and requested danger is no
 
 record 'このマシンを再起動して'
 AGENT_DELEGATED_SESSION=1 record '親エージェントからの依頼: 再起動して確認すること'
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"再起動する"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"再起動する"}'
 pre_tool_use '"sudo shutdown -r now"' | bash "$HOOK" >/dev/null
 grep -q '(none)' "$work/judge-input" && ! grep -q '再起動して' "$work/judge-input" ||
   fail "a delegated session's prompt is not treated as the user's request"
@@ -152,16 +152,29 @@ out=$(jq -n '{session_id:"s1",tool_name:"Bash",tool_input:{}}' | bash "$HOOK")
 reason "$out" | grep -q '判定せずに通した' || fail "missing command is reported, not passed silently: $out"
 echo 'ok: argv arrays and the cmd field are judged, and a missing command is reported'
 
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"external":true,"reason":"gh pr create が本文をファイルから読む"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"external":true,"short_cutoff":false,"reason":"gh pr create が本文をファイルから読む"}'
 record 'PR を作って'
 out=$(pre_tool_use '"gh pr create --body-file /tmp/body.md"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "a body read from a file path is denied: $out"
 reason "$out" | grep -q '標準入力' || fail "the deny reason tells how to pass the body"
 echo 'ok: posting a body from a file path is denied with the fix'
 
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":false,"short_cutoff":true,"reason":"テスト一式を 30 秒で打ち切る"}'
+record 'テストを流して'
+for agent in claude codex; do
+  out=$(pre_tool_use '"timeout 30 make test"' | bash "$HOOK" --cli "$agent")
+  [ "$(decision "$out")" = deny ] || fail "$agent denies a short cutoff without basis: $out"
+  reason "$out" | grep -q '内容' || fail "$agent tells to monitor the content instead: $out"
+done
+before=$(calls)
+pre_tool_use '"timeout 30 make test"' | bash "$HOOK" >/dev/null
+[ "$(calls)" = $((before + 1)) ] || fail "a short cutoff is not cached as safe"
+grep -q '打ち切' "$work/judge-input" || fail "the judge prompt asks about cutoffs"
+echo 'ok: a short cutoff without basis is denied with the content-monitoring fix'
+
 rm -f "$work/calls"
 record 'テストを直して'
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"commit を共有の remote へ送る"}'
 out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK")
 [ "$(decision "$out")" = ask ] && reason "$out" | grep -q 'commit を共有の remote へ送る' ||
   fail "Claude asks the user before an unauthorized external effect: $out"
@@ -170,7 +183,7 @@ out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli codex)
   fail "Codex denies an unauthorized external effect and tells the agent to get permission: $out"
 [ "$(calls)" = 2 ] || fail "an external effect is not cached as safe"
 record 'push して'
-STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"commit を共有の remote へ送る"}'
 for agent in claude codex; do
   out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli "$agent")
   [ -z "$out" ] || fail "$agent allows an external effect the user permitted: $out"

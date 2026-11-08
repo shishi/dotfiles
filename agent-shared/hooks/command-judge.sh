@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ツール実行前に、操作を独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
-# エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
+# エージェント自身の作業を続けられなくする操作、外部へ投稿する本文をファイルから読ませる操作、
+# 処理を根拠のない短い上限で打ち切らせる操作を止め、
 # 外部へ軽微でなく取り返しのつかない影響を与える操作や通常の push は、許可が無ければ実行させない。
 #
 #   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の発言と会話文脈を保存する
@@ -67,7 +68,7 @@ warn() {
 
 # 判定役を動かせない: 警告して通す。
 unjudged() {
-  warn "$1" "$2ため、操作を判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、許可の無い push などの外部への操作も止まらない。"
+  warn "$1" "$2ため、操作を判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、根拠のない短い上限での打ち切り、許可の無い push などの外部への操作も止まらない。"
 }
 
 # このコマンドだけ判定結果を得られない: Claude は確認、Codex は止める。
@@ -260,6 +261,9 @@ case "$workdir" in
   *) cwd="${cwd:+$cwd/}$workdir" ;;
 esac
 shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不明)}"
+# Claude Code の Bash は timeout を指定しない前景の実行をこの既定値で打ち切る。判定役が既定の上限を推測しないよう渡す。
+[ "$cli" = claude ] && [ -n "${BASH_DEFAULT_TIMEOUT_MS:-}" ] &&
+  shell="$shell / Bash の既定の上限: ${BASH_DEFAULT_TIMEOUT_MS} ms (指定できる最大 ${BASH_MAX_TIMEOUT_MS:-不明} ms)"
 
 now=$(date +%s)
 user_history=""
@@ -352,13 +356,16 @@ esac
 
 verdict=$(printf '%s' "$output" | jq -R -s -c '
   split("\n") | map(fromjson? | select(type == "object" and
-    ([.danger, .user_requested, .body_from_file, .external] | all(type == "boolean")))) | last // empty
+    ([.danger, .user_requested, .body_from_file, .external, .short_cutoff] | all(type == "boolean")))) | last // empty
 ' 2>/dev/null)
 [ -n "$verdict" ] || judge_failed "判定役の出力から判定結果の JSON を読み取れなかった"
 
 reason=$(jq -r '.reason // "" | tostring | sub("[。.[:space:]]+$"; "")' <<<"$verdict")
 if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
   decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をツールの引数に直接書くか、コマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
+fi
+if [ "$(jq -r .short_cutoff <<<"$verdict")" = true ]; then
+  decide deny "処理を、通常の所要時間に余裕のない根拠のない短い上限で打ち切らせるため止めた: ${reason}。上限は実測や外部の制約から余裕を持たせて決め、根拠が無ければ十分に長い上限にするか背景で実行し、その間は出力の内容を読んで目的の結果へ進んでいるかを確かめること (大きさや行数の増加だけでは進捗と扱わない)"
 fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
