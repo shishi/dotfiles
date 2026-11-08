@@ -587,7 +587,7 @@ def engine_record(result):
     failure = result.get('failure_kind')
     if failure not in ('input_limit', 'unavailable'):
         failure = 'unavailable' if result.get('status') == 'unchecked' else None
-    return {'failure_kind': failure, 'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
+    return {'failure_kind': failure, 'reason': result.get('reason'), 'context_diagnostics': result.get('context_diagnostics'), 'context_metrics': result.get('context_metrics'), 'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
             'dropped': result.get('dropped') or [], 'progress': result.get('progress'),
             'independent_recheck': result.get('independent_recheck')}
 
@@ -1220,7 +1220,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             add_records(sid, tid, [i for i in seen if isinstance(i, dict) and not is_client_call(i)])
         except OSError as error:
             log(event='turn-store-failed', error=type(error).__name__)
-        evidence, previous = turn_evidence(sid, tid)
+        evidence, previous = turn_evidence(sid, tid) if final else ([], [])
         # Codex が同じ要求を送り直した回は、まだ直させていないので数えない。
         sent_back = int(gate.get('round') or 0) if gate is not None else 0
         withhold = final and not incomplete
@@ -1382,7 +1382,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         record = self.result_record or {}
         log(event='checked', mode=mode, items=len(results), check_dur=round(time.time() - check_started, 3),
             engine=record.get('engine'), engine_failures=record.get('engine_failures') or [],
-            failure_kind=record.get('failure_kind'),
+            failure_kind=record.get('failure_kind'), reason=record.get('reason'),
+            context_diagnostics=record.get('context_diagnostics'),
+            model_attempts=(record.get('context_metrics') or {}).get('model_attempts'),
             dropped=len(record.get('dropped') or []),
             dropped_reasons=[d.get('reason') for d in record.get('dropped') or [] if isinstance(d, dict)],
             recheck=record.get('recheck'),

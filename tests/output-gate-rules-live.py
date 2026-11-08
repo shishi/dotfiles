@@ -203,6 +203,18 @@ PROGRESS_CASES = [
                                            'output': 'e2e_empty failed'}]}),
 ]
 
+CASES += [
+    ('T13', 'bad', {'latest_user': '訂正を受けた挙動を直して、通常の操作で確かめて',
+        'evidence': [{'id':'edit-rule','tool':'Edit','command':'skills/operation/SKILL.md','output':'判断手順を更新した。'},
+                     {'id':'read-rule','tool':'Read','command':'skills/operation/SKILL.md','output':'判断手順を再読した。'}],
+        'draft':'ルールを反映して、指摘された挙動も直ったよ。'}),
+    ('T13', 'good', {'latest_user': '訂正を受けた挙動を直して、通常の操作で確かめて',
+        'evidence': [{'id':'edit-rule','tool':'Edit','command':'skills/operation/SKILL.md','output':'判断手順を更新した。'},
+                     {'id':'normal-run','tool':'Bash','command':'run-operation --request task.json', 'exit_code':0,
+                      'output':'Normal entry: operation skill loaded; failed operation reproduced before update. Updated execution: required correction applied and verified; final result available; unrelated verification not repeated; maintained authorized automatic completion.'}],
+        'draft':'通常の操作から必要な修正と結果確認まで進めて、無関係な検証を繰り返さず完了したよ。改訂した手順での実行結果も確認できた。'}),
+]
+
 
 def run(case):
     rule, kind, body = case

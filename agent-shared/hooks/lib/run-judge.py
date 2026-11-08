@@ -35,6 +35,7 @@ LIMIT_REACHED = 75
 LIMIT_ERROR = re.compile(rb'\bERROR\b.*\b(?:usage limit|rate limit|429)\b', re.I)
 
 seconds, cwd, *command = sys.argv[1:]
+parent_pid=int(os.environ.get("OUTPUT_GATE_PARENT_PID") or os.getppid())
 executable = shutil.which(command[0])
 if executable is None:
     sys.exit(127)
@@ -109,6 +110,9 @@ reader = threads[1]
 # 標準出力が閉じ (判定役とその子孫が終わり)、判定役が終了するまで待つ。締切と認証の失敗はその間に見る。
 # 標準出力を先に閉じて動き続ける判定役もあるため、終了を待つ間も締切を見る。
 while reader.is_alive() or process.poll() is None:
+    if os.name != "nt" and os.getppid() != parent_pid:
+        stop_tree()
+        sys.exit(130)
     if auth_failed.is_set():
         stop_tree()
         sys.exit(AUTH_FAILED)

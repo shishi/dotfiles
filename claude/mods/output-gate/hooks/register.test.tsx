@@ -47,11 +47,14 @@ const codexFailed = (p: Payload): Result => ({ status: 'unchecked', text: `[出�
   engine_failures: [{ family: 'codex', reason: 'codex 不調' }] })
 
 type Fs = Map<string, string>
+const clocks = new WeakMap<Fs, ReturnType<typeof mock.clock>>()
 const norm = (path: string) => String(path).replaceAll('\\', '/').replace(/^[A-Za-z]:/, '')
 
 // このマシンで出力ゲートを有効にした状態 (状態ディレクトリの claude-enabled を読める) と、記憶だけのファイル。
 function world(on: On, options: { env?: Record<string, string>; enabled?: boolean; messages?: Message[] } = {}) {
+  const clock = mock.clock(on)
   const fs: Fs = new Map()
+  clocks.set(fs, clock)
   if (options.enabled ?? true) fs.set('/state/output-gate/claude-enabled', '')
   mock.env(on, { HOME: '/home/u', XDG_STATE_HOME: '/state', ...options.env })
   on('session.id', () => ({ value: 'sess-1' }))
@@ -81,15 +84,15 @@ function world(on: On, options: { env?: Record<string, string>; enabled?: boolea
 }
 
 const runs: { argv: string[]; env: Record<string, string> }[] = []
-type Checker = { prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result;
+type Checker = { spawn?: (input: string) => AsyncGenerator<{ stream: 'stdout'; text: string }, object>; prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result;
   confirm?: (r: { context_dir: string; token: string; text: string }) => Result;
   finish?: (r: { initial: Result; rechecked: Result }) => Result;
-  receive?: (r: { payload: Payload; reply: string; transaction?: unknown; engine: unknown; engine_failures?: unknown[] }) => Result }
+  receive?: (r: { payload: Payload; reply: string; transaction?: unknown; engine: unknown; engine_failures?: unknown[]; model_attempts?: unknown[] }) => Result }
 // 検査処理の代わり: Python の確認・ファイルの置き換えと削除は記憶のファイルで行い、検査は与えた関数で答える。
 function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), calls: Payload[] = []) {
   runs.length = 0
   const given = typeof answer === 'function' ? { bulk: answer } : answer
-  on('process.run', (_$, e) => {
+  const execute = (e: { argv: readonly unknown[]; init?: { stdin?: string; env?: Record<string, string> } }) => {
     const argv = e.argv.map(String)
     const code = argv.indexOf('-c')
     if (code >= 0 && argv.length > code + 2) {
@@ -108,13 +111,27 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
     if (argv.includes('--receive')) {
       const request = JSON.parse(e.init.stdin)
       calls.push(request.payload)
-      return ok(given.receive!(request))
+      return ok(request.engine?.family === 'codex' && JSON.parse(request.reply).status ? JSON.parse(request.reply) : given.receive!(request))
+    }
+    if (argv.includes('--judge')) {
+      const request = JSON.parse(e.init.stdin)
+      const result = given.bulk!(request.payload)
+      if (result.status === 'unchecked' && !result.engine && Array.isArray(result.engine_failures) && result.engine_failures.length)
+        return ok({ status: 'unavailable', reason: result.reason, engine_failures: result.engine_failures })
+      return ok({ status: 'answered', reply: JSON.stringify(result), engine: result.engine, engine_failures: [] })
     }
     if (argv.includes('--confirm-display')) return ok(given.confirm?.(JSON.parse(e.init.stdin)) ?? { status: 'confirmed' })
     if (argv.includes('--finish-recheck')) return ok(given.finish!(JSON.parse(e.init.stdin)))
     const payload = JSON.parse(e.init.stdin) as Payload
     calls.push(payload)
     return ok(given.bulk!(payload))
+  }
+  on('process.run', (_$, e) => execute(e))
+  on('process.spawn', async function* (_$, e) {
+    if (given.spawn) return yield* given.spawn(e.input ?? '')
+    const result = execute({ argv: e.argv, init: { stdin: e.input, env: e.env } }).value
+    if (result.stdout) yield { stream: 'stdout' as const, text: result.stdout }
+    return { value: { code: result.exitCode, signal: null } } as never
   })
   return calls
 }
@@ -423,9 +440,9 @@ test('a failure of the hook itself shows the original with the reason', async ($
 
 type Completion = { model: string; effort?: string; maxTokens?: number; system?: string; prompt: string }
 function claudeModel(on: On, answer: (e: Completion) => object, calls: Completion[] = []) {
-  on('model.complete', (_$, e) => {
+  on('model.complete', async (_$, e) => {
     calls.push(e as Completion)
-    return { value: answer(e as Completion) } as never
+    return { value: await answer(e as Completion) } as never
   })
   return calls
 }
@@ -905,21 +922,25 @@ test('the turn file keeps which checker judged and why the other failed', async 
   expect(saved.checks[0]?.dropped.length).toBe(1)
 })
 
-test('the two checkers share the 45 second deadline, half of what is left to the first', async ($, on) => {
+test('the first Codex checker receives the full shared deadline', async ($, on) => {
   const fs = world(on)
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
-  checker(on, fs, { bulk: codexFailed, receive: r => replaceKiku(r.payload) })
+  let attempts: Record<string, unknown>[] = []
+  checker(on, fs, { bulk: codexFailed, receive: r => { attempts = r.model_attempts as Record<string, unknown>[]; return replaceKiku(r.payload) } })
   const completions = claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
   model(on, [[TEXT(0, '答え。'), STOP()]])
   await run($)
-  const bulk = runs.find(r => !r.argv.includes('--prepare') && !r.argv.includes('--receive'))!
+  const bulk = runs.find(r => r.argv.includes('--judge'))!
   const first = Number(bulk.env['OUTPUT_GATE_TIMEOUT'])
-  expect(first > 20 && first <= 22.5).toBe(true)
+  expect(first > 40 && first <= 45).toBe(true)
   const second = (completions[0] as { timeoutMs?: number }).timeoutMs!
   expect(second > 40_000 && second <= 45_000).toBe(true)
+  expect(attempts[0]?.outcome).toBe('failed')
+  expect(attempts[0]?.usage).toBe(null)
+  expect(attempts[1]?.usage).toEqual(usage(10))
 })
 
-test('with Claude first, Claude gets half and Codex the rest', async ($, on) => {
+test('with Claude first, Claude gets the full deadline and raw failure falls back immediately', async ($, on) => {
   const fs = world(on)
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'same' }))
   checker(on, fs, { bulk: replaceKiku, receive: r => replaceKiku(r.payload) })
@@ -928,8 +949,8 @@ test('with Claude first, Claude gets half and Codex the rest', async ($, on) => 
   const { text } = await run($)
   expect(text).toBe('これは速い。')
   const first = (completions[0] as { timeoutMs?: number }).timeoutMs!
-  expect(first > 20_000 && first <= 22_500).toBe(true)
-  const bulk = runs.find(r => !r.argv.includes('--prepare') && !r.argv.includes('--receive'))!
+  expect(first > 40_000 && first <= 45_000).toBe(true)
+  const bulk = runs.find(r => r.argv.includes('--judge'))!
   const second = Number(bulk.env['OUTPUT_GATE_TIMEOUT'])
   expect(second > 20 && second <= 45).toBe(true)
 })
@@ -1213,3 +1234,59 @@ test('each accepted queued human event carries its own request identity even wit
   expect(second?.startsWith('t1:queued:')).toBe(true)
   expect(second).not.toBe(first)
 })
+
+for (const first of ['claude', 'codex'] as const) {
+  test(`delayed ${first} keeps its full budget and only the winning raw reply is received`, async ($, on) => {
+    const fs = world(on)
+    const clock = clocks.get(fs)!
+    fs.set('/state/output-gate/checker.json', JSON.stringify({ first }))
+    const received: unknown[] = []
+    let attempts: Record<string, unknown>[] = []
+    let prepares = 0
+    let stopped = false
+    let codexStarts = 0
+    checker(on, fs, {
+      prepare: () => { prepares += 1; return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', transaction: { id: 'shared' } }) },
+      receive: r => { received.push(r.engine); attempts = r.model_attempts as Record<string, unknown>[]; return checked(r.payload) },
+      spawn: async function* (input) {
+        codexStarts += 1
+        const request = JSON.parse(input)
+        expect(request.prompt).toBe('PROMPT')
+        expect(request.transaction).toEqual({ id: 'shared' })
+        try {
+          await clock.sleep(first === 'codex' ? 35_000 : 30_000)
+          yield { stream: 'stdout' as const, text: JSON.stringify({ status: 'answered', reply: '{}', engine: { family: 'codex' }, model_attempts: [{ family: 'codex', outcome: 'answered', elapsed_ms: 35_000, usage: { input_tokens: 7, output_tokens: 2 } }] }) }
+          return { value: { code: 0, signal: null } }
+        } finally { stopped = true }
+      },
+    })
+    const completions = claudeModel(on, async () => {
+      await clock.sleep(first === 'claude' ? 35_000 : 30_000)
+      return { isAnswered: true, text: '{}', usage: usage(1) }
+    })
+    model(on, [[TEXT(0, '回答'), STOP()]])
+    const pending = run($)
+    await clock.settle()
+    expect(received.length).toBe(0)
+    await clock.advance(20_000)
+    expect(codexStarts).toBe(first === 'codex' ? 1 : 0)
+    expect(completions.length).toBe(first === 'claude' ? 1 : 0)
+    await clock.advance(15_000)
+    const result = await pending
+    expect(result.text).toBe('回答')
+    expect(prepares).toBe(1)
+    expect(received.length).toBe(1)
+    expect((received[0] as { family: string }).family).toBe(first)
+    expect(attempts.length).toBe(2)
+    const winner = attempts.find(a => a.family === first)!
+    const loser = attempts.find(a => a.family !== first)!
+    expect(winner.outcome).toBe('answered')
+    expect(winner.usage).toEqual(first === 'claude' ? usage(1) : { input_tokens: 7, output_tokens: 2 })
+    expect(loser.outcome).toBe('cancelled')
+    expect(loser.usage).toBe(null)
+    expect(typeof loser.elapsed_ms).toBe('number')
+    await clock.advance(30_000)
+    expect(received.length).toBe(1)
+    expect(stopped).toBe(true)
+  })
+}

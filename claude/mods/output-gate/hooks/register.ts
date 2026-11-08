@@ -15,7 +15,7 @@ const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as s
 
 const UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
 // 検査全体の締切 (秒)。秘密情報の検査 (gitleaks) と二つの系統の検査役が、この中に収まる。先に試す系統には
-// 残りの半分、次の系統には残り全てを渡す (検査処理と同じ分け方)。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
+// 全残時間を先行へ渡し、半分を過ぎても未完了なら代替を始める。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
 const DEFAULT_TIMEOUT_S = 45
 // 検査処理を待つ上限は、渡した締切に、止まらない子の後始末 (最大 30 秒) と余裕を足したもの。締切切れは
 // 検査処理が理由付きで返すため、ここで切るのは検査処理そのものが止まった場合だけ。
@@ -85,6 +85,7 @@ type Payload = {
 }
 type Failure = { family: string | null; reason: string }
 type CheckResult = {
+  context_metrics?: Record<string, unknown> | null
   status: 'checked' | 'unchecked'
   display_receipt?: string
   text: string | null
@@ -416,14 +417,14 @@ async function fileOps($: EngineInterface, replace: [string, string][], remove: 
 
 // --- 検査処理と検査役 ---
 
-async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display') {
+async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display' | '--judge') {
   const home = await homeDir($)
   if (!home) throw new Error('ホームディレクトリが分からない')
   return [await findPython($), '-I', `${home}/.agent-shared/bin/output-gate-check.py`, ...(mode ? [mode] : [])]
 }
 
 // budgetMs: 検査処理に渡す締切 (OUTPUT_GATE_TIMEOUT)。
-async function runChecker($: EngineInterface, input: unknown, budgetMs: number, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display'):
+async function runChecker($: EngineInterface, input: unknown, budgetMs: number, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display' | '--judge'):
     Promise<Record<string, unknown>> {
   const argv = await checkerArgv($, mode)
   let result
@@ -451,9 +452,6 @@ function asResult(out: Record<string, unknown>): CheckResult {
     display_text: typeof out['display_text'] === 'string' ? out['display_text'] : null }
 }
 
-// 検査役の系統の失敗 (検査役が答えなかった) か。検査役が答えて検査できなかった場合は別の系統へ移らない。
-const engineFailed = (r: CheckResult) => r.status === 'unchecked' && r.engine == null && r.engine_failures.length > 0
-
 // 利用者の設定 (先に試す系統、Claude の系統のモデルと推論量)。検査処理と同じく、無ければ既定値、読めない・
 // 形が違えば検査できなかった扱い (理由付き) にする。
 async function settings($: EngineInterface): Promise<Settings> {
@@ -480,81 +478,117 @@ async function settings($: EngineInterface): Promise<Settings> {
     claude: { model: data.claude?.model || 'opus', effort: (data.claude?.effort || 'low') as Effort } }
 }
 
-// Claude の検査役: 検査処理の入力を組む口で入力を作り (秘密情報は伏せてある)、セッションの認証で呼び、
-// 返答を受ける口へ渡す。この系統で検査できなければ、その理由 (Failure) を返す。
-async function claudeCheck($: EngineInterface, payload: Payload, config: Settings['claude'], failures: Failure[],
-    deadline: number): Promise<CheckResult | Failure> {
-  const fail = (reason: string): Failure => ({ family: 'claude', reason: `claude の検査役で検査できなかった (${reason})` })
-  let prepared
+type ModelAttempt = { family: string; outcome: string; elapsed_ms: number; usage: unknown }
+type RawAnswer = ({ reply: string; engine: unknown } | { failures: Failure[] }) & { usage?: unknown; model_attempts?: ModelAttempt[] }
+
+async function rawAnswer($: EngineInterface, payload: Payload, prepared: Record<string, unknown>,
+    config: Settings, family: 'claude' | 'codex', deadline: number, stop: AbortController): Promise<RawAnswer> {
+  let usage: unknown = null
   try {
-    prepared = await runChecker($, payload, deadline - Date.now(), '--prepare')
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : '入力を組めない')
-  }
-  if (prepared['status'] !== 'ready') return fail(String(prepared['reason'] ?? '入力を組めない'))
-  while (prepared['status'] === 'ready') {
     const left = Math.floor(deadline - Date.now())
-    if (left <= 0) return fail('時間が残っていない')
-    let reply
+    if (left <= 0) throw new Error('時間が残っていない')
+    if (family === 'claude') {
+      const reply = await $.model.complete({ ...config.claude, system: String(prepared['system']),
+        prompt: String(prepared['prompt']), maxTokens: CLAUDE_MAX_TOKENS, timeoutMs: left }, { signal: stop.signal })
+      usage = reply.usage ?? null
+      if (!reply.isAnswered) throw new Error(`答えが無い: ${reply.reason}`)
+      return { reply: reply.text, engine: { family, ...config.claude }, usage }
+    }
+    const stream = $.process.spawn({ argv: await checkerArgv($, '--judge'),
+      input: JSON.stringify({ payload, prompt: prepared['prompt'], transaction: prepared['transaction'] }),
+      env: { OUTPUT_GATE_TIMEOUT: (left / 1000).toFixed(3) } })
+    const cancel = () => { void stream.return().catch(() => {}) }
+    stop.signal.addEventListener('abort', cancel, { once: true })
+    let stdout = ''
     try {
-      reply = await $.model.complete({ model: config.model, effort: config.effort, system: String(prepared['system']),
-        prompt: String(prepared['prompt']), maxTokens: CLAUDE_MAX_TOKENS, timeoutMs: left })
-    } catch (error) {
-      return fail(`呼び出しを拒まれた: ${error instanceof Error ? error.message : String(error)}`)
+      if (stop.signal.aborted) throw new Error('検査を中止した')
+      while (true) {
+        const next = await stream.next()
+        if (next.done) {
+          if (next.value.code !== 0) throw new Error('検査処理が失敗した')
+          break
+        }
+        if (next.value.stream === 'stdout') stdout += next.value.text
+      }
+    } finally {
+      stop.signal.removeEventListener('abort', cancel)
+      await stream.return()
     }
-    if (!reply.isAnswered) {
-      const detail = reply.reason === 'api-error' ? ` ${reply.error}${reply.status === null ? '' : ` (HTTP ${reply.status})`}` : ''
-      return fail(`答えが無い: ${reply.reason}${detail}`)
-    }
-    try {
-      prepared = await runChecker($, {
-        payload, reply: reply.text, transaction: prepared['transaction'],
-        engine: { family: 'claude', ...config }, engine_failures: failures,
-      }, Math.max(1, deadline - Date.now()), '--receive')
-    } catch (error) {
-      return fail(error instanceof Error ? error.message : '返答を受けられない')
-    }
+    const result = JSON.parse(stdout) as Record<string, unknown>
+    if (result['status'] === 'answered' && typeof result['reply'] === 'string')
+      return { reply: result['reply'], engine: result['engine'], model_attempts: result['model_attempts'] as ModelAttempt[] | undefined }
+    return { model_attempts: result['model_attempts'] as ModelAttempt[] | undefined, failures: Array.isArray(result['engine_failures']) && result['engine_failures'].length ?
+      result['engine_failures'] as Failure[] : [{ family, reason: String(result['reason'] ?? '答えが無い') }] }
+  } catch (error) {
+    return { usage, failures: [{ family, reason: error instanceof Error ? error.message : '検査役を呼べない' }] }
   }
-  return asResult(prepared)
 }
 
-// 先の系統には残りの半分、次の系統には残り全てを渡す。系統で検査できなければ次の系統へ移り、全て失敗すれば
-// 系統ごとの失敗を例外に含める。
 async function checkOnce($: EngineInterface, payload: Payload, sharedDeadline?: number): Promise<CheckResult> {
   const config = await settings($)
-  const total = Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S
-  const deadline = sharedDeadline ?? Date.now() + total * 1000
+  const deadline = sharedDeadline ?? Date.now() + (Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S) * 1000
+  let prepared = await runChecker($, payload, deadline - Date.now(), '--prepare')
   const failures: Failure[] = []
-  const order: ('codex' | 'claude')[] = config.first === 'claude' ? ['claude', 'codex'] : ['codex', 'claude']
-  for (const [position, family] of order.entries()) {
+  while (prepared['status'] === 'ready') {
+    const primary = new AbortController()
+    const secondary = new AbortController()
+    const timers = new AbortController()
+    const first = config.first
+    const other = first === 'claude' ? 'codex' : 'claude'
     const left = deadline - Date.now()
-    const share = position < order.length - 1 ? left / 2 : left
-    if (share <= 0) {
-      failures.push({ family, reason: `${family} の検査役を試す時間が残っていない` })
-      continue
+    if (left <= 0) throw new Error('検査の時間が残っていない')
+    const attempts = new Map<string, ModelAttempt[]>()
+    const pending = new Map<string, Promise<{ family: string; result: RawAnswer }>>()
+    const start = (family: 'claude' | 'codex', stop: AbortController) => {
+      const started = Date.now()
+      const attempt: ModelAttempt = { family, outcome: 'running', elapsed_ms: 0, usage: null }
+      attempts.set(family, [attempt])
+      stop.signal.addEventListener('abort', () => {
+        if (attempt.outcome === 'running') {
+          attempt.outcome = 'cancelled'
+          attempt.elapsed_ms = Date.now() - started
+        }
+      }, { once: true })
+      pending.set(family, rawAnswer($, payload, prepared, config, family, deadline, stop).then(result => {
+        if (attempt.outcome === 'running') {
+          if (Array.isArray(result.model_attempts) && result.model_attempts.length) attempts.set(family, result.model_attempts)
+          else Object.assign(attempt, { outcome: 'reply' in result ? 'answered' : 'failed', elapsed_ms: Date.now() - started, usage: result.usage ?? null })
+        }
+        return { family, result }
+      }))
     }
-    if (family === 'codex') {
-      let result
-      try {
-        result = asResult(await runChecker($, payload, share))
-      } catch (error) {
-        failures.push({ family, reason: error instanceof Error ? error.message : '検査処理を実行できなかった' })
-        continue
+    const wait = (ms: number, family: string) => $.clock.sleep(ms, { signal: timers.signal })
+      .then(() => ({ family, result: { failures: [] } as RawAnswer }))
+    const timeout = wait(left, 'timeout')
+    const hedge = wait(left / 2, 'hedge')
+    start(first, primary)
+    let hedged = false
+    let accepted: RawAnswer | undefined
+    try {
+      while (pending.size) {
+        const next = await Promise.race([...pending.values(), timeout, ...(!hedged ? [hedge] : [])])
+        if (next.family === 'timeout') throw new Error('検査の時間が残っていない')
+        if (next.family === 'hedge') {
+          hedged = true
+          start(other, secondary)
+          continue
+        }
+        pending.delete(next.family)
+        if ('reply' in next.result) { accepted = next.result; break }
+        failures.push(...next.result.failures)
+        if (!hedged) { hedged = true; start(other, secondary) }
       }
-      if (!engineFailed(result)) return { ...result, engine_failures: [...failures, ...result.engine_failures] }
-      failures.push(...result.engine_failures)
-    } else {
-      const result = await claudeCheck($, payload, config.claude, failures, Date.now() + share)
-      if (!('status' in result)) {
-        failures.push(result)
-      } else if (!engineFailed(result)) {
-        return result
-      } else {
-        failures.splice(0, failures.length, ...result.engine_failures)
-      }
+    } finally {
+      primary.abort()
+      secondary.abort()
+      timers.abort()
     }
+    if (!accepted || !('reply' in accepted)) throw new Error(failures.map(f => f.reason).join(' / ') || '検査役の答えが無い')
+    prepared = await runChecker($, { payload, reply: accepted.reply, engine: accepted.engine, transaction: prepared['transaction'], engine_failures: failures,
+      model_attempts: [...attempts.values()].flat() },
+      Math.max(1, deadline - Date.now()), '--receive')
   }
-  throw new Error(failures.map(f => f.reason).join(' / ') || '検査役の系統が無い')
+  return asResult(prepared)
 }
 
 // --- 断片の扱い ---
@@ -653,7 +687,7 @@ const stepKey = (e: TurnStepInput) => `${e.agentId ?? ''}:${e.turnId}:${e.index}
 // その検査でどの系統が判定し、ほかの系統がなぜ失敗し、どの指摘を捨てたかをターンの記録に残す。
 const checkRecord = (index: number, final: boolean, result: CheckResult) => ({
   index, final, status: result.status, engine: result.engine ?? null, engine_failures: result.engine_failures,
-  dropped: result.dropped, reason: result.reason,
+  dropped: result.dropped, reason: result.reason, context_metrics: result.context_metrics,
 })
 
 async function payloadFor($: EngineInterface, turnId: string, turn: Turn, bodies: string[], final: boolean,

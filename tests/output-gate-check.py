@@ -36,15 +36,22 @@ AUTH_ERROR_LINE = ('2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::respo
                    'connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses')
 PROTOCOL_MOCK = r'''def protocol_reply(data, legacy, catalog, served, aliases=None):
     """Fixture protocol mechanics only; these claims do not assess semantic quality."""
-    def expand(value):
+    literals = data.get('_source_literals', {})
+    handles = data.get('_reference_handles', {})
+    def expand(value, key=''):
+        if isinstance(value,dict) and set(value)=={'$source_ref'}:
+            return handles[value['$source_ref']]
         if isinstance(value, list):
-            return [expand(v) for v in value]
+            return [expand(v,key) for v in value]
         if not isinstance(value, dict):
             return value
-        out = {k: expand(v) for k, v in value.items()}
+        out = {k: expand(v,k) for k, v in value.items()}
         text = out.get('text')
         if 'ref' in out and 'kind' in out and isinstance(text, dict) and text.get('encoding') == 'literal_repeat_v1':
             out['text'] = ''.join(p if isinstance(p, str) else p['literal'] * p['repeat'] for p in text['parts'])
+            assert len(out['text'].encode('utf-8')) == out['ref']['end'] - out['ref']['start']
+        elif 'ref' in out and 'kind' in out and isinstance(text, dict) and text.get('encoding') == 'literal_table_v1':
+            out['text'] = ''.join(p if isinstance(p,str) else literals[p['literal_id']] for p in text['parts'])
             assert len(out['text'].encode('utf-8')) == out['ref']['end'] - out['ref']['start']
         return out
     data = expand(data)
@@ -58,7 +65,7 @@ PROTOCOL_MOCK = r'''def protocol_reply(data, legacy, catalog, served, aliases=No
     legacy = json.loads(json.dumps(legacy))
     def envelope(response):
         for key in ('refs', 'user_coverage', 'focus_refs', 'answer_coverage', 'focus_candidates', 'focus_resolved',
-                    'catalog_coverage', 'decisions', 'additions', 'unresolved', 'claims', 'obligations',
+                    'catalog_coverage', 'user_assessments', 'rule_assessments', 'decisions', 'additions', 'unresolved', 'claims', 'obligations',
                     'item_coverage', 'replacements', 'findings'):
             response.setdefault(key, [])
         response.setdefault('progress', {'state': 'unknown', 'reason': ''})
@@ -84,7 +91,8 @@ PROTOCOL_MOCK = r'''def protocol_reply(data, legacy, catalog, served, aliases=No
     items = {i['id']: i for i in data.get('items', [])}
     if data['stage'] in ('judge', 'update_and_judge'):
         items.update({i['id']: i for i in data.get('check_items', [])})
-    update = {'user_coverage': [u['ref'] for u in data.get('users', [])],
+    update = {'remaining_users': {'disposition':'context_only','reason':'fixture residual context'}, 'user_coverage': [u['ref'] for u in data.get('users', [])],
+              'user_assessments': [{'refs': [u['ref'] for u in data.get('users', [])], 'disposition': 'context_only', 'item_ids': [], 'resolution_refs': [], 'reason': 'fixture has no semantic update'}] if data.get('users') else [],
               'focus_refs': data.get('focus', []),
               'decisions': [{'item_id': i['id'], 'action': 'keep', 'basis': 'current', 'refs': [],
                              'reason': 'fixture keeps item'} for i in items.values()],
@@ -119,7 +127,7 @@ PROTOCOL_MOCK = r'''def protocol_reply(data, legacy, catalog, served, aliases=No
             refs = [r for r in data.get('catalog_refs', []) if not is_served(r)]
     if refs:
         return envelope({'kind': 'need_refs', 'refs': refs})
-    return envelope(dict(legacy, **update, kind='judgment', answer_coverage=[a['ref'] for a in data.get('answers', [])],
+    return envelope(dict(legacy, **update, rule_assessments=[{'rule':r['id'],'result':'violation' if any(f.get('rule')==r['id'] for f in legacy['findings']) else 'pass','reason':'fixture rule result'} for r in data.get('checked_rules',[])], kind='judgment', answer_coverage=[a['ref'] for a in data.get('answers', [])],
                 item_coverage=list(items),
                 claims=[{'id': 'fixture-' + str(n), 'answer_ref': a['ref'], 'text': a['text'],
                          'requirement_ids': [], 'evidence': [], 'verdict': 'nonfactual', 'reason': 'fixture protocol coverage'}

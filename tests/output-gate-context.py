@@ -30,6 +30,9 @@ class ContextTests(unittest.TestCase):
         self.payload = {'origin': 'codex', 'session_id': 'session', 'context_dir': self.tmp.name,
                         'draft': 'Done.', 'latest_user': 'Use UTF-8.', 'final': True}
 
+    def packet(self, ready):
+        return checker.context.expand_wire(json.loads(ready['prompt']))
+
     def ready(self, payload=None):
         result = checker.prepare(payload or self.payload)
         self.assertEqual(result['status'], 'ready', result)
@@ -37,35 +40,193 @@ class ContextTests(unittest.TestCase):
         return result
 
     def reply(self, ready, reply):
+        data = self.packet(ready)
+        if reply.get('kind') in ('update', 'judgment') and data.get('users'):
+            ids = [i['id'] for i in reply.get('additions', []) if i['kind'] != 'fact']
+            reply.setdefault('user_assessments', ([{'refs': [r for i in reply.get('additions', []) if i['id'] in ids for r in i['refs']], 'disposition': 'live', 'item_ids': ids, 'resolution_refs': [], 'reason':'fixture live meaning'}] if ids else []) + [{'refs':[data['user_scope']['ref']], 'disposition':'context_only', 'item_ids':[], 'resolution_refs':[], 'reason':'fixture residual context'}])
         return checker.receive({'payload': self.payload, 'transaction': ready['transaction'],
                                 'reply': json.dumps(reply), 'engine': {'family': 'test'}})
 
     def test_prepare_is_semantic_update(self):
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertIn(data['stage'], ('update', 'update_and_judge'))
         self.assertEqual(data['users'][0]['text'], 'Use UTF-8.')
+
+    def test_reading_users_without_accounting_for_their_meaning_cannot_pass(self):
+        ready = self.ready()
+        data = self.packet(ready)
+        result = self.reply(ready, {'kind':'update', 'user_coverage':[data['user_scope']['ref']],
+            'user_assessments':[], 'catalog_coverage':[], 'decisions':[], 'additions':[], 'unresolved':[], 'focus_refs':[]})
+        self.assertEqual(result['status'],'ready')
+        self.assertIn('remaining user meaning',self.packet(result)['validation_feedback'])
+
+    def test_live_meaning_cannot_use_a_read_bundle_to_hide_a_different_source(self):
+        ready = self.ready()
+        data = self.packet(ready)
+        user = data['users'][0]['ref']
+        item = dict(id='r',kind='constraint',text='Use UTF-8',refs=[user],related=[],target=dict(name='output',revision_refs=[]),validity='current')
+        result = self.reply(ready, dict(kind='update',user_coverage=[data['user_scope']['ref']],
+            user_assessments=[dict(refs=[data['user_scope']['ref']],disposition='live',item_ids=['r'],resolution_refs=[],reason='read everything')],
+            additions=[item],decisions=[],catalog_coverage=[],unresolved=[],focus_refs=[]))
+        self.assertIn('original user refs',self.packet(result)['validation_feedback'])
+
+    def test_unverified_aggregate_is_flagged_over_its_entire_original_range(self):
+        self.payload['draft']='First result. Second result.'
+        ready=self.update(self.ready())
+        data=self.packet(ready)
+        result=self.judgment(ready,claims=[dict(id='all',answer_ref=data['answers'][0]['ref'],text='both',requirement_ids=[],evidence=[],verdict='unverified')])
+        self.assertEqual(result['status'],'checked')
+        self.assertTrue(any(f['excerpt']==self.payload['draft'] for f in result['findings']))
+        self.assertIsNone(result['text'])
+
+    def test_literal_lookup_merges_overlapping_original_windows(self):
+        self.payload['evidence']=[dict(id='op',output='needle '*20)]
+        ready=self.ready();source=next(s for s in ready['transaction']['sources'].values() if s['kind']=='evidence')
+        ranges,result=checker.context.locate_refs(ready['transaction'],dict(id=source['id'],rev=source['rev'],field='output',literal='needle',after=0))
+        self.assertEqual(len(result['matches']),20)
+        self.assertEqual(ranges,[checker.context.ref(source,'output')])
+
+    def test_shared_source_lines_are_lossless_without_repeating_the_whole_template(self):
+        import random
+        rng=random.Random(31)
+        common=''.join(rng.choices('あいうえおabcdefghijklmnopqrstuvwxyz',k=6000))+'\n'
+        entries=[]
+        for n in range(6):
+            text='Source template\nprogress='+str(n)+'\n'+common+'counter='+str(n*2)+'\n'
+            entries.append(dict(kind='user',ref=dict(id='u'+str(n),rev='r'+str(n),field='text',start=0,end=len(text.encode())),text=text))
+        data=dict(users=entries)
+        packet=checker.context.wire_value(data)
+        self.assertEqual(checker.context.expand_wire(packet),data)
+        self.assertLess(len(checker.context.encoded(packet)),len(checker.context.encoded(data))//2)
+
+    def test_nonfinal_rule_input_does_not_grow_with_execution_evidence(self):
+        payload=dict(origin='codex',final=False,draft='その表現を整えるよ。',latest_user='文体を続けて',
+            recent_messages=[dict(role='user',text='文書の文体を維持して')],shown_text='先ほどの説明')
+        sizes=[]
+        for count in (1,200):
+            evidence=[dict(id=str(n),tool='exec',output='runtime output '*100) for n in range(count)]
+            data=checker.build_input(dict(payload,evidence=evidence,previous_evidence=[dict(turn_id='old',items=evidence)],
+                previous_findings=[dict(kind='missing_request')],progress_state=dict(round=1,stalled=1,bodies=['old'],findings=[],evidence=evidence)), 'rules')
+            self.assertEqual(data['evidence'],[])
+            self.assertEqual(data['previous_evidence'],[])
+            self.assertNotIn('progress_state',data)
+            self.assertNotIn('previous_findings',data)
+            self.assertEqual(data['messages'],checker.messages(payload))
+            self.assertEqual(data['protected_parts_of_draft'],checker.protected_parts(payload['draft']))
+            sizes.append(len(checker.render(data).encode()))
+        self.assertEqual(sizes[0],sizes[1])
+
+    def test_raw_judge_generates_without_accepting_state(self):
+        ready=self.ready();path=Path(self.tmp.name)/'transaction.json';before=path.read_bytes()
+        with patch.object(checker,'run_codex',return_value=('{}',dict(family='codex'))) as run:
+            result=checker.raw_judge(dict(payload=self.payload,prompt=ready['prompt'],transaction=ready['transaction']))
+        self.assertEqual(result['status'],'answered')
+        self.assertEqual(path.read_bytes(),before)
+        self.assertFalse((Path(self.tmp.name)/'state.json').exists())
+        self.assertEqual(run.call_count,1)
+        with patch.object(checker,'run_codex') as run:
+            rejected=checker.raw_judge(dict(payload=self.payload,prompt=ready['prompt']+' ',transaction=ready['transaction']))
+        self.assertEqual(rejected['status'],'unavailable')
+        run.assert_not_called()
+
+    def test_expired_raw_packet_is_not_sent_to_a_model(self):
+        ready=self.ready();ready['transaction']['deadline']=0
+        checker.context.atomic(Path(self.tmp.name)/'transaction.json',ready['transaction'])
+        with patch.object(checker,'run_codex') as run:
+            result=checker.raw_judge(dict(payload=self.payload,prompt=ready['prompt'],transaction=ready['transaction']))
+        self.assertEqual(result['status'],'unavailable')
+        run.assert_not_called()
+
+    def test_nonfinal_primary_has_full_budget_and_records_attempts(self):
+        calls=[]
+        def run(family,cancel):
+            calls.append(family);end=time.monotonic()+0.5
+            while time.monotonic()<end:
+                if cancel.is_set():raise checker.EngineFailure('cancelled')
+                time.sleep(0.005)
+            return json.dumps(dict(replacements=[],findings=[],progress=dict(state='unknown',reason='fixture'))),dict(family=family,usage=dict(input_tokens=11,output_tokens=7))
+        payload=dict(self.payload,final=False)
+        with patch.object(checker,'load_settings',return_value=dict(first='claude',claude={},codex={})), patch.object(checker,'run_claude',side_effect=lambda p,c,w,t,f,cancel:run('claude',cancel)), patch.object(checker,'run_codex',side_effect=lambda p,c,y,w,t,f,cancel:run('codex',cancel)):
+            result=checker.check(payload,time.monotonic()+0.8)
+        self.assertEqual(result['status'],'checked',result.get('reason'))
+        attempts=result['context_metrics']['model_attempts']
+        self.assertEqual([a['family'] for a in attempts],['claude','codex'])
+        self.assertEqual(attempts[0]['usage'],dict(input_tokens=11,output_tokens=7))
+        self.assertEqual(attempts[1]['outcome'],'cancelled')
+        self.assertIsNone(attempts[1]['usage'])
+
+    def test_typed_reference_resolution_does_not_depend_on_field_names(self):
+        reference=dict(id='source',rev='revision',field='text',start=0,end=12)
+        data=dict(new_field=[dict(nested={'$source_ref':'@0'})],literal='@0')
+        self.assertEqual(checker.context.expand_references(data,{'@0':reference}),dict(new_field=[dict(nested=reference)],literal='@0'))
+
+    def test_resolved_user_assessment_accepts_the_supplied_compact_ref(self):
+        self.live_state()
+        self.payload.update(turn_id='cancel-turn',request_id='cancel-request',latest_user='Cancel the UTF-8 constraint.')
+        ready=self.ready();wire=json.loads(ready['prompt']);user=wire['users'][0]['ref']
+        result=self.reply(ready,dict(kind='update',user_coverage=[user],user_assessments=[dict(refs=[user],disposition='resolved',item_ids=[],resolution_refs=[user],reason='explicit user cancellation')],decisions=[dict(item_id='encoding',action='retire',basis='cancelled',refs=[user],reason='user cancelled')],additions=[],catalog_coverage=[],unresolved=[],focus_refs=[]))
+        self.assertEqual(result['status'],'ready')
+        self.assertIsNone(self.packet(result)['validation_feedback'])
+        self.assertEqual(result['transaction']['candidate_state']['items'],[])
+
+    @unittest.skipUnless(sys.platform.startswith('linux'),'Linux process lifetime inspection')
+    def test_raw_judge_stops_descendants_when_its_caller_is_terminated(self):
+        import signal
+        import subprocess
+        ready=self.ready();folder=Path(self.tmp.name)
+        rules=folder/'rules.md';rules.write_text('## 応答\n')
+        checked=folder/'checked.json';checked.write_text('[]')
+        for signum in (signal.SIGTERM,signal.SIGKILL):
+            pidfile=folder/('model-'+str(signum)+'.pid')
+            fake=folder/('fake-'+str(signum)+'.py')
+            fake.write_text('import os,time;open('+repr(str(pidfile))+',"w").write(str(os.getpid()));time.sleep(60)')
+            env=dict(os.environ,OUTPUT_GATE_RULES=str(rules),OUTPUT_GATE_CHECKED_RULES=str(checked),OUTPUT_GATE_CODEX_CMD=json.dumps([sys.executable,str(fake)]))
+            with tempfile.TemporaryFile() as out,tempfile.TemporaryFile() as err:
+                proc=subprocess.Popen([sys.executable,'-I',str(ROOT/'agent-shared/bin/output-gate-check.py'),'--judge'],stdin=subprocess.PIPE,stdout=out,stderr=err,env=env)
+                self.addCleanup(lambda p=proc:p.kill() if p.poll() is None else None)
+                proc.stdin.write(json.dumps(dict(payload=self.payload,prompt=ready['prompt'],transaction=ready['transaction'])).encode());proc.stdin.close()
+                until=time.monotonic()+5
+                while not pidfile.exists() and proc.poll() is None and time.monotonic()<until:time.sleep(0.01)
+                self.assertTrue(pidfile.exists())
+                def cleanup_model(path=pidfile):
+                    try:os.kill(int(path.read_text()),signal.SIGKILL)
+                    except (OSError,ValueError):pass
+                self.addCleanup(cleanup_model)
+                started=time.monotonic();proc.send_signal(signum);proc.wait(timeout=5)
+                state=Path('/proc')/pidfile.read_text()/'stat'
+                while state.exists() and state.read_text().split(') ',1)[1][0]!='Z' and time.monotonic()-started<2:time.sleep(0.01)
+                self.assertTrue(not state.exists() or state.read_text().split(') ',1)[1][0]=='Z')
+                self.assertLess(time.monotonic()-started,2)
+
+    def test_joint_judgment_retains_new_live_items_without_duplicate_keep_output(self):
+        ready=self.ready();data=self.packet(ready);user=data['users'][0]['ref']
+        item=dict(id='encoding',kind='constraint',text='Use UTF-8',refs=[user],related=[],target=dict(name='output',revision_refs=[]),validity='current')
+        result=self.reply(ready,dict(kind='judgment',user_coverage=[data['user_scope']['ref']],additions=[item],decisions=[],catalog_coverage=[],unresolved=[],focus_refs=[],answer_coverage=[a['ref'] for a in data['answers']],item_coverage=['encoding'],claims=[dict(id='answer',answer_ref=data['answers'][0]['ref'],text='Done.',requirement_ids=['encoding'],evidence=[],verdict='nonfactual')],findings=[],replacements=[],progress=dict(state='unknown',reason='fixture'),focus_candidates=[]))
+        self.assertEqual(result['status'],'checked',result.get('reason'))
+        self.assertEqual(result['context_state']['items'],[item])
+        self.assertEqual(len(result['context_metrics']['inputs']),1)
 
     def test_empty_coverage_cannot_pass(self):
         result = self.reply(self.ready(), {'kind': 'update', 'user_coverage': [], 'focus_refs': [],
             'catalog_coverage': [], 'decisions': [], 'additions': [], 'unresolved': []})
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('coverage', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('coverage', self.packet(result)['validation_feedback'])
 
     def test_discovery_annotation_does_not_add_a_catalog_obligation(self):
         for has_operation in [False, True]:
             with self.subTest(has_operation=has_operation):
                 self.payload['context_dir'] = str(Path(self.tmp.name) / str(has_operation))
-                self.payload['evidence'] = [{'id': 'op', 'tool': 'exec', 'output': 'result'}] if has_operation else []
+                self.payload['evidence'] = [{'id': 'op', 'tool': 'exec', 'output': 'unavailable', 'unavailable': True}] if has_operation else []
                 ready = self.ready()
-                data = checker.context.expand_wire(json.loads(ready['prompt']))
+                data = self.packet(ready)
                 discovery = data['catalog_refs'][0]
                 result = self.reply(ready, {'kind': 'update', 'user_coverage': [u['ref'] for u in data['users']],
                     'catalog_coverage': [{'id': discovery['id'], 'rev': discovery['rev'],
                         'disposition': 'unrelated', 'related_item_ids': [], 'reason': 'Discovery index annotation',
                         'grounding_refs': [discovery]}],
                     'decisions': [], 'additions': [], 'unresolved': [], 'focus_refs': []})
-                feedback = json.loads(result['prompt']).get('validation_feedback')
+                feedback = self.packet(result).get('validation_feedback')
                 if has_operation:
                     self.assertIn('catalog coverage incomplete', feedback)
                 else:
@@ -75,7 +236,7 @@ class ContextTests(unittest.TestCase):
         result = self.reply(self.ready(), {'kind': 'need_refs', 'refs': [
             {'id': 'foreign', 'rev': 'x', 'field': 'text', 'start': 0, 'end': 1}]})
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('reference', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('reference', self.packet(result)['validation_feedback'])
 
     def test_archive_ingestion_is_not_user_meaning_coverage(self):
         ready = self.ready()
@@ -101,7 +262,7 @@ class ContextTests(unittest.TestCase):
     def test_same_text_occurrences_have_distinct_ids(self):
         self.payload['recent_messages'] = [{'role': 'user', 'text': 'Again'}, {'role': 'user', 'text': 'Again'}]
         ready = self.ready()
-        users = json.loads(ready['prompt'])['users']
+        users = self.packet(ready)['users']
         self.assertEqual(len({x['ref']['id'] for x in users}), len(users))
 
     def test_expired_shared_deadline_refuses_reply(self):
@@ -125,7 +286,7 @@ class ContextTests(unittest.TestCase):
                     raise checker.EngineFailure('deadline')
                 time.sleep(0.005)
             return '{"kind":"judgment"}', {'family': family}
-        ready = {'status': 'ready', 'prompt': '{}', 'transaction': {'source_end': {}}}
+        ready = {'status': 'ready', 'prompt': '{}', 'transaction': {'source_end': {}, 'metrics': {'inputs':[{}]}}}
         settings = {'first': 'claude', 'claude': {}, 'codex': {}}
         with patch.object(checker, 'prepare', return_value=ready), \
              patch.object(checker, 'load_settings', return_value=settings), \
@@ -154,7 +315,7 @@ class ContextTests(unittest.TestCase):
             if counts['codex'] > 1:
                 raise checker.EngineFailure('unavailable')
             return '{"kind":"need_refs"}', {'family': 'codex'}
-        ready = {'status': 'ready', 'prompt': '{}', 'transaction': {'source_end': {}}}
+        ready = {'status': 'ready', 'prompt': '{}', 'transaction': {'source_end': {}, 'metrics': {'inputs':[{}]}}}
         def receive(request):
             return ready if counts['codex'] == 1 else {'status': 'checked', 'engine': request['engine']}
         with patch.object(checker, 'prepare', return_value=ready), \
@@ -188,7 +349,7 @@ class ContextTests(unittest.TestCase):
         self.assertTrue(not state.exists() or state.read_text().split(') ', 1)[1][0] == 'Z')
 
     def update(self, ready, additions=None, decisions=None):
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         return self.reply(ready, {'kind': 'update', 'user_coverage': [x['ref'] for x in data.get('users', [])],
             'focus_refs': data.get('focus', []), 'catalog_coverage': [dict(id=c['id'], rev=c['rev'],
                 disposition='unrelated', related_item_ids=[], reason='test fixture unrelated') for c in data.get('catalog', [])],
@@ -196,7 +357,7 @@ class ContextTests(unittest.TestCase):
             'additions': additions or [], 'unresolved': []})
 
     def judgment(self, ready, **changes):
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         answer = {'kind': 'judgment', 'answer_coverage': [a['ref'] for a in data['answers']],
             'item_coverage': [i['id'] for i in data['items']],
             'decisions': [dict(item_id=i['id'], action='keep', basis='current', refs=[], reason='fixture active') for i in data['items']], 'claims': [dict(id=str(n), answer_ref=a['ref'],
@@ -208,7 +369,7 @@ class ContextTests(unittest.TestCase):
 
     def live_state(self):
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]
+        user = self.packet(ready)['users'][0]
         item = {'id': 'encoding', 'kind': 'constraint', 'text': 'Use UTF-8', 'refs': [user['ref']],
                 'related': [], 'target': {'name': 'output', 'revision_refs': []}, 'validity': 'current'}
         ready = self.update(ready, [item])
@@ -219,7 +380,7 @@ class ContextTests(unittest.TestCase):
     def test_warm_state_retains_old_constraint_without_resending_user(self):
         first = self.live_state()
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertEqual(data['stage'], 'judge')
         self.assertEqual(data['items'], first['context_state']['items'])
         self.assertNotIn('users', data)
@@ -232,26 +393,26 @@ class ContextTests(unittest.TestCase):
         self.payload['latest_user'] = 'What time is it?'
         result = self.update(self.ready(), decisions=[])
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('coverage', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('coverage', self.packet(result)['validation_feedback'])
 
     def test_nonapplicability_does_not_retire_unfinished_item(self):
         self.live_state()
         self.payload['latest_user'] = 'What time is it?'
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]['ref']
+        user = self.packet(ready)['users'][0]['ref']
         result = self.update(ready, decisions=[{'item_id': 'encoding', 'action': 'retire', 'basis': 'irrelevant',
             'refs': [user], 'reason': 'topic detour'}])
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('non-applicability', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('non-applicability', self.packet(result)['validation_feedback'])
 
     def test_cancellation_still_requires_current_check_coverage(self):
         self.live_state()
         self.payload['latest_user'] = 'Cancel UTF-8 requirement.'
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]['ref']
+        user = self.packet(ready)['users'][0]['ref']
         ready = self.update(ready, decisions=[{'item_id': 'encoding', 'action': 'retire', 'basis': 'cancelled',
             'refs': [user], 'reason': 'explicit cancellation'}])
-        self.assertEqual(json.loads(ready['prompt'])['items'][0]['id'], 'encoding')
+        self.assertEqual(self.packet(ready)['items'][0]['id'], 'encoding')
         result = self.judgment(ready)
         self.assertEqual(result['context_state']['items'], [])
 
@@ -271,16 +432,16 @@ class ContextTests(unittest.TestCase):
         source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
         r = checker.context.ref(source, 'output', 500000, 500004)
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [r]})
-        self.assertEqual(json.loads(ready['prompt'])['retrieved'][0]['text'], 'FAIL')
+        self.assertEqual(self.packet(ready)['retrieved'][0]['text'], 'FAIL')
         self.assertIn(r, ready['transaction']['served_refs'])
 
     def test_utf8_reference_boundaries_are_validated(self):
         self.payload = {'origin': 'codex', 'final': True, 'draft': 'あ', 'latest_user': 'あ'}
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]['ref']
+        user = self.packet(ready)['users'][0]['ref']
         result = self.reply(ready, {'kind': 'need_refs', 'refs': [dict(user, start=1)]})
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('UTF-8', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('UTF-8', self.packet(result)['validation_feedback'])
 
     def test_new_revision_keeps_source_identity(self):
         self.payload['sources'] = [{'kind': 'user', 'native_id': 'uuid-1', 'fields': {'text': 'First'}}]
@@ -292,14 +453,101 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(old['id'], new['id'])
         self.assertNotEqual(old['rev'], new['rev'])
 
-    def test_missing_catalog_disposition_prevents_closure(self):
-        self.payload['evidence'] = [{'id': 'call', 'output': 'FAILED'}]
+    def test_tool_history_is_lazy_but_current_state_has_a_frontier(self):
+        self.payload['evidence'] = [{'id': str(n), 'command': 'operation', 'output': 'result'} for n in range(846)]
+        data = checker.context.expand_wire(json.loads(self.ready()['prompt']))
+        self.assertEqual(data['catalog'], [])
+        self.assertEqual(data['evidence_frontier']['count'], 846)
+        self.assertGreater(data['evidence_frontier']['last_seq'], 0)
+        self.assertLess(len(json.dumps(data)), 40000)
+
+    def test_archive_lookup_returns_originals_without_loading_the_index(self):
+        self.payload['evidence'] = [{'id': 'one', 'command': 'verify release', 'output': 'release abc passed'}]
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        result = self.reply(ready, {'kind': 'need_refs', 'refs': [
+            {'scope': 'archive', 'field': 'output', 'literal': 'release abc', 'before_seq': 0}]})
+        self.assertEqual(result['status'], 'ready')
+        data = self.packet(result)
+        self.assertIsNone(data['validation_feedback'])
+        self.assertEqual(data['retrieved'][0]['text'], 'release abc passed')
+        self.assertEqual(data['retrieved'][0]['kind'], 'evidence')
+        checker.context.resolve_refs(result['transaction'], [data['retrieved'][0]['ref']], True)
+
+    def test_old_success_cannot_prove_current_state_past_unreviewed_operations(self):
+        self.payload['evidence'] = [{'id': 'one', 'command': 'verify', 'output': 'passed'},
+                                    {'id': 'two', 'command': 'run opaque.sh', 'output': 'changed'}]
+        ready = self.update(self.ready())
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        old = checker.context.ref(source, 'output')
+        ready = self.reply(ready, {'kind': 'need_refs', 'refs': [old]})
+        data = self.packet(ready)
+        claim = dict(id='current', answer_ref=data['answers'][0]['ref'], text='Done.', requirement_ids=[],
+                     evidence=[dict(ref=old, relation='supports')], verdict='supported', temporal_scope='current',
+                     freshness=dict(basis='unresolved', through_seq=0, refs=[], reason='not checked'))
+        result = self.judgment(ready, claims=[claim])
+        self.assertEqual(result['status'], 'ready')
+        self.assertIn('freshness', self.packet(result)['validation_feedback'])
+
+    def test_current_aggregate_cannot_hide_a_change_behind_a_newer_other_success(self):
+        self.payload['evidence'] = [{'id': 'a', 'command': 'verify A', 'output': 'A passed'},
+            {'id': 'change', 'command': 'opaque', 'output': 'A changed'},
+            {'id': 'b', 'command': 'verify B', 'output': 'B passed'}]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+        refs = [checker.context.ref(s, 'output') for s in (sources[0], sources[2])]
+        ready = self.reply(ready, dict(kind='need_refs', refs=refs))
+        data = self.packet(ready)
+        claim = dict(id='aggregate', answer_ref=data['answers'][0]['ref'], text='A and B passed', requirement_ids=[],
+            evidence=[dict(ref=r, relation='supports') for r in refs], verdict='supported', temporal_scope='current',
+            freshness=dict(basis='unresolved', through_seq=0, refs=[], reason='not checked'))
+        result = self.judgment(ready, claims=[claim])
+        self.assertIn('freshness', self.packet(result)['validation_feedback'])
+
+    def test_reviewed_truncated_operation_cannot_close_current_state(self):
+        self.payload['evidence'] = [{'id':'old', 'command':'verify', 'output':'passed'},
+            {'id':'change', 'command':'opaque', 'output':'partial', 'truncated':True}]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+        old = checker.context.ref(sources[0], 'output')
+        later = [checker.context.ref(sources[1], f) for f in ('call','output')]
+        ready = self.reply(ready, dict(kind='need_refs', refs=[old,*later]))
+        data = self.packet(ready)
+        claim = dict(id='current', answer_ref=data['answers'][0]['ref'], text='passed', requirement_ids=[],
+            evidence=[dict(ref=old, relation='supports')], verdict='supported', temporal_scope='current',
+            freshness=dict(basis='changes_reviewed', through_seq=sources[1]['seq'], refs=later, reason='read stored fields'))
+        result = self.judgment(ready, claims=[claim])
+        self.assertIn('truncated', self.packet(result)['validation_feedback'])
+
+    def test_exhausted_checker_reports_where_the_context_stopped(self):
+        with patch.object(checker, 'context_engine_reply', return_value=(None,None)):
+            result = checker.check(self.payload)
+        self.assertEqual(result['status'], 'unchecked')
+        diagnostic = result['context_diagnostics']
+        self.assertEqual(diagnostic['stage'], 'update')
+        self.assertEqual(diagnostic['pending_units'], 1)
+        self.assertGreater(diagnostic['inputs'][0]['bytes'], 0)
+
+    def test_current_claim_can_review_supplied_operations_without_reciting_every_field(self):
+        self.payload['evidence'] = [{'id':'old', 'command':'verify', 'output':'passed'},
+            {'id':'later', 'command':'inspect', 'output':'unchanged'}]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+        old,later = [checker.context.ref(s,'output') for s in sources]
+        data = self.packet(ready)
+        claim = dict(id='current', answer_ref=data['answers'][0]['ref'], text='passed', requirement_ids=[],
+            evidence=[dict(ref=old, relation='supports')], verdict='supported', temporal_scope='current',
+            freshness=dict(basis='changes_reviewed', through_seq=sources[1]['seq'], refs=[later], reason='The supplied operation inspected the unchanged target.'))
+        result = self.judgment(ready, claims=[claim])
+        self.assertEqual(result['status'],'checked',result.get('reason'))
+
+    def test_missing_catalog_disposition_prevents_closure(self):
+        self.payload['evidence'] = [{'id': 'call', 'output': 'unavailable', 'unavailable': True}]
+        ready = self.ready()
+        data = self.packet(ready)
         result = self.reply(ready, {'kind': 'update', 'user_coverage': [u['ref'] for u in data['users']],
             'decisions': [], 'catalog_coverage': [], 'additions': [], 'unresolved': [], 'focus_refs': []})
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('catalog coverage', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('catalog coverage', self.packet(result)['validation_feedback'])
 
     def test_new_sources_make_older_judgment_stale(self):
         ready = self.update(self.ready())
@@ -316,14 +564,14 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(saved['stage'], 'judge')
         resumed = self.ready()
         self.assertEqual(resumed['transaction']['id'], ready['transaction']['id'])
-        self.assertEqual(json.loads(resumed['prompt'])['stage'], 'judge')
+        self.assertEqual(self.packet(resumed)['stage'], 'judge')
 
     def test_large_new_user_is_covered_in_bounded_units(self):
         self.payload['latest_user'] = 'a' * 430000
         ready = self.ready()
         coverage = []
-        while ready['status'] == 'ready' and json.loads(ready['prompt'])['stage'] in ('update', 'update_and_judge'):
-            data = checker.context.expand_wire(json.loads(ready['prompt']))
+        while ready['status'] == 'ready' and self.packet(ready)['stage'] in ('update', 'update_and_judge'):
+            data = self.packet(ready)
             coverage.extend(u['ref'] for u in data['users'])
             self.assertLess(ready['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
             ready = self.update(ready)
@@ -338,13 +586,13 @@ class ContextTests(unittest.TestCase):
         self.payload['source_collector'] = 'claude-hook'
         self.payload['sources'] = [{'kind': 'user', 'native_id': 'real-uuid', 'fields': {'text': 'Use UTF-8.'}}]
         second = self.ready()
-        self.assertEqual(json.loads(second['prompt'])['stage'], 'judge')
+        self.assertEqual(self.packet(second)['stage'], 'judge')
         self.assertEqual(second['transaction']['candidate_state']['items'], first['context_state']['items'])
         self.payload['source_mode'] = 'delta'
         self.payload['sources'][0]['native_id'] = 'different-uuid'
         third = self.ready()
-        self.assertIn(json.loads(third['prompt'])['stage'], ('update', 'update_and_judge'))
-        self.assertNotEqual(json.loads(third['prompt'])['users'][0]['ref']['id'], first['context_state']['items'][0]['refs'][0]['id'])
+        self.assertIn(self.packet(third)['stage'], ('update', 'update_and_judge'))
+        self.assertNotEqual(self.packet(third)['users'][0]['ref']['id'], first['context_state']['items'][0]['refs'][0]['id'])
 
     def test_input_schema_is_strict_at_every_object(self):
         schema = self.ready()['schema']
@@ -362,11 +610,11 @@ class ContextTests(unittest.TestCase):
 
     def test_display_receipt_confirms_answer_completion_and_focus(self):
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]['ref']
+        user = self.packet(ready)['users'][0]['ref']
         item = {'id': 'q', 'kind': 'question', 'text': 'Answer the question', 'refs': [user],
                 'related': [], 'target': {'name': 'answer', 'revision_refs': []}, 'validity': 'current'}
         ready = self.update(ready, [item])
-        draft = json.loads(ready['prompt'])['answers'][0]['ref']
+        draft = self.packet(ready)['answers'][0]['ref']
         result = self.judgment(ready, decisions=[dict(item_id='q', action='retire', basis='answered',
             refs=[draft], reason='actual response delivered')], focus_candidates=[draft])
         self.assertEqual(result['status'], 'checked', result)
@@ -381,7 +629,7 @@ class ContextTests(unittest.TestCase):
 
     def test_withheld_draft_does_not_become_focus(self):
         ready = self.update(self.ready())
-        draft = json.loads(ready['prompt'])['answers'][0]['ref']
+        draft = self.packet(ready)['answers'][0]['ref']
         result = self.judgment(ready, focus_candidates=[draft], findings=[{'kind': 'unverified_claim', 'rule': '',
             'source': 'draft', 'excerpt': 'Done.', 'evidence': [{'id': None, 'state': 'absent'}]}])
         self.assertEqual(result['status'], 'checked')
@@ -393,10 +641,10 @@ class ContextTests(unittest.TestCase):
         state = self.live_state()['context_state']
         self.payload['latest_user'] = 'New unrelated request'
         ready = self.ready()
-        changed = dict(state['items'][0], text='Now use Shift_JIS', refs=[json.loads(ready['prompt'])['users'][0]['ref']])
+        changed = dict(state['items'][0], text='Now use Shift_JIS', refs=[self.packet(ready)['users'][0]['ref']])
         result = self.update(ready, [changed])
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('overwrite', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('overwrite', self.packet(result)['validation_feedback'])
 
     def test_windows_lock_does_not_require_fcntl(self):
         import types
@@ -409,15 +657,15 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(calls, [(1, 1), (2, 1)])
 
     def test_scope_coverage_expands_only_the_visible_users_and_catalog(self):
-        self.payload['evidence'] = [{'id': 'call', 'tool': 'exec', 'output': 'A result'}]
+        self.payload['evidence'] = [{'id': 'call', 'tool': 'exec', 'output': 'unavailable', 'unavailable': True}]
         self.payload['recent_messages'] = [{'role': 'user', 'text': 'first'}, {'role': 'assistant', 'text': 'report'}]
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         result = self.reply(ready, {'kind': 'update', 'user_coverage': [data['user_scope']['ref']],
             'catalog_coverage': [dict(data['catalog_scope'], disposition='unrelated', related_item_ids=[], reason='fixture')],
             'decisions': [], 'additions': [], 'unresolved': [], 'focus_refs': []})
         self.assertEqual(result['status'], 'ready', result)
-        self.assertEqual(json.loads(result['prompt'])['stage'], 'judge')
+        self.assertEqual(self.packet(result)['stage'], 'judge')
 
     def test_large_original_request_is_paged_without_marking_remaining_bytes_served(self):
         import random
@@ -427,7 +675,7 @@ class ContextTests(unittest.TestCase):
         source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
         full = checker.context.ref(source, 'output')
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [full]})
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertTrue(data['remaining_refs'])
         self.assertLessEqual(ready['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
         with self.assertRaisesRegex(ValueError, 'not served'):
@@ -435,7 +683,7 @@ class ContextTests(unittest.TestCase):
         pieces = [e['text'] for e in data['retrieved']]
         while data['remaining_refs']:
             ready = self.reply(ready, {'kind': 'need_refs', 'refs': data['remaining_refs']})
-            data = checker.context.expand_wire(json.loads(ready['prompt']))
+            data = self.packet(ready)
             pieces.extend(e['text'] for e in data['retrieved'])
             self.assertLessEqual(ready['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
         self.assertEqual(''.join(pieces), original)
@@ -445,7 +693,7 @@ class ContextTests(unittest.TestCase):
         ready = self.update(self.ready())
         self.payload['draft'] = 'A different answer'
         resumed = self.ready()
-        data = checker.context.expand_wire(json.loads(resumed['prompt']))
+        data = self.packet(resumed)
         self.assertEqual(data['stage'], 'judge')
         self.assertEqual(data['answers'][0]['text'], 'A different answer')
         self.assertEqual(resumed['transaction']['resumed_update_units'], 1)
@@ -456,13 +704,13 @@ class ContextTests(unittest.TestCase):
         old = ''.join(random.Random(31).choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=430000))
         self.payload['latest_user'] = old
         ready = self.ready()
-        covered_end = max(u['ref']['end'] for u in json.loads(ready['prompt'])['users'])
+        covered_end = max(u['ref']['end'] for u in self.packet(ready)['users'])
         ready = self.update(ready)
         self.payload['draft'] = 'Changed draft'
         self.payload['recent_messages'] = [{'role': 'user', 'text': old}, {'role': 'user', 'text': 'Continue'}]
         self.payload['latest_user'] = 'Continue'
         resumed = self.ready()
-        data = checker.context.expand_wire(json.loads(resumed['prompt']))
+        data = self.packet(resumed)
         self.assertIn(data['stage'], ('update', 'update_and_judge'))
         self.assertEqual(data['users'][0]['ref']['start'], covered_end)
         self.assertEqual(resumed['transaction']['candidate_state']['meaning_cursor']['user_seq'], 0)
@@ -471,7 +719,7 @@ class ContextTests(unittest.TestCase):
     def test_small_gap_has_served_original_but_stays_unavailable(self):
         self.payload['evidence'] = [{'id': 'gap', 'unavailable': True, 'note': 'No original result'}]
         ready = self.ready()
-        grounds = [g for g in json.loads(ready['prompt'])['catalog_grounding'] if g['kind'] == 'gap']
+        grounds = [g for g in self.packet(ready)['catalog_grounding'] if g['kind'] == 'gap']
         self.assertTrue(grounds)
         self.assertTrue(all(not g['available'] for g in grounds))
         for ground in grounds:
@@ -500,21 +748,24 @@ class ContextTests(unittest.TestCase):
         first, second = [checker.context.ref(s, 'output') for s in sources]
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [first]})
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [second]})
-        self.assertEqual({e['text'] for e in json.loads(ready['prompt'])['retrieved']}, {'small one', 'small two'})
+        self.assertEqual({e['text'] for e in self.packet(ready)['retrieved']}, {'small one', 'small two'})
 
-    def test_final_meaning_unit_and_judgment_can_close_in_one_reply(self):
-        ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
-        self.assertEqual(data['stage'], 'update_and_judge')
-        reply = {'kind': 'judgment', 'user_coverage': [u['ref'] for u in data['users']],
-            'catalog_coverage': [], 'decisions': [], 'additions': [], 'unresolved': [], 'focus_refs': [],
-            'answer_coverage': [a['ref'] for a in data['answers']], 'item_coverage': [],
-            'claims': [dict(id=str(n), answer_ref=a['ref'], text=a['text'], requirement_ids=[], evidence=[], verdict='nonfactual') for n,a in enumerate(data['answers'])],
-            'findings': [], 'replacements': [], 'progress': {'state': 'unknown', 'reason': 'fixture'}, 'focus_candidates': []}
-        result = self.reply(ready, reply)
-        self.assertEqual(result['status'], 'checked', result)
-        self.assertGreater(result['context_state']['meaning_cursor']['user_seq'], 0)
-        self.assertEqual(len(result['context_metrics']['inputs']), 1)
+    def test_user_meaning_and_planned_evidence_are_ready_before_judgment(self):
+        self.payload['evidence']=[dict(id='op',output='actual result')]
+        ready=self.ready();data=self.packet(ready)
+        self.assertEqual(data['stage'],'update_and_judge')
+        self.assertEqual(data['answers'][0]['text'],'Done.')
+        source=next(s for s in ready['transaction']['sources'].values() if s['kind']=='evidence')
+        wanted=checker.context.ref(source,'output')
+        ready=self.reply(ready,dict(kind='update',refs=[wanted],user_coverage=[data['user_scope']['ref']],
+            additions=[],decisions=[],catalog_coverage=[],unresolved=[],focus_refs=[]))
+        data=self.packet(ready)
+        self.assertEqual(data['stage'],'judge')
+        self.assertNotIn('users',data)
+        self.assertTrue(any(g['ref']==wanted for g in data['retrieved']))
+        result=self.judgment(ready)
+        self.assertEqual(result['status'],'checked')
+        self.assertEqual(len(result['context_metrics']['inputs']),2)
 
     def test_support_can_use_the_necessary_original_range_without_reading_unrelated_bytes(self):
         prefix = 'x' * 350000
@@ -523,22 +774,22 @@ class ContextTests(unittest.TestCase):
         source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
         needed = checker.context.ref(source, 'output', len(prefix), len(prefix) + len('target passed'))
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [needed]})
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         ready = self.reply(ready, {'kind': 'update', 'user_coverage': [u['ref'] for u in data['users']],
             'focus_refs': [], 'catalog_coverage': [{'id': source['id'], 'rev': source['rev'], 'disposition': 'retrieve',
                 'related_item_ids': [], 'reason': 'The target result is in this exact original range', 'grounding_refs': [needed]}],
             'decisions': [], 'additions': [], 'unresolved': []})
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         answer = data['answers'][0]
         result = self.judgment(ready, claims=[{'id': 'c', 'answer_ref': answer['ref'], 'text': answer['text'],
-            'requirement_ids': [], 'evidence': [{'ref': needed, 'relation': 'supports'}], 'verdict': 'supported'}])
+            'requirement_ids': [], 'evidence': [{'ref': needed, 'relation': 'supports'}], 'verdict': 'supported', 'temporal_scope': 'historical'}])
         self.assertEqual(result['status'], 'checked', result)
         self.assertLess(result['context_metrics']['retrieved_bytes'], len(prefix))
 
     def test_current_unshown_draft_cannot_retire_an_old_question_during_update(self):
         ready = self.ready()
-        user = json.loads(ready['prompt'])['users'][0]['ref']
-        old_answer = json.loads(ready['prompt'])['answers'][0]['ref']
+        user = self.packet(ready)['users'][0]['ref']
+        old_answer = self.packet(ready)['answers'][0]['ref']
         item = {'id': 'q', 'kind': 'question', 'text': 'Explain', 'refs': [user], 'related': [],
                 'target': {'name': 'answer', 'revision_refs': []}, 'validity': 'current'}
         self.judgment(self.update(ready, [item]))
@@ -546,11 +797,11 @@ class ContextTests(unittest.TestCase):
         self.payload['turn_id'] = 'next-turn'
         self.payload['draft'] = 'Not yet displayed'
         ready = self.ready()
-        draft = json.loads(ready['prompt'])['answers'][0]['ref']
+        draft = self.packet(ready)['answers'][0]['ref']
         result = self.update(ready, decisions=[{'item_id': 'q', 'action': 'retire', 'basis': 'answered',
             'refs': [draft], 'reason': 'It appears in the draft'}])
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('deliverable', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('deliverable', self.packet(result)['validation_feedback'])
         self.assertEqual(result['transaction']['candidate_state']['items'][0]['id'], 'q')
         ready = self.reply(result, {'kind': 'need_refs', 'refs': [old_answer]})
         ready = self.update(ready)
@@ -578,7 +829,7 @@ class ContextTests(unittest.TestCase):
         locator = {'id': source['id'], 'rev': source['rev'], 'field': 'output', 'literal': '"failed"', 'after': 0}
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [locator]})
         self.assertEqual(ready['status'], 'ready', ready)
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertIsNone(data['validation_feedback'])
         self.assertIn('"failed":1', ''.join(r['text'] for r in data['retrieved']))
         self.assertLess(sum(len(r['text'].encode()) for r in data['retrieved']), 10000)
@@ -594,7 +845,7 @@ class ContextTests(unittest.TestCase):
         source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
         locator = {'id': source['id'], 'rev': source['rev'], 'field': 'output', 'literal': 'f.*ed', 'after': 0}
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [locator]})
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertTrue(data['locator_results'][0]['not_found'])
         self.assertEqual(data['locator_results'][0]['matches'], [])
         with self.assertRaisesRegex(ValueError, 'not served'):
@@ -607,10 +858,10 @@ class ContextTests(unittest.TestCase):
         source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
         locator = {'id': source['id'], 'rev': source['rev'], 'field': 'output', 'literal': 'needle', 'after': 0}
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [locator]})
-        result = json.loads(ready['prompt'])['locator_results'][0]
+        result = self.packet(ready)['locator_results'][0]
         self.assertIsNotNone(result['remaining_after'])
         next_ready = self.reply(ready, {'kind': 'need_refs', 'refs': [dict(locator, after=result['remaining_after'])]})
-        later = json.loads(next_ready['prompt'])['locator_results'][0]
+        later = self.packet(next_ready)['locator_results'][0]
         self.assertGreater(later['matches'][0]['start'], result['matches'][-1]['start'])
         self.assertEqual(later['matches'][0]['rev'], source['rev'])
 
@@ -622,7 +873,7 @@ class ContextTests(unittest.TestCase):
         wire_text = data['users'][0]['text']
         self.assertIsInstance(wire_text, dict)
         self.assertEqual(checker.context.expand_source_text(wire_text), text)
-        source_ref = data['users'][0]['ref']
+        source_ref = checker.context.expand_references(data['users'][0]['ref'],ready['transaction']['reference_handles'])
         self.assertEqual(source_ref['end'], len(text.encode()))
         self.assertEqual(checker.context.resolve_refs(ready['transaction'], [source_ref], True)[0]['text'], text)
         source = ready['transaction']['sources'][source_ref['id'] + ':' + source_ref['rev']]
@@ -634,7 +885,7 @@ class ContextTests(unittest.TestCase):
         self.update(first)
         path = Path(self.tmp.name) / 'transaction.json'
         before = json.loads(path.read_text())
-        user_ref = json.loads(late['prompt'])['users'][0]['ref']
+        user_ref = self.packet(late)['users'][0]['ref']
         rejected = self.reply(late, {'kind': 'need_refs', 'refs': [user_ref]})
         self.assertEqual(rejected['status'], 'unchecked')
         self.assertIn('CAS', rejected['reason'])
@@ -642,12 +893,12 @@ class ContextTests(unittest.TestCase):
 
     def test_conflicting_new_item_ids_do_not_silently_drop_a_requirement(self):
         ready = self.ready()
-        user_ref = json.loads(ready['prompt'])['users'][0]['ref']
+        user_ref = self.packet(ready)['users'][0]['ref']
         first = {'id': 'same-new-id', 'kind': 'requirement', 'text': 'Keep A', 'refs': [user_ref],
                  'related': [], 'target': {'name': 'task', 'revision_refs': []}, 'validity': 'current'}
         result = self.update(ready, [first, dict(first, text='Also do B')])
         self.assertEqual(result['status'], 'ready')
-        self.assertIn('identity', json.loads(result['prompt'])['validation_feedback'])
+        self.assertIn('identity', self.packet(result)['validation_feedback'])
         self.assertEqual(result['transaction']['candidate_state']['items'], [])
 
     def test_prefetch_budget_uses_lossless_wire_bytes_and_supplies_the_whole_original(self):
@@ -655,19 +906,20 @@ class ContextTests(unittest.TestCase):
         self.payload['evidence'] = [{'id': 'call', 'tool': 'exec', 'output': original}]
         ready = self.ready()
         packet = json.loads(ready['prompt'])
-        output = next(e for e in packet['catalog_grounding'] if e['ref']['field'] == 'output')
+        output = next(e for e in packet['catalog_grounding'] if checker.context.expand_references(e['ref'],ready['transaction']['reference_handles'])['field'] == 'output')
         self.assertEqual(checker.context.expand_source_text(output['text']), original)
-        self.assertEqual(output['ref']['end'], len(original.encode()))
+        reference=checker.context.expand_references(output['ref'],ready['transaction']['reference_handles'])
+        self.assertEqual(reference['end'], len(original.encode()))
         self.assertLess(len(checker.context.encoded(output)), 8192)
-        checker.context.resolve_refs(ready['transaction'], [output['ref']], True)
+        checker.context.resolve_refs(ready['transaction'], [reference], True)
 
     def test_contradicted_claim_cannot_be_displayed_without_a_valid_finding(self):
         self.payload['evidence'] = [{'id': 'call', 'tool': 'exec', 'output': '11 passed, 1 failed'}]
-        ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        ready = self.update(self.ready())
+        data = self.packet(ready)
         result_ref = next(g['ref'] for g in data['catalog_grounding'] if g['ref']['field'] == 'output')
-        answer = {'kind': 'judgment', 'user_coverage': [u['ref'] for u in data['users']],
-            'catalog_coverage': [dict(data['catalog_scope'], disposition='retrieve', related_item_ids=[], reason='contradiction', grounding_refs=[result_ref])],
+        answer = {'kind': 'judgment', 'user_coverage': [u['ref'] for u in data.get('users', [])],
+            'catalog_coverage': [],
             'additions': [], 'decisions': [], 'unresolved': [], 'focus_refs': [], 'focus_resolved': [],
             'item_coverage': [], 'answer_coverage': [a['ref'] for a in data['answers']],
             'claims': [{'id': 'c', 'answer_ref': data['answers'][0]['ref'], 'text': 'all passed', 'requirement_ids': [],
@@ -675,7 +927,7 @@ class ContextTests(unittest.TestCase):
             'findings': [], 'replacements': [], 'progress': {'state': 'unknown', 'reason': 'fixture'}, 'focus_candidates': []}
         rejected = self.reply(ready, answer)
         self.assertEqual(rejected['status'], 'ready')
-        self.assertIn('contradicted', json.loads(rejected['prompt'])['validation_feedback'])
+        self.assertIn('contradicted', self.packet(rejected)['validation_feedback'])
         self.assertFalse((Path(self.tmp.name) / 'state.json').exists())
         answer['findings'] = [{'kind': 'unverified_claim', 'rule': '', 'source': 'draft', 'excerpt': 'Done.',
                               'evidence': [{'id': 'call', 'state': 'failed'}]}]
@@ -690,7 +942,7 @@ class ContextTests(unittest.TestCase):
             {'role': 'assistant', 'text': 'A progress report'}, {'role': 'user', 'text': 'Yes'}]
         self.payload['latest_user'] = 'Yes'
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertEqual(data['catalog'], [])
         self.assertFalse(any(k.startswith(('recent-', 'start-')) for k in data['aliases']))
         self.assertEqual(data['catalog_summary']['assistant'], 4)
@@ -701,7 +953,7 @@ class ContextTests(unittest.TestCase):
         proposal = proposals[0]
         proposal_ref = {'id': proposal['id'], 'rev': proposal['rev'], 'field': 'text', 'start': 0, 'end': proposal['fields']['text']}
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [proposal_ref]})
-        self.assertIn('Shall I proceed?', checker.context.expand_wire(json.loads(ready['prompt']))['retrieved'][0]['text'])
+        self.assertIn('Shall I proceed?', self.packet(ready)['retrieved'][0]['text'])
         user = data['users'][0]
         ready = self.update(ready)
         result = self.judgment(ready, findings=[{'kind': 'missing_request', 'rule': '', 'source': user['ref']['id'],
@@ -712,9 +964,9 @@ class ContextTests(unittest.TestCase):
     def test_unverified_status_can_be_reported_honestly_without_a_finding(self):
         self.payload['draft'] = 'The result is still unverified.'
         ready = self.update(self.ready())
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         result = self.judgment(ready, claims=[{'id': 'c', 'answer_ref': data['answers'][0]['ref'],
-            'text': 'The result is still unverified.', 'requirement_ids': [], 'evidence': [], 'verdict': 'unverified'}])
+            'text': 'The result is still unverified.', 'requirement_ids': [], 'evidence': [], 'verdict': 'qualified'}])
         self.assertEqual(result['status'], 'checked')
         self.assertEqual(result['text'], self.payload['draft'])
         self.assertEqual(result['findings'], [])
@@ -723,12 +975,12 @@ class ContextTests(unittest.TestCase):
         self.payload['turn_id'] = 'first'
         ready = self.ready()
         ready = self.update(ready)
-        answer = checker.context.expand_wire(json.loads(ready['prompt']))['answers'][0]['ref']
+        answer = self.packet(ready)['answers'][0]['ref']
         result = self.judgment(ready, focus_candidates=[answer])
         checker.context.confirm_display(self.tmp.name, result['display_receipt'], result['text'])
         self.payload.update(turn_id='second', latest_user='Yes', draft='A new answer')
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         focus = next(g for g in data['catalog_grounding'] if g['ref'] == answer)
         self.assertTrue(focus['displayed'])
         self.assertEqual(focus['text'], 'Done.')
@@ -739,7 +991,7 @@ class ContextTests(unittest.TestCase):
         self.judgment(self.update(self.ready()))
         self.payload.update(turn_id='two', recent_messages=[{'role': 'user', 'text': 'うん', 'native_id': 'new-genuine-user-event'}])
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertIn(data['stage'], ('update', 'update_and_judge'))
         self.assertEqual(len(data['users']), 1)
         source = ready['transaction']['sources'][data['users'][0]['ref']['id'] + ':' + data['users'][0]['ref']['rev']]
@@ -751,7 +1003,7 @@ class ContextTests(unittest.TestCase):
         self.judgment(self.update(self.ready()))
         self.payload.update(turn_id='two', recent_messages=[{'role': 'user', 'text': 'Repeat the check'}])
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertIn(data['stage'], ('update', 'update_and_judge'))
         self.assertEqual([u['text'] for u in data['users']], ['Repeat the check'])
 
@@ -761,7 +1013,7 @@ class ContextTests(unittest.TestCase):
         self.payload.update(source_collector='claude-hook', source_mode='bootstrap',
             sources=[{'kind': 'user', 'native_id': 'uncorrelated-uuid', 'fields': {'text': 'Use UTF-8.'}}])
         ready = self.ready()
-        data = checker.context.expand_wire(json.loads(ready['prompt']))
+        data = self.packet(ready)
         self.assertTrue(data['users'][0]['identity_gap'])
         self.assertEqual(ready['transaction']['candidate_state']['items'], first['context_state']['items'])
         original = data['users'][0]['ref']
@@ -770,7 +1022,7 @@ class ContextTests(unittest.TestCase):
         authorization = {'id': 'new-authorization', 'kind': 'authorization', 'text': 'Proceed', 'refs': [original],
             'related': [], 'target': {'name': 'action', 'revision_refs': []}, 'validity': 'current'}
         rejected = self.update(ready, [authorization])
-        self.assertIn('uncertain source identity', json.loads(rejected['prompt'])['validation_feedback'])
+        self.assertIn('uncertain source identity', self.packet(rejected)['validation_feedback'])
         self.assertEqual(rejected['transaction']['candidate_state']['items'], first['context_state']['items'])
 
     def test_verified_request_coordinate_links_a_native_upgrade_without_replaying_it(self):
@@ -778,13 +1030,13 @@ class ContextTests(unittest.TestCase):
         first = self.live_state()
         self.payload['sources'] = [{'kind': 'user', 'native_id': 'physical-one', 'fields': {'text': 'Use UTF-8.'}}]
         ready = self.ready()
-        self.assertEqual(json.loads(ready['prompt'])['stage'], 'judge')
+        self.assertEqual(self.packet(ready)['stage'], 'judge')
         native = next(s for s in ready['transaction']['sources'].values() if s.get('native_id') == 'physical-one')
         self.assertEqual(native['metadata']['replay_of']['id'], first['context_state']['items'][0]['refs'][0]['id'])
         self.payload['request_id'] = 'event-two'
         self.payload['sources'][0]['native_id'] = 'physical-two'
         ready = self.ready()
-        users = checker.context.expand_wire(json.loads(ready['prompt']))['users']
+        users = self.packet(ready)['users']
         self.assertEqual(len(users), 1)
         self.assertFalse(users[0].get('identity_gap'))
 
