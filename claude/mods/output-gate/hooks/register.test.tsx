@@ -3,7 +3,7 @@ import type { On, TurnStepChunk } from 'claude-code'
 
 const STEP = { turnId: 't1', index: 0, model: 'm', messageCount: 2 } as const
 const PREFIX = '[出力ゲート: 検査できませんでした'
-const UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
+const UNAVAILABLE = '出力検査が完了していないため、回答は確定していません。\n\n'
 const GATE_TOOL = 'mcp__output-gate__gate_findings'
 const NOT_ISSUED = '出力ゲートが出した呼び出しではなく、検査は行われていない'
 const UNMET_TEXT = '出力ゲート: 次の点は確かめられていません\n- 確認していない主張: 「全部通った」'
@@ -110,6 +110,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
     if (argv.includes('--prepare')) return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', schema: {} })
     if (argv.includes('--receive')) {
       const request = JSON.parse(e.init.stdin)
+      if (request.unavailable_reason && !given.receive) return { value: { ...done, exitCode: 1, stdout: '' } }
       calls.push(request.payload)
       return ok(request.engine?.family === 'codex' && JSON.parse(request.reply).status ? JSON.parse(request.reply) : given.receive!(request))
     }
@@ -206,13 +207,14 @@ test('input sent while the turn runs joins its request', async ($, on) => {
   expect(calls.at(-1)?.latest_user).toBe('設定を教えて\n\nテストも回して')
 })
 
-test('a failed check shows the original with the reason', async ($, on) => {
+test('a failed check stops without publishing the unchecked draft', async ($, on) => {
   const fs = world(on)
   on('process.run', (_$, e) => ({ value: { ...done, exitCode: e.init?.stdin === undefined ? 0 : 1, stdout: '' } }))
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 test('an unchecked result without a reason gets one', async ($, on) => {
@@ -220,7 +222,8 @@ test('an unchecked result without a reason gets one', async ($, on) => {
   checker(on, fs, p => ({ status: 'unchecked', text: p.bodies.join(''), bodies: p.bodies }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 test('text resent after a retry marker is checked with the rest in one call', async ($, on) => {
@@ -415,7 +418,7 @@ test('the session is marked so that the display hook leaves it to the mod', asyn
   expect(fs.get('/state/output-gate/claude-mod/sess-1')).toBe('t1')   // 印には今のターンの識別子を書く
 })
 
-test('a checker call that is cut off shows the original with the reason', async ($, on) => {
+test('a checker call that is cut off keeps the draft private', async ($, on) => {
   world(on)
   on('process.run', (_$, e) => {
     if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
@@ -423,17 +426,19 @@ test('a checker call that is cut off shows the original with the reason', async 
   })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
-test('a failure of the hook itself shows the original with the reason', async ($, on) => {
+test('a failure of the hook itself keeps the draft private', async ($, on) => {
   on('env.get', () => {
     throw new Error('env is broken')
   })
   on('process.run', () => ({ value: { ...done, exitCode: 0, stdout: '' } }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- 検査役の系統 ---
@@ -480,13 +485,14 @@ test('the settings choose sonnet, and Claude first', async ($, on) => {
   expect(bulk.length).toBe(0)
 })
 
-test('when both checkers fail, the original is shown with both reasons', async ($, on) => {
+test('when both checkers fail, the draft stays private', async ($, on) => {
   const fs = world(on)
-  checker(on, fs, { bulk: codexFailed, receive: r => replaceKiku(r.payload) })
+  checker(on, fs, { bulk: codexFailed, receive: r => ({ ...checked(r.payload), status: 'unchecked', text: '出力検査未完了', bodies: ['出力検査未完了'], fallback_text: '出力検査未完了', reason: '検査役なし' }) })
   claudeModel(on, () => ({ isAnswered: false, reason: 'api-error', status: 401, error: 'authentication_failed', usage: usage(0) }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- 未達のときに直させる ---
@@ -963,7 +969,8 @@ for (const [name, content] of [['unreadable', '{"first": '], ['wrongly shaped', 
     const calls = checker(on, fs, replaceKiku)
     model(on, [[TEXT(0, 'これは効く。'), STOP()]])
     const { text } = await run($)
-    expect(text).toBe(UNAVAILABLE + 'これは効く。')
+    expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
     expect(calls.length).toBe(0)
   })
 }
@@ -984,7 +991,8 @@ test('a failed prepare is the Claude checker failing, and both reasons are shown
   checker(on, fs, { prepare: () => ({ value: { ...done, exitCode: 1, stdout: '' } }), bulk: codexFailed })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- ターンの終わり ---
@@ -1290,3 +1298,70 @@ for (const first of ['claude', 'codex'] as const) {
     expect(stopped).toBe(true)
   })
 }
+
+for (const saveFails of [false, true]) {
+  test(`unchecked final reply stays private when continuation ${saveFails ? 'cannot be saved' : 'is interrupted'}`, async ($, on) => {
+    const fs = world(on)
+    checker(on, fs, p => ({ ...checked(p), status: 'unchecked', text: null, bodies: null,
+      corrected_bodies: p.bodies, reason: '検査役が応答しない', agent_message: '検査未完了。原因を調査して修正を続けてください。',
+      fallback_text: '検査未完了', fallback_bodies: ['検査未完了'] }))
+    tools(on)
+    if (saveFails) on('state.set', (_$, e, next) => e.key === 'issued' && e.value !== null ? { deny: 'state is broken' } as never : next(e))
+    model(on, [[TEXT(0, '秘密の未検査草稿'), STOP()]])
+    await start($)
+    const first = await run($)
+    expect(first.text.includes('秘密の未検査草稿')).toBe(false)
+    expect(first.result.answer.includes('秘密の未検査草稿')).toBe(false)
+    if (!saveFails) {
+      expect(first.result.stopReason).toBe('tool_use')
+      const id = first.chunks.find(c => c.kind === 'tool')!
+      const feedback = await $.tool.call({ tool: GATE_TOOL, tool_use_id: (id as { id: string }).id })
+      expect(feedback.context?.join('').includes('原因を調査')).toBe(true)
+    }
+    const ended = await complete($, 'aborted')
+    expect(ended.text.includes('秘密の未検査草稿')).toBe(false)
+  })
+}
+
+test('checker invocation failures use the shared continuation policy without publishing the draft', async ($, on) => {
+  const fs = world(on)
+  let reason: string | undefined
+  checker(on, fs, {
+    prepare: () => ({ value: { ...done, exitCode: 1, stdout: '' } }),
+    receive: r => {
+      reason = (r as unknown as { unavailable_reason: string }).unavailable_reason
+      return { ...checked(r.payload), status: 'unchecked', text: null, bodies: null,
+        reason, agent_message: '検査未完了。原因を調査して修正を続けてください。', fallback_text: '検査未完了', fallback_bodies: ['検査未完了'] }
+    },
+  })
+  tools(on)
+  model(on, [[TEXT(0, '未検査の最終草稿'), STOP()]])
+  await start($)
+  const first = await run($)
+  expect(typeof reason).toBe('string')
+  expect(first.result.stopReason).toBe('tool_use')
+  expect(first.text).toBe('')
+  expect(first.result.answer).toBe('')
+})
+
+test('shared no-progress stop ends unchecked continuation without publishing the draft', async ($, on) => {
+  const fs = world(on)
+  const rounds: number[] = []
+  checker(on, fs, p => {
+    rounds.push(p.round)
+    return { ...checked(p), status: 'unchecked', text: p.round >= 3 ? '出力検査未完了のため保留' : null, bodies: null, reason: '同じ検査障害',
+      stopped: p.round >= 3, agent_message: p.round >= 3 ? null : '検査未完了。原因の調査と修正を続けてください。',
+      fallback_text: '出力検査未完了のため保留', fallback_bodies: ['出力検査未完了のため保留'] }
+  })
+  tools(on)
+  model(on, [[TEXT(0, '未検査の最終草稿'), STOP()]])
+  await start($)
+  for (let index = 0; index < 4; index += 1) {
+    const response = await run($, { index })
+    expect(response.text.includes('未検査の最終草稿')).toBe(false)
+    expect(response.result.answer.includes('未検査の最終草稿')).toBe(false)
+    expect(response.chunks.some(c => c.kind === 'tool')).toBe(index < 3)
+    if (index === 3) expect(response.text).toBe('出力検査未完了のため保留')
+  }
+  expect(rounds).toEqual([0, 1, 2, 3])
+})

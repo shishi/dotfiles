@@ -81,7 +81,7 @@ HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorizat
        'accept-encoding'}
 PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
-UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
+UNAVAILABLE = '出力検査が完了していないため、最終回答を保留しています。\n\n'
 # Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
 INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
 COMPACTION_TYPES = {'compaction', 'context_compaction'}
@@ -659,7 +659,7 @@ def run_check(payload, checks):
         out = json.loads(checks.run(payload).decode('utf-8'))
         if not isinstance(out, dict) or out.get('status') not in ('checked', 'unchecked'):
             raise ValueError('unexpected result')
-        withheld = out['status'] == 'checked' and out.get('bodies') is None and \
+        withheld = out.get('bodies') is None and \
             isinstance(out.get('agent_message'), str) and strings(out.get('fallback_bodies'), count)
         if not (withheld or strings(out.get('bodies'), count)) or \
                 (out['status'] == 'unchecked' and not (isinstance(out.get('reason'), str) and out['reason'].strip())):
@@ -667,7 +667,7 @@ def run_check(payload, checks):
         return out
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         reason = f'検査処理を実行できなかった ({type(error).__name__})'
-        bodies = [UNAVAILABLE + payload['bodies'][0], *payload['bodies'][1:]]
+        bodies = [UNAVAILABLE, *[''] * (len(payload['bodies']) - 1)]
         return {'status': 'unchecked', 'bodies': bodies, 'reason': reason, 'findings': []}
 
 
@@ -1209,7 +1209,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.check_status = result.get('status')
             self.result_record = engine_record(result)
             if result.get('status') == 'unchecked':
-                return [UNAVAILABLE + bodies[0], *bodies[1:]]
+                return result.get('bodies') or [UNAVAILABLE, *[''] * (len(bodies) - 1)]
             return result['bodies']
         sid, tid, turn = self.turn_key
         gate = read_json(gate_path(sid, tid))
@@ -1240,8 +1240,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.check_status = result.get('status')
         self.result_record = engine_record(result)
         texts = result.get('bodies')
-        if result.get('status') == 'unchecked':
-            texts = [UNAVAILABLE + bodies[0], *bodies[1:]]
+        if result.get('status') == 'unchecked' and texts is not None:
+            texts = result['bodies']
         if texts is None:
             source = next(key[0] for key, value in collect_drafts(held).items() if value.strip())
             marker = 'msg_' + os.urandom(16).hex()
@@ -1252,7 +1252,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
                      'progress_state': result.get('progress_state'),
                      'agent_message': result['agent_message'], 'original': original,
-                     'display': '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
+                     'display': (result.get('fallback_text') or UNAVAILABLE) if result.get('status') == 'unchecked' else '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
                      'notice_marker': marker, 'notices': notices,
                      'created': time.time(), **self.result_record}
             try:
@@ -1264,7 +1264,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 log(event='gate-state-failed', error=type(error).__name__)
                 fallback = result.get('fallback_bodies')
                 texts = list(fallback) if strings(fallback, len(bodies)) else [
-                    UNAVAILABLE + bodies[0], *bodies[1:]]
+                    UNAVAILABLE, *[''] * (len(bodies) - 1)]
         elif final and gate is not None:
             # 本文を表示した後は最後の原文と指摘を回収に
             # 使わないので消す。各回の案内を原文に戻す notices は、同じターンの以後の要求のために残す。
@@ -1285,8 +1285,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         results, statuses = {}, []
         check_started = time.time()
         if mode == 'unchecked':
-            results.update({key: (UNAVAILABLE if i == 0 else '') + draft
-                            for i, (key, draft) in enumerate(drafts.items())})
+            results.update({key: '' for key in drafts})
         elif mode == 'check':
             # 空白だけのパートは規則に反しようがないので、検査処理に渡さずにそのまま流す。本文の要素が複数あっても
             # 検査処理は 1 回だけ呼び、1〜3 を本文全体で判定させる。
@@ -1298,7 +1297,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     texts = self.wait(self.check_answer, body, held, [drafts[key] for key in keys])
                     statuses.append(self.check_status)
                 except Exception:
-                    texts = [UNAVAILABLE + drafts[keys[0]], *[drafts[key] for key in keys[1:]]]
+                    texts = [''] * len(keys)
                     statuses.append('unchecked')
                 results.update(zip(keys, texts))
         else:
@@ -1315,10 +1314,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     try:
                         results[key], status = future.result()
                     except Exception:
-                        results[key], status = UNAVAILABLE + drafts[key], 'unchecked'
+                        results[key], status = '', 'unchecked'
                     statuses.append(status)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
+        if (mode == 'unchecked' or 'unchecked' in statuses) and not self.silent_item:
+            results = {key: ('出力検査が完了していないため、最終回答を保留しています。' if n == 0 else '')
+                       for n, key in enumerate(drafts)}
         delta_sent = set()
         for etype, obj, raw in held:
             key = message_key(etype, obj)

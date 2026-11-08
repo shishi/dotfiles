@@ -160,7 +160,7 @@ class RelayTests(unittest.TestCase):
         cls.checker = cls.tmp / 'check.py'
         # 共通の検査処理 (output-gate-check.py) の入出力の形を真似る。findings-on の印があれば、最終回答に未達を 1 件返す。
         cls.checker.write_text(textwrap.dedent(f'''\
-            import json, sys, time, os
+            import json, sys, time, os, subprocess
             payload = json.load(sys.stdin)
             if '--ingest' in sys.argv:
                 import subprocess
@@ -181,9 +181,10 @@ class RelayTests(unittest.TestCase):
             elif os.environ.get('FAKE_CHECK_NO_REASON'):
                 print(json.dumps({{"status": "unchecked", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
             elif os.environ.get('FAKE_CHECK_FAIL'):
-                shown = ["[出力ゲート: 検査できませんでした — fake failure]\\n\\n" + bodies[0]] + bodies[1:]
-                print(json.dumps({{"status": "unchecked", "reason": "fake failure", "text": "\\n\\n".join(shown),
-                                   "bodies": shown}}))
+                failed = subprocess.run([sys.executable, '-I', {str(REPO / 'agent-shared/bin/output-gate-check.py')!r}, '--receive'],
+                                        input=json.dumps(dict(payload=payload, unavailable_reason='fake failure')),
+                                        text=True, capture_output=True)
+                sys.stdout.write(failed.stdout)
             else:
                 fixed = [b.replace("効く", "速い") for b in bodies]
                 result = {{"status": "checked", "reason": None, "findings": [], "agent_message": None,
@@ -798,13 +799,32 @@ class RelayTests(unittest.TestCase):
         after = json.loads(self.call('GET', '/__gate/version')[2])
         self.assertEqual((after['version'], after['pid']), (before['version'], before['pid']))
 
+    def test_unchecked_response_is_private_and_resumes_in_same_session(self):
+        self.restart_relay(check_fail='1')
+        self.register()
+        events = self.answer('未検査の完了報告')
+        self.assertNotIn('未検査の完了報告', self.final_text(events))
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'substituted')
+        self.assertEqual(state['failure_kind'], 'unavailable')
+        notice = state['notice_marker']
+        events = self.answer('保留中', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertTrue(any('検査経路の原因を調べ' in text for text in self.upstream_texts()))
+        self.assertNotIn('保留中', self.final_text(events))
+        notice = self.gate_state()['notice_marker']
+        self.restart_relay()
+        events = self.answer('検査完了の回答', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertEqual(self.final_text(events), '検査完了の回答')
+        self.assertEqual(self.gate_state()['phase'], 'resolved')
+
     def test_checker_exit_code_failure_is_unchecked(self):
         self.restart_relay(check_exit='7')
         evs, item = message_events('msg_1', 'これは効く。')
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn()
         text = self.final_text(events)
-        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
+        self.assertNotIn('これは効く。', text)
+        self.assertIn('保留', text)
         checked = [json.loads(line) for line in (self.state / 'relay.log').read_text().splitlines()
                    if json.loads(line).get('event') == 'checked']
         self.assertEqual(checked[-1]['failure_kind'], 'unavailable')

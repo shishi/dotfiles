@@ -47,6 +47,20 @@ class ContextTests(unittest.TestCase):
         return checker.receive({'payload': self.payload, 'transaction': ready['transaction'],
                                 'reply': json.dumps(reply), 'engine': {'family': 'test'}})
 
+    def test_unchecked_final_is_withheld_until_repaired_or_stopped(self):
+        payload = dict(self.payload, continuation='withhold', draft='Unverified original.')
+        result = checker.unchecked(payload, 'engine unavailable')
+        self.assertEqual(result['status'], 'unchecked')
+        self.assertIsNone(result['bodies'])
+        self.assertTrue(result['agent_message'])
+        self.assertNotIn('Unverified original.', result['fallback_text'])
+        for round in range(1, 4):
+            payload.update(round=round, progress_state=result['progress_state'])
+            result = checker.unchecked(payload, 'engine unavailable')
+        self.assertTrue(result['stopped'])
+        self.assertIsNotNone(result['bodies'])
+        self.assertNotIn('Unverified original.', result['text'])
+
     def test_prepare_is_semantic_update(self):
         ready = self.ready()
         data = self.packet(ready)

@@ -275,13 +275,20 @@ def joined(bodies):
 
 def unchecked(payload, reason, **extra):
     bodies = body_list(payload)
-    shown = ['出力検査を実行できなかったため、生成済みの回答を表示します。\n\n' + bodies[0], *bodies[1:]]
-    result = {'status': 'unchecked', 'text': joined(shown), 'bodies': shown, 'reason': reason,
-              'failure_kind': 'unavailable', 'findings': [], 'dropped': [], 'agent_message': None,
-              'fallback_text': None, 'fallback_bodies': None, 'unmet_text': None, 'display_text': None,
-              'display_bodies': None, 'engine': None,
-              'engine_failures': [], 'applied': 0, 'progress_state': payload.get('progress_state'),
-              'recheck_required': False, 'stopped': False}
+    held = ['出力検査が完了していないため、最終回答を保留しています。', *[''] * (len(bodies) - 1)]
+    checkpoint = progress_checkpoint(dict(payload, evidence=[], previous_evidence=[]), [], [],
+                                     {'state': 'unknown', 'reason': reason})
+    stopped = checkpoint['stalled'] >= 3
+    withhold = payload.get('final') and payload.get('continuation', 'withhold') == 'withhold' and not stopped
+    result = {'status': 'unchecked', 'text': None if withhold else joined(held),
+              'bodies': None if withhold else held, 'reason': reason,
+              'failure_kind': 'unavailable', 'findings': [], 'dropped': [],
+              'agent_message': ('出力検査が完了していません。理由: ' + reason +
+                                '。元の回答は公開していません。検査経路の原因を調べ、修正と結果確認を続けてください。'
+                                '新情報のない同じ試行を繰り返さないでください。') if withhold else None,
+              'fallback_text': joined(held), 'fallback_bodies': held, 'unmet_text': None, 'display_text': None,
+              'display_bodies': None, 'engine': None, 'engine_failures': [], 'applied': 0,
+              'progress_state': checkpoint, 'recheck_required': False, 'stopped': stopped}
     result.update(extra)
     return result
 
@@ -1471,6 +1478,8 @@ def ingest(payload):
 
 def receive(request):
     payload = request['payload']
+    if isinstance(request.get('unavailable_reason'), str) and request['unavailable_reason'].strip():
+        return unchecked(payload, request['unavailable_reason'])
     if not payload.get('final'):
         return legacy_receive(request)
     tx = request.get('transaction')
@@ -1773,8 +1782,9 @@ def main():
                 raise ValueError('prepared prompt required')
             validate(request.get('payload'))
         elif mode == '--receive':
-            if not (isinstance(request, dict) and isinstance(request.get('reply'), str)):
-                raise ValueError('reply is required')
+            if not (isinstance(request, dict) and (isinstance(request.get('reply'), str) or
+                    isinstance(request.get('unavailable_reason'), str) and request['unavailable_reason'].strip())):
+                raise ValueError('reply or unavailable_reason is required')
             validate(request.get('payload'))
         else:
             validate(request)
