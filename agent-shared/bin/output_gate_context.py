@@ -690,6 +690,16 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
                 tx['evidence_obligations'] = saved['evidence_obligations']
                 tx['retrieval_observations'] = saved.get('retrieval_observations', [])
                 tx['pending_units'] = [*(saved['pending_units'] if saved['stage'] == 'update' else []), *delta_units]
+                merged = []
+                for unit in tx['pending_units']:
+                    clean = {k: unit[k] for k in ('items', 'users', 'catalog')}
+                    if merged and merged[-1]['items'] == clean['items']:
+                        combined = dict(clean, users=[*merged[-1]['users'], *clean['users']], catalog=[*merged[-1]['catalog'], *clean['catalog']])
+                        if len(wire_encoded(combined)) < headroom:
+                            merged[-1] = combined
+                            continue
+                    merged.append(clean)
+                tx['pending_units'] = merged
                 if saved['stage'] == 'update':
                     tx['retrieved'] = saved['retrieved']
                     tx['remaining_refs'] = saved.get('remaining_refs', [])

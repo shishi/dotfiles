@@ -247,6 +247,23 @@ class ContextTests(unittest.TestCase):
         self.assertIn('answers', calls[-1])
         self.assertEqual(ready['status'], 'ready')
 
+    def test_next_request_reuses_validated_user_page_after_timeout(self):
+        self.payload.update(recent_messages=[dict(role='user', text='Alpha.', native_id='alpha'), dict(role='user', text='Beta.', native_id='beta')], latest_user='Beta.')
+        ready = self.ready(); tx = ready['transaction']; unit = tx['pending_units'][0]
+        users = unit['users']; self.assertEqual(len(users), 2)
+        tx['pending_units'] = [dict(items=[], users=[user], catalog=[]) for user in users]
+        ready = checker.context_ready(tx)
+        result = self.reply(ready, dict(kind='update', user_coverage=[users[0]['ref']], additions=[], decisions=[], catalog_coverage=[], unresolved=[], focus_refs=[]))
+        self.assertEqual(result['status'], 'ready')
+        self.payload['draft'] = 'New answer.'
+        next_ready = self.ready(); data = self.packet(next_ready)
+        self.assertEqual([u['text'] for u in data['users']], ['Beta.'])
+        self.payload['recent_messages'].append(dict(role='user', text='Gamma.', native_id='gamma'))
+        self.payload['latest_user'] = 'Gamma.'
+        next_ready = self.ready(); data = self.packet(next_ready)
+        self.assertEqual([u['text'] for u in data['users']], ['Beta.', 'Gamma.'])
+        self.assertEqual(len(next_ready['transaction']['pending_units']), 1)
+
     def test_empty_coverage_cannot_pass(self):
         result = self.reply(self.ready(), {'kind': 'update', 'user_coverage': [], 'focus_refs': [],
             'catalog_coverage': [], 'decisions': [], 'additions': [], 'unresolved': []})
