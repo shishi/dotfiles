@@ -700,9 +700,8 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
                             continue
                     merged.append(clean)
                 tx['pending_units'] = merged
-                if saved['stage'] == 'update':
-                    tx['retrieved'] = saved['retrieved']
-                    tx['remaining_refs'] = saved.get('remaining_refs', [])
+                tx['retrieved'] = saved['retrieved']
+                tx['remaining_refs'] = saved.get('remaining_refs', [])
                 tx['resumed_update_units'] = sum(u.get('stage') == 'update' for u in tx['completed_units'])
     if not tx['pending_units']:
         start_judge(tx)
@@ -718,7 +717,6 @@ def make_catalog(tx):
 
 def start_judge(tx):
     tx['stage'] = 'judge'
-    tx['retrieved'] = []
     state = tx['candidate_state']
     obligations = {i['id']: i for i in tx['obligation_items']}
     obligations.update({i['id']: i for i in state['items']})
@@ -757,7 +755,10 @@ def start_judge(tx):
 
 def retrieval_page(tx, data, overhead):
     queue = list(tx.pop('retrieval_requests', []))
+    requested = bool(queue)
     supplied = list(tx['retrieved'])
+    if not queue and not supplied:
+        return
     retained = list(supplied)
     while queue:
         wanted = queue.pop(0)
@@ -803,10 +804,17 @@ def retrieval_page(tx, data, overhead):
             wanted = dict(wanted, start=partial['end'])
         queue.insert(0, wanted)
         break
-    if not supplied:
+    if not requested:
+        queue = tx.get('remaining_refs', [])
+    data.update(retrieved=supplied, remaining_refs=queue)
+    while supplied and len(wire_encoded(data)) + overhead > LIMIT:
+        supplied.remove(max(supplied, key=lambda entry: len(wire_encoded(entry))))
+        data.update(retrieved=supplied)
+    if requested and not supplied:
         raise ValueError('context input limit: no room for requested original range')
     tx['retrieved'], tx['remaining_refs'] = supplied, queue
-    tx['metrics']['retrieved_bytes'] += sum(len(e['text'].encode()) for e in supplied)
+    if requested:
+        tx['metrics']['retrieved_bytes'] += sum(len(e['text'].encode()) for e in supplied)
     data.update(retrieved=supplied, remaining_refs=queue)
 
 
@@ -867,6 +875,7 @@ def plan_unit(tx, instructions, schema):
             'evidence_obligations': tx['evidence_obligations'], 'retrieved': tx['retrieved'],
             'remaining_refs': tx.get('remaining_refs', []), 'retrieval_observations': tx.get('retrieval_observations', []),
             'locator_results': tx.get('locator_results', []),
+            'archive_searches': tx.get('archive_searches', []),
             'aliases': aliases, 'source_end': tx['source_end'],
             'catalog_refs': tx.get('catalog_refs', []),
             'evidence_frontier': {'count': sum(s['kind'] == 'evidence' for s in tx['sources'].values()), 'last_seq': max((s['seq'] for s in tx['sources'].values() if s['kind'] == 'evidence'), default=0), 'reviewed': False},
@@ -897,8 +906,7 @@ def plan_unit(tx, instructions, schema):
                             joint = proposed
             unit['_joint'] = {'answers': answers, 'items': check_items, 'grounding': joint['grounding']}
             data = joint
-    if tx.get('retrieval_requests'):
-        retrieval_page(tx, data, len(instructions.encode()) + len(encoded(schema)))
+    retrieval_page(tx, data, len(instructions.encode()) + len(encoded(schema)))
     packet,handles = compact_references(wire_value(data))
     tx['reference_handles']=handles
     if expand_wire(packet) != data:
@@ -1078,11 +1086,46 @@ def accept_update(tx, answer):
     tx['candidate_state']['gaps'] = list({digest(g): g for g in [*tx['candidate_state']['gaps'], *answer.get('unresolved', [])]}.values())
     tx['pending_units'].pop(0)
     tx['completed_units'].append({'stage': 'update', 'user_coverage': coverage, 'catalog_coverage': answer.get('catalog_coverage', [])})
-    tx['retrieved'] = []
     if not tx['pending_units']:
         seq = tx['source_end']['seq']
         tx['candidate_state']['meaning_cursor'] = {'user_seq': seq, 'catalog_seq': seq}
         start_judge(tx)
+
+
+def searched_claim_originals(tx, answer_ref):
+    searches = [s for s in tx.get('archive_searches', [])
+                if s['source_end'] == tx['source_end'] and covered(answer_ref, s['focus_refs'])]
+    def inspected_source(detail):
+        seen = set()
+        while detail.get('remaining_after') is not None:
+            cursor = detail['remaining_after']
+            if cursor in seen:
+                return False
+            seen.add(cursor)
+            query = dict(detail['locator'], after=cursor)
+            detail = next((s for s in searches if s['query'] == query), None)
+            if detail is None or any(not covered(r, tx['served_refs']) for r in detail['ranges']):
+                return False
+        return True
+
+    for first in searches:
+        if first['query'].get('scope') != 'archive' or first['query']['before_seq'] != 0:
+            continue
+        page, inspected, seen = first, [], set()
+        while page is not None and page['query']['before_seq'] not in seen:
+            seen.add(page['query']['before_seq'])
+            inspected.extend(page['ranges'])
+            if any(not inspected_source(detail) for detail in page['matches']):
+                break
+            cursor = page['remaining_before_seq']
+            if cursor is None:
+                if all(covered(r, tx['served_refs']) for r in inspected):
+                    return True
+                break
+            page = next((s for s in searches if s['query'].get('scope') == 'archive' and s['query']['field'] == first['query']['field']
+                         and s['query']['literal'] == first['query']['literal']
+                         and s['query']['before_seq'] == cursor), None)
+    return False
 
 
 def accept_judgment(tx, answer):
@@ -1130,6 +1173,13 @@ def accept_judgment(tx, answer):
         if not isinstance(c.get('requirement_ids'), list) or any(i not in {x['id'] for x in tx['obligation_items']} for i in c['requirement_ids']):
             raise ValueError('claim requirement mapping invalid')
         evidence = c.get('evidence', [])
+        if c['verdict'] == 'unverified':
+            grounds = [resolve_refs(tx, [e['ref']], True)[0] for e in evidence]
+            unavailable = any(not g['available'] or g['producer_truncated'] or g.get('identity_gap') for g in grounds)
+            originals = [ref(s, field) for s in tx['sources'].values() if s['kind'] == 'evidence'
+                         for field in ('call', 'output') if field in s['fields']]
+            if not unavailable and any(not covered(r, tx['served_refs']) for r in originals) and not searched_claim_originals(tx, c['answer_ref']):
+                raise ValueError('unread evidence requires evidence search with focus_refs for this claim before absence can be judged')
         for e in evidence:
             ground = resolve_refs(tx, [e['ref']], True)[0]
             if e.get('relation') not in ('supports', 'contradicts', 'unresolved'):
@@ -1258,7 +1308,6 @@ def accept_judgment(tx, answer):
     tx['replacements'].extend(answer.get('replacements', []))
     tx['progress'] = answer.get('progress', {'state': 'unknown', 'reason': ''})
     tx['pending_units'].pop(0)
-    tx['retrieved'] = []
     tx['completed_units'].append({'stage': 'judge', 'answer_coverage': coverage, 'item_coverage': answer['item_coverage']})
 
 
@@ -1280,11 +1329,15 @@ def accept(tx, answer, checkpoint=None):
         if not isinstance(requests, list) or not requests:
             raise ValueError('empty reference request')
         refs, located = [], []
+        focus_refs = answer.get('focus_refs', [])
+        resolve_refs(tx, focus_refs, True)
         for request in requests:
             if isinstance(request, dict) and 'literal' in request:
                 ranges, result = locate_archive(tx, request, min(8192, UNIT_BYTES // 4 // max(1, sum(r.get('scope') == 'archive' for r in requests if isinstance(r, dict))))) if request.get('scope') == 'archive' else locate_refs(tx, request)
                 refs.extend(ranges)
                 located.append(result)
+                tx.setdefault('archive_searches', []).append(dict(result, query=request, ranges=ranges,
+                    focus_refs=focus_refs, source_end=deepcopy(tx['source_end'])))
             else:
                 resolve_refs(tx, [request])
                 refs.append(request)
@@ -1334,7 +1387,7 @@ def accept(tx, answer, checkpoint=None):
     if tx['stage'] == 'update':
         accept_update(tx, answer)
         if answer.get('refs'):
-            accept(tx, dict(kind='need_refs', refs=answer['refs'], additions=[]))
+            accept(tx, dict(kind='need_refs', refs=answer['refs'], focus_refs=answer.get('focus_refs', []), additions=[]))
     else:
         accept_judgment(tx, answer)
     return not tx['pending_units']
@@ -1434,6 +1487,7 @@ from the host. Reference slots accept the supplied {$source_ref:"@N"} objects ma
 NOT its original text. catalog_grounding and grounding ARE exact original ranges already supplied; do not fetch them again. Request original text with {kind:"need_refs",refs:[...]}; use the field lengths in catalog.
 Large requests are paged to fit the input: remaining_refs explicitly lists bytes NOT yet supplied. Request the needed remaining ranges, never infer success there. Before requesting another page, additions may record compact fact/unresolved observations grounded ONLY in already served originals; these observations are carried across pages, not unexamined raw text. A precise failure counterexample can contradict an all-success claim without reading unrelated remaining bytes. For unknown locations in a large known source, need_refs.refs may instead contain {id,rev,field,literal,after:0}: you choose an exact literal to locate (not a regex). The host searches ONLY that masked field and returns exact matching ranges with nearby original text. locator_results gives matches, searched byte range and remaining_after for further matches. A no-match result is not evidence that an operation succeeded or that unavailable source content is absent. Use returned ORIGINAL range refs, never the locator object, in coverage/claims/findings. Do not invent paths, commands, sources or source content. Read only originals relevant to active requirements,
 constraints, unresolved failures, changes of target revision and answer claims. Unrelated tool bodies need not be read.
+Before judging unread evidence absent, return need_refs with focus_refs covering that answer claim and semantically relevant archive queries in refs. Read the returned originals and finish search pagination before judging absence. archive_searches records the completed search pages and their claim scopes; a search for one claim does not establish absence for another.
 
 For stage update ONLY (not update_and_judge) with new users, complete their meaning assessment FIRST. answer_preview shows the draft only to plan evidence lookup for the subsequent judgment. If evidence is needed to judge it, return kind update WITH refs containing the needed archive queries/ranges, alongside the complete user accounting. The host applies that meaning update and retrieves those originals BEFORE asking for judgment. refs is the evidence lookup PLAN for the factual assertions in answer_preview: populate it when the supplied originals do not establish those assertions. Do not postpone this planning until the judgment call. Do not return need_refs just to look up answer evidence while leaving all user interpretation pending. Use need_refs before updating only when user meaning itself cannot be resolved without the originals (such as a short approval to an unknown proposal).
 For stage update_and_judge, if claim evidence needs lookup but user meaning is already clear, return need_refs WITH the complete user update fields and the needed refs; the host keeps that completed interpretation before fetching evidence. Return kind judgment with BOTH the update fields below and the judgment fields. Interpret user/catalog changes first, then judge against check_items plus all additions. Return decisions for every pre-existing item. New additions already declare retention, so a duplicate keep decision is unnecessary; the host keeps them unless an explicit validated retirement is supplied. Existing item decisions serve both phases; current-answer answered retire is deferred until the host confirms display. This is one integrated assessment, not permission to omit either coverage. For stage update return {kind:"update",refs:[planned evidence queries/ranges],focus_refs:[Ref],
