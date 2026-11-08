@@ -94,6 +94,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
   const given = typeof answer === 'function' ? { bulk: answer } : answer
   const execute = (e: { argv: readonly unknown[]; init?: { stdin?: string; env?: Record<string, string> } }) => {
     const argv = e.argv.map(String)
+    if (argv.includes('--limits')) return ok({ timeout_seconds: Number(e.init?.env?.['OUTPUT_GATE_TIMEOUT'] || 3600), cleanup_seconds: 40, hedge_seconds: 40 })
     const code = argv.indexOf('-c')
     if (code >= 0 && argv.length > code + 2) {
       const ops = JSON.parse(argv[code + 2]!) as { replace: [string, string][]; remove: string[] }
@@ -129,7 +130,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
   }
   on('process.run', (_$, e) => execute(e))
   on('process.spawn', async function* (_$, e) {
-    if (given.spawn) return yield* given.spawn(e.input ?? '')
+    if (given.spawn && e.argv.includes('--judge')) return yield* given.spawn(e.input ?? '')
     const result = execute({ argv: e.argv, init: { stdin: e.input, env: e.env } }).value
     if (result.stdout) yield { stream: 'stdout' as const, text: result.stdout }
     return { value: { code: result.exitCode, signal: null } } as never
@@ -369,16 +370,18 @@ test('the spinner does not show inspection details while the answer is held', as
     return <Text>{`${props.word}${props.suffix}`}</Text>
   })
   let seen = ''
-  on('process.run', async (_$, e) => {
-    if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
-    const ui = await $.ui.mount({
-      plugin: 'output-gate', surface: 'terminal', component: 'Spinner', requestId: 'main',
-      props: { word: 'Working', message: null, suffix: '…', mode: 'responding' },
-    })
-    seen = (await ui.find({ type: 'Text' }))?.text ?? ''
-    await ui.unmount()
-    return ok(replaceKiku(JSON.parse(e.init.stdin) as Payload))
-  })
+  checker(on, fs, { bulk: replaceKiku, spawn: async function* (input) {
+      const ui = await $.ui.mount({
+        plugin: 'output-gate', surface: 'terminal', component: 'Spinner', requestId: 'main',
+        props: { word: 'Working', message: null, suffix: '…', mode: 'responding' },
+      })
+      seen = (await ui.find({ type: 'Text' }))?.text ?? ''
+      await ui.unmount()
+      const request = JSON.parse(input) as { payload: Payload }
+      yield { stream: 'stdout' as const, text: JSON.stringify({ status: 'answered',
+        reply: JSON.stringify(replaceKiku(request.payload)), engine: { family: 'codex' } }) }
+      return { value: { code: 0, signal: null } }
+    } })
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   await run($)
@@ -928,8 +931,31 @@ test('the turn file keeps which checker judged and why the other failed', async 
   expect(saved.checks[0]?.dropped.length).toBe(1)
 })
 
-test('the first Codex checker receives the full shared deadline', async ($, on) => {
+test('the default shared budget keeps a checker running beyond 45 seconds', async ($, on) => {
   const fs = world(on)
+  const clock = clocks.get(fs)!
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'claude' }))
+  checker(on, fs, { receive: r => checked(r.payload), bulk: codexFailed })
+  const completions = claudeModel(on, async () => {
+    await clock.sleep(65_000)
+    return { isAnswered: true, text: '{}', usage: usage(1) }
+  })
+  model(on, [[TEXT(0, '検査済みの回答'), STOP()]])
+  let finished = false
+  const pending = run($).then(result => { finished = true; return result })
+  await clock.settle()
+  await clock.advance(45_000)
+  expect(finished).toBe(false)
+  expect(runs.some(r => r.argv.includes('--judge'))).toBe(true)
+  await clock.advance(20_000)
+  expect((await pending).text).toBe('検査済みの回答')
+  expect((completions[0] as { timeoutMs: number }).timeoutMs > 590_000).toBe(true)
+  const prepared = runs.find(r => r.argv.includes('--prepare'))!
+  expect(Number(prepared.env['OUTPUT_GATE_TIMEOUT']) > 590).toBe(true)
+})
+
+test('the first Codex checker receives the full shared deadline', async ($, on) => {
+  const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
   let attempts: Record<string, unknown>[] = []
   checker(on, fs, { bulk: codexFailed, receive: r => { attempts = r.model_attempts as Record<string, unknown>[]; return replaceKiku(r.payload) } })
@@ -947,7 +973,7 @@ test('the first Codex checker receives the full shared deadline', async ($, on) 
 })
 
 test('with Claude first, Claude gets the full deadline and raw failure falls back immediately', async ($, on) => {
-  const fs = world(on)
+  const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'same' }))
   checker(on, fs, { bulk: replaceKiku, receive: r => replaceKiku(r.payload) })
   const completions = claudeModel(on, () => ({ isAnswered: false, reason: 'aborted', usage: usage(0) }))
@@ -1245,7 +1271,7 @@ test('each accepted queued human event carries its own request identity even wit
 
 for (const first of ['claude', 'codex'] as const) {
   test(`delayed ${first} keeps its full budget and only the winning raw reply is received`, async ($, on) => {
-    const fs = world(on)
+    const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
     const clock = clocks.get(fs)!
     fs.set('/state/output-gate/checker.json', JSON.stringify({ first }))
     const received: unknown[] = []

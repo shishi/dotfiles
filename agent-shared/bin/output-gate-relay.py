@@ -51,6 +51,7 @@ import gzip
 import hashlib
 import http.client
 import http.server
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -73,7 +74,10 @@ except ImportError:  # Python 3.14 より前
     DECODE_ERRORS = (ValueError, OSError, EOFError)
 
 SCRIPT = Path(__file__).resolve()
-VERSION = hashlib.sha256(SCRIPT.read_bytes()).hexdigest()[:12]
+_context_spec = importlib.util.spec_from_file_location('output_gate_context', SCRIPT.parent / 'output_gate_context.py')
+context = importlib.util.module_from_spec(_context_spec)
+_context_spec.loader.exec_module(context)
+VERSION = context.runtime_version(SCRIPT)
 PREFIX = '/backend-api/codex'
 DEFAULT_UPSTREAM = 'https://chatgpt.com/backend-api/codex'
 HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorization', 'proxy-authenticate',
@@ -256,8 +260,10 @@ def remember_compaction(body, output_items, session_id=None):
         directory = Settings.state_dir / 'context' / session_id
         payload = checker_payload(body, [''], final=True, session_id=session_id, context_dir=str(directory))
         try:
+            limits = context.limits()
             result = subprocess.run([*Settings.check_cmd, '--ingest'], input=json.dumps(payload).encode(),
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    timeout=limits['timeout_seconds'] + limits['cleanup_seconds'])
             snapshot = json.loads(result.stdout)
             if result.returncode or snapshot.get('status') != 'ingested':
                 raise ValueError('compaction source ingestion failed')
@@ -647,7 +653,9 @@ class Checks:
                                     stderr=subprocess.DEVNULL, start_new_session=os.name != 'nt')
             self.procs.append(proc)
         try:
-            out, _ = proc.communicate(json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=300)
+            limits = context.limits()
+            out, _ = proc.communicate(json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                                      timeout=limits['timeout_seconds'] + limits['cleanup_seconds'])
         except subprocess.TimeoutExpired:
             kill_tree(proc)
             raise

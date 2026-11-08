@@ -54,7 +54,7 @@
   OUTPUT_GATE_CODEX_CMD    codex の代わりに起動するコマンド (JSON 配列)。試験で差し替える
   OUTPUT_GATE_CLAUDE_CMD   claude の代わりに起動するコマンド (JSON 配列)。試験で差し替える
   OUTPUT_GATE_SETTINGS     設定ファイルのパス。既定は $XDG_STATE_HOME/output-gate/checker.json
-  OUTPUT_GATE_TIMEOUT      検査全体の締切 (秒)。既定 45。二系統で分ける
+  OUTPUT_GATE_TIMEOUT      検査全体の非常用上限 (秒)。既定 3600。二系統で共有する
   OUTPUT_GATE_RULES        応答の規則を読む共通指示のパス。既定 ~/.codex/AGENTS.md。
   OUTPUT_GATE_CHECKED_RULES 最終回答で守られているかを確かめる規則の一覧 (JSON の [{id, text}])。
                            既定はこのファイルと同じ場所の output-gate-rules.json。
@@ -83,7 +83,7 @@ _context_spec = importlib.util.spec_from_file_location('output_gate_context', BI
 context = importlib.util.module_from_spec(_context_spec)
 _context_spec.loader.exec_module(context)
 RUN_JUDGE = BIN_DIR.parent / 'hooks' / 'lib' / 'run-judge.py'
-DEFAULT_TIMEOUT = 45
+DEFAULT_TIMEOUT = context.DEFAULT_TIMEOUT
 FIRST_ENGINE_SHARE = 0.5
 # 検査役への入力の全体の上限 (バイト)。超えるときだけ古いツールの出力から中ほどを省く。値は検査役の時間と
 # 利用枠の測定で決める。
@@ -1356,8 +1356,7 @@ def legacy_check(payload, deadline=None):
         if not order:
             return unchecked(payload, '使える検査役の系統が無い (engines)')
         if deadline is None:
-            total = float(os.environ.get('OUTPUT_GATE_TIMEOUT') or
-                          (120 if payload.get('independent_recheck') else DEFAULT_TIMEOUT))
+            total = context.limits()['timeout_seconds']
             deadline = time.monotonic() + total
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
             workdir = Path(tmp)
@@ -1534,7 +1533,11 @@ def receive(request):
         previous_step = tx.get('step', 0)
         def checkpoint(validated):
             nonlocal baseline_tx
+            advanced = any(validated.get(k) != baseline_tx.get(k)
+                           for k in ('candidate_state', 'completed_units', 'retrieval_observations'))
             baseline_tx = deepcopy(validated)
+            if advanced:
+                baseline_tx.pop('validation_failures', None)
         complete = context.accept(tx, answer, checkpoint)
         tx['step'] = previous_step + 1
         tx.pop('validation_feedback', None)
@@ -1617,7 +1620,8 @@ def context_engine_reply(prompt, payload, settings, order, workdir, deadline, fa
     pool = ThreadPoolExecutor(max_workers=len(order))
     pending = {}
     next_engine = 0
-    fallback_at = time.monotonic() + max(0, deadline - time.monotonic()) * FIRST_ENGINE_SHARE
+    fallback_at = time.monotonic() + min(max(0, deadline - time.monotonic()) * FIRST_ENGINE_SHARE,
+                                       context.limits()['hedge_seconds'])
 
     def invoke(family):
         started=time.monotonic()
@@ -1767,6 +1771,9 @@ def validate(payload):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else None
+    if mode == '--limits':
+        print(json.dumps(context.limits()))
+        return
     if mode not in (None, '--prepare', '--receive', '--finish-recheck', '--ingest', '--confirm-display', '--judge'):
         print(f'output-gate-check: unknown option {mode}', file=sys.stderr)
         sys.exit(2)

@@ -26,6 +26,7 @@ Claude Code 自身が作った回答 (API エラーの表示など) も、会話
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -37,9 +38,12 @@ import time
 
 HOOKS_DIR = Path(__file__).resolve().parent.parent
 CHECK_SCRIPT = HOOKS_DIR.parent / 'bin' / 'output-gate-check.py'
+_context_spec = importlib.util.spec_from_file_location('output_gate_context', CHECK_SCRIPT.with_name('output_gate_context.py'))
+context = importlib.util.module_from_spec(_context_spec)
+_context_spec.loader.exec_module(context)
 UNCHECKED_PREFIX = '[出力ゲート: 検査できませんでした — {}]\n\n'
-# 検査処理の全体の締切 (gitleaks を含めて既定 45 秒) と後始末 (最大 30 秒) より長くする。hook の時間制限はこれより長く設定する。
-CHECK_TIMEOUT = 90
+_limits = context.limits()
+CHECK_TIMEOUT = _limits['timeout_seconds'] + _limits['cleanup_seconds']
 RECENT_MESSAGES = 10
 # これより古いセッションの印と貯め置きは、利用者の入力のときに消す (日)。
 OLD_STATE_DAYS = 7
@@ -61,8 +65,7 @@ READ_LIMIT = 32 << 20
 PREVIOUS_TURNS = 10
 PREVIOUS_SECONDS = 24 * 3600
 FINAL_STOP_REASONS = ('end_turn', 'stop_sequence')
-# Stop hook が「検査中」の印を見て結果を待つ上限 (秒)。settings.json の Stop hook の時間制限 (120 秒) より短くする。
-STOP_WAIT = 100
+STOP_WAIT = CHECK_TIMEOUT + 10
 # Stop hook が、印も結果も無いときに MessageDisplay hook が印を書くのを待つ上限 (秒)。どちらが先に動くかは
 # 確かめていないため。
 STOP_APPEAR_WAIT = 1.5

@@ -14,12 +14,6 @@ const holding = atom({ plugin: 'output-gate', key: 'holding' } as const, 0)
 const active = atom({ plugin: 'output-gate', key: 'active' } as const, null as string | null)
 
 const UNAVAILABLE = '出力検査が完了していないため、回答は確定していません。\n\n'
-// 検査全体の締切 (秒)。秘密情報の検査 (gitleaks) と二つの系統の検査役が、この中に収まる。先に試す系統には
-// 全残時間を先行へ渡し、半分を過ぎても未完了なら代替を始める。環境変数 OUTPUT_GATE_TIMEOUT で変えられる。
-const DEFAULT_TIMEOUT_S = 45
-// 検査処理を待つ上限は、渡した締切に、止まらない子の後始末 (最大 30 秒) と余裕を足したもの。締切切れは
-// 検査処理が理由付きで返すため、ここで切るのは検査処理そのものが止まった場合だけ。
-const CLEANUP_MS = 30_000 + 10_000
 // Claude の検査役 ($.model.complete) の返答の上限 (トークン)。仮の値で、時間と利用枠を測ってから決め直す。
 const CLAUDE_MAX_TOKENS = 8_192
 const GATE_TOOL_NAME = 'gate_findings'
@@ -417,25 +411,56 @@ async function fileOps($: EngineInterface, replace: [string, string][], remove: 
 
 // --- 検査処理と検査役 ---
 
-async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display' | '--judge') {
+async function checkerArgv($: EngineInterface, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display' | '--judge' | '--limits') {
   const home = await homeDir($)
   if (!home) throw new Error('ホームディレクトリが分からない')
   return [await findPython($), '-I', `${home}/.agent-shared/bin/output-gate-check.py`, ...(mode ? [mode] : [])]
+}
+
+async function checkerLimits($: EngineInterface): Promise<{ timeoutMs: number; cleanupMs: number; hedgeMs: number }> {
+  const timeout = await $.env.get('OUTPUT_GATE_TIMEOUT')
+  const result = await $.process.run(await checkerArgv($, '--limits'), {
+    timeoutMs: 10_000, env: timeout ? { OUTPUT_GATE_TIMEOUT: timeout } : {},
+  })
+  if (result.exitCode !== 0) throw new Error('検査処理の待機時間を取得できなかった')
+  const limits = JSON.parse(result.stdout) as { timeout_seconds: number; cleanup_seconds: number; hedge_seconds: number }
+  if (!Number.isFinite(limits.timeout_seconds) || limits.timeout_seconds <= 0 ||
+      !Number.isFinite(limits.cleanup_seconds) || limits.cleanup_seconds < 0 ||
+      !Number.isFinite(limits.hedge_seconds) || limits.hedge_seconds <= 0) {
+    throw new Error('検査処理の待機時間の形が違う')
+  }
+  return { timeoutMs: limits.timeout_seconds * 1000, cleanupMs: limits.cleanup_seconds * 1000,
+    hedgeMs: limits.hedge_seconds * 1000 }
 }
 
 // budgetMs: 検査処理に渡す締切 (OUTPUT_GATE_TIMEOUT)。
 async function runChecker($: EngineInterface, input: unknown, budgetMs: number, mode?: '--prepare' | '--receive' | '--finish-recheck' | '--confirm-display' | '--judge'):
     Promise<Record<string, unknown>> {
   const argv = await checkerArgv($, mode)
-  let result
+  const { cleanupMs } = await checkerLimits($)
+  // process.run は最大 600 秒なので、検査と後始末を合わせた待機には使えない。
+  const stream = $.process.spawn({ argv, input: JSON.stringify(input),
+    env: { OUTPUT_GATE_TIMEOUT: (budgetMs / 1000).toFixed(3) } })
+  const timer = new AbortController()
+  const expired = $.clock.sleep(Math.max(1, Math.ceil(budgetMs) + cleanupMs), { signal: timer.signal })
+    .then(() => { throw new Error('検査処理の待機時間を超えた') })
+  let stdout = ''
   try {
-    result = await $.process.run(argv, { stdin: JSON.stringify(input), timeoutMs: Math.ceil(budgetMs) + CLEANUP_MS,
-      env: { OUTPUT_GATE_TIMEOUT: (budgetMs / 1000).toFixed(3) } })
+    for (;;) {
+      const next = await Promise.race([stream.next(), expired])
+      if (next.done) {
+        if (next.value.code !== 0) throw new Error(`検査処理が失敗した (終了コード ${next.value.code})`)
+        break
+      }
+      if (next.value.stream === 'stdout') stdout += next.value.text
+    }
   } catch {
     throw new Error('検査処理を実行できなかった')
+  } finally {
+    timer.abort()
+    await stream.return()
   }
-  if (result.exitCode !== 0) throw new Error(`検査処理が失敗した (終了コード ${result.exitCode})`)
-  return JSON.parse(result.stdout) as Record<string, unknown>
+  return JSON.parse(stdout) as Record<string, unknown>
 }
 
 function asResult(out: Record<string, unknown>): CheckResult {
@@ -524,9 +549,8 @@ async function rawAnswer($: EngineInterface, payload: Payload, prepared: Record<
   }
 }
 
-async function checkOnce($: EngineInterface, payload: Payload, sharedDeadline?: number): Promise<CheckResult> {
+async function checkOnce($: EngineInterface, payload: Payload, deadline: number, hedgeMs: number): Promise<CheckResult> {
   const config = await settings($)
-  const deadline = sharedDeadline ?? Date.now() + (Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S) * 1000
   let prepared = await runChecker($, payload, deadline - Date.now(), '--prepare')
   const failures: Failure[] = []
   while (prepared['status'] === 'ready') {
@@ -560,7 +584,7 @@ async function checkOnce($: EngineInterface, payload: Payload, sharedDeadline?: 
     const wait = (ms: number, family: string) => $.clock.sleep(ms, { signal: timers.signal })
       .then(() => ({ family, result: { failures: [] } as RawAnswer }))
     const timeout = wait(left, 'timeout')
-    const hedge = wait(left / 2, 'hedge')
+    const hedge = wait(Math.min(left / 2, hedgeMs), 'hedge')
     start(first, primary)
     let hedged = false
     let accepted: RawAnswer | undefined
@@ -640,8 +664,9 @@ function stopResult(result: CheckResult, original: string[], reason: string): Ch
 }
 
 async function check($: EngineInterface, payload: Payload): Promise<CheckResult> {
-  const deadline = Date.now() + (Number(await $.env.get('OUTPUT_GATE_TIMEOUT')) || DEFAULT_TIMEOUT_S) * 1000
-  const initial = await checkOnce($, payload, deadline)
+  const limits = await checkerLimits($)
+  const deadline = Date.now() + limits.timeoutMs
+  const initial = await checkOnce($, payload, deadline, limits.hedgeMs)
   if (!initial.recheck_required) return initial
   const left = deadline - Date.now()
   const { engines: _engines, ...unrestricted } = payload

@@ -151,6 +151,20 @@ class Upstream(http.server.BaseHTTPRequestHandler):
     do_GET = handle_any
 
 
+class RelayVersionTests(unittest.TestCase):
+    def test_changed_common_limits_invalidate_the_running_relay_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / RELAY.name
+            script.write_bytes(RELAY.read_bytes())
+            common = script.with_name('output_gate_context.py')
+            common.write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
+            command = [sys.executable, '-c', 'import runpy,sys; print(runpy.run_path(sys.argv[1])["VERSION"])', str(script)]
+            before = subprocess.check_output(command, text=True)
+            common.write_text(common.read_text() + '\nDEFAULT_TIMEOUT = 720\n')
+            after = subprocess.check_output(command, text=True)
+            self.assertNotEqual(before, after)
+
+
 class RelayTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -594,6 +608,7 @@ class RelayTests(unittest.TestCase):
     def test_ensure_replaces_old_version(self):
         old = self.tmp / 'old-relay.py'
         old.write_text(RELAY.read_text(encoding='utf-8') + '\n# old version marker\n', encoding='utf-8')
+        old.with_name('output_gate_context.py').write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
         self.relay.kill(); self.relay.wait(5); self.relay.stderr.close()
         env = dict(os.environ, OUTPUT_GATE_CHECK_CMD=json.dumps([sys.executable, '-I', str(self.checker)]))
         self.relay = subprocess.Popen([sys.executable, '-I', str(old), '--port', str(self.port),
@@ -790,6 +805,7 @@ class RelayTests(unittest.TestCase):
         new_dir.mkdir(exist_ok=True)
         new_relay = new_dir / 'output-gate-relay.py'
         new_relay.write_text(RELAY.read_text(encoding='utf-8') + '\n# new version marker\n', encoding='utf-8')
+        new_relay.with_name('output_gate_context.py').write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
         (new_dir / 'output-gate-check.py').write_text('def broken(:\n', encoding='utf-8')
         before = json.loads(self.call('GET', '/__gate/version')[2])
         result = subprocess.run([sys.executable, '-I', str(new_relay), '--port', str(self.port),
@@ -1642,6 +1658,25 @@ class RelayTests(unittest.TestCase):
 
 
 class CompactionIngestionTests(unittest.TestCase):
+    def test_checker_wait_covers_the_shared_budget_and_cleanup(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('timeout_relay', RELAY)
+        relay = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(relay)
+        for override, expected in [(None, 3640), ('720', 760)]:
+            with self.subTest(timeout=override), patch.dict(os.environ, clear=False):
+                if override is None:
+                    os.environ.pop('OUTPUT_GATE_TIMEOUT', None)
+                else:
+                    os.environ['OUTPUT_GATE_TIMEOUT'] = override
+                with patch.object(relay.subprocess, 'Popen') as popen:
+                    process = popen.return_value
+                    process.communicate.return_value = (b'{}', b'')
+                    process.returncode = 0
+                    self.assertEqual(relay.Checks().run({}), b'{}')
+                    self.assertEqual(process.communicate.call_args.kwargs['timeout'], expected)
+
     def test_ingestion_failure_preserves_the_original_conversation(self):
         import importlib.util
         from unittest.mock import patch

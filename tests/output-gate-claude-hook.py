@@ -451,6 +451,21 @@ class ClaudeHookTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
+    def test_checker_and_stop_waits_cover_the_shared_budget_and_cleanup(self):
+        for override, expected in [(None, 3640), ('720', 760)]:
+            with self.subTest(timeout=override), mock.patch.dict(os.environ, clear=False):
+                if override is None:
+                    os.environ.pop('OUTPUT_GATE_TIMEOUT', None)
+                else:
+                    os.environ['OUTPUT_GATE_TIMEOUT'] = override
+                module = self.load_hook()
+                reply = {'status': 'checked', 'text': '確認済み'}
+                with mock.patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, json.dumps(reply).encode())) as run:
+                    self.assertEqual(module.run_check({'draft': '原文'}), reply)
+                    self.assertEqual(run.call_args.kwargs['timeout'], expected)
+                self.assertGreaterEqual(module.STOP_WAIT, expected)
+                self.assertGreaterEqual(module.CHECKING_STALE, expected)
+
     def test_findings_show_the_marked_answer_and_store_the_pair(self):
         out = self.display('全部通ったよ', final=True, FAKE_CHECK_FINDINGS='1')
         self.assertIn('出力ゲート: 次の点は確かめられていません', self.shown(out))

@@ -332,7 +332,7 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh display",
-            "timeout": 120
+            "timeout": 7200
           }
         ]
       }
@@ -343,7 +343,7 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh stop",
-            "timeout": 120
+            "timeout": 7200
           }
         ]
       },

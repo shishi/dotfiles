@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic context protocol tests; model semantics are tested separately."""
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -761,8 +762,12 @@ class ContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not served'):
             checker.context.resolve_refs(ready['transaction'], [full], True)
         pieces = [e['text'] for e in data['retrieved']]
+        observations = [dict(id='prefix-read', kind='unresolved', text='The prefix is read; remaining original bytes are still required.',
+                             refs=[data['retrieved'][0]['ref']], related=[],
+                             target=dict(name='original', revision_refs=[]), validity='current')]
         while data['remaining_refs']:
-            ready = self.reply(ready, {'kind': 'need_refs', 'refs': data['remaining_refs']})
+            ready = self.reply(ready, {'kind': 'need_refs', 'refs': data['remaining_refs'], 'additions': observations})
+            observations = []
             data = self.packet(ready)
             pieces.extend(e['text'] for e in data['retrieved'])
             self.assertLessEqual(ready['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
@@ -778,6 +783,28 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(data['answers'][0]['text'], 'A different answer')
         self.assertEqual(resumed['transaction']['resumed_update_units'], 1)
         self.assertFalse((Path(self.tmp.name) / 'state.json').exists())
+
+    def test_fetched_original_survives_meaning_update_and_changed_draft(self):
+        self.payload['evidence'] = [{'id': 'verification', 'output': 'x' * 10000 + 'VERIFIED' + 'y' * 10000}]
+        ready = self.ready()
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        wanted = checker.context.ref(source, 'output', 10000, 10008)
+        ready = self.reply(ready, {'kind': 'need_refs', 'refs': [wanted]})
+        self.assertEqual(self.packet(ready)['retrieved'][0]['text'], 'VERIFIED')
+        ready = self.update(ready)
+        self.assertTrue(any(e['ref'] == wanted and e['text'] == 'VERIFIED'
+                            for e in self.packet(ready)['retrieved']))
+        stale = ready
+        self.payload['draft'] = 'Updated answer.'
+        self.payload['evidence'].append({'id': 'inspection', 'output': 'No target changes.'})
+        resumed = self.ready()
+        data = self.packet(resumed)
+        self.assertEqual(data['answers'][0]['text'], 'Updated answer.')
+        self.assertTrue(any(e['ref'] == wanted and e['text'] == 'VERIFIED' for e in data['retrieved']))
+        self.assertEqual(resumed['transaction']['claims'], [])
+        checker.context.resolve_refs(resumed['transaction'], [wanted], True)
+        self.assertEqual(self.judgment(stale)['status'], 'unchecked')
+        self.assertEqual(self.judgment(resumed)['status'], 'checked')
 
     def test_partial_meaning_update_resumes_with_new_user_without_replaying_prefix(self):
         import random
@@ -829,6 +856,154 @@ class ContextTests(unittest.TestCase):
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [first]})
         ready = self.reply(ready, {'kind': 'need_refs', 'refs': [second]})
         self.assertEqual({e['text'] for e in self.packet(ready)['retrieved']}, {'small one', 'small two'})
+
+    def test_repeated_reference_request_gets_content_feedback(self):
+        self.payload['evidence'] = [{'id': 'verification', 'output': 'x' * 10000 + 'VERIFIED' + 'y' * 10000}]
+        ready = self.update(self.ready())
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        wanted = checker.context.ref(source, 'output', 10000, 10008)
+        ready = self.reply(ready, {'kind': 'need_refs', 'refs': [wanted]})
+        repeated = self.reply(ready, {'kind': 'need_refs', 'refs': [wanted]})
+        self.assertEqual(repeated['status'], 'ready')
+        self.assertIn('without context progress', self.packet(repeated)['validation_feedback'] or '')
+        self.assertEqual(self.judgment(repeated)['status'], 'checked')
+
+    def test_same_search_for_a_different_claim_advances_its_evidence_scope(self):
+        self.payload['draft'] = 'First. Second.'
+        self.payload['evidence'] = [{'id': 'verification', 'output': 'tests passed'}]
+        ready = self.update(self.ready())
+        answer = self.packet(ready)['answers'][0]['ref']
+        first = dict(answer, end=6)
+        second = dict(answer, start=7)
+        query = dict(scope='archive', field='output', literal='tests', before_seq=0)
+        ready = self.reply(ready, dict(kind='need_refs', refs=[query], focus_refs=[first]))
+        ready = self.reply(ready, dict(kind='need_refs', refs=[query], focus_refs=[second]))
+        self.assertIsNone(self.packet(ready)['validation_feedback'])
+        self.assertEqual(ready['transaction']['archive_searches'][-1]['focus_refs'], [second])
+
+    def test_regrouping_old_requests_does_not_advance_context(self):
+        self.payload['evidence'] = [{'id': 'one', 'output': 'first'}, {'id': 'two', 'output': 'second'}]
+        ready = self.update(self.ready())
+        refs = [checker.context.ref(s, 'output') for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence']
+        ready = self.reply(ready, dict(kind='need_refs', refs=[refs[0]]))
+        ready = self.reply(ready, dict(kind='need_refs', refs=[refs[1]]))
+        ready = self.reply(ready, dict(kind='need_refs', refs=refs))
+        self.assertIn('without context progress', self.packet(ready)['validation_feedback'] or '')
+
+    def test_evidence_supply_frontier_advances_after_the_original_is_read(self):
+        import random
+        self.payload['evidence'] = [dict(id='verification', output=''.join(random.Random(409).choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=20000)))]
+        ready = self.ready()
+        self.assertEqual(self.packet(ready)['evidence_frontier'].get('unserved_original_fields'), 1)
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        ready = self.reply(ready, dict(kind='need_refs', refs=[checker.context.ref(source, 'output')]))
+        self.assertEqual(self.packet(ready)['evidence_frontier']['unserved_original_fields'], 0)
+
+    def test_paging_preserves_a_grounded_interpretation_before_evicting_evidence(self):
+        import random
+        rng = random.Random(407)
+        self.payload['evidence'] = [dict(id=str(n), output=''.join(rng.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=size)))
+                                    for n, size in enumerate((108000, 70000))]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+        first, second = [checker.context.ref(s, 'output') for s in sources]
+        ready = self.reply(ready, dict(kind='need_refs', refs=[first]))
+        rejected = self.reply(ready, dict(kind='need_refs', refs=[second]))
+        self.assertIn('grounded observation', self.packet(rejected)['validation_feedback'] or '')
+        self.assertTrue(any(e['ref'] == first for e in self.packet(rejected)['retrieved']))
+        observation = dict(id='first-fact', kind='fact', text='Inspected the first verification original.',
+                           refs=[first], related=[], target=dict(name='verification', revision_refs=[]), validity='current')
+        ready = self.reply(rejected, dict(kind='need_refs', refs=[second], additions=[observation]))
+        self.assertIsNone(self.packet(ready)['validation_feedback'])
+        self.assertTrue(any(e['ref'] == second for e in self.packet(ready)['retrieved']))
+        self.assertEqual(ready['transaction']['retrieval_observations'], [observation])
+        self.assertFalse(any(e['ref'] == first for e in self.packet(ready)['retrieved']))
+        self.payload['draft'] = 'Updated answer after inspecting both originals.'
+        resumed = self.ready()
+        self.assertEqual(resumed['transaction']['retrieval_observations'], [observation])
+        checker.context.resolve_refs(resumed['transaction'], observation['refs'], True)
+
+    def test_validated_interpretation_survives_a_later_paging_feedback(self):
+        import random
+        rng = random.Random(408)
+        self.payload['evidence'] = [dict(id=str(n), output=''.join(rng.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=size)))
+                                    for n, size in enumerate((50000, 50000, 108000))]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s:s['seq'])
+        first, second, third = [checker.context.ref(s, 'output') for s in sources]
+        ready = self.reply(ready, dict(kind='need_refs', refs=[first, second]))
+        one = dict(id='one', kind='fact', text='First original was inspected.', refs=[first], related=[],
+                   target=dict(name='first', revision_refs=[]), validity='current')
+        two = dict(id='two', kind='unresolved', text='Second original needs later verification.', refs=[second], related=[],
+                   target=dict(name='second', revision_refs=[]), validity='current')
+        for _ in range(2):
+            ready = self.reply(ready, dict(kind='need_refs', refs=[third]))
+        feedback = self.packet(ready)['validation_feedback']
+        self.assertIn(first['id'], feedback)
+        self.assertIn(second['id'], feedback)
+        ready = self.reply(ready, dict(kind='need_refs', refs=[third], additions=[one]))
+        self.assertEqual(ready['status'], 'ready', ready.get('reason'))
+        self.assertIn('grounded observation', self.packet(ready)['validation_feedback'] or '')
+        self.assertEqual(ready['transaction']['retrieval_observations'], [one])
+        ready = self.reply(ready, dict(kind='need_refs', refs=[third], additions=[two]))
+        self.assertIsNone(self.packet(ready)['validation_feedback'])
+        self.assertEqual(ready['transaction']['retrieval_observations'], [one, two])
+        self.assertTrue(any(e['ref'] == third for e in self.packet(ready)['retrieved']))
+
+    def test_retained_originals_fit_the_packet_after_a_larger_answer(self):
+        import random
+        rng = random.Random(405)
+        self.payload['latest_user'] = ''.join(rng.choices('abcdefghijklmnopqrstuvwxyz', k=200000))
+        self.payload['draft'] = ''
+        self.payload['evidence'] = [{'id': 'verification', 'output': ''.join(rng.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=108000))}]
+        ready = self.ready()
+        data = self.packet(ready)
+        user = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'user')
+        user_ref = checker.context.ref(user)
+        item = dict(id='requirement', kind='requirement', text='Inspect the required result', refs=[user_ref],
+                    related=[], target=dict(name='result', revision_refs=[]), validity='current')
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        wanted = checker.context.ref(source, 'output')
+        ready = self.reply(ready, dict(kind='need_refs', refs=[wanted]))
+        ready = self.update(ready, additions=[item])
+        self.payload['draft'] = ''.join(rng.choices('abcdefghijklmnopqrstuvwxyz', k=55000))
+        resumed = self.ready()
+        self.assertLessEqual(resumed['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
+        self.assertIn(source['id'] + ':' + source['rev'], resumed['transaction']['sources'])
+
+    def test_progressing_check_can_complete_beyond_ten_minutes(self):
+        clock = [1000.0]
+        calls = []
+        self.payload['evidence'] = [{'id': 'verification', 'output': 'x' * 10000 + 'VERIFIED' + 'y' * 10000}]
+
+        def engine(prompt, payload, settings, order, workdir, deadline, failures, attempts):
+            calls.append(prompt)
+            clock[0] += 250
+            if clock[0] >= deadline:
+                return None, None
+            data = checker.context.expand_wire(json.loads(prompt))
+            if len(calls) == 1:
+                reply = dict(kind='update', remaining_users=dict(disposition='context_only', reason='fixture'),
+                             decisions=[], additions=[], catalog_coverage=[], unresolved=[], focus_refs=[])
+            elif len(calls) == 2:
+                source = next(s for s in json.loads((Path(self.tmp.name) / 'transaction.json').read_text())['sources'].values()
+                              if s['kind'] == 'evidence')
+                reply = dict(kind='need_refs', refs=[checker.context.ref(source, 'output', 10000, 10008)])
+            else:
+                reply = dict(kind='judgment', claims=[dict(id='answer', answer_ref=data['answers'][0]['ref'],
+                             text='Done.', requirement_ids=[], evidence=[], verdict='nonfactual')],
+                             item_coverage=[], decisions=[], findings=[], replacements=[],
+                             progress=dict(state='advanced', reason='Completed evidence acquisition and judgment.'))
+            return json.dumps(reply), {'family': 'test'}
+
+        with patch.dict(os.environ, {'OUTPUT_GATE_TIMEOUT': ''}), \
+                patch.object(time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(time, 'time', side_effect=lambda: clock[0]), \
+                patch.object(checker, 'context_engine_reply', side_effect=engine):
+            result = checker.check(self.payload)
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual(result['text'], 'Done.')
+        self.assertEqual(len(calls), 3)
 
     def test_user_meaning_and_planned_evidence_are_ready_before_judgment(self):
         self.payload['evidence']=[dict(id='op',output='actual result')]
