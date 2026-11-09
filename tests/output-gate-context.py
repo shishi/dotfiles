@@ -449,6 +449,29 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(result['status'], 'checked', result)
         return result
 
+    def test_judgment_with_complete_decisions_accepts_fact_without_item_coverage(self):
+        self.live_state()
+        self.payload['evidence'] = [dict(id='inspection', output='The target snapshot was inspected.')]
+        ready = self.ready()
+        data = self.packet(ready)
+        self.assertEqual(data['stage'], 'judge')
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        original = checker.context.ref(source, 'output')
+        checker.context.resolve_refs(ready['transaction'], [original], True)
+        answer = dict(kind='judgment',
+            decisions=[dict(item_id=item['id'], action='keep', basis='current', refs=[], reason='Still active') for item in data['items']],
+            additions=[dict(id='inspection-result', kind='fact', text='The target snapshot was inspected.',
+                refs=[original], related=[], target=dict(name='target', revision_refs=[]), validity='current')],
+            claims=[dict(id=str(n), answer_ref=entry['ref'], text=entry['text'],
+                requirement_ids=[], evidence=[], verdict='nonfactual') for n, entry in enumerate(data['answers'])],
+            findings=[], replacements=[], focus_candidates=[], progress=dict(state='advanced', reason='Inspection result is available'))
+        missing_decisions = self.reply(ready, dict(answer, decisions=[]))
+        self.assertEqual(missing_decisions['status'], 'ready')
+        self.assertIn('judgment item decisions coverage incomplete', self.packet(missing_decisions)['validation_feedback'])
+        result = self.reply(missing_decisions, answer)
+        self.assertEqual(result['status'], 'checked', result.get('reason') or result.get('transaction', {}).get('validation_feedback'))
+        self.assertEqual([item['id'] for item in result['context_state']['items']], ['encoding'])
+
     def test_warm_state_retains_old_constraint_without_resending_user(self):
         first = self.live_state()
         ready = self.ready()
@@ -899,6 +922,23 @@ class ContextTests(unittest.TestCase):
         ready = self.reply(ready, dict(kind='need_refs', refs=[checker.context.ref(source, 'output')]))
         self.assertEqual(self.packet(ready)['evidence_frontier']['unserved_original_fields'], 0)
 
+    def test_requested_originals_share_the_full_packet_budget(self):
+        import random
+        rng = random.Random(406)
+        originals = [''.join(rng.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=size)) for size in (108000, 70000)]
+        self.payload['evidence'] = [dict(id=str(n), output=text) for n, text in enumerate(originals)]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s: s['seq'])
+        first, second = [checker.context.ref(s, 'output') for s in sources]
+        ready = self.reply(ready, dict(kind='need_refs', refs=[first]))
+        ready = self.reply(ready, dict(kind='need_refs', refs=[second]))
+        packet = self.packet(ready)
+        self.assertIsNone(packet['validation_feedback'])
+        self.assertEqual({e['text'] for e in packet['retrieved']}, set(originals))
+        self.assertEqual(packet['remaining_refs'], [])
+        self.assertLessEqual(ready['transaction']['metrics']['inputs'][-1]['bytes'], 400000)
+
+    @patch.object(checker.context, 'LIMIT', 200_000)
     def test_paging_preserves_a_grounded_interpretation_before_evicting_evidence(self):
         import random
         rng = random.Random(407)
@@ -924,6 +964,7 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(resumed['transaction']['retrieval_observations'], [observation])
         checker.context.resolve_refs(resumed['transaction'], observation['refs'], True)
 
+    @patch.object(checker.context, 'LIMIT', 200_000)
     def test_validated_interpretation_survives_a_later_paging_feedback(self):
         import random
         rng = random.Random(408)

@@ -842,13 +842,13 @@ def retrieval_page(tx, data, overhead):
         preview_ref = dict(wanted, end=wanted['start'] + preview_end)
         preview = dict(original, ref=preview_ref, text=preview_raw[:preview_end].decode())
         data.update(retrieved=[*supplied, preview], remaining_refs=queue)
-        while retained and (len(wire_encoded(data)) + overhead > LIMIT or sum(len(wire_encoded(e)) for e in [*supplied, preview]) > UNIT_BYTES):
+        while retained and len(wire_encoded(data)) + overhead > LIMIT:
             largest = max(retained, key=lambda e: len(wire_encoded(e)))
             evict(largest)
             data.update(retrieved=[*supplied, preview], remaining_refs=queue)
         candidate = [*supplied, original]
         data.update(retrieved=candidate, remaining_refs=queue)
-        if len(wire_encoded(data)) + overhead <= LIMIT and sum(len(wire_encoded(e)) for e in candidate) <= UNIT_BYTES:
+        if len(wire_encoded(data)) + overhead <= LIMIT:
             supplied = candidate
             continue
         raw = original['text'].encode('utf-8')
@@ -862,7 +862,7 @@ def retrieval_page(tx, data, overhead):
             rest = dict(wanted, start=partial['end'])
             entry = dict(original, ref=partial, text=raw[:end].decode())
             data.update(retrieved=[*supplied, entry], remaining_refs=[rest, *queue])
-            if len(wire_encoded(data)) + overhead <= LIMIT and sum(len(wire_encoded(e)) for e in [*supplied, entry]) <= UNIT_BYTES:
+            if len(wire_encoded(data)) + overhead <= LIMIT:
                 best = end
                 low = middle + 1
             else:
@@ -1250,8 +1250,6 @@ def searched_claim_originals(tx, answer_ref):
 def accept_judgment(tx, answer):
     unit = tx['pending_units'][0]
     coverage = [c['answer_ref'] for c in answer.get('claims', [])]
-    if set(answer.get('item_coverage', [])) != {i['id'] for i in unit['items']}:
-        raise ValueError('active item coverage incomplete')
     decisions = answer.get('decisions', [])
     if {d.get('item_id') for d in decisions} != {i['id'] for i in unit['items']}:
         raise ValueError('judgment item decisions coverage incomplete')
@@ -1430,7 +1428,7 @@ def accept_judgment(tx, answer):
     tx['replacements'].extend(answer.get('replacements', []))
     tx['progress'] = answer.get('progress', {'state': 'unknown', 'reason': ''})
     tx['pending_units'].pop(0)
-    tx['completed_units'].append({'stage': 'judge', 'answer_coverage': coverage, 'item_coverage': answer['item_coverage']})
+    tx['completed_units'].append({'stage': 'judge', 'answer_coverage': coverage, 'item_coverage': [d['item_id'] for d in decisions]})
 
 
 def accept(tx, answer, checkpoint=None):
@@ -1439,8 +1437,6 @@ def accept(tx, answer, checkpoint=None):
         answer['user_coverage'] = [r for assessment in answer.get('user_assessments', []) for r in assessment.get('refs', [])]
         if (answer.get('remaining_users') or {}).get('disposition') == 'context_only' and answer['remaining_users'].get('reason'):
             answer['user_coverage'].extend(u['ref'] for u in tx['pending_units'][0].get('users', []))
-    if 'item_coverage' not in answer:
-        answer['item_coverage'] = list({i for i in [*(d.get('item_id') for d in answer.get('decisions', [])), *(a.get('id') for a in answer.get('additions', []))] if i})
     if time.time() >= tx['deadline']:
         raise ValueError('context deadline exhausted')
     if answer.get('kind') == 'need_refs':
