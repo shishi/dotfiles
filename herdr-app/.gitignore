@@ -1,0 +1,3 @@
+# Herdr writes typings and editor config into every mod folder.
+mods/*/jsconfig.json
+mods/*/gpui-kit.d.ts
