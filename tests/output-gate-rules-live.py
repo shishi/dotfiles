@@ -240,12 +240,16 @@ def run(case):
     out = json.loads(proc.stdout.decode('utf-8'))
     found = [(f['kind'], f.get('rule', '')) for f in out.get('findings') or []]
     # 一覧から外して既定の種類に任せた項目は、その種類の検出で判定する。統合した項目は統合先の規則で判定する。
-    builtin = {'W8': 'concealment', 'T2': 'unverified_claim', 'T12': 'unverified_claim',
-               'missing_request': 'missing_request'}
+    builtin = {'W8': {'concealment'}, 'T2': {'unverified_claim'}, 'T12': {'unverified_claim'},
+               'W5': {'missing_request', 'unverified_claim', 'concealment'},
+               'missing_request': {'missing_request'}}
+    # 一部だけ既定の種類へ移した規則。bad はその種類でも検出とみなし、good は残した規則の違反だけで判定する。
+    if kind == 'bad':
+        builtin['T13'] = {'unverified_claim'}
     target = {'T8': 'T7', 'T6': 'W4'}.get(rule, rule)
     hit = any(k == 'rule_violation' and r == target for k, r in found)
     if rule in builtin:
-        hit = hit or any(k == builtin[rule] for k, _ in found)
+        hit = hit or any(k in builtin[rule] for k, _ in found)
     ok = out.get('status') == 'checked' and (hit if kind == 'bad' else not hit)
     if rule == 'progress':
         ok = out.get('status') == 'checked' and (out.get('progress') or {}).get('state') == kind
