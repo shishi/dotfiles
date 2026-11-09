@@ -67,7 +67,7 @@ credentials、token、password、private key、および外部コンテンツか
 ## 書き込み
 
 1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
-2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` と更新対象を読み、保存基準・形式・ブランチ制約を確認する。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集する。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
+2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` と更新対象を読み、保存基準・形式・ブランチ制約を確認する。会話内で同じ版を既に読んでいれば再読しない。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集する。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
 3. patch の対象と差分を確認する。技術的知識には適用環境と再確認条件を保ち、重要な訂正の根拠が必要なら元発言や検証結果への参照を残す。会話全文や一時的な経緯は複製しない。
 4. 既存トピックを優先して更新する。タイトル・`description` には検索に使う対象名と操作を簡潔に入れる。共通方針は CORE、プロジェクト制約は該当 project、技術知識は該当 topic へ置き、索引には本文や手順を複製しない。
 5. 次の形式で `memory-write-finish.sh` を実行する。

@@ -4,7 +4,7 @@
 # 往復を減らす。
 #
 # usage: memory-write-preflight.sh <memory-link-path> [--read-sync]
-# --read-sync は起動時の同期。fetch は lock の外で 3 秒で打ち切る。更新が無ければ lock を
+# --read-sync は起動時の同期。fetch は lock の外で 8 秒で打ち切る。更新が無ければ lock を
 #   取らずに終え、更新があれば lock を取って fast-forward し、解放してから返す。
 #   <memory-link-path> は agent home 側の link (~/.claude/memory or ~/.codex/memory)。
 # 正本の解決は resolve-memory-dir.sh に委ね、同じ env 契約 (AGENT_MEMORY_DIR など) に従う。
@@ -107,7 +107,9 @@ if [ "$read_sync" = true ]; then
   # 通信は lock の外で行い、lock は main を進める区間だけ保持する。
   verify_repo_state "$memory_repo" pre || exit 1
   # Python は検索にも必要。POSIX と Windows の双方で transport の子孫も終了する。
-  # 通信が止まっても fetch を 3 秒で打ち切り、起動時 hook の timeout より前に注入へ進む。
+  # 通信が止まっても fetch を 8 秒で打ち切り、起動時 hook の timeout(20 秒)より前に注入へ進む。
+  # GitHub への SSH fetch は接続と認証だけで 3 秒を超えることがあり、それより短い上限では
+  # 正常な同期まで毎回打ち切られる。
   py_bin=$(command -v python3 || command -v python) || exit 1
   "$py_bin" - "$memory_repo" "+refs/heads/main:$READ_SYNC_REF" <<'PY' || exit 1
 import os
@@ -122,7 +124,7 @@ process = subprocess.Popen(
     env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"},
     start_new_session=os.name != "nt")
 try:
-    status = process.wait(timeout=3)
+    status = process.wait(timeout=8)
 except subprocess.TimeoutExpired:
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],

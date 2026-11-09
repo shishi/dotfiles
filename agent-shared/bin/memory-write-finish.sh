@@ -172,10 +172,10 @@ else
     || { warn "memory commit failed"; exit 1; }
   result="$(git -C "$repo" rev-parse HEAD)" \
     || { warn "memory commit could not be resolved"; exit 1; }
+  # A successful push already moves origin/main to what the remote accepted,
+  # so no separate fetch is needed to check it.
   git -C "$repo" push origin main >&2 \
     || { warn "memory push failed"; exit 1; }
-  git -C "$repo" fetch origin main >&2 \
-    || { warn "remote verification fetch failed"; exit 1; }
   git -C "$repo" merge-base --is-ancestor "$result" origin/main \
     || { warn "remote main does not contain the memory commit"; exit 1; }
   post_status="$(git -C "$repo" status --porcelain)" \

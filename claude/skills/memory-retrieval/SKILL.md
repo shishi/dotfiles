@@ -17,7 +17,7 @@ private repo `agent-memory` を共通の正本とする AGENTS.md の原則を�
 
 1. 毎入力の `[記憶検索]` と `<personal-memory-index>` を確認します。自動検索が渡すのは索引と候補であり、本文は選択後に取得します。
 2. 候補の順位に限定せず、依頼の対象・操作・制約と索引の意味から必要な未読本文を選びます。
-3. `bash ~/.agent-shared/hooks/inject-memory.sh <agent home>/memory lookup '<索引の相対パス>'` へ 1 回に 1 パスを渡します。この helper は本文を検査して取得します。索引がなければ同 helper に検索語を渡します。
+3. `bash ~/.agent-shared/hooks/inject-memory.sh <agent home>/memory lookup '<索引の相対パス>'` へ、必要な記憶のパスを空白で区切ってまとめて渡します(1 回 3 件まで)。この helper は本文を検査して取得します。索引がなければ同 helper に検索語を渡します。
 4. 本文が取得上限を超える場合は、表示された commit の `git show` で取得します。通常の取得でも、表示された commit の `git show` を使えます。
 5. 語句一致・該当なし・取得上限を参照不要の根拠にしません。節取得を全文既読として扱わず、候補や適用条件が曖昧なら追加取得します。同版既読は再読しません。注入済みという記録を、理解・適用を確認した記録として扱いません。
 

@@ -301,6 +301,13 @@ if printf '%s' "$output" | grep -q QUARTZ_BODY && printf '%s' "$output" | grep -
 else
   ng "an exact path retrieves the complete source without repeating the index"
 fi
+output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup context.md z.md)
+if printf '%s' "$output" | grep -q INDEX_ROUTE_BODY && printf '%s' "$output" | grep -q INCIDENTAL_FOURTH \
+  && ! printf '%s' "$output" | grep -q '<personal-memory-index>'; then
+  ok "several exact paths are retrieved in one lookup"
+else
+  ng "several exact paths are retrieved in one lookup"
+fi
 printf '\npassword = %s\n' "$secret_value" >>"$MEMORY_DIR/sections.md"
 git -C "$MEMORY_DIR" add sections.md
 git -C "$MEMORY_DIR" commit -qm hidden-section-secret

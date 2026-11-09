@@ -160,7 +160,7 @@ git -C "$SEED" push -q "$ORIGIN" main
 started=$SECONDS
 out=$(AGENT_MEMORY_DIR="$CLONE" bash "$HELPER" "$LINK" --read-sync 2>"$TMP/timeout.err")
 status=$?
-if [ "$status" -ne 0 ] && [ $((SECONDS - started)) -lt 10 ]   && grep -q 'timed out' "$TMP/timeout.err" && [ ! -e "$CLONE/.git/memory-write.lock" ]; then
+if [ "$status" -ne 0 ] && [ $((SECONDS - started)) -lt 15 ]   && grep -q 'timed out' "$TMP/timeout.err" && [ ! -e "$CLONE/.git/memory-write.lock" ]; then
   ok "read sync bounds network wait and releases the lock on timeout"
 else
   ng "read sync bounds network wait and releases the lock on timeout"

@@ -152,8 +152,10 @@ def main():
 
     manual = event.get("memory_lookup_manual", False)
     paths = git(repo, "ls-tree", "-r", "--name-only", snapshot).splitlines()
-    exact_path = prompt if manual and prompt in paths and prompt.endswith(".md") else None
-    targets = [exact_path] if exact_path else [path for path in paths if path.endswith(".md")
+    # A manual lookup of index paths (one or more, space-separated) retrieves exactly those documents.
+    tokens = [prompt] if prompt in paths else prompt.split()
+    exact_paths = list(dict.fromkeys(tokens)) if manual and tokens and all(t in paths and t.endswith(".md") for t in tokens) else []
+    targets = exact_paths or [path for path in paths if path.endswith(".md")
                                                and path not in {"MEMORY.md", "CONVENTIONS.md"}]
     bodies = read_bodies(repo, snapshot, ["MEMORY.md", *targets])
     index_content = bodies["MEMORY.md"]
@@ -163,8 +165,8 @@ def main():
                                          index_content, re.MULTILINE)
     }
     documents = []
-    for path in [exact_path] if exact_path else paths:
-        if not path.endswith(".md") or (not exact_path and path in {"MEMORY.md", "CONVENTIONS.md"}):
+    for path in exact_paths or paths:
+        if not path.endswith(".md") or (not exact_paths and path in {"MEMORY.md", "CONVENTIONS.md"}):
             continue
         body = bodies[path]
         headings = [heading.replace("プロジェクト記憶", "")
@@ -175,7 +177,7 @@ def main():
         metadata = " ".join([subject, *headings]).casefold()
         text = body.casefold()
         matches = {term for term, pattern in patterns.items() if pattern.search(text) or pattern.search(metadata)}
-        if matches or path == exact_path:
+        if matches or path in exact_paths:
             documents.append((path, body, metadata, matches, subject))
     frequency = {term: sum(term in doc[3] for doc in documents) for term in terms}
 
@@ -191,8 +193,8 @@ def main():
                                     -sum(bool(patterns[term].search(doc[2])) for term in doc[3]),
                                     -len(doc[3]), -score(doc), doc[0]))
     candidates = documents
-    if exact_path:
-        candidates = [doc for doc in documents if doc[0] == exact_path]
+    if exact_paths:
+        candidates = [doc for doc in documents if doc[0] in exact_paths]
     selected = []
     known = []
     deferred = [doc[0] for doc in candidates[MAX_DOCUMENTS:]] if manual else []
@@ -211,7 +213,7 @@ def main():
                     if any(pattern.search(part.casefold()) for pattern in patterns.values())]
         # A document-level match or shared-condition query needs the whole document.
         shared_text = re.sub(r"\A---\r?\n.*?\r?\n---\r?\n", "", preamble, count=1, flags=re.DOTALL)
-        if not exact_path and matching and not any(pattern.search(shared_text.casefold()) for pattern in patterns.values()):
+        if not exact_paths and matching and not any(pattern.search(shared_text.casefold()) for pattern in patterns.values()):
             unread = [(index, part) for index, part in matching
                       if seen.get(f"{path}#section-{index}") != hashlib.sha256((preamble + part).encode()).hexdigest()]
             if not unread:
@@ -240,7 +242,7 @@ def main():
 
     lines = [f"[記憶検索] 確定済み記憶の語句検索: {len(documents)}件一致、本文取得{len(selected)}件。",
              "記憶は advisory。現在のユーザー指示と AGENTS.md を優先する。語句一致なので関連記憶の網羅を意味しない。"]
-    if exact_path:
+    if exact_paths:
         lines.append(f"取得元の確定 commit: {snapshot}")
     else:
         lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>",
@@ -258,7 +260,7 @@ def main():
         lines.extend(["本文の自動注入は行わない。候補だけに限定せず索引から意味で選び、必要な未読本文を取得してから判断する。",
                       "既読は注入済みの記録で、理解・適用を確認した記録ではない。",
                       "手動 lookup や git show の読了はこの一覧へ自動反映しない。同版の読了は会話内の取得結果でも確認する。",
-                      f"検査付きの全文取得: bash {shlex.quote(str(Path(__file__).resolve().parent.parent / 'inject-memory.sh'))} {shlex.quote(repo)} lookup '<索引で選んだ相対パス>'。",
+                      f"検査付きの全文取得: bash {shlex.quote(str(Path(__file__).resolve().parent.parent / 'inject-memory.sh'))} {shlex.quote(repo)} lookup '<索引で選んだ相対パス>'。必要な記憶はパスを空白で区切って 1 回にまとめて渡す（1 回 {MAX_DOCUMENTS} 件まで）。",
                       f"検索語を渡す手動 lookup も利用できる。パス指定は語句の順位によらず対象を選ぶ。本文計{MAX_BODY_CHARS}文字の上限を超える場合は commit を指定した git show を使う。"])
     for path, _, excerpt, label in selected:
         lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, excerpt, "</retrieved-memory>"])
