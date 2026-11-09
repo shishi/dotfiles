@@ -305,6 +305,15 @@ out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p2)
 [[ "$(field .hookSpecificOutput.additionalContext "$out")" == *"5 件目を確認中"* ]] || fail "returning from wait_agent shows a carried-over child's content: $out"
 ok "returning from wait_agent shows the child's content"
 
+# 子の rollout に 4 MiB を超える 1 行が来ても、その後の進捗を示し、大きな行の断片を示さない。
+reset; child_a
+{ printf '%s' '{"type":"response_item","payload":{"type":"function_call_output","output":"'; head -c 5000000 /dev/zero | tr '\0' 'q'; printf '%s\n' '"}}'; } >>"$R"
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"大きな出力のあと 6 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+c=$(field .hookSpecificOutput.additionalContext "$out")
+[[ "$c" == *"大きな出力のあと 6 件目を確認中"* && "$c" != *qqqqqqqq* ]] || fail "returning from wait_agent after a line over 4 MiB shows the following progress: $(head -c 300 <<<"$c")"
+ok "returning from wait_agent after a line over 4 MiB shows the following progress"
+
 reset; child_a
 jq -nc --arg text "$(head -c 2000 /dev/zero | tr '\0' x)" '{type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:$text}]}}' >>"$R"
 waited 180000 >/dev/null
