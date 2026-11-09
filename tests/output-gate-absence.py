@@ -346,6 +346,50 @@ class AbsenceTests(unittest.TestCase):
             self.assertEqual(ready['status'], 'ready', ready.get('reason'))
             self.assertTrue(any(e['ref'] == needed for e in f.packet(ready)['retrieved']))
 
+    def test_qualified_answer_can_answer_a_question_after_delivery(self):
+        f = self.fixture
+        f.payload.update(latest_user='Can the current state be verified?', draft='Verification is blocked by the permission denial.',
+                         evidence=[dict(id='attempt', output='Permission denied', failed=True)])
+        ready = f.ready()
+        user = f.packet(ready)['users'][0]['ref']
+        question = dict(id='question', kind='question', text='Can the current state be verified?', refs=[user], related=[],
+                        target=dict(name='verification', revision_refs=[]), validity='current')
+        ready = f.update(ready, additions=[question])
+        data = f.packet(ready)
+        draft = data['answers'][0]['ref']
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        original = fixtures.checker.context.ref(source, 'output')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original]))
+        claim = dict(id='limitation', answer_ref=draft, text=f.payload['draft'], requirement_ids=['question'],
+                     evidence=[dict(ref=original, relation='unresolved')], verdict='qualified')
+        result = f.judgment(ready, claims=[claim], decisions=[dict(item_id='question', action='retire', basis='answered',
+                            refs=[draft], reason='The answer explains the verified limit on checking the state.')])
+        self.assertEqual(result['status'], 'checked', result.get('reason') or result.get('transaction', {}).get('validation_feedback'))
+        self.assertEqual(len(result['context_state']['items']), 1)
+        confirmed = fixtures.checker.context.confirm_display(f.tmp.name, result['display_receipt'], result['text'])
+        self.assertEqual(confirmed['context_state']['items'], [])
+
+    def test_qualified_status_cannot_close_an_action_requirement(self):
+        f = self.fixture
+        f.payload.update(latest_user='Verify the current state.', draft='Verification is blocked by the permission denial.',
+                         evidence=[dict(id='attempt', output='Permission denied', failed=True)])
+        ready = f.ready()
+        user = f.packet(ready)['users'][0]['ref']
+        action = dict(id='action', kind='requirement', text='Verify the current state.', refs=[user], related=[],
+                      target=dict(name='verification', revision_refs=[]), validity='current')
+        ready = f.update(ready, additions=[action])
+        draft = f.packet(ready)['answers'][0]['ref']
+        source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+        original = fixtures.checker.context.ref(source, 'output')
+        ready = f.reply(ready, dict(kind='need_refs', refs=[original]))
+        claim = dict(id='limitation', answer_ref=draft, text=f.payload['draft'], requirement_ids=['action'],
+                     evidence=[dict(ref=original, relation='unresolved')], verdict='qualified')
+        for basis, ground in [('completed', original), ('answered', draft)]:
+            ready = f.judgment(ready, claims=[claim], decisions=[dict(item_id='action', action='retire', basis=basis,
+                              refs=[ground], reason='Attempt to close the action from a qualified status.')])
+            self.assertEqual(ready['status'], 'ready')
+            self.assertIn('cannot close', f.packet(ready)['validation_feedback'])
+
     def test_cached_lookup_can_fetch_an_original_that_is_no_longer_visible(self):
         f = self.fixture
         noise = ''.join(random.Random(71).choices('abcdefghijklmnopqrstuvwxyz0123456789', k=20000))

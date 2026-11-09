@@ -297,7 +297,7 @@ def validate_context_state(state, stream):
     return state
 
 
-def normalize_sources(payload, message_list, evidence_parts, archive):
+def normalize_sources(payload, message_list, evidence_parts, archive, additional_sources=None):
     stream = {'host': payload['origin'], 'session': payload.get('session_id') or 'legacy', 'epoch': payload.get('source_epoch', '1')}
     sources = []
     aliases = {}
@@ -343,6 +343,7 @@ def normalize_sources(payload, message_list, evidence_parts, archive):
                 'fields': {'call': json.dumps(call, ensure_ascii=False), 'output': str(e.get('output') or ''),
                            'metadata': json.dumps(metadata, ensure_ascii=False)}, 'metadata': metadata,
                 'available': not e.get('unavailable'), 'producer_truncated': bool(e.get('truncated'))})
+    rows.extend(deepcopy(additional_sources or []))
     latest_archive = {a['id']: a for a in archive if not a['id'].startswith('answer-')}
     for row in rows:
         kind = row.get('kind')
@@ -556,7 +557,7 @@ def pack(rows, budget=UNIT_BYTES, extra_bytes=None):
     return [*pages, page] if page else pages
 
 
-def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directory=None, planning_overhead=0, payload_identity=None, archive_only=False, mask_payload=None):
+def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directory=None, planning_overhead=0, payload_identity=None, archive_only=False, mask_payload=None, additional_sources=None):
     directory = Path(directory) if directory else None
     old = read(directory / 'state.json') if directory else payload.get('context_state')
     archive = read(directory / 'manifest.json', []) if directory else []
@@ -571,7 +572,7 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
             archived_sources.append(source)
     if mask_payload is not None:
         payload = mask_payload(payload, archived_sources)
-    stream, normalized, aliases = normalize_sources(payload, messages, evidence_parts, archived_sources)
+    stream, normalized, aliases = normalize_sources(payload, messages, evidence_parts, archived_sources, additional_sources)
     if archive_only:
         normalized = [s for s in normalized if not s['id'].startswith('answer-')]
     archived_by_key = {source_key(source): source for source in archived_sources}
@@ -651,7 +652,8 @@ def begin(payload, messages, evidence_parts, mask, rules, checked_rules, directo
                     continue
     if archive_only:
         return {'source_cursor': cursor, 'context_generation': state['generation'],
-                'source_refs': [ref(s) for s in masked['sources'] if s['kind'] in ('user', 'assistant')]}
+                'source_refs': [ref(s) for s in masked['sources'] if s['kind'] in ('user', 'assistant')
+                                and s.get('metadata', {}).get('context_kind') != 'delegated_task']}
     tx = {'version': 1, 'evidence_policy': 3, 'step': 0, 'id': digest([cursor, aliases['draft'], time.time_ns()]), 'base_generation': state['generation'],
           'base_meaning_cursor': deepcopy(state['meaning_cursor']), 'source_end': cursor, 'draft_rev': aliases['draft']['rev'],
           'rules_rev': digest([masked['rules'], masked['checked_rules']]), 'rules_source_rev': digest([rules, checked_rules]),
@@ -1417,7 +1419,10 @@ def accept_judgment(tx, answer):
     tx['focus_candidates'].extend(focus)
     for d in decisions:
         if d['action'] == 'retire' and d['basis'] in ('completed', 'resolved', 'answered'):
-            if any(c['verdict'] in ('unverified', 'contradicted', 'qualified') and d['item_id'] in c['requirement_ids'] for c in claims):
+            item = next(i for i in unit['items'] if i['id'] == d['item_id'])
+            answered_question = item['kind'] == 'question' and d['basis'] == 'answered'
+            blocked_verdicts = ('unverified', 'contradicted') if answered_question else ('unverified', 'contradicted', 'qualified')
+            if any(c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids'] for c in claims):
                 raise ValueError('unverified claim cannot close its requirement')
     tx['judge_decisions'].extend(decisions)
     tx['claims'].extend(claims)

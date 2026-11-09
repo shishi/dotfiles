@@ -82,6 +82,9 @@ BIN_DIR = Path(__file__).resolve().parent
 _context_spec = importlib.util.spec_from_file_location('output_gate_context', BIN_DIR / 'output_gate_context.py')
 context = importlib.util.module_from_spec(_context_spec)
 _context_spec.loader.exec_module(context)
+_native_spec = importlib.util.spec_from_file_location('output_gate_codex_native', BIN_DIR / 'output_gate_codex_native.py')
+native = importlib.util.module_from_spec(_native_spec)
+_native_spec.loader.exec_module(native)
 RUN_JUDGE = BIN_DIR.parent / 'hooks' / 'lib' / 'run-judge.py'
 DEFAULT_TIMEOUT = context.DEFAULT_TIMEOUT
 FIRST_ENGINE_SHARE = 0.5
@@ -1168,6 +1171,8 @@ def describe_evidence(ref, evidence):
     item = evidence[ref['id']]
     call = item.get('command') or (json.dumps(item['input'], ensure_ascii=False) if item.get('input') is not None
                                    else '')
+    if not isinstance(call, str):
+        call = json.dumps(call, ensure_ascii=False)
     call = call if len(call) <= 200 else call[:200] + '…'
     exit_code = item.get('exit_code')
     status = f'終了コード {exit_code}' if isinstance(exit_code, int) else '終了コードなし'
@@ -1448,6 +1453,23 @@ def with_pending_sources(payload):
     return dict(payload, previous_evidence=list(previous.values()))
 
 
+def native_delta(payload):
+    if payload.get('origin') != 'codex' or payload.get('source_collector') != 'codex-relay' or not payload.get('context_dir') or not payload.get('session_id'):
+        return [], None
+    path = Path(payload['context_dir']) / 'native-cursor.json'
+    before = context.read(path)
+    sources, after = native.collect_session(payload['session_id'], os.environ.get('CODEX_HOME'), before)
+    return sources, (path, before, after) if after.get('sessions') and after != before else None
+
+
+def commit_native_cursor(update):
+    if update is not None:
+        path, before, after = update
+        with context.locked(path.parent):
+            if context.read(path) == before:
+                context.atomic(path, after)
+
+
 def prepare(payload):
     started = time.time()
     if not payload.get('final'):
@@ -1456,10 +1478,12 @@ def prepare(payload):
     if problem:
         return unchecked(payload, problem)
     try:
+        sources, cursor_update = native_delta(payload)
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
             tx = context.begin(with_pending_sources(payload), messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
                                response_rules(), checked_rules(), payload.get('context_dir'),
-                               len((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS).encode()) + len(context.encoded(context.protocol_schema(CHECKER_SCHEMA))), context.digest(payload), mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))))
+                               len((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS).encode()) + len(context.encoded(context.protocol_schema(CHECKER_SCHEMA))), context.digest(payload), mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))), additional_sources=sources)
+            commit_native_cursor(cursor_update)
             tx['payload_rev'] = context.digest(payload)
             tx['deadline'] = min(tx['deadline'], started + float(os.environ.get('OUTPUT_GATE_TIMEOUT') or DEFAULT_TIMEOUT))
         return context_ready(tx)
@@ -1469,10 +1493,12 @@ def prepare(payload):
 
 def ingest(payload):
     try:
+        sources, cursor_update = native_delta(payload)
         with tempfile.TemporaryDirectory(prefix='output-gate-', ignore_cleanup_errors=True) as tmp:
             result = context.begin(with_pending_sources(payload), messages, evidence_parts, lambda data: mask_secrets(data, Path(tmp)),
                                    '', [], payload.get('context_dir'), archive_only=True,
-                                   mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))))
+                                   mask_payload=lambda data, archive: mask_secrets(data, Path(tmp), set(scanned_texts(archive))), additional_sources=sources)
+            commit_native_cursor(cursor_update)
         return dict(result, status='ingested')
     except Exception as error:
         return unchecked(payload, str(error) or type(error).__name__)
