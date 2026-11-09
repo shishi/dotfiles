@@ -183,12 +183,6 @@ TASK_STATUS=$(jq -r '.status // "unknown"' "$WORK/out.json" 2>/dev/null) || TASK
 RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/events.jsonl" "$TASK_STATUS" "$FINISHED_AT") || { echo "記録保存失敗。結果は $WORK に保全" >&2; exit 95; }
 printf 'Run record: %s\n' "$RUN_RECORD" >&2
 printf 'Run artifacts: %s\n' "$WORK" >&2
-# stall-guard: 委譲先の子の run が終わらないまま exec が終わっていないかを読む (stall-guard を外していれば何もしない)
-SG="$HOME/.agent-shared/hooks/stall-guard.sh"
-SG_THREAD=$(jq -r 'select(.type == "thread.started") | .thread_id' "$WORK/events.jsonl" 2>/dev/null | head -n 1)
-if [ -f "$SG" ] && [ -n "$SG_THREAD" ]; then
-  bash "$SG" --cli codex status --json --session "$SG_THREAD" > "$WORK/stall-guard.json" 2>> "$WORK/run.log"
-fi
 if [ "$rc" -eq 0 ] && [ -s "$WORK/out.json" ] && jq -e 'type == "object" and (.status == "done" or .status == "partial" or .status == "blocked")' "$WORK/out.json" >/dev/null; then
   cat "$WORK/out.json"
   exit 0
@@ -237,10 +231,6 @@ exit "$rc"
    イベントの失敗や hook・権限の拒否があれば、代替操作の証拠または未完了理由を確認する。
    取得できる実モデルの metadata と指定値を照合し、取得できなければ実モデル未確認とする。
    `done` 以外なら `blockers` と残った作業を見て、司令塔が引取りや再試行を判断する
-   `$WORK/stall-guard.json` があれば読む。`.running`・`.unrecovered`・`.pending` のどれかが空でなければ、
-   委譲先の子の run が完了しないまま exec が終わっている。`status` に関わらず委譲を失敗の結果として扱い、
-   `agent_id`・`task_name`・`elapsed_sec`・終了理由 (`end`。`.pending` は「開始を確認できない」) を報告する。
-   `.hooked == false` は「stall-guard の hook が動いていない」と報告し、未完了なしとは扱わない
 2. **`status` と `blockers` の整合は Claude が検査する。** schema では強制していない(構造化出力が
    JSON Schema の条件分岐 `if` / `then` を受理するかを確認していない)。`done` なのに `blockers` が
    非空、あるいは `done` 以外で空なら、不整合を未解決として保持し、実物と検証結果から
@@ -263,7 +253,11 @@ exit "$rc"
 ## 長時間の委譲
 
 長い委譲は起動元の timeout と background 実行の仕様を確認し、必要なら最初から background
-で始める。実行 handle と `WORK` を保持し、同じ実行を追跡する。観測の timeout だけでは
+で始める。background では、監視 hook がタスクの出力で進み具合を判定する。出力をすべてファイルへ向けたままだと
+進んでいても確認のたびに起こされるため、上の `codex exec` の行を codex-review と同じ形
+(`2> "$WORK/run.log" | tee "$WORK/events.jsonl" | jq` で完了した項目を 1 行ずつ出し、`PIPESTATUS` で
+codex と tee の終了コードを確かめる) に替える。前景では文脈が増えるだけなので替えない。
+実行 handle と `WORK` を保持し、同じ実行を追跡する。観測の timeout だけでは
 CLI の終了・最終 JSON の欠落・子プロセスの停止を断定しない。
 
 - `workspace-write` の writer が動いている間は、同じ範囲へ次の writer を起動しない。

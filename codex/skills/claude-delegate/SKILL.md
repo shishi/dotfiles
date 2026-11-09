@@ -76,18 +76,12 @@ gitleaks dir "$WORK/prompt.md" --no-banner || exit 98
 mkdir "$WORK/run.claim" || exit 96
 SCHEMA=$(jq -c . "$HOME/.codex/skills/claude-delegate/schema.json") || exit 1
 STARTED_AT=$(date +%s)
-# AGENT_DELEGATED_SESSION: 委譲先の出力ゲートと stall-guard に、委譲の子セッションだと知らせる目印
+# AGENT_DELEGATED_SESSION: 委譲先の出力ゲートに、委譲の子セッションだと知らせる目印
 AGENT_DELEGATED_SESSION=1 claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
 rc=$?
 FINISHED_AT=$(date +%s)
 RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" claude "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/result.json" "" "$FINISHED_AT") || exit 95
 printf 'Run record: %s\n' "$RUN_RECORD" >&2
-# stall-guard: 委譲先に終わっていないバックグラウンド処理が残っていないかを読む (stall-guard を外していれば何もしない)
-SG="$HOME/.agent-shared/hooks/stall-guard.sh"
-SG_SESSION=$(jq -r '.session_id // empty' "$WORK/result.json" 2>/dev/null)
-if [ -f "$SG" ] && [ -n "$SG_SESSION" ]; then
-  bash "$SG" status --json --session "$SG_SESSION" > "$WORK/stall-guard.json" 2>> "$WORK/run.log"
-fi
 [ "$rc" -eq 0 ] || { tail -c 4000 "$WORK/run.log"; exit "$rc"; }
 jq -e '.is_error == false and .subtype == "success" and (.structured_output | type == "object")' "$WORK/result.json" >/dev/null || exit 97
 jq '.structured_output' "$WORK/result.json"
@@ -98,17 +92,13 @@ chore / implement は `ROLE` を変更し、上の Claude コマンドのツー�
 `Edit` のパス許可は Write にも適用されます。Bash 不要ならツールと許可から外します。
 
 ```sh
-# AGENT_DELEGATED_SESSION: 委譲先の出力ゲートと stall-guard に、委譲の子セッションだと知らせる目印
+# AGENT_DELEGATED_SESSION: 委譲先の出力ゲートに、委譲の子セッションだと知らせる目印
 AGENT_DELEGATED_SESSION=1 claude -p --model "$DELEGATE_MODEL" --effort "$DELEGATE_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob,Edit,Write,Bash --allowedTools 'Edit(./src/**)' 'Bash(python3 verify.py)' --disallowedTools 'Bash(codex:*)' 'Bash(git commit:*)' 'Bash(git push:*)' 'Bash(git stash:*)' 'Bash(git checkout:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(git rebase:*)' 'Bash(git pull:*)' 'Bash(git cherry-pick:*)' 'Bash(git branch:*)' --strict-mcp-config --json-schema "$SCHEMA" --output-format json < "$WORK/prompt.md" > "$WORK/result.json" 2> "$WORK/run.log"
 ```
 
 - 正常終了と JSON 受領は作業完了の証明ではありません。`status`、`blockers`、検証結果を
   読み、`done` なら blockers が空、未完了なら理由があることを確認します。
   `permission_denials` に必要な操作の拒否があれば、完了した代替操作の証拠か未完了理由が必要です。
-- `$WORK/stall-guard.json` があれば読みます。`.tasks` が空でなければ、委譲先がバックグラウンド処理を
-  終わらせないまま終了しています。委譲を失敗の結果として扱い、作業の `id`・`kind`・
-  `elapsed_sec` を報告して、回収するか別経路にするかを決めます。`.hooked == false` は
-  「stall-guard の hook が動いていない」と報告し、未完了なしとは扱いません。
 - `modelUsage` で実モデルを確認します。別モデルに替わっていれば指定条件と照合します。
 - 書込時は開始 commit と現在の HEAD、stash、`git status --short --untracked-files=all`、
   `git diff HEAD` を確認します。`changed_files` と一致しない変更、対象外変更、

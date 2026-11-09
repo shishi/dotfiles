@@ -60,8 +60,8 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
    以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
    Claude Code の Bash の前景実行は既定・最大の上限で打ち切られ、review-gate の上限に届かない。
-   このブロックは `run_in_background` で起動し、`bash ~/.agent-shared/hooks/stall-guard.sh deadline <task id> <分> --watch "$REVIEW_EVENTS"`
-   で events を登録する。確認ごとに示される追記内容 (reviewer の発言・コマンド・結果) で進捗を判断する。
+   このブロックは `run_in_background` で起動する。完了した項目の種類と冒頭 80 文字がタスクの出力に 1 行ずつ流れ、
+   監視 hook が前回の確認から 10 分、20 分、40 分、以後 40 分ごとにその進み具合を判定して、止まっていればエージェントを起こす。
    **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
    REVIEW_MODEL=gpt-6-astra
@@ -71,17 +71,14 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    # 委譲先の出力ゲートに、委譲の子セッションだと知らせる目印。codex exec の行の許可 prefix を
    # 保つため別の行で設定する。export が codex exec に届くよう、このブロックは 1 回の Bash 呼び出しで実行する
    export AGENT_DELEGATED_SESSION=1
-   codex exec -s read-only -c 'openai_base_url=""' --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" > "$REVIEW_EVENTS" 2> "$REVIEW_LOG"
-   rc=$?
+   codex exec -s read-only -c 'openai_base_url=""' --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" 2> "$REVIEW_LOG" |
+     tee "$REVIEW_EVENTS" | jq -Rrc --unbuffered 'fromjson? | select(.type == "item.completed") | .item | "\(.type) \(.command // .text // "" | tostring | .[0:80])"'
+   ps=("${PIPESTATUS[@]}"); rc=${ps[0]}
+   # events の保存 (tee) に失敗したら、その内容で失敗・拒否を確かめられないため失敗として扱う
+   [ "${ps[1]}" -eq 0 ] || rc=1
    FINISHED_AT=$(date +%s)
    RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
    printf 'Run record: %s\n' "$RUN_RECORD" >&2
-   # stall-guard: レビュー役の子の run が終わらないまま exec が終わっていないかを読む (stall-guard を外していれば何もしない)
-   SG="$HOME/.agent-shared/hooks/stall-guard.sh"
-   SG_THREAD=$(jq -r 'select(.type == "thread.started") | .thread_id' "$REVIEW_EVENTS" 2>/dev/null | head -n 1)
-   if [ -f "$SG" ] && [ -n "$SG_THREAD" ]; then
-     bash "$SG" --cli codex status --json --session "$SG_THREAD" > "$REVIEW_EVENTS.stall-guard.json" 2>> "$REVIEW_LOG"
-   fi
    [ "$rc" -eq 0 ] && [ -s "$REVIEW_OUTPUT" ] || { tail -c 4000 "$REVIEW_LOG"; tail -c 4000 "$REVIEW_EVENTS"; exit 97; }
    cat "$REVIEW_OUTPUT"
    ```
@@ -92,10 +89,6 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    hook 拒否・入力不足の返答は clean と扱いません。取得できる実モデルの metadata と指定値を
    照合し、取得できなければ実モデル未確認とします。CLI 成功はレビュー合格ではなく、本文と
    全対象の確認結果を gate が判定します。
-   `$REVIEW_EVENTS.stall-guard.json` の `.running`・`.unrecovered`・`.pending` のどれかが空でなければ、
-   レビュー役の子が完了しないまま終わっています。そのレビューを clean と扱わず、`agent_id`・`task_name`・
-   `elapsed_sec`・終了理由 (`.pending` は「開始を確認できない」) を報告します。`.hooked == false` は
-   「stall-guard の hook が動いていない」と報告し、未完了なしとは扱いません。
 4. 本文と実績記録を保全してから、自分が作った一時ファイルを削除する。
    `RUN_RECORD` は採否と実検証の結果を追記するまで保持する。
 

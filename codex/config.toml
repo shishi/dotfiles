@@ -14,6 +14,9 @@ mcp_oauth_credentials_store = "file"
 # 出力ゲートの中継は、同じ利用者のプロセスがログイン情報を読める前提で 127.0.0.1 に待ち受ける
 # (docs/output-gate.md)。その前提を全てのマシンでそろえるため、ログイン情報もファイルに保存する。
 cli_auth_credentials_store = "file"
+# 監視 hook (task-monitor-codex.sh) は、バックグラウンドのコマンドを空の write_stdin で最長 40 分待たせる。
+# 既定の 5 分では、その待ち時間が切り詰められる。
+background_terminal_max_timeout = 2400000
 
 [auto_review]
 extra_policy = '''

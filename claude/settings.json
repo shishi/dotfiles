@@ -241,15 +241,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh inject",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -263,68 +254,6 @@
             "statusMessage": "投稿された実物を取得中..."
           }
         ]
-      },
-      {
-        "matcher": "Agent|Bash|ScheduleWakeup|CronCreate|TaskStop",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh stop-check",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh watch",
-            "timeout": 2100,
-            "asyncRewake": true
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "matcher": "ScheduleWakeup|CronCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PermissionDenied": [
-      {
-        "matcher": "ScheduleWakeup|CronCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/stall-guard.sh record --failed",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "PermissionRequest": [
@@ -336,6 +265,18 @@
             "timeout": 90,
             "statusMessage": "確認が必要な操作を判定中...",
             "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/task-monitor-claude.sh",
+            "asyncRewake": true,
+            "timeout": 86400
           }
         ]
       }
