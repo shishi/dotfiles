@@ -207,6 +207,11 @@ sg_added() {
       elif $format == "codex-rollout" and
           ($record.type == "session_meta" or $record.type == "turn_context"
            or ($record.type == "event_msg" and (["task_started", "task_complete", "turn_complete", "turn_aborted", "token_count", "context_compacted", "user_message", "agent_reasoning"] | index($record.payload.type)) != null)) then empty
+      # 種類のわからない記録は、空白を含む文字列 (文章) だけを本文として示す。識別子・時刻・数値だけの
+      # 記録 (使用量などのメタデータ) は本文が無いので示さない。種類名は列挙しない。
+      elif $format == "codex-rollout" and ($v | type) == "object" then
+        [$v | .. | strings | select(test("[[:space:]]"))] as $texts
+        | if ($texts | length) > 0 then "[\($v.type // "record")] \($texts | join(" ") | flat)" else empty end
       elif $format == "codex-rollout" then $raw | flat
       elif $transcript then empty
       else $raw | flat end) as $text
