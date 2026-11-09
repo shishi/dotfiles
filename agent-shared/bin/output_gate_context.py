@@ -1706,7 +1706,7 @@ def protocol_schema(legacy):
         'obligations': arr(obj({'candidate_refs': arr(r), 'result': enum('verified', 'unrelated', 'unavailable'),
                                'grounding_refs': arr(r), 'reason': string})),
          **legacy['properties']}
-    locator = obj({'id': string, 'rev': string, 'field': string, 'literal': string, 'after': {'type': 'integer'}})
+    locator = obj({'id': string, 'rev': string, 'field': string, 'literal': {'type': 'string', 'pattern': r'[\s\S]+'}, 'after': {'type': 'integer'}})
     archive_locator = obj({'scope': enum('archive'), 'field': enum('text', 'call', 'output', 'metadata'), 'literal': string, 'before_seq': {'type': 'integer'}})
     properties['refs'] = arr({'anyOf': [r, locator, archive_locator]})
     return obj(properties)
