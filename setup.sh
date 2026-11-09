@@ -127,21 +127,6 @@ esac
 mkdir -p "$herdr_config_dir"
 ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
 
-# Herdr app keeps its own state and shipped mods in the same folder, so link
-# only the tracked keymap and mods. Its home is under XDG_CONFIG_HOME on every OS.
-herdr_app_dir="$XDG_CONFIG_HOME/herdr-app"
-case "$(uname -s)" in
-Darwin) herdr_app_keys="$DOTDIR/herdr-app/keys.macos.json" ;;
-*) herdr_app_keys="$DOTDIR/herdr-app/keys.json" ;;
-esac
-mkdir -p "$herdr_app_dir/mods"
-ln -sfn "$herdr_app_keys" "$herdr_app_dir/keys.json"
-for herdr_app_mod in "$DOTDIR"/herdr-app/mods/*/; do
-  [ -d "$herdr_app_mod" ] || continue
-  herdr_app_mod="${herdr_app_mod%/}"
-  link_config_dir "$herdr_app_mod" "$herdr_app_dir/mods/${herdr_app_mod##*/}"
-done
-
 mkdir -p "$XDG_CONFIG_HOME/hunk"
 ln -sfn "$DOTDIR/hunk/config.toml" "$XDG_CONFIG_HOME/hunk/config.toml"
 
