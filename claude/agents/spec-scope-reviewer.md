@@ -2,7 +2,7 @@
 name: spec-scope-reviewer
 description: 差分がタスク記述の通りか・それ以上のことをしていないか・目的が妥当でそれに沿うかの照合レビューの単一ソース。review-gate / spec-scope-review skill からタスク記述とレビュー対象を渡されて dispatch される。自動 delegation の対象にしない。
 tools: Read, Grep, Glob
-model: inherit
+model: opus
 effort: high
 ---
 

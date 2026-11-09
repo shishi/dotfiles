@@ -7,7 +7,8 @@
 |---|---|---|
 | 判定方法が明確な定型作業 | Luna / high → Sol / medium → Astra / high | Haiku / low〜medium → Sonnet / medium → Opus / medium → Fable / high |
 | 通常の実装・調査・文書作成 | Sol / medium〜high → Astra / high | Sonnet / medium → Opus / medium〜high → Fable / high |
-| 難しい設計・実装、独立レビュー | Astra / high → Sol / high | Fable / high → Opus / high |
+| 難しい設計・実装 | Astra / high → Sol / high | Fable / high → Opus / high |
+| 独立レビュー | Astra / high → Sol / high | Opus / high → Fable / high |
 
 - Codex の候補は `gpt-6-luna`・`gpt-6.1-sol`・`gpt-6-astra`、Claude は `haiku`・`sonnet`・`opus`・`fable` です。最初に選んだモデルを先頭へ移し、残りは表の左から未試行のものだけを使います。親の選択は維持し、子は同じ許容範囲の上位モデルも候補にできます。難しい仕事やレビューの代替下限は Sol / high または Opus / high です。狭い機械的な照合だけなら Sonnet / high も許容するが、Luna・Haiku にレビューの採否判断を任せません。gitleaks 等の実行・集計そのものは定型作業として扱います。
 - モデル単位の利用不可・廃止・利用枠不足なら次の許容候補を試します。認証切れ、サービス全体の利用枠不足、通信・権限・hook の拒否はモデル変更で直ると扱わず、原因を切り分けて利用可能な経路へ進みます。代替で要件を満たせるならその経路で完遂し、元の委譲先の再認証・復旧を完了条件にしません。代替でも満たせない認証・権限が残る場合だけ本人へ依頼します。拒否された権限や秘密検査を迂回しません。

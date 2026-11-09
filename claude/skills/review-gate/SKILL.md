@@ -156,8 +156,8 @@ DB スキーマ・ORM の関連・データ移行・永続化する事実の設�
 
 | 司令塔 | spec-scope | 同系統 correctness / adversarial | 他系統 correctness / adversarial |
 |---|---|---|---|
-| Claude Code | Claude の新規観点 agent | 司令塔と同じモデルの新規観点 agent / high | Codex CLI(`codex-review`、Astra / high) |
-| Codex | Codex の新規観点 agent | Astra の新規観点 agent / high(司令塔が Sol でも同じ) | Claude CLI(`claude-review`、Fable / high。ユーザー指定なら Opus / high) |
+| Claude Code | Claude の新規観点 agent | Opus の新規観点 agent / high(司令塔が Fable でも同じ) | Codex CLI(`codex-review`、Astra / high) |
+| Codex | Codex の新規観点 agent | Astra の新規観点 agent / high(司令塔が Sol でも同じ) | Claude CLI(`claude-review`、Opus / high) |
 
 - 曜日による利用制限は両方とも設けない。secrets は常時 gitleaks。
 - 同系統の確認も実装した会話の自己点検とは別に行う。両系統に同じ原要求・既存保証・
@@ -279,7 +279,7 @@ mv "$RECORD_UPDATE" "$RUN_RECORD"
 次の許容候補へ進む。
 
 1. `agent-delegation` のモデル代替規則で、この観点に許容するモデルを決めて初回を dispatch する。
-   既定の外部レビューは Codex の Astra / high → Sol / high、Claude の Fable / high → Opus / high。
+   既定の外部レビューは Codex の Astra / high → Sol / high、Claude の Opus / high → Fable / high。
    狭い機械的照合だけなら Sonnet / high も許容する。各候補は原則 1 回、受理後の待ちは上の上限と内容の確認に従う。
 2. 失敗原因を確認する。モデル単位の障害なら、同じエンジンの次の許容候補を新しく起動する。
    認証・通信・権限・サービス全体の枠不足なら、その原因を共有する候補を連打しない。
