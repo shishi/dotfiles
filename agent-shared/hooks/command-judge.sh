@@ -273,16 +273,58 @@ if ! valid_session "$session" || [ -n "${AGENT_DELEGATED_SESSION:-}" ]; then
 fi
 context_args=(--context)
 [ "$cli" != claude ] || context_args+=(--mask)
+context_request='{}'
+context_digest=
+context_manifest='[]'
+judge_stop_at=$((now + 137))
+
+context_helper() {
+  local remaining=$((judge_stop_at - $(date +%s)))
+  [ "$remaining" -gt 0 ] || return 124
+  "$py_bin" -I "$hook_dir/lib/run-judge.py" "$remaining" "$judge_cwd" \
+    "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "$@"
+}
 
 load_context() {
-  assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" 2>/dev/null) ||
+  local next=${1:-'{}'} prepared digest
+  context_request=$(printf '%s\0%s' "$context_request" "$next" | jq -Rsc '
+    split("\u0000") | map(fromjson) | .[0] as $previous | .[1] as $next
+    | if ($next | type) != "object" then error("invalid context request") else $next end
+    | .files = (($previous.files // []) + (.files // []) | unique)
+    | .records = (($previous.records // []) + (.records // []) | unique)') ||
+    undecided "文脈の取得要求を読み取れなかった"
+  prepared=$(printf '%s\0%s\0%s' "$input" "$context_request" "$cwd" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + {context_request: (.[1] | fromjson), context_cwd: .[2]}') ||
+    undecided "文脈の取得入力を用意できなかった"
+  assistant_context=$(printf '%s' "$prepared" | context_helper "${context_args[@]}" 2>/dev/null) ||
     undecided "会話文脈を秘密情報を伏せた状態で取得できなかった"
+  context_manifest=$(printf '%s\0%s' "$context_manifest" "$assistant_context" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + ((.[1] | fromjson).files // []
+      | map(select((.sha256 | type) == "string") | {path, sha256})) | unique') ||
+    undecided "取得した原文の版を保持できなかった"
   user_message="(none)"
   if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
     user_message=$(jq -sc 'map({input: .text, input_context: (.assistant_context // "")})' "$prompt_path" 2>/dev/null) ||
       undecided "利用者の記録を読み取れなかった"
   fi
-  context_data="$(section CONTEXT "$assistant_context")$(section USER "$user_message")"
+  model_context=$(printf '%s' "$assistant_context" | jq -c 'if .files then .files |= map(del(.sha256)) else . end') ||
+    undecided "モデルへ渡す証拠を用意できなかった"
+  context_data="$(section CONTEXT "$model_context")$(section USER "$user_message")"
+  digest=$(printf '%s' "$context_data" | hash_stdin)
+  [ "$digest" != "$context_digest" ] || undecided "追加で取得できる証拠が変わらず、操作または承認の根拠を確定できなかった"
+  context_digest=$digest
+}
+
+verify_context_files() {
+  [ "$context_manifest" != '[]' ] || return 0
+  local status
+  printf '%s\0%s\0%s' "$input" "$context_manifest" "$cwd" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + {context_files: (.[1] | fromjson), context_cwd: .[2]}' |
+    context_helper --verify-files 2>/dev/null
+  status=$?
+  [ "$status" -eq 0 ] && return 0
+  [ "$status" -ne 124 ] || undecided "取得した原文の版を照合する時間を確保できなかった"
+  undecided "判定中に取得したファイルの版が変わったか、現在の版を照合できなかったため再判定する必要がある"
 }
 
 # 文脈に依存しない安全判定だけを保存するため、会話や経過時間を鍵に含めない。
@@ -333,7 +375,10 @@ if [ -f "$down_stamp" ] && [ ! -L "$down_stamp" ] && read -r down_at down_cause 
   esac
 fi
 run_stage() {
-  local stage=$1 prompt_file=$2 payload=$3 status
+  local stage=$1 prompt_file=$2 payload=$3 status characters
+  characters=$({ cat "$prompt_file" && section STAGE "$stage" && printf '%s' "$payload"; } |
+    "$py_bin" -I -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8")))') || undecided "判定入力の長さを確認できなかった"
+  [ "$characters" -le 1048576 ] || undecided "判定入力が Codex の 1048576 文字の上限を超えたため、必要な原文をさらに絞る必要がある"
   if [ "$cli" = claude ]; then
     printf '%s' "$payload" | has_secret
     case $? in
@@ -341,6 +386,8 @@ run_stage() {
       2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
     esac
   fi
+  [ $((judge_stop_at - $(date +%s))) -ge "$judge_timeout_seconds" ] ||
+    undecided "hook の実行上限内で、追加の証拠を判定する時間を確保できなかった"
   output=$({ cat "$prompt_file" && section STAGE "$stage" && printf '%s' "$payload"; } | run_codex "$judge_timeout_seconds" 2>/dev/null)
   status=$?
   case "$status" in
@@ -365,13 +412,12 @@ parse_effect() {
 run_stage effect "$hook_dir/command-judge-prompt.md" "$data"
 parse_effect
 used_context=false
-if [ "$(jq -r .needs_context <<<"$verdict")" = true ]; then
-  load_context
+while [ "$(jq -r .needs_context <<<"$verdict")" = true ]; do
+  load_context "$(jq -c '.context_request // {}' <<<"$verdict")"
   run_stage effect-context "$hook_dir/command-judge-prompt.md" "$data$context_data"
   parse_effect
   used_context=true
-  [ "$(jq -r .needs_context <<<"$verdict")" = false ] || undecided "会話を照合しても操作の効果を確定できなかった"
-fi
+done
 
 reason=$(jq -r '.reason // "" | tostring | sub("[。.[:space:]]+$"; "")' <<<"$verdict")
 if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
@@ -383,6 +429,7 @@ fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
 if [ "$danger" = false ] && [ "$external" = false ]; then
+  verify_context_files
   if [ "$used_context" = false ] && [ "$(jq -r .context_free <<<"$verdict")" = true ]; then
     printf '%s\n' "$now" | write_atomic "$safe_path" || true
   fi
@@ -407,27 +454,30 @@ else
   printf '%s\n' "$permissions" | write_atomic "$state_path" || undecided "承認状態を保存できなかった"
 fi
 # 未記録の発言は許可を作れないが、撤回や対象変更を見落とさないため照合する。
-authorization_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" --since "$prompt_path" 2>/dev/null) ||
+authorization_context=$(printf '%s' "$input" | context_helper "${context_args[@]}" --since "$prompt_path" 2>/dev/null) ||
   undecided "現在の会話文脈を取得できなかった"
-authorization_data="$data$(section EFFECT "$verdict")$(section PERMISSIONS "$permissions")"
-run_stage authorize "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$(section CONTEXT "$authorization_context")"
+authorization_data="$data$(section EFFECT "$verdict")$(section PERMISSIONS "$permissions")$(section CONTEXT "$authorization_context")"
+run_stage authorize "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data"
 parse_authorization() {
   authorization=$(printf '%s' "$output" | jq -Rsc 'split("\n") | map(fromjson? | select(type == "object" and
     ([.user_requested, .needs_context] | all(type == "boolean")) and (.reason | type == "string"))) | last // empty')
   [ -n "$authorization" ] || judge_failed "判定役の出力から承認の判定を読み取れなかった"
 }
 parse_authorization
-if [ "$(jq -r .needs_context <<<"$authorization")" = true ]; then
-  load_context
-  run_stage authorize-context "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$context_data"
+context_digest=
+while [ "$(jq -r .needs_context <<<"$authorization")" = true ]; do
+  load_context "$(jq -c '.context_request // {}' <<<"$authorization")"
+  run_stage authorize-context "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$(section EVIDENCE "$model_context")$(section USER "$user_message")"
   parse_authorization
-  [ "$(jq -r .needs_context <<<"$authorization")" = false ] || undecided "原文を照合しても承認範囲を確定できなかった"
-fi
+done
 if [ "$prompt_path" != /dev/null ]; then
   printf '%s\n' "$permissions" | "$py_bin" -I "$state_helper" verify "$prompt_path" "$state_path" "$policy" 2>/dev/null ||
     undecided "判定中に本人入力が変わったため、現在の承認を再判定する必要がある"
 fi
-[ "$(jq -r .user_requested <<<"$authorization")" = true ] && exit 0
+if [ "$(jq -r .user_requested <<<"$authorization")" = true ]; then
+  verify_context_files
+  exit 0
+fi
 if [ "$danger" = true ]; then
   [ "$external" = true ] &&
     decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけ両方の操作と対象への許可を得ること"
