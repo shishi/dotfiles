@@ -14,7 +14,12 @@
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
 # 判定役は動いたがそのコマンドの結果を得られないときは、Claude は利用者に確認させ、Codex は止める
 # (Codex の PreToolUse は "ask" を受け付けず、hook の失敗としてコマンドを通すため)。
+#
+# ${XDG_STATE_HOME:-$HOME/.local/state}/command-judge/disabled があれば、hook の登録を残したまま何もせずに通す。
+# 消せば再び判定する。
 set -o pipefail
+
+[ -e "${XDG_STATE_HOME:-$HOME/.local/state}/command-judge/disabled" ] && exit 0
 
 cli=claude
 mode=judge
