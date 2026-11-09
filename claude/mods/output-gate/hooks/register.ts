@@ -513,7 +513,11 @@ async function rawAnswer($: EngineInterface, payload: Payload, prepared: Record<
     const left = Math.floor(deadline - Date.now())
     if (left <= 0) throw new Error('時間が残っていない')
     if (family === 'claude') {
-      const reply = await $.model.complete({ ...config.claude, system: String(prepared['system']),
+      // $.model.complete には返答の形を強制する手段が無い。CLI の検査役が --json-schema で受ける必須項目を
+      // system で示さないと、検査役が項目を省いて同じ検証エラーを繰り返し、検査が完了しない。
+      const schema = prepared['schema'] === undefined ? '' :
+        `\n\nReply with one JSON object that conforms to this JSON Schema, with every required property:\n${JSON.stringify(prepared['schema'])}`
+      const reply = await $.model.complete({ ...config.claude, system: String(prepared['system']) + schema,
         prompt: String(prepared['prompt']), maxTokens: CLAUDE_MAX_TOKENS, timeoutMs: left }, { signal: stop.signal })
       usage = reply.usage ?? null
       if (!reply.isAnswered) throw new Error(`答えが無い: ${reply.reason}`)

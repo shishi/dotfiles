@@ -108,7 +108,7 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
     if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
     runs.push({ argv, env: e.init?.env ?? {} })
     if (argv.includes('--prepare') && given.prepare) return given.prepare()
-    if (argv.includes('--prepare')) return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', schema: {} })
+    if (argv.includes('--prepare')) return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', schema: SCHEMA })
     if (argv.includes('--receive')) {
       const request = JSON.parse(e.init.stdin)
       if (request.unavailable_reason && !given.receive) return { value: { ...done, exitCode: 1, stdout: '' } }
@@ -446,6 +446,7 @@ test('a failure of the hook itself keeps the draft private', async ($, on) => {
 
 // --- 検査役の系統 ---
 
+const SCHEMA = { type: 'object', required: ['claims'], properties: { claims: { type: 'array' } } }
 type Completion = { model: string; effort?: string; maxTokens?: number; system?: string; prompt: string }
 function claudeModel(on: On, answer: (e: Completion) => object, calls: Completion[] = []) {
   on('model.complete', async (_$, e) => {
@@ -469,7 +470,9 @@ test('with Codex first, when the Codex checker fails, Claude checks through the 
   expect(completions[0]?.model).toBe('opus')
   expect(completions[0]?.effort).toBe('low')
   expect(typeof completions[0]?.maxTokens).toBe('number')
-  expect(completions[0]?.system).toBe('SYSTEM')
+  // $.model.complete は返答の形を強制しないので、必須の項目は system で検査役に示す。
+  expect(completions[0]?.system?.startsWith('SYSTEM')).toBe(true)
+  expect(completions[0]?.system).toContain(JSON.stringify(SCHEMA))
   expect(completions[0]?.prompt).toBe('PROMPT')
   expect(received[0]?.engine).toEqual({ family: 'claude', model: 'opus', effort: 'low' })
   expect(received[0]?.engine_failures).toEqual([{ family: 'codex', reason: 'codex 不調' }])
