@@ -250,7 +250,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.claude/hooks/herdr-agent-state.sh session",
+            "command": "if [ \"$OS\" = Windows_NT ]; then if [ \"${HERDR_ENV:-}\" = 1 ]; then powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE/.claude/hooks/herdr-agent-state.ps1\" session; fi; else bash ~/.claude/hooks/herdr-agent-state.sh session; fi",
             "timeout": 10
           }
         ]
