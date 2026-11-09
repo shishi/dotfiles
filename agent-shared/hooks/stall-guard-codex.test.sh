@@ -301,6 +301,9 @@ printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assis
   '{"timestamp":"2026-11-09T05:23:32.071Z","ordinal":21,"type":"token_usage_record","payload":{"thread_id":"01a1bec2-d1bb","turn_id":"01a1bec2-d1de","usage":{"input_tokens":42}}}' >>"$R"
 out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
 [[ "$(ctx "$out")" == *"after usage"* && "$(ctx "$out")" != *token_usage_record* ]] || fail "records with only identifiers and numbers are not shown as progress: $out"
+printf '%s\n' '{"type":"custom_progress","payload":{"message":"六件目を確認中","id":"01a1bec2-d1bb"}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[[ "$(ctx "$out")" == *"六件目を確認中"* ]] || fail "unknown records keep Japanese text without spaces: $out"
 complete "$R" c1 5; out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
 [ -z "$out" ] || fail "returning from wait_agent after the run ended is silent: $out"
 reset; child_a
