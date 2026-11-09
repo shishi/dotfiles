@@ -8,7 +8,7 @@
 #   command-judge.sh [--cli claude|codex]                   PreToolUse: 判定して該当すれば止める
 #
 # コマンドの語を照合したり構文解析したりはしない。何が起きるかの判断は判定役に任せ、
-# このスクリプトはツール名・入力全文・目的・利用者の発言と会話文脈を渡して結果を適用する。
+# このスクリプトは操作の分類を先に行い、必要な場合だけ会話と承認を照合する。
 #
 # 判定できないときも黙って通さない。判定役を動かせない状態 (codex が無い、ログイン切れ等) は
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
@@ -85,6 +85,7 @@ run_codex() {
     "$py_bin" -I "$hook_dir/lib/run-judge.py" "$1" "$judge_cwd" \
     codex exec --ignore-user-config -c 'openai_base_url=""' --ephemeral --ignore-rules -s read-only --skip-git-repo-check \
     -m gpt-6.1-sol -c model_reasoning_effort=medium -c approval_policy=never -c project_doc_max_bytes=0 \
+    -c "model_instructions_file=$(json_string "$hook_dir/command-judge-role.md")" -c skills.include_instructions=false \
     --disable shell_tool --disable unified_exec --disable view_image --disable apps --disable plugins \
     -c 'web_search="disabled"' -
 }
@@ -103,7 +104,7 @@ judge_failed() {
 
 prepare_state_dir() {
   umask 077
-  mkdir -p "$state_dir/prompts" "$state_dir/safe" "$state_dir/judge-cwd" 2>/dev/null || return 1
+  mkdir -p "$state_dir/prompts" "$state_dir/permissions" "$state_dir/safe" "$state_dir/judge-cwd" 2>/dev/null || return 1
   [ -d "$state_dir" ] && [ ! -L "$state_dir" ] && [ -O "$state_dir" ] || return 1
   chmod 700 "$state_dir" 2>/dev/null || return 1
 }
@@ -266,34 +267,27 @@ shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不
   shell="$shell / Bash の既定の上限: ${BASH_DEFAULT_TIMEOUT_MS} ms (指定できる最大 ${BASH_MAX_TIMEOUT_MS:-不明} ms)"
 
 now=$(date +%s)
-user_history=""
 prompt_path="$state_dir/prompts/$session"
-if valid_session "$session" && [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
-  user_history=$(cat -- "$prompt_path" 2>/dev/null) || user_history=""
+if ! valid_session "$session" || [ -n "${AGENT_DELEGATED_SESSION:-}" ]; then
+  prompt_path=/dev/null
 fi
-if [ -n "${AGENT_DELEGATED_SESSION:-}" ]; then
-  user_history=""
-fi
-user_message="(none)"
-if [ -n "$user_history" ]; then
-  # 撤回も含む全履歴を古い順に渡し、承認範囲の判断は判定役に任せる。
-  user_message=$(printf '%s' "$user_history" | jq -rs --argjson now "$now" '
-    map(select(type == "object" and (.at | numbers) and (.text | strings)))
-    | map({minutes_ago: ((($now - .at) / 60) | floor),
-           input: .text, input_context: (.assistant_context // "")})' 2>/dev/null) ||
-    user_message="(none)"
-  [ -n "$user_message" ] || user_message="(none)"
-fi
-
-
 context_args=(--context)
 [ "$cli" != claude ] || context_args+=(--mask)
-assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" 2>/dev/null) ||
-  undecided "会話文脈を秘密情報を伏せた状態で取得できなかった"
 
-# 判定基準を変えたら、それまでの安全判定は使わない。目的の説明や作業ディレクトリが変われば判定役が得る情報も変わるため鍵に含める。
-# 会話から実際の効果や宛先を判断するため、その文脈が変わったら再判定する。
-key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s\0%s\0%s' "$shell" "$tool_name" "$tool_input" "$user_message" "$assistant_context"; } | hash_stdin) &&
+load_context() {
+  assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" 2>/dev/null) ||
+    undecided "会話文脈を秘密情報を伏せた状態で取得できなかった"
+  user_message="(none)"
+  if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
+    user_message=$(jq -sc 'map({input: .text, input_context: (.assistant_context // "")})' "$prompt_path" 2>/dev/null) ||
+      undecided "利用者の記録を読み取れなかった"
+  fi
+  context_data="$(section CONTEXT "$assistant_context")$(section USER "$user_message")"
+}
+
+# 文脈に依存しない安全判定だけを保存するため、会話や経過時間を鍵に含めない。
+policy=$(cat "$hook_dir/command-judge-role.md" "$hook_dir/command-judge-prompt.md" "$hook_dir/command-judge-state-prompt.md" "$hook_dir/command-judge-authorization-prompt.md" | hash_stdin)
+key=$(printf '%s\0%s\0%s\0%s' "$policy" "$shell" "$tool_name" "$tool_input" | hash_stdin) &&
   [ -n "$key" ] || unjudged hash "判定のキャッシュの鍵を計算できなかった"
 safe_path="$state_dir/safe/$key"
 if [ -f "$safe_path" ] && [ ! -L "$safe_path" ] && IFS= read -r cached_at <"$safe_path"; then
@@ -303,14 +297,13 @@ if [ -f "$safe_path" ] && [ ! -L "$safe_path" ] && IFS= read -r cached_at <"$saf
   esac
 fi
 
-
 # 節の区切りを入力から推測できないようにし、データ側から節を閉じて指示を足せないようにする。
 nonce=$(od -An -tx1 -N8 /dev/urandom 2>/dev/null | tr -d ' \n')
 [ -n "$nonce" ] || nonce="$now$$$RANDOM"
 section() {
   printf '\n<<<%s %s>>>\n%s\n<<<END %s %s>>>\n' "$1" "$nonce" "$2" "$1" "$nonce"
 }
-data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose" && section CONTEXT "$assistant_context")
+data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose")
 
 # Claude のセッションでは、ツール入力は別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
 # 利用者のメッセージは記録時に検査済み。Codex のセッションでは同じ内容が既に Codex のモデルに渡っている。
@@ -321,7 +314,6 @@ if [ "$cli" = claude ]; then
     2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
   esac
 fi
-data="$data$(section USER "$user_message")"
 
 # 判定役は両 CLI 共通で codex exec にする。Claude Desktop から起動した子の claude -p は認証できないため。
 # 送信先は既定の OpenAI に固定し (--ignore-user-config で config.toml の接続先も読まない)、認証は利用者が
@@ -340,25 +332,46 @@ if [ -f "$down_stamp" ] && [ ! -L "$down_stamp" ] && read -r down_at down_cause 
        fi ;;
   esac
 fi
-output=$({ cat "$hook_dir/command-judge-prompt.md" && printf '%s' "$data"; } | run_codex "$judge_timeout_seconds")
-status=$?
-case "$status" in
-  0) ;;
-  124) judge_failed "判定役が ${judge_timeout_seconds} 秒以内に答えなかった" ;;
-  127) unjudged no-codex "判定役に使う codex が見つからない" ;;
-  77)
-    # run-judge.py が判定役の認証エラー (HTTP 401) の繰り返しを見て止めた。問い直しても同じなので、
-    # 判定役が答えないときと同じく、しばらく判定を省く。
-    printf '%s login\n' "$(date +%s)" >"$down_stamp" 2>/dev/null
-    unjudged judge-login "$JUDGE_LOGIN_INVALID" ;;
-  *) judge_failed "判定役の codex exec が終了コード $status で失敗した" ;;
-esac
+run_stage() {
+  local stage=$1 prompt_file=$2 payload=$3 status
+  if [ "$cli" = claude ]; then
+    printf '%s' "$payload" | has_secret
+    case $? in
+      0) decide ask "判定に必要な情報に秘密情報らしき文字列があり、判定役へ送らなかった。実行してよいか確認する" ;;
+      2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
+    esac
+  fi
+  output=$({ cat "$prompt_file" && section STAGE "$stage" && printf '%s' "$payload"; } | run_codex "$judge_timeout_seconds" 2>/dev/null)
+  status=$?
+  case "$status" in
+    0) ;;
+    124) judge_failed "判定役が ${judge_timeout_seconds} 秒以内に答えなかった" ;;
+    127) unjudged no-codex "判定役の codex が見つからない" ;;
+    77)
+      printf '%s login\n' "$(date +%s)" >"$down_stamp" 2>/dev/null
+      unjudged judge-login "$JUDGE_LOGIN_INVALID" ;;
+    *) judge_failed "判定役の codex exec が終了コード $status で失敗した" ;;
+  esac
+}
 
-verdict=$(printf '%s' "$output" | jq -R -s -c '
-  split("\n") | map(fromjson? | select(type == "object" and
-    ([.danger, .user_requested, .body_from_file, .external, .short_cutoff] | all(type == "boolean")))) | last // empty
-' 2>/dev/null)
-[ -n "$verdict" ] || judge_failed "判定役の出力から判定結果の JSON を読み取れなかった"
+parse_effect() {
+  verdict=$(printf '%s' "$output" | jq -Rsc '
+    split("\n") | map(fromjson? | select(type == "object" and
+      ([.danger, .body_from_file, .external, .short_cutoff, .needs_context, .context_free] | all(type == "boolean")) and
+      (.reason | type == "string"))) | last // empty' 2>/dev/null)
+  [ -n "$verdict" ] || judge_failed "判定役の出力から効果の判定を読み取れなかった"
+}
+
+run_stage effect "$hook_dir/command-judge-prompt.md" "$data"
+parse_effect
+used_context=false
+if [ "$(jq -r .needs_context <<<"$verdict")" = true ]; then
+  load_context
+  run_stage effect-context "$hook_dir/command-judge-prompt.md" "$data$context_data"
+  parse_effect
+  used_context=true
+  [ "$(jq -r .needs_context <<<"$verdict")" = false ] || undecided "会話を照合しても操作の効果を確定できなかった"
+fi
 
 reason=$(jq -r '.reason // "" | tostring | sub("[。.[:space:]]+$"; "")' <<<"$verdict")
 if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
@@ -370,11 +383,51 @@ fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
 if [ "$danger" = false ] && [ "$external" = false ]; then
-  # 同じ操作と会話文脈で安全と判定した結果だけを再利用する。
-  printf '%s\n' "$now" | write_atomic "$safe_path" || true
+  if [ "$used_context" = false ] && [ "$(jq -r .context_free <<<"$verdict")" = true ]; then
+    printf '%s\n' "$now" | write_atomic "$safe_path" || true
+  fi
   exit 0
 fi
-[ "$(jq -r .user_requested <<<"$verdict")" = true ] && exit 0
+state_path="$state_dir/permissions/$cli-$session"
+state_helper="$hook_dir/lib/command-judge-state.py"
+if [ "$prompt_path" = /dev/null ]; then
+  permissions='{"facts":[]}'
+else
+  update=$("$py_bin" -I "$state_helper" prepare "$prompt_path" "$state_path" "$policy" 2>/dev/null) ||
+    undecided "承認状態と本人入力の出典を照合できなかった"
+  if [ "$(jq '.new_inputs | length' <<<"$update")" -gt 0 ]; then
+    run_stage state "$hook_dir/command-judge-state-prompt.md" "$(section UPDATE "$update")"
+    answer=$(printf '%s' "$output" | jq -Rsc 'split("\n") | map(fromjson? | select(type == "object" and has("facts"))) | last // empty')
+  else
+    answer=$(printf '%s' "$update" | jq -c '{facts: .previous}')
+  fi
+  permissions=$(printf '%s\0%s' "$update" "$answer" | jq -Rsc 'split("\u0000") | {update: (.[0] | fromjson), answer: (.[1] | fromjson)}' |
+    "$py_bin" -I "$state_helper" finish "$prompt_path" "$state_path" "$policy" 2>/dev/null) ||
+    judge_failed "承認状態の形式・出典または記録の版が一致しなかった"
+  printf '%s\n' "$permissions" | write_atomic "$state_path" || undecided "承認状態を保存できなかった"
+fi
+# 未記録の発言は許可を作れないが、撤回や対象変更を見落とさないため照合する。
+authorization_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "${context_args[@]}" --since "$prompt_path" 2>/dev/null) ||
+  undecided "現在の会話文脈を取得できなかった"
+authorization_data="$data$(section EFFECT "$verdict")$(section PERMISSIONS "$permissions")"
+run_stage authorize "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$(section CONTEXT "$authorization_context")"
+parse_authorization() {
+  authorization=$(printf '%s' "$output" | jq -Rsc 'split("\n") | map(fromjson? | select(type == "object" and
+    ([.user_requested, .needs_context] | all(type == "boolean")) and (.reason | type == "string"))) | last // empty')
+  [ -n "$authorization" ] || judge_failed "判定役の出力から承認の判定を読み取れなかった"
+}
+parse_authorization
+if [ "$(jq -r .needs_context <<<"$authorization")" = true ]; then
+  load_context
+  run_stage authorize-context "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$context_data"
+  parse_authorization
+  [ "$(jq -r .needs_context <<<"$authorization")" = false ] || undecided "原文を照合しても承認範囲を確定できなかった"
+fi
+if [ "$prompt_path" != /dev/null ]; then
+  printf '%s\n' "$permissions" | "$py_bin" -I "$state_helper" verify "$prompt_path" "$state_path" "$policy" 2>/dev/null ||
+    undecided "判定中に本人入力が変わったため、現在の承認を再判定する必要がある"
+fi
+[ "$(jq -r .user_requested <<<"$authorization")" = true ] && exit 0
 if [ "$danger" = true ]; then
   [ "$external" = true ] &&
     decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけ両方の操作と対象への許可を得ること"

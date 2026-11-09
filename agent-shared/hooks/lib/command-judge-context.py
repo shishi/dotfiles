@@ -78,10 +78,50 @@ def assistant_tail(messages):
     return '\n\n'.join(text for role, text, _ in messages[start:] if role == 'assistant')
 
 
-def conversation_context(event):
-    return {'current_transcript': [
+def conversation_context(event, journal_path=None):
+    messages = read_messages(event)
+    if journal_path:
+        try:
+            rows = [json.loads(line) for line in Path(journal_path).read_text().splitlines() if line.strip()]
+            remaining, assistant, cursor = [], [], 0
+            for message in messages:
+                role, text, _ = message
+                if role == 'assistant':
+                    assistant.append(message)
+                    continue
+                context = '\n\n'.join(item[1] for item in assistant)
+                matched = next((i for i in range(cursor, len(rows))
+                                if rows[i]['text'] == text and rows[i].get('assistant_context', '') == context), None)
+                if matched is None:
+                    remaining.extend(assistant)
+                    remaining.append(message)
+                else:
+                    cursor = matched + 1
+                assistant = []
+            messages = remaining
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            pass
+    result = {'current_transcript': [
         {'role': role, 'text': text, 'timestamp': timestamp}
-        for role, text, timestamp in read_messages(event)]}
+        for role, text, timestamp in messages]}
+    if not journal_path:
+        records = []
+        for line in transcript_lines(event):
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict) or entry.get('isSidechain'):
+                continue
+            payload = entry.get('payload', {})
+            if entry.get('type') == 'response_item' and isinstance(payload, dict) and payload.get('type') != 'message':
+                records.append(payload)
+            elif entry.get('type') in ('assistant', 'user'):
+                content = (entry.get('message') or {}).get('content', [])
+                if isinstance(content, list):
+                    records.extend(p for p in content if isinstance(p, dict) and p.get('type') in ('tool_use', 'tool_result'))
+        result['tool_records'] = records
+    return result
 
 
 def mask_context(text):
@@ -96,7 +136,8 @@ def mask_context(text):
 def main():
     event = json.load(sys.stdin.buffer)
     if len(sys.argv) >= 2 and sys.argv[1] == '--context':
-        text = conversation_context(event)
+        journal_path = sys.argv[sys.argv.index('--since') + 1] if '--since' in sys.argv else None
+        text = conversation_context(event, journal_path)
         if '--mask' in sys.argv[2:]:
             text = mask_context(text)
         sys.stdout.buffer.write(json.dumps(text, ensure_ascii=False).encode('utf-8'))

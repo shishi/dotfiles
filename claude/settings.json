@@ -175,7 +175,7 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/command-judge.sh",
-            "timeout": 60,
+            "timeout": 180,
             "statusMessage": "操作の影響を判定中..."
           }
         ]

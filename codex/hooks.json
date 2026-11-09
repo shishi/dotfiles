@@ -32,7 +32,7 @@
             "command": "bash ~/.agent-shared/hooks/command-judge.sh --cli codex",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/command-judge.sh --cli codex'",
             "statusMessage": "操作の影響を判定中...",
-            "timeout": 60,
+            "timeout": 180,
             "type": "command"
           }
         ]

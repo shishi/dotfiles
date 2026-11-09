@@ -398,6 +398,21 @@ reset; out=$(inject)
 [ -z "$out" ] && [ ! -e "$D" ] || fail "inject is silent without tasks"
 ok "inject is silent without tasks"
 
+reset; agent a1; f=$((NOW + 600)); wake $f
+stop "$(bt a1:subagent)" "[$(cron_of $f)]" >/dev/null
+printf 'reserved output\n' >"$work/a1.jsonl"
+out=$(inject)
+[ -z "$out" ] && [ "$(lines "$D/obs.jsonl")" = 0 ] || fail "covered task is silent without consuming its content: $out"
+out=$(STALL_GUARD_NOW=$f inject)
+has 'reserved output' "$(ctx "$out")" || fail "due reservation delivers the content held while covered: $out"
+ok "covered task is silent until its reservation is due"
+
+reset; shell b1; cs keep b1 >/dev/null; seen '["b1"]'
+[ -z "$(inject)" ] || fail "kept shell needs no prompt notification"
+reset; shell b1 true; seen '["b1"]'
+[ -z "$(inject)" ] || fail "shell ending with final needs no prompt notification"
+ok "shells without an observation obligation stay silent"
+
 reset; rm -f "$work/a1.jsonl"; agent a1; seen '["a1"]'; printf 'start\n' >"$work/result.txt"
 cs deadline a1 5 --watch "$work/result.txt" || fail "deadline with a watch path"
 printf '0123456789\nabc' >>"$work/result.txt"
@@ -471,7 +486,7 @@ ok "deadline rejects out of range"
 reset; agent a1; shell b1; seen '["a1","b1"]'
 ! cs keep a1 2>/dev/null || fail "keep rejects a subagent"
 cs keep b1 || fail "keep accepts a shell"
-has keep "$(ctx "$(inject)")" && [ "$(field '.tasks[] | select(.id=="b1") | .keep' "$(sg status --json --session s1)")" = true ] || fail "keep is shown in inject and status"
+! has 'b1' "$(ctx "$(inject)")" && [ "$(field '.tasks[] | select(.id=="b1") | .keep' "$(sg status --json --session s1)")" = true ] || fail "keep is silent in inject and visible in status"
 ok "keep rejects a subagent"
 
 reset; agent a1
@@ -518,8 +533,8 @@ jq -e --arg pre "& (Join-Path \$HOME '.agent-shared/bin/invoke-git-bash-hook.ps1
     | select(.timeout == (if (.command | test("stop-check$|pre-wait$")) then 30 else 10 end))
     | select(.type == "command" and .commandWindows == ($pre + (.command | sub("^bash "; "")) + $suf))]
   | length == 6' "$CX" >/dev/null || fail "registration matches the design (Codex commandWindows)"
-# 既存の出力ゲートの登録が残っている。
-jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-claude\\.sh stop"))] | length == 1' "$CS" >/dev/null \
-  && jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-codex\\.sh stop"))] | length == 1' "$CX" >/dev/null \
-  || fail "registration keeps the output gate hooks"
+# 出力ゲートの登録は廃止済みなので、stall-guard の登録で復活させない。
+jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-claude\\.sh stop"))] | length == 0' "$CS" >/dev/null \
+  && jq -e '[.hooks.Stop[].hooks[] | select(.command | test("output-gate-codex\\.sh stop"))] | length == 0' "$CX" >/dev/null \
+  || fail "registration does not restore retired output gate hooks"
 ok "registration matches the design"

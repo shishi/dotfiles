@@ -132,7 +132,7 @@ sg_line_end() {
   if [ "$part" -ge $((size - start)) ]; then echo "$from"; else echo $((size - part)); fi
 }
 
-# sg_added <path> <前回の位置>: 前回の位置以後に追記された内容を読む。進捗を大きさや更新時刻でなく内容で
+# sg_added <path> <前回の位置> [codex-rollout]: 前回の位置以後に追記された内容を読む。進捗を大きさや更新時刻でなく内容で
 # 判断させるため、1 行目に「読み始めた位置<TAB>読み終えた位置<TAB>いまの大きさ」(無ければ空行)、2 行目以降に
 # 追記の末尾 (最大 8 項目) を出す。読むのは最後の改行までの完全な行で、書きかけの行は次回に回す。
 # 読むのは範囲の末尾 4 MiB の、末尾 40 行 (1 行が大きくても本文を取り出してから各項目を 300 文字に詰める)。
@@ -141,29 +141,56 @@ sg_line_end() {
 # 会話記録を含まない JSONL やテキストは行をそのまま出す。前回より小さければ作り直されたとみなし先頭から読む。
 # jq の program には逆斜線の連続を書かない (Codex の Windows の起動経路で 2 個が 1 個に縮むため)。
 sg_added() {
-  local p=$1 from=${2:-0} size end
+  local p=$1 from=${2:-0} format=${3:-} seen_items=${4:-[]} size end rendered
   size=$(wc -c <"$p" 2>/dev/null) || { echo; return 0; }
   size=${size//[!0-9]/}
   [[ "$from" =~ ^[0-9]+$ ]] && [ "$from" -le "$size" ] || from=0
   end=$(sg_line_end "$p" "$from" "$size")
-  printf '%s\t%s\t%s\n' "$from" "$end" "$size"
-  [ "$end" -gt "$from" ] || return 0
+  if [ "$format" != codex-rollout ]; then printf '%s\t%s\t%s\n' "$from" "$end" "$size"; fi
+  if [ "$end" -le "$from" ]; then
+    [ "$format" != codex-rollout ] || printf '%s\t%s\t%s\t%s\n' "$from" "$end" "$size" "$seen_items"
+    return 0
+  fi
   # 窓が行の途中から始まるときは、その断片を捨てる (断片を別の記録として示さないため)。
   local start=$from skip=1
   if [ $((end - from)) -gt 4194304 ]; then start=$((end - 4194304)); skip=2; fi
-  tail -c +$((start + 1)) -- "$p" 2>/dev/null | head -c $((end - start)) | tail -n +$skip | tail -n 40 | tr -d '\000' | jq -rRs '
+  rendered=$(tail -c +$((start + 1)) -- "$p" 2>/dev/null | head -c $((end - start)) | tail -n +$skip | tail -n 40 | tr -d '\000' | jq -cRs --arg format "$format" --argjson seen_items "$seen_items" '
     def txt: if type == "string" then . elif type == "array" then map(.text? // empty | strings) | join(" ") else tojson end;
     def flat: .[:2000] | gsub("[[:space:]]+"; " ") | .[:300];
     def cut: txt | flat;
     def msg: (.message | type) == "object" and ((.message.content | type) as $t | $t == "string" or $t == "array");
     def item: .type == "response_item" and (.payload | type) == "object";
+    def native_text:
+      if type == "string" then . elif type == "array" then map(native_text) | join(" ")
+      elif type == "object" then (.text // "") | native_text else "" end;
+    def native_item_text:
+      if .type == "AgentMessage" then .content | native_text | flat | select(test("[^[:space:]]")) | "[assistant] " + .
+      elif .type == "Reasoning" then [.summary_text, .raw_content] | native_text | flat | select(test("[^[:space:]]")) | "[reasoning] " + .
+      elif .type == "CommandExecution" then
+        (.aggregated_output | native_text | flat) as $output
+        | if ($output | test("[^[:space:]]")) then "[result] " + $output
+          else .command | native_text | flat | select(test("[^[:space:]]")) | "[tool exec] " + . end
+      elif .type == "SubAgentActivity" then empty
+      else null end;
+    def item_identity:
+      (if .type == "response_item" then .payload
+       elif .type == "event_msg" and (.payload.type == "item_completed" or .payload.type == "item_started") then .payload.item
+       else {} end)
+      | if (.id | type) != "string" then null
+        elif .type == "AgentMessage" or .type == "message" then "message:" + .id
+        elif .type == "Reasoning" or .type == "reasoning" then "reasoning:" + .id
+        elif .type == "CommandExecution" then "command:" + .id
+        else null end;
     [split("\n")[] | select(length > 0) | {raw: ., v: (fromjson? // null)}] as $rows
     | any($rows[].v | objects; msg or item) as $transcript
-    | $rows[] | .raw as $raw | .v as $v
-    | if ($v | type) == "object" and ($v | item) then $v.payload
+    | [$rows[] | .raw as $raw | .v as $v
+    | (if ($v | type) == "object" then $v else {} end) as $record
+    | (if ($v | type) == "object" and ($v | item) then $v.payload
         | if .type == "message" and .role != "developer" and .role != "system" then "[\(.role)] \(.content | cut)"
           elif .type == "function_call" or .type == "custom_tool_call" then "[tool \(.name)] \((.arguments // .input) | cut)"
           elif .type == "function_call_output" or .type == "custom_tool_call_output" then "[result] \(.output | cut)"
+          elif $format == "codex-rollout" and .type == "reasoning" then
+            [.summary, .content] | native_text | flat | select(test("[^[:space:]]")) | "[reasoning] " + .
           else empty end
       elif ($v | type) == "object" and ($v | msg) then
         ($v.message.content | if type == "string" then [{type: "text", text: .}] else . end)[]
@@ -171,20 +198,50 @@ sg_added() {
           elif .type == "tool_use" then "[tool \(.name)] \(.input | cut)"
           elif .type == "tool_result" then "[result] \(.content | cut)"
           else empty end
+      elif $format == "codex-rollout" and $record.type == "event_msg"
+          and ($record.payload.type == "item_completed" or $record.payload.type == "item_started") then
+        $record.payload.item as $native
+        | $native | native_item_text | if . == null then $raw | flat else . end
+      elif $format == "codex-rollout" and $record.type == "event_msg" and $record.payload.type == "agent_message" then
+        "[assistant] \($v.payload.message | cut)"
+      elif $format == "codex-rollout" and
+          ($record.type == "session_meta" or $record.type == "turn_context"
+           or ($record.type == "event_msg" and (["task_started", "task_complete", "turn_complete", "turn_aborted", "token_count", "context_compacted", "user_message", "agent_reasoning"] | index($record.payload.type)) != null)) then empty
+      elif $format == "codex-rollout" then $raw | flat
       elif $transcript then empty
-      else $raw | flat end' 2>/dev/null | tail -n 8
+      else $raw | flat end) as $text
+    | {text: $text, id: (if $format == "codex-rollout" then $record | item_identity else null end),
+       native: ($record.type == "event_msg")} ] as $content
+    | [$content[] | . as $candidate
+        | select(.id == null or (.native | not)
+          or (any($content[]; .id == $candidate.id and (.native | not)) | not))
+        | del(.native)] as $preferred
+    | [($preferred | reduce .[] as $item ({seen: $seen_items, out: []};
+          if $item.id != null and any(.seen[]; .id == $item.id and .text == $item.text) then .
+          else .out += [$item] | if $item.id != null then .seen += [$item] else . end end) | .out)[-8:][]] as $shown
+    # 既存の本文8項目に合わせ、通知したidentityと本文の組だけを直近8件残す。
+    | {text: ($shown | map(.text) | join("\n")), items: (($seen_items + [$shown[] | select(.id != null)])[-8:])}' 2>/dev/null) || rendered='{"text":"","items":[]}'
+  if [ "$format" = codex-rollout ]; then
+    printf '%s\t%s\t%s\t%s\n' "$from" "$end" "$size" "$(jq -c '.items' <<<"$rendered")"
+  fi
+  jq -r '.text | select(length > 0)' <<<"$rendered"
 }
 
-# sg_added_map <key> <path> <前回の位置> ...: {key: {text, end, size, from}} の JSON を出す
+# sg_added_map [--codex-rollout] [--seen-items <JSON>] <key> <path> <前回の位置> ...: {key: {text, end, size, from}} の JSON を出す
 # (end・size は読めなければ null)。
 sg_added_map() {
-  local m='{}' out head
+  local m='{}' out head format= seen='{}' items
+  if [ "${1:-}" = --codex-rollout ]; then format=codex-rollout; shift; fi
+  if [ "${1:-}" = --seen-items ]; then seen=$2; shift 2; fi
   while [ $# -ge 3 ]; do
-    out=$(sg_added "$2" "$3")
+    items=$(jq -c --arg key "$1" '.[$key].items // []' <<<"$seen")
+    out=$(sg_added "$2" "$3" "$format" "$items")
     head=${out%%$'\n'*}
     [[ "$out" == *$'\n'* ]] && out=${out#*$'\n'} || out=
     m=$(jq -c --arg k "$1" --arg v "$out" --arg h "$head" \
-      '($h | split("\t") | map(tonumber? // null)) as $n | . + {($k): {text: $v, from: $n[0], end: $n[1], size: $n[2]}}' <<<"$m") || return 1
+      '($h | split("\t")) as $fields | ($fields[:3] | map(tonumber? // null)) as $n
+       | . + {($k): {text: $v, from: $n[0], end: $n[1], size: $n[2]}}
+       | if $fields[3] != null then .[$k].items = ($fields[3] | fromjson) else . end' <<<"$m") || return 1
     shift 3
   done
   printf '%s\n' "$m"

@@ -19,6 +19,10 @@ def live($w; $crons):
     | any($crons[]; (.recurring == false)
         and (((.schedule // "") | split(" ")) as $p | (($p[0] | tonumber?) == $m) and (($p[1] | tonumber?) == $h)))
   end;
+def needs_observation($L; $t; $crons):
+  (interval_of($L; $t.id)) as $iv | ((($now + $iv + 59) / 60 | floor) * 60) as $due
+  | ($t.kind != "shell" or ((kept($L; $t.id) | not) and $t.ends_with_final != true))
+    and (any(($L.wakeups // [])[]; live(.; $crons) and .fire > $now and .fire <= $due) | not);
 def observed_of($L; $key): ([($L.observed // [])[] | select(.key == $key)] | last | .observed_with) // null;
 # 終了の記録は、最新の seen 以後のものだけで running から外す (それより前の終了で、後の Stop が running と報告した作業を隠さない)。
 def ended_since($L): (lastof($L.seen).at // 0) as $a | [($L.ended // [])[] | select(.at >= $a) | .id];
@@ -121,7 +125,7 @@ claude_keep() {
   echo "stall-guard: $id is kept running without check schedules"
 }
 
-# inject (UserPromptSubmit): ターンの境界を書き、running の作業・前のターンで抜けた記録・残った予約の事実を渡す。
+# inject (UserPromptSubmit): ターンの境界を書き、確認が必要な作業・前のターンで抜けた記録・残った予約を渡す。
 claude_inject() {
   local input sid
   input=$(cat) || return 0
@@ -140,6 +144,7 @@ claude_inject() {
   # 1 回目: 内容を読むパス (running の作業の watch と outputFile) を、鍵・パス・前回観測した大きさの組で出す。
   paths=$(jq -nrR --argjson now "$now" --argjson off "$off" "$SG_JQ_LOAD$CLAUDE_JQ_DEFS"'
     sg_load as $L | running_ids($L)[] as $id
+    | select(needs_observation($L; task_of($L; $id); crons_now($L)))
     | ((last_by_id($L.deadlines; $id).watch // [])[], (task_of($L; $id).output_file // empty)) as $p
     | $p, $p, ([($L.obs // [])[] | select(.path == $p)] | last | .size // 0)' "${files[@]}" 2>/dev/null) || return 0
   paths=${paths//$SG_CR/}
@@ -152,6 +157,7 @@ claude_inject() {
     sg_load as $L | crons_now($L) as $crons
     | ([($L.turns // [])[] | select(.event == "prompt") | .at] | last // 0) as $prev
     | [running_ids($L)[] as $id | task_of($L; $id) as $t
+        | select(needs_observation($L; $t; $crons))
         | ([($L.deadlines // [])[] | select(.id == $id)] | last) as $d
         | "- \($id) (\($t.kind)): 起動から \((($now - $t.started) / 60) | floor) 分、確認の間隔 \(interval_of($L; $id) / 60 | floor) 分"
           + (if kept($L; $id) then "、keep 中 (確認の予約を求めない)" else "" end)
@@ -433,11 +439,8 @@ claude_stop_check() {
         | {key, observed_with: inter(.tasks_at_create // []; $rids), at: $now}] as $obs
     | {observed: (($L.observed // []) + $obs)} as $O
     | [$rids[] as $id | last_by_id($T.tasks; $id) as $t
-        | interval_of($L; $id) as $iv | ((($now + $iv + 59) / 60 | floor) * 60) as $due
-        | if $t.kind == "shell" and kept($L; $id) then empty
-          elif $t.kind == "shell" and $t.ends_with_final == true then empty
-          elif any(($L.wakeups // [])[]; live(.; $crons) and .fire > $now and .fire <= $due) then empty
-          else {id: $id, kind: $t.kind, started: $t.started, interval: $iv} end] as $unmet
+        | select(needs_observation($L; $t; $crons))
+        | {id: $id, kind: $t.kind, started: $t.started, interval: interval_of($L; $id)}] as $unmet
     | ([($L.blocks // [])[] | select(.prompt_id == $S.pid)]) as $B
     | ([$B[] | select(.kind != "leftover")] | reduce .[] as $b ({prev: null, streak: 0};
         if .prev != null and ($b.unmet | length) < (.prev | length) and (inter($b.unmet; .prev) | length) == ($b.unmet | length)

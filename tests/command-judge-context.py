@@ -117,6 +117,27 @@ class ConversationContextTest(unittest.TestCase):
                                 input=json.dumps({'transcript_path': str(self.transcript)}), text=True, capture_output=True)
         self.assertIn('送信しないで', result.stdout)
 
+    def test_unrecorded_revocation_before_latest_prompt_is_retained(self):
+        self.transcript.write_text('\n'.join(json.dumps(row) for row in [
+            self.codex('user', 'permit'), self.codex('assistant', 'origin main?'),
+            self.codex('user', 'revoke'), self.codex('user', 'y')]))
+        self.record('y', [{'at': 1, 'text': 'permit', 'assistant_context': ''}])
+        result = subprocess.run([sys.executable, str(HELPER), '--context', '--since',
+            str(self.folder / 'state/prompts/s1')], input=json.dumps({'transcript_path': str(self.transcript)}),
+            text=True, capture_output=True)
+        self.assertIn('revoke', result.stdout)
+        self.assertIn('origin main?', result.stdout)
+        self.assertNotIn('permit', result.stdout)
+
+    def test_context_fallback_contains_tool_arguments_and_results(self):
+        self.transcript.write_text(json.dumps({'type': 'response_item', 'payload': {
+            'type': 'function_call', 'name': 'exec_command', 'arguments': '{"cmd":"destination=remote"}'}}) + '\n' +
+            json.dumps({'type': 'response_item', 'payload': {'type': 'function_call_output', 'output': 'duration=18s'}}))
+        result = subprocess.run([sys.executable, str(HELPER), '--context'],
+            input=json.dumps({'transcript_path': str(self.transcript)}), text=True, capture_output=True)
+        self.assertIn('destination=remote', result.stdout)
+        self.assertIn('duration=18s', result.stdout)
+
     def test_record_remains_json_with_an_older_plain_context_helper(self):
         import shutil
         hooks = self.folder / 'hooks'
@@ -138,6 +159,210 @@ class ConversationContextTest(unittest.TestCase):
                            prompt='進めて', previous=previous)
         records = [json.loads(line) for line in text.splitlines()]
         self.assertEqual(records[1]['assistant_context'], 'origin fix/context へ反映してよい？')
+
+
+class StagedJudgeTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        self.bin = self.folder / 'bin'
+        self.bin.mkdir()
+        self.log = self.folder / 'requests.jsonl'
+        self.transcript = self.folder / 'transcript.jsonl'
+        self.transcript.write_text(json.dumps({'type': 'response_item', 'payload': {
+            'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': 'CONVERSATION_MARKER'}]}}) + '\n')
+        stub = self.bin / 'codex'
+        stub.write_text('#!' + sys.executable + '\n' + r"""
+import json, os, re, sys
+text = sys.stdin.read()
+if text == 'Reply with exactly: OK':
+    print('OK'); sys.exit()
+stage = re.search(r'<<<STAGE [^>]+>>>\n(.*?)\n', text)
+stage = stage[1] if stage else 'legacy'
+with open(os.environ['JUDGE_LOG'], 'a') as f:
+    f.write(json.dumps({'stage': stage, 'text': text, 'argv': sys.argv[1:]}) + '\n')
+def section(name):
+    m = re.search(r'<<<' + name + r' ([^>]+)>>>\n(.*?)\n<<<END ' + name + r' \1>>>', text, re.S)
+    return json.loads(m[2]) if m else None
+if stage == 'state':
+    update = section('UPDATE')
+    facts = update['previous'] + [{'sources': [row['ref']], 'purpose': 'task',
+        'target': 'origin main', 'effect': 'push', 'scope': row['input'],
+        'status': 'denied' if 'revoke' in row['input'] else 'allowed'} for row in update['new_inputs']]
+    if os.environ.get('BAD_STATE') == 'sources': facts[-1]['sources'] = ['invented']
+    if os.environ.get('BAD_STATE') == 'schema': facts[-1]['scope'] = 42
+    print(json.dumps({'facts': facts}))
+elif stage.startswith('authorize'):
+    if os.environ.get('HOLD_AUTH'):
+        import time
+        from pathlib import Path
+        Path(os.environ['HOLD_AUTH']).write_text('ready')
+        deadline = time.monotonic() + 20
+        while not Path(os.environ['RELEASE_AUTH']).exists():
+            if time.monotonic() > deadline: sys.exit(9)
+            time.sleep(0.01)
+    facts = section('PERMISSIONS')['facts']
+    if os.environ.get('RACE_JOURNAL'):
+        with open(os.environ['RACE_JOURNAL'], 'a') as f: f.write(json.dumps({'at': 2, 'text': 'revoke'}) + '\n')
+    print(json.dumps({'user_requested': bool(facts) and facts[-1]['status'] == 'allowed', 'needs_context': os.environ.get('AUTH_CONTEXT') == '1' and stage != 'authorize-context', 'reason': 'authorization'}))
+else:
+    external = os.environ.get('EXTERNAL') == '1'
+    needs = os.environ.get('STILL_UNKNOWN') == '1' or (os.environ.get('NEEDS_CONTEXT') == '1' and stage != 'effect-context')
+    print(json.dumps({'danger': False, 'external': external, 'body_from_file': False,
+        'short_cutoff': False, 'context_free': 'true' if os.environ.get('BAD_EFFECT') else not needs, 'needs_context': needs,
+        'user_requested': False, 'reason': ''}))
+""")
+        stub.chmod(0o755)
+        self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ['PATH'],
+                        COMMAND_JUDGE_STATE_DIR=str(self.folder / 'state'), JUDGE_LOG=str(self.log))
+        self.env.pop('AGENT_DELEGATED_SESSION', None)
+        self.env.pop('COMMAND_JUDGE_ACTIVE', None)
+
+    def run_hook(self, event, record=False, **env):
+        result = subprocess.run(['bash', str(HOOK), '--cli', 'codex'] + (['--record-prompt'] if record else []),
+            input=json.dumps(dict(session_id='stage', **event)), text=True, capture_output=True,
+            env=dict(self.env, **env))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout) if result.stdout else {}
+
+    def record(self, text):
+        self.run_hook({'prompt': text, 'transcript_path': str(self.transcript)}, record=True)
+
+    def judge(self, command='git status', **env):
+        return self.run_hook({'tool_name': 'Bash', 'tool_input': {'command': command},
+            'transcript_path': str(self.transcript)}, **env)
+
+    def requests(self, stage=None):
+        rows = [json.loads(line) for line in self.log.read_text().splitlines()]
+        return [r for r in rows if stage is None or r['stage'] == stage]
+
+    def test_ordinary_operation_never_sends_history_and_reuses_context_free_verdict(self):
+        self.record('USER_HISTORY_MARKER' * 1000)
+        self.judge()
+        request = self.requests()[0]['text']
+        self.assertNotIn('USER_HISTORY_MARKER', request)
+        self.assertNotIn('CONVERSATION_MARKER', request)
+        self.record('unrelated progress')
+        self.judge()
+        self.assertEqual(len(self.requests()), 1)
+
+    def test_other_hook_state_cannot_validate_an_older_authorization(self):
+        import time
+        self.record('permit origin main')
+        held, release = self.folder / 'held', self.folder / 'release'
+        event = {'session_id': 'stage', 'tool_name': 'Bash',
+                 'tool_input': {'command': 'git push origin main'},
+                 'transcript_path': str(self.transcript)}
+        process = subprocess.Popen(['bash', str(HOOK), '--cli', 'codex'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env=dict(self.env, EXTERNAL='1', HOLD_AUTH=str(held), RELEASE_AUTH=str(release)))
+        try:
+            process.stdin.write(json.dumps(event))
+            process.stdin.close()
+            deadline = time.monotonic() + 20
+            while not held.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(held.exists(), 'the first hook must reach authorization')
+            self.record('revoke origin main')
+            newer = self.judge('git push origin main', EXTERNAL='1')
+            self.assertEqual(newer['hookSpecificOutput']['permissionDecision'], 'deny')
+            release.write_text('continue')
+            process.wait(timeout=20)
+            self.assertEqual(process.returncode, 0, process.stderr.read())
+            output = process.stdout.read()
+            self.assertTrue(output, 'the older hook must reject its stale verdict')
+            self.assertEqual(json.loads(output)['hookSpecificOutput']['permissionDecision'], 'deny')
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_classifier_uses_dedicated_role_without_skill_catalog(self):
+        self.judge()
+        args = self.requests()[0]['argv']
+        self.assertIn('skills.include_instructions=false', args)
+        setting = next(arg for arg in args if arg.startswith('model_instructions_file='))
+        path = Path(json.loads(setting.split('=', 1)[1]))
+        self.assertTrue(path.is_file())
+        self.assertLess(len(path.read_bytes()), 1024)
+
+    def test_needs_context_fetches_originals_without_caching_contextual_verdict(self):
+        self.record('TIMING_EVIDENCE_MARKER')
+        self.judge('timeout 30 tests', NEEDS_CONTEXT='1')
+        self.assertEqual([r['stage'] for r in self.requests()], ['effect', 'effect-context'])
+        self.assertNotIn('TIMING_EVIDENCE_MARKER', self.requests()[0]['text'])
+        self.assertIn('TIMING_EVIDENCE_MARKER', self.requests()[1]['text'])
+        self.assertIn('CONVERSATION_MARKER', self.requests()[1]['text'])
+        self.judge('timeout 30 tests', NEEDS_CONTEXT='1')
+        self.assertEqual(len(self.requests()), 4)
+
+    def test_authorization_updates_only_new_inputs_and_revocation_is_not_cached(self):
+        self.record('permit origin main')
+        self.assertEqual(self.judge('git push origin main', EXTERNAL='1'), {})
+        self.assertEqual(self.judge('git push origin main', EXTERNAL='1'), {})
+        self.assertEqual(len(self.requests('state')), 1)
+        self.assertEqual(len(self.requests('authorize')), 2)
+        self.record('revoke origin main')
+        out = self.judge('git push origin main', EXTERNAL='1')
+        self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
+        updates = self.requests('state')
+        self.assertEqual(len(updates), 2)
+        import re
+        data = re.search(r'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', updates[-1]['text'], re.S)[2]
+        self.assertEqual([r['input'] for r in json.loads(data)['new_inputs']], ['revoke origin main'])
+
+    def test_forged_source_or_wrong_schema_cannot_authorize(self):
+        self.record('permit origin main')
+        for mode in ('sources', 'schema'):
+            with self.subTest(mode=mode):
+                out = self.judge('git push origin main', EXTERNAL='1', BAD_STATE=mode)
+                self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
+
+    def test_unknown_effect_and_malformed_boolean_are_not_treated_as_safe(self):
+        for env in ({'STILL_UNKNOWN': '1'}, {'BAD_EFFECT': '1'}):
+            with self.subTest(env=env):
+                out = self.judge('invoke unresolved_session', **env)
+                self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
+
+    def test_authorization_can_retrieve_originals_without_duplicate_context_sections(self):
+        self.record('permit origin main')
+        self.assertEqual(self.judge('git push origin main', EXTERNAL='1', AUTH_CONTEXT='1'), {})
+        request = self.requests('authorize-context')[0]['text']
+        self.assertIn('permit origin main', request)
+        self.assertEqual(request.count('\n<<<CONTEXT '), 1)
+        self.assertEqual(request.count('\n<<<USER '), 1)
+
+    def test_corrupt_cached_schema_rebuilds_from_sources(self):
+        self.record('permit origin main')
+        self.judge('git push origin main', EXTERNAL='1')
+        cache = self.folder / 'state/permissions/codex-stage'
+        state = json.loads(cache.read_text())
+        state['facts'][0]['scope'] = 42
+        cache.write_text(json.dumps(state))
+        self.assertEqual(self.judge('git push origin main', EXTERNAL='1'), {})
+        self.assertEqual(len(self.requests('state')), 2)
+        self.assertIsInstance(json.loads(cache.read_text())['facts'][0]['scope'], str)
+
+    def test_new_input_during_authorization_invalidates_the_allow(self):
+        self.record('permit origin main')
+        out = self.judge('git push origin main', EXTERNAL='1',
+            RACE_JOURNAL=str(self.folder / 'state/prompts/stage'))
+        self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
+        self.assertIn('判定中に本人入力が変わった', out['hookSpecificOutput']['permissionDecisionReason'])
+
+    def test_replaced_journal_rebuilds_state_and_delegation_cannot_reuse_it(self):
+        self.record('permit origin main')
+        self.judge('git push origin main', EXTERNAL='1')
+        journal = self.folder / 'state/prompts/stage'
+        journal.write_text(json.dumps({'at': 1, 'text': 'revoke origin main'}) + '\n')
+        out = self.judge('git push origin main', EXTERNAL='1')
+        self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
+        self.record('permit origin main')
+        out = self.judge('git push origin main', EXTERNAL='1', AGENT_DELEGATED_SESSION='1')
+        self.assertEqual(out['hookSpecificOutput']['permissionDecision'], 'deny')
 
 
 if __name__ == '__main__':

@@ -16,23 +16,43 @@ done
 # 判定役が動くかを確かめる問いには STUB_PROBE を出して STUB_PROBE_EXIT で終わる。
 mkdir -p "$work/bin"
 cat >"$work/bin/fake_codex.py" <<'PY'
-import os, sys, time
+import json, os, re, sys, time
 work = os.environ["STUB_WORK"]
 data = sys.stdin.buffer.read()
 if b"Reply with exactly: OK" in data:
     print(os.environ.get("STUB_PROBE", "OK"))
     sys.exit(int(os.environ.get("STUB_PROBE_EXIT", "0")))
-with open(os.path.join(work, "judge-input"), "wb") as f:
+stage_match = re.search(rb'\n<<<STAGE [^>]+>>>\n(.*?)\n', data)
+stage = stage_match[1].decode() if stage_match else 'legacy'
+with open(os.path.join(work, "judge-input"), "wb" if stage in ('effect', 'legacy') else "ab") as f:
     f.write(data)
-with open(os.path.join(work, "calls"), "a") as f:
-    f.write("x\n")
+with open(os.path.join(work, "stages"), "a") as f:
+    f.write(stage + "\n")
+if stage in ('effect', 'legacy'):
+    with open(os.path.join(work, "calls"), "a") as f:
+        f.write("x\n")
 if os.environ.get("STUB_AUTH_FAIL"):   # ログインが無効な codex のように 401 を出し続ける
     for _ in range(5):
         print("2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to connect "
               "to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses",
               file=sys.stderr, flush=True)
 time.sleep(float(os.environ.get("STUB_SLEEP", "0")))
-print(os.environ.get("STUB_OUTPUT", ""))
+raw = os.environ.get("STUB_OUTPUT", "")
+try:
+    verdict = json.loads(raw.splitlines()[-1])
+except (ValueError, IndexError):
+    print(raw)
+else:
+    if stage == 'state':
+        update = json.loads(re.search(rb'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', data, re.S)[2])
+        facts = update['previous'] + [{'sources': [row['ref']], 'purpose': '', 'target': '',
+            'effect': '', 'scope': row['input'] + row['input_context'], 'status': 'pending'} for row in update['new_inputs']]
+        print(json.dumps({'facts': facts}, ensure_ascii=False))
+    elif stage.startswith('authorize'):
+        print(json.dumps({'user_requested': verdict['user_requested'], 'needs_context': False, 'reason': verdict['reason']}, ensure_ascii=False))
+    else:
+        verdict.update(needs_context=os.environ.get('STUB_CONTEXT') == '1' and stage == 'effect', context_free=True)
+        print(json.dumps(verdict, ensure_ascii=False))
 sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 PY
 printf '#!/bin/sh\nexec "%s" -I "%s/bin/fake_codex.py" "$@"\n' "$py_bin" "$work" >"$work/bin/codex"
@@ -132,7 +152,7 @@ record 'このマシンを再起動して'
 AGENT_DELEGATED_SESSION=1 record '親エージェントからの依頼: 再起動して確認すること'
 STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"再起動する"}'
 pre_tool_use '"sudo shutdown -r now"' | bash "$HOOK" >/dev/null
-grep -q '(none)' "$work/judge-input" && ! grep -q '再起動して' "$work/judge-input" ||
+grep -q '"facts":\[\]' "$work/judge-input" && ! grep -q 'このマシンを再起動して' "$work/judge-input" ||
   fail "a delegated session's prompt is not treated as the user's request"
 echo 'ok: a delegated session does not record the delegating prompt as the user request'
 
@@ -193,12 +213,17 @@ echo 'ok: an external effect needs the user permission, asked in Claude and deni
 
 record '修正して push までして'
 record '進捗は？'
-STUB_OUTPUT=$SAFE
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"push"}'
 pre_tool_use '"git push origin HEAD"' | bash "$HOOK" >/dev/null
 grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？' "$work/judge-input" ||
   fail "the judge sees a permission given in an earlier message of the session"
-[ "$(grep -n '修正して push までして' "$work/judge-input" | cut -d: -f1)" -lt "$(grep -n '進捗は？' "$work/judge-input" | cut -d: -f1)" ] ||
-  fail "the user's messages reach the judge oldest first"
+"$py_bin" -I - "$work/judge-input" <<'PY_ORDER'
+import json, re, sys
+text = open(sys.argv[1]).read()
+update = json.loads(re.search(r'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', text, re.S)[2])
+inputs = [row['input'] for row in update['new_inputs']]
+assert inputs.index('修正して push までして') < inputs.index('進捗は？')
+PY_ORDER
 for n in $(seq 1 6); do record "進捗は？ $n"; done
 pre_tool_use '"git push origin main"' | bash "$HOOK" >/dev/null
 grep -q '修正して push までして' "$work/judge-input" || fail "a permission survives several progress checks"
@@ -213,16 +238,16 @@ jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"fi
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
 record '進めて' --cli codex
-STUB_OUTPUT=$SAFE
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"external"}'
 pre_tool_use '"ssh dns-host apply"' | bash "$HOOK" --cli codex >/dev/null
 grep -q 'DNS サーバーの設定を反映していい？' "$work/judge-input" && grep -q 'いい' "$work/judge-input" ||
   fail 'the preceding assistant question and the user approval must reach the judge together'
 "$py_bin" -I - "$work/judge-input" <<'PY_PAIRED'
 import json, re, sys
 text = open(sys.argv[1]).read()
-user = re.search(r'<<<USER ([^>]+)>>>\n(.*?)\n<<<END USER \1>>>', text, re.S).group(2)
+user = re.search(r'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', text, re.S).group(2)
 try:
-    rows = json.loads(user)
+    rows = json.loads(user)["new_inputs"]
 except ValueError:
     raise AssertionError('USER must preserve each input with its recorded context')
 assert rows[0]['input'] == 'いい'
@@ -375,6 +400,7 @@ for config in claude/settings.json codex/hooks.json; do
   jq -e '[.hooks.PreToolUse[] | select((.matcher // "") == "" or .matcher == "*") | .hooks[] | select(.command | test("command-judge\\.sh"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config registers the judge for all tools"
   jq -e '[.hooks.UserPromptSubmit[].hooks[] | select(.command | test("command-judge\\.sh .*--record-prompt"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config records the prompt"
   jq -e '[.. | strings | select(test("gh-body-file-guard"))] | length == 0' "$HOOK_DIR/../../$config" >/dev/null || fail "$config no longer runs the pattern-based gh guard"
+  jq -e '[.hooks.PreToolUse[].hooks[] | select(.command | test("command-judge\\.sh")) | .timeout] == [180]' "$HOOK_DIR/../../$config" >/dev/null || fail "$config allows all judgement stages and the health probe to finish"
   echo "ok: $config registers the judge and the prompt recorder"
 done
 
@@ -384,5 +410,5 @@ record 'この作業の状態を調べて' --cli codex
 pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
 record '宛先の変更はせず、引き続き確認して' --cli codex
 pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
-[ "$(calls)" = 2 ] || fail 'a changed conversation must be presented to the judge instead of reusing the old verdict'
-echo 'ok: a safe verdict is bound to the conversation used to judge its effect'
+[ "$(calls)" = 1 ] || fail 'unrelated conversation must not invalidate a context-free safe verdict'
+echo 'ok: context-free verdicts do not resend unrelated conversation'
