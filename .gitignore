@@ -53,14 +53,6 @@ __pycache__/
 /docs/superpowers/*
 
 # BEGIN managed external skills
-/claude/skills/domain-modeling/
-/claude/skills/grill-me/
-/claude/skills/grill-with-docs/
 /claude/skills/grilling/
-/claude/skills/show-me/
-/codex/skills/domain-modeling/
-/codex/skills/grill-me/
-/codex/skills/grill-with-docs/
 /codex/skills/grilling/
-/codex/skills/show-me/
 # END managed external skills

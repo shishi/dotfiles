@@ -12,7 +12,6 @@
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "1",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "1",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/output-gate",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "1",
     "FORCE_AUTOUPDATE_PLUGINS": "1",
@@ -42,7 +41,6 @@
       "Bash(uniq:*)",
       "Bash(date:*)",
       "Bash(pwd)",
-      "Bash(env)",
       "Bash(printenv:*)",
       "Bash(printf:*)",
       "Bash(tree:*)",
@@ -53,7 +51,6 @@
       "Bash(nix develop:*)",
       "Bash(nix flake metadata:*)",
       "Bash(nix log:*)",
-      "Bash(ruby:*)",
       "Bash(claude mcp list)",
       "Bash(git status:*)",
       "Bash(git log:*)",
@@ -172,14 +169,18 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/command-judge.sh",
-            "timeout": 60,
-            "statusMessage": "コマンドの影響を判定中..."
-          },
+            "timeout": 180,
+            "statusMessage": "操作の影響を判定中..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
@@ -284,15 +285,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh prompt",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "bash ~/.agent-shared/hooks/stall-guard.sh inject",
             "timeout": 10
           }
@@ -322,27 +314,7 @@
         ]
       }
     ],
-    "MessageDisplay": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh display",
-            "timeout": 120
-          }
-        ]
-      }
-    ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/output-gate-claude.sh stop",
-            "timeout": 120
-          }
-        ]
-      },
       {
         "hooks": [
           {
@@ -353,8 +325,8 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/stall-guard.sh watch",
-            "asyncRewake": true,
-            "timeout": 2100
+            "timeout": 2100,
+            "asyncRewake": true
           }
         ]
       }
@@ -453,15 +425,9 @@
   "language": "日本語",
   "sandbox": {
     "filesystem": {
-      "allowWrite": [
-        "~/dev/src/github.com/shishi/agent-memory"
-      ]
+      "allowWrite": ["~/dev/src/github.com/shishi/agent-memory"]
     },
-    "excludedCommands": [
-      "git:*",
-      "gh:*",
-      "codex:*"
-    ]
+    "excludedCommands": ["git:*", "gh:*", "codex:*"]
   },
   "spinnerVerbs": {
     "mode": "replace",
@@ -496,13 +462,6 @@
   "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "autoMode": {
-    "hard_deny": [
-      "$defaults",
-      "Unrequested repository publication: block any action that sends commits or updates refs in a remote repository unless the user's conversation authorizes that publication. Assess the effect of scripts, wrappers, aliases, APIs and delegated tools too. Delegated repository work must retain native authorization review. A request to edit, test or commit does not authorize publication, and a trusted destination does not supply consent. Interpret the user's meaning in context; no fixed wording, branch spelling or command form is required. Prior authorization remains valid within its scope until fulfilled or withdrawn, and does not authorize later work. This rule does not block an authorized publication; other safety rules still apply. Standing permission for personal-memory saves covers only the private memory repository's own configured origin and the memory commit sent by its write protocol, not publication from ordinary repositories."
-    ],
-    "classifyAllShell": true
-  },
   "autoUpdates": false,
   "feedbackSurveyState": {
     "lastShownTime": 1754089004345

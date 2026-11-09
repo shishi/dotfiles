@@ -1,12 +1,15 @@
 # stall-guard の Codex 側。stall-guard.sh から source される (共通関数はそちら)。
 # 台帳: <根>/codex/<session_id>/ の children・accepts・interrupts・runs・offsets・waits・blocks・released・
-# notified・turns (いずれも 1 行 1 事実の JSONL) と、最後の畳み込みの結果 fold.json。
+# notified・observations・turns (いずれも 1 行 1 事実の JSONL) と、最後の畳み込みの結果 fold.json。
 # 子の run は子の rollout の task_started で始まり、同じ turn_id の task_complete / turn_aborted で閉じる。
 # hook の入力に実行中の子の一覧が無いので、rollout を読み進めた事実と受付の事実を毎回照合し直して状態を出す。
 #
 # jq の program には逆斜線の連続を書かない (Windows の起動経路で 2 個が 1 個に縮むため、正規表現は [.] などで書く)。
 
-CODEX_WAIT_MIN_MS=$((SG_INTERVAL * 1000))
+# wait_agent は子を止めずに観測を区切る待機。新しい本文は戻った時点で示すので、最低の待ち時間は
+# 内容を確かめる間隔 (数分) にする。これより短い待機の連打は、内容が進む前に確認を繰り返すだけになる。
+CODEX_WAIT_MIN_MS=180000
+CODEX_OBSERVE_INTERVAL=1200
 CODEX_ACCEPT_TTL=120
 CODEX_LOCK_STALE=10
 
@@ -93,9 +96,11 @@ def fold($L; $now):
 def unrecovered($F): [$F.runs[] | select(.end != "completed" and (.end != null or .released))];
 def age($t; $now): if $t == null then "?" else "\($now - $t) 秒" end;
 def run_fact($now):
-  "- \(.task_name // .agent_id) (agent_id \(.agent_id)、turn \(.turn_id)): 受付から \(age(.accepted_at; $now))、"
-  + "rollout の最終更新は \(age(.rollout_mtime; $now))前"
-  + (if .end != null then "、終了理由 \(.end)" else "" end) + (if .released then "、歯止めで抜けたターンに動いていた" else "" end);
+  "- \(.task_name // .agent_id) (agent_id \(.agent_id)、turn \(.turn_id)): 受付から \(age(.accepted_at; $now))"
+  + (if .end != null then "、終了理由 \(.end)" else "" end) + (if .released then "、歯止めで抜けたターンに動いていた" else "" end)
+  + (($added[.agent_id].text // "") as $t
+     | if $t != "" then "\n  rollout の最新の内容:\n" + ($t | split("\n") | map("    " + .) | join("\n"))
+       else "\n  rollout から示せる本文がまだ無い" end);
 def pending_fact($now): "- \(.target): 受付 (\(.event // "受付")) から \(age(.at; $now))、子の run の開始を確認できていない";
 # 今のターンで受け付けた running の run と開始を確認できない受付。fold.json より後に追記された受付は未結合として足す
 # (lock を取れず読み進められなかった時に、block の対象を減らさないため)。
@@ -104,6 +109,9 @@ def targets($F; $L; $turn; $now):
    pending: ([$F.pending[] | select(.turn_id == $turn and .parent == "root" and (expired(.; $now) | not))]
      + [($L.accepts // [])[($F.accepts_lines // 0):][] | select(.turn_id == $turn and (.parent // "root") == "root")
         | {target, event, turn_id, at, parent: "root", child_known: false, boundary_seen: false}])};
+def observation_due($L; $r; $now):
+  ([($L.observations // [])[] | select(.agent_id == $r.agent_id and .turn_id == $r.turn_id)] | last | .at)
+    // $r.accepted_at // $r.started_at | $now - . >= $observe_sec;
 def complied($W; $from; $to; $turn): any($W[$from:$to][]; .turn_id == $turn and ((.timeout_ms // 0) >= $wait_ms));
 def fold_file($L): (($L["fold.json"] // []) | last) // {children: [], runs: [], pending: [], accepts_lines: 0};
 '
@@ -119,7 +127,7 @@ codex_main() {
   return 0
 }
 
-codex_jq() { jq --argjson ttl "$CODEX_ACCEPT_TTL" --argjson wait_ms "$CODEX_WAIT_MIN_MS" "$@"; }
+codex_jq() { jq --argjson observe_sec "$CODEX_OBSERVE_INTERVAL" --argjson ttl "$CODEX_ACCEPT_TTL" --argjson wait_ms "$CODEX_WAIT_MIN_MS" --argjson added "${CODEX_ADDED:-{\}}" "$@"; }
 
 # hook の入口。jq 1 回目で入力から session_id と事実だけを取り出す。
 codex_hook() {
@@ -170,6 +178,11 @@ codex_hook() {
         file=${file%\?}
       fi
       sg_append "$dir/$file.jsonl" "$fact"
+      # 親の wait_agent から戻ったら、新しい本文と確認期限を照合する。
+      if [ "$file" = waits ]; then
+        codex_advance "$dir" 2
+        codex_decide post-wait "$dir" "$turn" "$tmo" "$now"
+      fi
       ;;
     subagent-start | subagent-stop)
       [ -n "$file" ] || return 0
@@ -255,11 +268,29 @@ codex_advance() {
 
 codex_decide() {
   local sub=$1 dir=$2 turn=$3 tmo=$4 now=$5 plan files
+  # Stop の理由は再提示できるよう全体を読み、通常の観測では未提示の本文だけを読む。
+  local args=()
+  # 読むのは終わっていない run と未回収の run の子だけ (終わった子の rollout は読まない)。
+  [ -f "$dir/children.jsonl" ] && [ -f "$dir/fold.json" ] && mapfile -t args < <(jq -cR 'fromjson? | objects' "$dir/children.jsonl" 2>/dev/null | jq -rs --slurpfile F "$dir/fold.json" '
+    [$F[0].runs[]? | select(.end != "completed") | .agent_id] as $live
+    | map(select((.rollout | type) == "string" and (.agent_id as $a | $live | index($a)))) | group_by(.agent_id)[] | last
+    | .agent_id, .rollout, 0' 2>/dev/null | tr -d '\r')
+  local CODEX_ADDED observations='{}' observation_rows='[]'
+  if [ "$sub" = inject ] || [ "$sub" = post-wait ]; then
+    observation_rows=$(jq -cRs 'split("\n") | map(fromjson? | objects)' "$dir/observations.jsonl" 2>/dev/null) || observation_rows='[]'
+    observations=$(jq -c 'reduce .[] as $observation ({}; .[$observation.agent_id] = $observation)' <<<"$observation_rows")
+    local i
+    for ((i = 0; i < ${#args[@]}; i += 3)); do
+      args[i + 2]=$(jq -r --arg aid "${args[i]}" '.[$aid].end // 0' <<<"$observations")
+    done
+  fi
+  CODEX_ADDED=$(sg_added_map --codex-rollout --seen-items "$observations" ${args[@]+"${args[@]}"}) || CODEX_ADDED='{}'
   sg_files "$dir" accepts waits blocks released notified
   files=(${SG_FILES[@]+"${SG_FILES[@]}"} /dev/null)
   [ -f "$dir/fold.json" ] && files+=("$dir/fold.json")
-  plan=$(codex_jq -nrR --arg sub "$sub" --arg turn "$turn" --argjson tmo "${tmo:-0}" --argjson now "$now" "$SG_JQ_LOAD$CODEX_JQ_DEFS"'
-    sg_load as $L | fold_file($L) as $F | targets($F; $L; $turn; $now) as $T
+  plan=$(printf '%s\n' "$observation_rows" | codex_jq -nrR --arg sub "$sub" --arg turn "$turn" --argjson tmo "${tmo:-0}" --argjson now "$now" "$SG_JQ_LOAD$CODEX_JQ_DEFS"'
+    (input | fromjson) as $observations
+    | (sg_load + {observations: $observations}) as $L | fold_file($L) as $F | targets($F; $L; $turn; $now) as $T
     | (($T.runs | length) + ($T.pending | length)) as $n
     | ([$T.runs[] | run_fact($now)] + [$T.pending[] | pending_fact($now)] | join("\n")) as $facts
     | if $sub == "stop-check" then
@@ -277,6 +308,17 @@ codex_decide() {
                 + " (wait_agent は子が終われば早く戻る)。\n" + $facts)} | tojson)"
             end
         end
+      elif $sub == "post-wait" then
+        # 終了の関所とは別に、持ち越した run も新しい本文か確認期限があれば観測する。
+        [$F.runs[] | select(.end == null)
+          | select(observation_due($L; .; $now) or (($added[.agent_id].text // "") != ""))] as $live
+        | ($live[] | "A\tobservations\t\({agent_id, turn_id, at: $now, end: $added[.agent_id].end, items: $added[.agent_id].items} | tojson)"),
+          ([$live[] | run_fact($now)] | join("\n")) as $facts
+        | if ($live | length) > 0 then
+          "O\t\({hookSpecificOutput: {hookEventName: "PostToolUse",
+            additionalContext: ("stall-guard: wait_agent から戻った時点の子の run の事実。rollout の内容が目的の結果へ近づいているかで、"
+              + "待ち続けるか止めるかを判断する (更新時刻だけでは判断しない)。\n" + $facts)}} | tojson)"
+        else empty end
       elif $sub == "pre-wait" then
         if $n > 0 and $tmo < $wait_ms then
           "O\t\({hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny",
@@ -285,20 +327,21 @@ codex_decide() {
         else empty end
       else
         ($L.notified // []) as $N
-        | [$F.runs[] | select(.end == null)] as $run
+        | [$F.runs[] | select(.end == null) | select(observation_due($L; .; $now))] as $run
         | [($L.released // [])[] | . as $r | select(any($N[]; .released_turn == $r.turn_id) | not)] as $rel
         | [unrecovered($F)[] | . as $u | select(any($N[]; .agent_id == $u.agent_id and .turn_id == $u.turn_id and .end == $u.end) | not)] as $unr
         | "A\tturns\t\({turn_id: $turn, at: $now} | tojson)",
+          ($run[] | "A\tobservations\t\({agent_id, turn_id, at: $now, end: $added[.agent_id].end, items: $added[.agent_id].items} | tojson)"),
           ($unr[] | "A\tnotified\t\({agent_id, turn_id, end, at: $now} | tojson)"),
           ($rel[] | "A\tnotified\t\({released_turn: .turn_id, at: $now} | tojson)"),
           (if ($run | length) + ($rel | length) + ($unr | length) == 0 then empty
-           else "O\t\({hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: (["stall-guard: 子の run の事実 (止めるか待つかはここで判断する)。"]
+           else "O\t\({hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: (["stall-guard: 子の run の事実 (止めるか待つかはここで判断する。進捗は rollout の内容が目的の結果へ近づいているかで判断し、更新時刻だけでは判断しない)。"]
              + (if ($run | length) > 0 then ["動いている run (前のターンから持ち越したものを含む):"] + [$run[] | run_fact($now)
                  + (if .accepted_turn == null then "、受付の記録なし (由来不明)" elif .accepted_turn != $turn then "、受け付けたターン \(.accepted_turn)" else "" end)] else [] end)
              + (if ($unr | length) > 0 then ["完了せずに終わった run (未回収。成果を受け取れていない):"] + [$unr[] | run_fact($now)] else [] end)
              + (if ($rel | length) > 0 then ["wait_agent で待たずに抜けたターン: " + ([$rel[] | .turn_id] | join(", "))] else [] end)
              | join("\n"))}} | tojson)" end)
-      end' "${files[@]}" 2>/dev/null) || return 0
+      end' - "${files[@]}" 2>/dev/null) || return 0
   sg_apply "$dir" "$plan"
 }
 

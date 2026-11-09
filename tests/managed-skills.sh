@@ -170,5 +170,42 @@ else
   ng "fork removes the desired-state record"
 fi
 
+TRACKED_SKILL="$HOME_DIR/.agent-shared/skills/tracked-local"
+prepare_tracked_skill() {
+  mkdir -p "$TRACKED_SKILL"
+  git -C "$TRACKED_SKILL" init -q
+  printf 'local authored contents\n' >"$TRACKED_SKILL/SKILL.md"
+  : >"$TRACKED_SKILL/.dotfiles-managed-skill"
+  git -C "$TRACKED_SKILL" add -- SKILL.md
+}
+
+prepare_tracked_skill
+run_manager sync || ng "sync accepts a tracked fork removed from the manifest"
+assert "sync preserves tracked forks with stale markers" test -f "$TRACKED_SKILL/SKILL.md"
+assert "sync releases a tracked fork marker" test ! -e "$TRACKED_SKILL/.dotfiles-managed-skill"
+
+prepare_tracked_skill
+printf 'tracked-local\texample/skills\tskills/tracked-local\tcodex\n' >>"$DOTFILES/agent-shared/managed-skills.tsv"
+if run_manager sync; then
+  ng "sync refuses to overwrite a Git-tracked skill"
+else
+  ok "sync refuses to overwrite a Git-tracked skill"
+fi
+assert "sync leaves authored contents unchanged" test "$(cat "$TRACKED_SKILL/SKILL.md")" = 'local authored contents'
+
+prepare_tracked_skill
+run_manager remove tracked-local || ng "remove accepts a stale tracked marker"
+assert "remove preserves a Git-tracked skill" test -f "$TRACKED_SKILL/SKILL.md"
+assert "remove releases a tracked marker" test ! -e "$TRACKED_SKILL/.dotfiles-managed-skill"
+
+prepare_tracked_skill
+manifest_before=$(cat "$DOTFILES/agent-shared/managed-skills.tsv")
+if run_manager add example/skills tracked-local codex; then
+  ng "add rejects a tracked skill with a stale marker"
+else
+  ok "add rejects a tracked skill with a stale marker"
+fi
+assert "tracked add collision leaves the manifest unchanged" test "$(cat "$DOTFILES/agent-shared/managed-skills.tsv")" = "$manifest_before"
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

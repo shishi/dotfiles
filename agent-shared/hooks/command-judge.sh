@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Bash 実行前に、コマンドを独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
-# エージェント自身の作業を続けられなくする操作と、外部へ投稿する本文をファイルから読ませる操作を止め、
+# ツール実行前に、操作を独立した判定役の AI に判定させる。判定基準は command-judge-prompt.md にあり、
+# エージェント自身の作業を続けられなくする操作、外部へ投稿する本文をファイルから読ませる操作、
+# 処理を根拠のない短い上限で打ち切らせる操作を止め、
 # 外部へ軽微でなく取り返しのつかない影響を与える操作や通常の push は、許可が無ければ実行させない。
 #
-#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の直近のメッセージを保存する
-#   command-judge.sh [--cli claude|codex]                   PreToolUse(Bash): 判定して該当すれば止める
+#   command-judge.sh [--cli claude|codex] --record-prompt   UserPromptSubmit: 利用者の発言と会話文脈を保存する
+#   command-judge.sh [--cli claude|codex]                   PreToolUse: 判定して該当すれば止める
 #
 # コマンドの語を照合したり構文解析したりはしない。何が起きるかの判断は判定役に任せ、
-# このスクリプトはコマンド・作業エージェントが述べた目的・利用者の直近のメッセージを渡して結果を適用する。
+# このスクリプトは操作の分類を先に行い、必要な場合だけ会話と承認を照合する。
 #
 # 判定できないときも黙って通さない。判定役を動かせない状態 (codex が無い、ログイン切れ等) は
 # 全コマンドに共通なので、利用者に警告して通す。止めると、ガード自身がエージェントの作業を止めてしまう。
@@ -30,12 +31,7 @@ case "$cli" in claude|codex) ;; *) bad_args="--cli の値 '$cli' が claude で�
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 state_dir="${COMMAND_JUDGE_STATE_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/command-judge-${UID:-user}}"
 safe_ttl_seconds=86400
-# 判定役へ渡す利用者のメッセージの範囲。依頼と許可の後に、進捗確認や補足を何通も挟んでも許可を失わないため。
-# 古い許可を使い続けないよう、最新以外は時間でも区切る。判定役の入力を抑えるため、最新以外で recent_prompt_chars
-# 文字を超えるメッセージは、それより前と一緒に渡さない (一部だけを渡すと、省いた部分にある撤回が届かないため)。
-recent_prompts=20
-recent_prompt_seconds=43200
-recent_prompt_chars=4000
+# 承認とその後の撤回を欠かさないよう、同じセッションの履歴は時刻・件数・長さで切らない。
 judge_timeout_seconds=25
 # 判定役が失敗したときに、判定役そのものが動くかを確かめる問いの締切。実測では約 4 秒で答える。
 probe_timeout_seconds=12
@@ -72,7 +68,7 @@ warn() {
 
 # 判定役を動かせない: 警告して通す。
 unjudged() {
-  warn "$1" "$2ため、コマンドを判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、許可の無い push などの外部への操作も止まらない。"
+  warn "$1" "$2ため、操作を判定せずに通した。直すまで、再起動などエージェント自身の作業を止める操作、本文をファイルで渡す投稿、根拠のない短い上限での打ち切り、許可の無い push などの外部への操作も止まらない。"
 }
 
 # このコマンドだけ判定結果を得られない: Claude は確認、Codex は止める。
@@ -87,8 +83,9 @@ undecided() {
 run_codex() {
   env -u OPENAI_BASE_URL -u OPENAI_API_KEY -u CODEX_API_KEY COMMAND_JUDGE_ACTIVE=1 \
     "$py_bin" -I "$hook_dir/lib/run-judge.py" "$1" "$judge_cwd" \
-    codex exec --ignore-user-config --ephemeral --ignore-rules -s read-only --skip-git-repo-check \
-    -m gpt-6-luna -c model_reasoning_effort=high -c approval_policy=never -c project_doc_max_bytes=0 \
+    codex exec --ignore-user-config -c 'openai_base_url=""' --ephemeral --ignore-rules -s read-only --skip-git-repo-check \
+    -m gpt-6.1-sol -c model_reasoning_effort=medium -c approval_policy=never -c project_doc_max_bytes=0 \
+    -c "model_instructions_file=$(json_string "$hook_dir/command-judge-role.md")" -c skills.include_instructions=false \
     --disable shell_tool --disable unified_exec --disable view_image --disable apps --disable plugins \
     -c 'web_search="disabled"' -
 }
@@ -107,7 +104,7 @@ judge_failed() {
 
 prepare_state_dir() {
   umask 077
-  mkdir -p "$state_dir/prompts" "$state_dir/safe" "$state_dir/judge-cwd" 2>/dev/null || return 1
+  mkdir -p "$state_dir/prompts" "$state_dir/permissions" "$state_dir/safe" "$state_dir/judge-cwd" 2>/dev/null || return 1
   [ -d "$state_dir" ] && [ ! -L "$state_dir" ] && [ -O "$state_dir" ] || return 1
   chmod 700 "$state_dir" 2>/dev/null || return 1
 }
@@ -172,8 +169,8 @@ if [ "$mode" = record ]; then
   session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
   valid_session "$session" || record_failed "セッション ID を読めなかった" "$blocked"
   prepare_state_dir || record_failed "状態ディレクトリ $state_dir を用意できなかった" "$blocked"
-  # 直近 recent_prompts 件のメッセージを 1 行 1 件の JSON で残す。許可は、その後の進捗確認などのメッセージを
-  # 挟んでも続くため。書き込みに失敗したら履歴ごと消す: 新しいメッセージを欠いた古い履歴を今の依頼として使わないため。
+  # メッセージを 1 行 1 件の JSON で残す。書き込みに失敗したら履歴ごと消す:
+  # 新しいメッセージを欠いた古い履歴を今の依頼として使わないため。
   prompt_path="$state_dir/prompts/$session"
   previous=""
   if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
@@ -187,9 +184,9 @@ if [ "$mode" = record ]; then
   [ -z "${AGENT_DELEGATED_SESSION:-}" ] || exit 0
   prompt=$(printf '%s' "$input" | jq -j '.prompt // ""' 2>/dev/null)
   assistant_context=""
-  if [ "$cli" = codex ] && find_python; then
+  if find_python; then
     assistant_context=$(printf '%s' "$input" | "$py_bin" -I "$hook_dir/lib/command-judge-context.py" 2>/dev/null)
-    case $? in 0) ;; 3) previous="" ;; *) assistant_context="" ;; esac
+    case $? in 0) ;; *) assistant_context="" ;; esac
   fi
   # Claude のセッションでは、利用者のメッセージは判定役 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら保存しない。
   omitted=""
@@ -203,12 +200,18 @@ if [ "$mode" = record ]; then
     if [ -n "$omitted" ]; then
       prompt="(利用者のメッセージは${omitted}ため省略した)"
       previous=""
+      assistant_context=""
+    else
+      printf '%s' "$assistant_context" | has_secret
+      case $? in
+        0|2) assistant_context="" ;;
+      esac
     fi
   fi
   { printf '%s\n' "$previous" | jq -c 'select(type == "object" and (.at | numbers) and (.text | strings))' 2>/dev/null
-    # 本文は標準入力で渡す。引数にすると、長いメッセージで引数長の上限を超えて記録に失敗する。
-    printf '%s' "$prompt" | jq -Rsc --argjson at "$(date +%s)" --arg context "$assistant_context" '{at: $at, text: ., assistant_context: $context}'
-  } | tail -n "$recent_prompts" | write_atomic "$prompt_path" || {
+    # 本文と文脈は標準入力で渡し、長い発言を引数の長さ制限へ載せない。
+    printf '%s\0%s' "$prompt" "$assistant_context" | jq -Rsc --argjson at "$(date +%s)" 'split("\u0000") | {at: $at, text: .[0], assistant_context: .[1]}'
+  } | write_atomic "$prompt_path" || {
     rm -f -- "$prompt_path" 2>/dev/null
     record_failed "書き込みに失敗した" "$lost"
   }
@@ -221,18 +224,23 @@ if [ "$mode" = record ]; then
 fi
 
 # 判定役の codex がツールを使おうとしても、判定の連鎖を起こさない (判定役はツールを無効にして起動する)。
-[ -z "${COMMAND_JUDGE_ACTIVE:-}" ] || decide deny "判定役はコマンドを実行しない"
+[ -z "${COMMAND_JUDGE_ACTIVE:-}" ] || decide deny "判定役はツールを実行しない"
 
 [ -z "$bad_args" ] || unjudged bad-args "hook の登録の引数が正しくない ($bad_args)"
 command -v jq >/dev/null 2>&1 || unjudged no-jq "jq が見つからない"
 find_python || unjudged no-python "起動できる python が見つからない"
 
 input=$(cat)
+tool_name=$(printf '%s' "$input" | jq -ej '.tool_name | select(type == "string" and length > 0)' 2>/dev/null) ||
+  unjudged input "フックの入力からツール名を読めなかった"
+tool_input=$(printf '%s' "$input" | jq -cS 'if has("tool_input") then .tool_input else error end' 2>/dev/null) ||
+  unjudged input "フックの入力からツール入力を読めなかった"
 # Codex は argv 配列や cmd の欄で渡すことがあるため、引用した 1 行のコマンドに直して判定役へ渡す。
 command=$(printf '%s' "$input" | jq -ej '.tool_input | (.command // .cmd) |
-  if type == "array" then map(tostring) | @sh elif type == "string" then . else error end' 2>/dev/null) ||
-  unjudged input "フックの入力からコマンドを読めなかった"
-[ -n "$command" ] || exit 0
+  if type == "array" then map(tostring) | @sh elif type == "string" then . else error end' 2>/dev/null) || {
+  [ "$tool_name" != Bash ] || unjudged input "フックの入力からコマンドを読めなかった"
+  command=""
+}
 purpose=$(printf '%s' "$input" | jq -j '.tool_input.description // "" | tostring' 2>/dev/null) || purpose=""
 [ -n "$purpose" ] || purpose="(not provided)"
 session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
@@ -254,32 +262,81 @@ case "$workdir" in
   *) cwd="${cwd:+$cwd/}$workdir" ;;
 esac
 shell="$shell / エージェント: $cli / 作業ディレクトリ: ${cwd:-(不明)}"
+# Claude Code の Bash は timeout を指定しない前景の実行をこの既定値で打ち切る。判定役が既定の上限を推測しないよう渡す。
+[ "$cli" = claude ] && [ -n "${BASH_DEFAULT_TIMEOUT_MS:-}" ] &&
+  shell="$shell / Bash の既定の上限: ${BASH_DEFAULT_TIMEOUT_MS} ms (指定できる最大 ${BASH_MAX_TIMEOUT_MS:-不明} ms)"
 
-# 判定基準を変えたら、それまでの安全判定は使わない。目的の説明や作業ディレクトリが変われば判定役が得る情報も変わるため鍵に含める。
-# 利用者のメッセージは含めない: 安全と判定したものは、利用者の依頼に関係なく安全と判定している。
-key=$({ cat "$hook_dir/command-judge-prompt.md" && printf '\0%s\0%s\0%s' "$shell" "$command" "$purpose"; } | hash_stdin) &&
+now=$(date +%s)
+prompt_path="$state_dir/prompts/$session"
+if ! valid_session "$session" || [ -n "${AGENT_DELEGATED_SESSION:-}" ]; then
+  prompt_path=/dev/null
+fi
+context_args=(--context)
+[ "$cli" != claude ] || context_args+=(--mask)
+context_request='{}'
+context_digest=
+context_manifest='[]'
+judge_stop_at=$((now + 137))
+
+context_helper() {
+  local remaining=$((judge_stop_at - $(date +%s)))
+  [ "$remaining" -gt 0 ] || return 124
+  "$py_bin" -I "$hook_dir/lib/run-judge.py" "$remaining" "$judge_cwd" \
+    "$py_bin" -I "$hook_dir/lib/command-judge-context.py" "$@"
+}
+
+load_context() {
+  local next=${1:-'{}'} prepared digest
+  context_request=$(printf '%s\0%s' "$context_request" "$next" | jq -Rsc '
+    split("\u0000") | map(fromjson) | .[0] as $previous | .[1] as $next
+    | if ($next | type) != "object" then error("invalid context request") else $next end
+    | .files = (($previous.files // []) + (.files // []) | unique)
+    | .records = (($previous.records // []) + (.records // []) | unique)') ||
+    undecided "文脈の取得要求を読み取れなかった"
+  prepared=$(printf '%s\0%s\0%s' "$input" "$context_request" "$cwd" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + {context_request: (.[1] | fromjson), context_cwd: .[2]}') ||
+    undecided "文脈の取得入力を用意できなかった"
+  assistant_context=$(printf '%s' "$prepared" | context_helper "${context_args[@]}" 2>/dev/null) ||
+    undecided "会話文脈を秘密情報を伏せた状態で取得できなかった"
+  context_manifest=$(printf '%s\0%s' "$context_manifest" "$assistant_context" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + ((.[1] | fromjson).files // []
+      | map(select((.sha256 | type) == "string") | {path, sha256})) | unique') ||
+    undecided "取得した原文の版を保持できなかった"
+  user_message="(none)"
+  if [ -f "$prompt_path" ] && [ ! -L "$prompt_path" ]; then
+    user_message=$(jq -sc 'map({input: .text, input_context: (.assistant_context // "")})' "$prompt_path" 2>/dev/null) ||
+      undecided "利用者の記録を読み取れなかった"
+  fi
+  model_context=$(printf '%s' "$assistant_context" | jq -c 'if .files then .files |= map(del(.sha256)) else . end') ||
+    undecided "モデルへ渡す証拠を用意できなかった"
+  context_data="$(section CONTEXT "$model_context")$(section USER "$user_message")"
+  digest=$(printf '%s' "$context_data" | hash_stdin)
+  [ "$digest" != "$context_digest" ] || undecided "追加で取得できる証拠が変わらず、操作または承認の根拠を確定できなかった"
+  context_digest=$digest
+}
+
+verify_context_files() {
+  [ "$context_manifest" != '[]' ] || return 0
+  local status
+  printf '%s\0%s\0%s' "$input" "$context_manifest" "$cwd" | jq -Rsc '
+    split("\u0000") | (.[0] | fromjson) + {context_files: (.[1] | fromjson), context_cwd: .[2]}' |
+    context_helper --verify-files 2>/dev/null
+  status=$?
+  [ "$status" -eq 0 ] && return 0
+  [ "$status" -ne 124 ] || undecided "取得した原文の版を照合する時間を確保できなかった"
+  undecided "判定中に取得したファイルの版が変わったか、現在の版を照合できなかったため再判定する必要がある"
+}
+
+# 文脈に依存しない安全判定だけを保存するため、会話や経過時間を鍵に含めない。
+policy=$(cat "$hook_dir/command-judge-role.md" "$hook_dir/command-judge-prompt.md" "$hook_dir/command-judge-state-prompt.md" "$hook_dir/command-judge-authorization-prompt.md" | hash_stdin)
+key=$(printf '%s\0%s\0%s\0%s' "$policy" "$shell" "$tool_name" "$tool_input" | hash_stdin) &&
   [ -n "$key" ] || unjudged hash "判定のキャッシュの鍵を計算できなかった"
 safe_path="$state_dir/safe/$key"
-now=$(date +%s)
 if [ -f "$safe_path" ] && [ ! -L "$safe_path" ] && IFS= read -r cached_at <"$safe_path"; then
   case "$cached_at" in
     ""|*[!0-9]*) ;;
     *) [ $((now - cached_at)) -ge 0 ] && [ $((now - cached_at)) -le "$safe_ttl_seconds" ] && exit 0 ;;
   esac
-fi
-
-user_message="(none)"
-if valid_session "$session" && [ -f "$state_dir/prompts/$session" ] && [ ! -L "$state_dir/prompts/$session" ]; then
-  # 古い順に、何分前のメッセージかを添えて並べる。最新は時間や長さに関係なく全文を渡す。
-  user_message=$(jq -rs --argjson now "$now" --argjson max_age "$recent_prompt_seconds" --argjson chars "$recent_prompt_chars" '
-    map(select(type == "object" and (.at | numbers) and (.text | strings)))
-    | (length - 1) as $last
-    | ([to_entries[] | select(.key != $last and ((.value.text | length) + ((.value.assistant_context // "") | length)) > $chars) | .key] | max // -1) as $long
-    | [to_entries[] | select(.key > $long) | select(.key == $last or $now - .value.at <= $max_age)
-       | "[\((($now - .value.at) / 60) | floor) 分前]\n" + (if (.value.assistant_context // "") != "" then "直前のアシスタントの回答（文脈）:\n\(.value.assistant_context)\n" else "" end) + "利用者:\n\(.value.text)"]
-    | join("\n\n")' "$state_dir/prompts/$session" 2>/dev/null) ||
-    user_message="(none)"
-  [ -n "$user_message" ] || user_message="(none)"
 fi
 
 # 節の区切りを入力から推測できないようにし、データ側から節を閉じて指示を足せないようにする。
@@ -288,21 +345,19 @@ nonce=$(od -An -tx1 -N8 /dev/urandom 2>/dev/null | tr -d ' \n')
 section() {
   printf '\n<<<%s %s>>>\n%s\n<<<END %s %s>>>\n' "$1" "$nonce" "$2" "$1" "$nonce"
 }
-data=$(section SHELL "$shell" && section COMMAND "$command" && section PURPOSE "$purpose")
+data=$(section SHELL "$shell" && section TOOL_NAME "$tool_name" && section TOOL_INPUT "$tool_input" && section COMMAND "$command" && section PURPOSE "$purpose")
 
-# Claude のセッションでは、コマンドは別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
+# Claude のセッションでは、ツール入力は別の提供元 (OpenAI) へ初めて渡る。秘密情報らしき文字列を含むなら送らない。
 # 利用者のメッセージは記録時に検査済み。Codex のセッションでは同じ内容が既に Codex のモデルに渡っている。
 if [ "$cli" = claude ]; then
   printf '%s' "$data" | has_secret
   case $? in
-    0) decide ask "コマンドか目的の説明に秘密情報らしき文字列があり、判定役 (codex) へ送らなかった。実行してよいか確認する" ;;
+    0) decide ask "ツール入力か目的の説明に秘密情報らしき文字列があり、判定役 (codex) へ送らなかった。実行してよいか確認する" ;;
     2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
   esac
 fi
-data="$data$(section USER "$user_message")"
 
 # 判定役は両 CLI 共通で codex exec にする。Claude Desktop から起動した子の claude -p は認証できないため。
-# モデルは応答時間を優先して gpt-6-luna にし、推論は high にする (low では変数を経由した再起動を見逃した)。
 # 送信先は既定の OpenAI に固定し (--ignore-user-config で config.toml の接続先も読まない)、認証は利用者が
 # codex login で選んだもの (CODEX_HOME の auth.json) だけを使う。環境変数の API キーへは切り替えない。
 judge_cwd="$state_dir/judge-cwd"
@@ -319,44 +374,116 @@ if [ -f "$down_stamp" ] && [ ! -L "$down_stamp" ] && read -r down_at down_cause 
        fi ;;
   esac
 fi
-output=$({ cat "$hook_dir/command-judge-prompt.md" && printf '%s' "$data"; } | run_codex "$judge_timeout_seconds")
-status=$?
-case "$status" in
-  0) ;;
-  124) judge_failed "判定役が ${judge_timeout_seconds} 秒以内に答えなかった" ;;
-  127) unjudged no-codex "判定役に使う codex が見つからない" ;;
-  77)
-    # run-judge.py が判定役の認証エラー (HTTP 401) の繰り返しを見て止めた。問い直しても同じなので、
-    # 判定役が答えないときと同じく、しばらく判定を省く。
-    printf '%s login\n' "$(date +%s)" >"$down_stamp" 2>/dev/null
-    unjudged judge-login "$JUDGE_LOGIN_INVALID" ;;
-  *) judge_failed "判定役の codex exec が終了コード $status で失敗した" ;;
-esac
+run_stage() {
+  local stage=$1 prompt_file=$2 payload=$3 status characters
+  characters=$({ cat "$prompt_file" && section STAGE "$stage" && printf '%s' "$payload"; } |
+    "$py_bin" -I -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8")))') || undecided "判定入力の長さを確認できなかった"
+  [ "$characters" -le 1048576 ] || undecided "判定入力が Codex の 1048576 文字の上限を超えたため、必要な原文をさらに絞る必要がある"
+  if [ "$cli" = claude ]; then
+    printf '%s' "$payload" | has_secret
+    case $? in
+      0) decide ask "判定に必要な情報に秘密情報らしき文字列があり、判定役へ送らなかった。実行してよいか確認する" ;;
+      2) unjudged gitleaks "送信前の秘密情報の検査 (gitleaks) を実行できない" ;;
+    esac
+  fi
+  [ $((judge_stop_at - $(date +%s))) -ge "$judge_timeout_seconds" ] ||
+    undecided "hook の実行上限内で、追加の証拠を判定する時間を確保できなかった"
+  output=$({ cat "$prompt_file" && section STAGE "$stage" && printf '%s' "$payload"; } | run_codex "$judge_timeout_seconds" 2>/dev/null)
+  status=$?
+  case "$status" in
+    0) ;;
+    124) judge_failed "判定役が ${judge_timeout_seconds} 秒以内に答えなかった" ;;
+    127) unjudged no-codex "判定役の codex が見つからない" ;;
+    77)
+      printf '%s login\n' "$(date +%s)" >"$down_stamp" 2>/dev/null
+      unjudged judge-login "$JUDGE_LOGIN_INVALID" ;;
+    *) judge_failed "判定役の codex exec が終了コード $status で失敗した" ;;
+  esac
+}
 
-verdict=$(printf '%s' "$output" | jq -R -s -c '
-  split("\n") | map(fromjson? | select(type == "object" and
-    ([.danger, .user_requested, .body_from_file, .external] | all(type == "boolean")))) | last // empty
-' 2>/dev/null)
-[ -n "$verdict" ] || judge_failed "判定役の出力から判定結果の JSON を読み取れなかった"
+parse_effect() {
+  verdict=$(printf '%s' "$output" | jq -Rsc '
+    split("\n") | map(fromjson? | select(type == "object" and
+      ([.danger, .body_from_file, .external, .short_cutoff, .needs_context, .context_free] | all(type == "boolean")) and
+      (.reason | type == "string"))) | last // empty' 2>/dev/null)
+  [ -n "$verdict" ] || judge_failed "判定役の出力から効果の判定を読み取れなかった"
+}
+
+run_stage effect "$hook_dir/command-judge-prompt.md" "$data"
+parse_effect
+used_context=false
+while [ "$(jq -r .needs_context <<<"$verdict")" = true ]; do
+  load_context "$(jq -c '.context_request // {}' <<<"$verdict")"
+  run_stage effect-context "$hook_dir/command-judge-prompt.md" "$data$context_data"
+  parse_effect
+  used_context=true
+done
 
 reason=$(jq -r '.reason // "" | tostring | sub("[。.[:space:]]+$"; "")' <<<"$verdict")
 if [ "$(jq -r .body_from_file <<<"$verdict")" = true ]; then
-  decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をコマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
+  decide deny "外部へ投稿する本文を、実行前からあるファイルから読ませているため止めた: ${reason}。sandbox の有無で一時ディレクトリが変わると、同じパスで別の残骸ファイルが読まれても投稿は失敗しない。本文をツールの引数に直接書くか、コマンドの中に書いて標準入力から渡し (パスには - を指定)、再実行すること"
+fi
+if [ "$(jq -r .short_cutoff <<<"$verdict")" = true ]; then
+  decide deny "処理を、通常の所要時間に余裕のない根拠のない短い上限で打ち切らせるため止めた: ${reason}。上限は実測や外部の制約から余裕を持たせて決め、根拠が無ければ十分に長い上限にするか背景で実行し、その間は出力の内容を読んで目的の結果へ進んでいるかを確かめること (大きさや行数の増加だけでは進捗と扱わない)"
 fi
 danger=$(jq -r .danger <<<"$verdict")
 external=$(jq -r .external <<<"$verdict")
 if [ "$danger" = false ] && [ "$external" = false ]; then
-  # 利用者のメッセージに関係なく安全と判定したものだけを再利用する。
-  printf '%s\n' "$now" | write_atomic "$safe_path" || true
+  verify_context_files
+  if [ "$used_context" = false ] && [ "$(jq -r .context_free <<<"$verdict")" = true ]; then
+    printf '%s\n' "$now" | write_atomic "$safe_path" || true
+  fi
   exit 0
 fi
-[ "$(jq -r .user_requested <<<"$verdict")" = true ] && exit 0
+state_path="$state_dir/permissions/$cli-$session"
+state_helper="$hook_dir/lib/command-judge-state.py"
+if [ "$prompt_path" = /dev/null ]; then
+  permissions='{"facts":[]}'
+else
+  update=$("$py_bin" -I "$state_helper" prepare "$prompt_path" "$state_path" "$policy" 2>/dev/null) ||
+    undecided "承認状態と本人入力の出典を照合できなかった"
+  if [ "$(jq '.new_inputs | length' <<<"$update")" -gt 0 ]; then
+    run_stage state "$hook_dir/command-judge-state-prompt.md" "$(section UPDATE "$update")"
+    answer=$(printf '%s' "$output" | jq -Rsc 'split("\n") | map(fromjson? | select(type == "object" and has("facts"))) | last // empty')
+  else
+    answer=$(printf '%s' "$update" | jq -c '{facts: .previous}')
+  fi
+  permissions=$(printf '%s\0%s' "$update" "$answer" | jq -Rsc 'split("\u0000") | {update: (.[0] | fromjson), answer: (.[1] | fromjson)}' |
+    "$py_bin" -I "$state_helper" finish "$prompt_path" "$state_path" "$policy" 2>/dev/null) ||
+    judge_failed "承認状態の形式・出典または記録の版が一致しなかった"
+  printf '%s\n' "$permissions" | write_atomic "$state_path" || undecided "承認状態を保存できなかった"
+fi
+# 未記録の発言は許可を作れないが、撤回や対象変更を見落とさないため照合する。
+authorization_context=$(printf '%s' "$input" | context_helper "${context_args[@]}" --since "$prompt_path" 2>/dev/null) ||
+  undecided "現在の会話文脈を取得できなかった"
+authorization_data="$data$(section EFFECT "$verdict")$(section PERMISSIONS "$permissions")$(section CONTEXT "$authorization_context")"
+run_stage authorize "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data"
+parse_authorization() {
+  authorization=$(printf '%s' "$output" | jq -Rsc 'split("\n") | map(fromjson? | select(type == "object" and
+    ([.user_requested, .needs_context] | all(type == "boolean")) and (.reason | type == "string"))) | last // empty')
+  [ -n "$authorization" ] || judge_failed "判定役の出力から承認の判定を読み取れなかった"
+}
+parse_authorization
+context_digest=
+while [ "$(jq -r .needs_context <<<"$authorization")" = true ]; do
+  load_context "$(jq -c '.context_request // {}' <<<"$authorization")"
+  run_stage authorize-context "$hook_dir/command-judge-authorization-prompt.md" "$authorization_data$(section EVIDENCE "$model_context")$(section USER "$user_message")"
+  parse_authorization
+done
+if [ "$prompt_path" != /dev/null ]; then
+  printf '%s\n' "$permissions" | "$py_bin" -I "$state_helper" verify "$prompt_path" "$state_path" "$policy" 2>/dev/null ||
+    undecided "判定中に本人入力が変わったため、現在の承認を再判定する必要がある"
+fi
+if [ "$(jq -r .user_requested <<<"$authorization")" = true ]; then
+  verify_context_files
+  exit 0
+fi
 if [ "$danger" = true ]; then
   [ "$external" = true ] &&
-    decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで、両方の操作を対象を明示して依頼してもらってから実行し直すこと"
-  decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、利用者にこのターンで明示的に依頼してもらってから実行し直すこと"
+    decide deny "エージェント自身の作業を続けられなくなる操作と、このマシンの外へ影響する操作を含むと判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけ両方の操作と対象への許可を得ること"
+  decide deny "エージェント自身の作業を続けられなくなる操作と判定したため止めた: ${reason}。必要な操作なら、会話内の既存承認を照合し、不足する場合だけこの操作と対象への許可を得ること"
 fi
 # Claude は利用者に確認させ、その場の許可で実行させる。Codex の PreToolUse は "ask" を受け付けないので止める。
 [ "$cli" = codex ] &&
-  decide deny "このマシンの外へ影響する操作で、利用者の許可が無いため止めた: ${reason}。利用者にこの操作をしてよいか尋ね、何をどこへ行うかを書いた許可 (例: 「origin へ push してよい」) をもらい、対象 (remote・ブランチなど) をコマンドに明示して実行し直すこと"
+  decide deny "このマシンの外へ影響する操作で、利用者の許可が無いため止めた: ${reason}。利用者にこの操作をしてよいか尋ね、何をどこへ行うかを書いた許可 (例: 「origin へ push してよい」) をもらい、対象 (remote・ブランチなど) をツール入力に明示して実行し直すこと"
 decide ask "このマシンの外へ影響する操作のため、実行してよいか確認する: ${reason}"

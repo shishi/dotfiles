@@ -3,13 +3,14 @@ import type { On, TurnStepChunk } from 'claude-code'
 
 const STEP = { turnId: 't1', index: 0, model: 'm', messageCount: 2 } as const
 const PREFIX = '[出力ゲート: 検査できませんでした'
-const UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+const UNAVAILABLE = '出力検査が完了していないため、回答は確定していません。\n\n'
 const GATE_TOOL = 'mcp__output-gate__gate_findings'
 const NOT_ISSUED = '出力ゲートが出した呼び出しではなく、検査は行われていない'
 const UNMET_TEXT = '出力ゲート: 次の点は確かめられていません\n- 確認していない主張: 「全部通った」'
 const UNMET = '\n\n---\n' + UNMET_TEXT
 
 type Payload = {
+  session_id?: string; turn_id?: string; context_dir?: string; request_id?: string
   origin: string; latest_user: string; recent_messages: { role: string; text: string }[]; bodies: string[]
   turn_start_context: { role: string; text: string }[]; shown_text: string; final: boolean; round: number
   continuation?: string; engines?: string[]; previous_findings?: unknown
@@ -34,7 +35,8 @@ const FINDING = { kind: 'unverified_claim', excerpt: { source: 'draft', text: '�
 const unmet = (p: Payload): Result => {
   const marked = [...p.bodies.slice(0, -1), p.bodies.at(-1) + UNMET]
   const base = { ...checked(p), findings: [FINDING], unmet_text: UNMET_TEXT, display_text: marked.join('\n\n'),
-    corrected_bodies: p.bodies }
+    corrected_bodies: p.bodies,
+    progress_state: { round: p.round, stalled: 0, bodies: p.bodies, findings: [FINDING], evidence: p.evidence } }
   if (p.continuation === 'none') return { ...base, text: marked.join('\n\n'), bodies: marked }
   const fallback = ['[出力ゲート: 指摘を保存できなかったため、直させずに表示します]\n\n' + marked[0], ...marked.slice(1)]
   return { ...base, text: null, bodies: null, agent_message: '指摘: 全部通った の証拠が無い',
@@ -45,11 +47,14 @@ const codexFailed = (p: Payload): Result => ({ status: 'unchecked', text: `[出�
   engine_failures: [{ family: 'codex', reason: 'codex 不調' }] })
 
 type Fs = Map<string, string>
+const clocks = new WeakMap<Fs, ReturnType<typeof mock.clock>>()
 const norm = (path: string) => String(path).replaceAll('\\', '/').replace(/^[A-Za-z]:/, '')
 
 // このマシンで出力ゲートを有効にした状態 (状態ディレクトリの claude-enabled を読める) と、記憶だけのファイル。
 function world(on: On, options: { env?: Record<string, string>; enabled?: boolean; messages?: Message[] } = {}) {
+  const clock = mock.clock(on)
   const fs: Fs = new Map()
+  clocks.set(fs, clock)
   if (options.enabled ?? true) fs.set('/state/output-gate/claude-enabled', '')
   mock.env(on, { HOME: '/home/u', XDG_STATE_HOME: '/state', ...options.env })
   on('session.id', () => ({ value: 'sess-1' }))
@@ -79,13 +84,17 @@ function world(on: On, options: { env?: Record<string, string>; enabled?: boolea
 }
 
 const runs: { argv: string[]; env: Record<string, string> }[] = []
-type Checker = { prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result; receive?: (r: { payload: Payload; reply: string; engine: unknown; engine_failures?: unknown[] }) => Result }
+type Checker = { spawn?: (input: string) => AsyncGenerator<{ stream: 'stdout'; text: string }, object>; prepare?: () => ReturnType<typeof ok>; bulk?: (p: Payload) => Result;
+  confirm?: (r: { context_dir: string; token: string; text: string }) => Result;
+  finish?: (r: { initial: Result; rechecked: Result }) => Result;
+  receive?: (r: { payload: Payload; reply: string; transaction?: unknown; engine: unknown; engine_failures?: unknown[]; model_attempts?: unknown[] }) => Result }
 // 検査処理の代わり: Python の確認・ファイルの置き換えと削除は記憶のファイルで行い、検査は与えた関数で答える。
 function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), calls: Payload[] = []) {
   runs.length = 0
   const given = typeof answer === 'function' ? { bulk: answer } : answer
-  on('process.run', (_$, e) => {
+  const execute = (e: { argv: readonly unknown[]; init?: { stdin?: string; env?: Record<string, string> } }) => {
     const argv = e.argv.map(String)
+    if (argv.includes('--limits')) return ok({ timeout_seconds: Number(e.init?.env?.['OUTPUT_GATE_TIMEOUT'] || 3600), cleanup_seconds: 40, hedge_seconds: 40 })
     const code = argv.indexOf('-c')
     if (code >= 0 && argv.length > code + 2) {
       const ops = JSON.parse(argv[code + 2]!) as { replace: [string, string][]; remove: string[] }
@@ -99,15 +108,32 @@ function checker(on: On, fs: Fs, answer: Checker | ((p: Payload) => Result), cal
     if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
     runs.push({ argv, env: e.init?.env ?? {} })
     if (argv.includes('--prepare') && given.prepare) return given.prepare()
-    if (argv.includes('--prepare')) return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', schema: {} })
+    if (argv.includes('--prepare')) return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', schema: SCHEMA })
     if (argv.includes('--receive')) {
       const request = JSON.parse(e.init.stdin)
+      if (request.unavailable_reason && !given.receive) return { value: { ...done, exitCode: 1, stdout: '' } }
       calls.push(request.payload)
-      return ok(given.receive!(request))
+      return ok(request.engine?.family === 'codex' && JSON.parse(request.reply).status ? JSON.parse(request.reply) : given.receive!(request))
     }
+    if (argv.includes('--judge')) {
+      const request = JSON.parse(e.init.stdin)
+      const result = given.bulk!(request.payload)
+      if (result.status === 'unchecked' && !result.engine && Array.isArray(result.engine_failures) && result.engine_failures.length)
+        return ok({ status: 'unavailable', reason: result.reason, engine_failures: result.engine_failures })
+      return ok({ status: 'answered', reply: JSON.stringify(result), engine: result.engine, engine_failures: [] })
+    }
+    if (argv.includes('--confirm-display')) return ok(given.confirm?.(JSON.parse(e.init.stdin)) ?? { status: 'confirmed' })
+    if (argv.includes('--finish-recheck')) return ok(given.finish!(JSON.parse(e.init.stdin)))
     const payload = JSON.parse(e.init.stdin) as Payload
     calls.push(payload)
     return ok(given.bulk!(payload))
+  }
+  on('process.run', (_$, e) => execute(e))
+  on('process.spawn', async function* (_$, e) {
+    if (given.spawn && e.argv.includes('--judge')) return yield* given.spawn(e.input ?? '')
+    const result = execute({ argv: e.argv, init: { stdin: e.input, env: e.env } }).value
+    if (result.stdout) yield { stream: 'stdout' as const, text: result.stdout }
+    return { value: { code: result.exitCode, signal: null } } as never
   })
   return calls
 }
@@ -182,13 +208,14 @@ test('input sent while the turn runs joins its request', async ($, on) => {
   expect(calls.at(-1)?.latest_user).toBe('設定を教えて\n\nテストも回して')
 })
 
-test('a failed check shows the original with the reason', async ($, on) => {
+test('a failed check stops without publishing the unchecked draft', async ($, on) => {
   const fs = world(on)
   on('process.run', (_$, e) => ({ value: { ...done, exitCode: e.init?.stdin === undefined ? 0 : 1, stdout: '' } }))
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 test('an unchecked result without a reason gets one', async ($, on) => {
@@ -196,7 +223,8 @@ test('an unchecked result without a reason gets one', async ($, on) => {
   checker(on, fs, p => ({ status: 'unchecked', text: p.bodies.join(''), bodies: p.bodies }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 test('text resent after a retry marker is checked with the rest in one call', async ($, on) => {
@@ -238,6 +266,23 @@ test('a correction of abandoned text is not applied inside the kept text', async
   })
   const { result } = await run($)
   expect(result.answer).toBe(kept)
+})
+
+test('a failed continuation write preserves the kept retry answer and its findings for upper hooks', async ($, on) => {
+  const fs = world(on)
+  checker(on, fs, unmet)
+  on('state.set', (_$, e, next) => e.key === 'issued' && e.value !== null ? { deny: 'read only' } as never : next(e))
+  on('turn.step', async function* (_$, e) {
+    yield TEXT(0, '破棄する試行。')
+    yield { kind: 'thinking', index: 1, text: '再試行' }
+    yield TEXT(0, '全部通った。')
+    yield STOP()
+    return { turnId: e.turnId, index: e.index, answer: '全部通った。', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+  })
+  const { result } = await run($)
+  expect(result.answer).toContain('全部通った。')
+  expect(result.answer).toContain(UNMET_TEXT)
+  expect(result.answer).toContain('自動差戻し停止・未解決')
 })
 
 test('a machine where the gate is not enabled is not checked and has no tool', async ($, on) => {
@@ -325,16 +370,18 @@ test('the spinner does not show inspection details while the answer is held', as
     return <Text>{`${props.word}${props.suffix}`}</Text>
   })
   let seen = ''
-  on('process.run', async (_$, e) => {
-    if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
-    const ui = await $.ui.mount({
-      plugin: 'output-gate', surface: 'terminal', component: 'Spinner', requestId: 'main',
-      props: { word: 'Working', message: null, suffix: '…', mode: 'responding' },
-    })
-    seen = (await ui.find({ type: 'Text' }))?.text ?? ''
-    await ui.unmount()
-    return ok(replaceKiku(JSON.parse(e.init.stdin) as Payload))
-  })
+  checker(on, fs, { bulk: replaceKiku, spawn: async function* (input) {
+      const ui = await $.ui.mount({
+        plugin: 'output-gate', surface: 'terminal', component: 'Spinner', requestId: 'main',
+        props: { word: 'Working', message: null, suffix: '…', mode: 'responding' },
+      })
+      seen = (await ui.find({ type: 'Text' }))?.text ?? ''
+      await ui.unmount()
+      const request = JSON.parse(input) as { payload: Payload }
+      yield { stream: 'stdout' as const, text: JSON.stringify({ status: 'answered',
+        reply: JSON.stringify(replaceKiku(request.payload)), engine: { family: 'codex' } }) }
+      return { value: { code: 0, signal: null } }
+    } })
   void fs
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   await run($)
@@ -374,7 +421,7 @@ test('the session is marked so that the display hook leaves it to the mod', asyn
   expect(fs.get('/state/output-gate/claude-mod/sess-1')).toBe('t1')   // 印には今のターンの識別子を書く
 })
 
-test('a checker call that is cut off shows the original with the reason', async ($, on) => {
+test('a checker call that is cut off keeps the draft private', async ($, on) => {
   world(on)
   on('process.run', (_$, e) => {
     if (e.init?.stdin === undefined) return { value: { ...done, exitCode: 0, stdout: '' } }
@@ -382,26 +429,29 @@ test('a checker call that is cut off shows the original with the reason', async 
   })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
-test('a failure of the hook itself shows the original with the reason', async ($, on) => {
+test('a failure of the hook itself keeps the draft private', async ($, on) => {
   on('env.get', () => {
     throw new Error('env is broken')
   })
   on('process.run', () => ({ value: { ...done, exitCode: 0, stdout: '' } }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- 検査役の系統 ---
 
+const SCHEMA = { type: 'object', required: ['claims'], properties: { claims: { type: 'array' } } }
 type Completion = { model: string; effort?: string; maxTokens?: number; system?: string; prompt: string }
 function claudeModel(on: On, answer: (e: Completion) => object, calls: Completion[] = []) {
-  on('model.complete', (_$, e) => {
+  on('model.complete', async (_$, e) => {
     calls.push(e as Completion)
-    return { value: answer(e as Completion) } as never
+    return { value: await answer(e as Completion) } as never
   })
   return calls
 }
@@ -420,7 +470,9 @@ test('with Codex first, when the Codex checker fails, Claude checks through the 
   expect(completions[0]?.model).toBe('opus')
   expect(completions[0]?.effort).toBe('low')
   expect(typeof completions[0]?.maxTokens).toBe('number')
-  expect(completions[0]?.system).toBe('SYSTEM')
+  // $.model.complete は返答の形を強制しないので、必須の項目は system で検査役に示す。
+  expect(completions[0]?.system?.startsWith('SYSTEM')).toBe(true)
+  expect(completions[0]?.system).toContain(JSON.stringify(SCHEMA))
   expect(completions[0]?.prompt).toBe('PROMPT')
   expect(received[0]?.engine).toEqual({ family: 'claude', model: 'opus', effort: 'low' })
   expect(received[0]?.engine_failures).toEqual([{ family: 'codex', reason: 'codex 不調' }])
@@ -439,13 +491,14 @@ test('the settings choose sonnet, and Claude first', async ($, on) => {
   expect(bulk.length).toBe(0)
 })
 
-test('when both checkers fail, the original is shown with both reasons', async ($, on) => {
+test('when both checkers fail, the draft stays private', async ($, on) => {
   const fs = world(on)
-  checker(on, fs, { bulk: codexFailed, receive: r => replaceKiku(r.payload) })
+  checker(on, fs, { bulk: codexFailed, receive: r => ({ ...checked(r.payload), status: 'unchecked', text: '出力検査未完了', bodies: ['出力検査未完了'], fallback_text: '出力検査未完了', reason: '検査役なし' }) })
   claudeModel(on, () => ({ isAnswered: false, reason: 'api-error', status: 401, error: 'authentication_failed', usage: usage(0) }))
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- 未達のときに直させる ---
@@ -487,6 +540,8 @@ test('findings at the final answer swap the text for the gate tool call, after t
   const second = await run($, { index: 1 })
   expect(calls[1]?.round).toBe(1)
   expect(calls[1]?.previous_findings).toEqual([FINDING])
+  expect((calls[1] as unknown as { progress_state: unknown }).progress_state).toEqual({
+    round: 0, stalled: 0, bodies: ['全部通った。'], findings: [FINDING], evidence: [] })
   // 未達が残る間は何回目でも直させる: 2 回目の最終回答も表示せず、gate_findings の呼び出しに差し替える。
   expect(second.chunks.map(c => c.kind)).toEqual(['tool', 'input', 'stop'])
   expect(second.text).toBe('')
@@ -498,6 +553,50 @@ test('findings at the final answer swap the text for the gate tool call, after t
   expect(third.chunks.some(c => c.kind === 'tool')).toBe(false)
   expect(third.text).toBe('証拠付きで直した。')
 })
+
+test('a stopped inspection displays the unresolved answer and findings without another gate call', async ($, on) => {
+  const fs = world(on)
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
+  checker(on, fs, p => ({ ...unmet(p), stopped: true, agent_message: null,
+    text: '自動差戻し停止・未解決\n\n' + p.bodies.join('\n\n') + UNMET,
+    bodies: ['自動差戻し停止・未解決\n\n' + p.bodies.join('\n\n') + UNMET] }))
+  model(on, [[TEXT(0, '全部通った。'), STOP()]])
+  const { text, chunks } = await run($)
+  expect(text).toBe('自動差戻し停止・未解決\n\n全部通った。' + UNMET)
+  expect(chunks.some(c => c.kind === 'tool')).toBe(false)
+})
+
+for (const outcome of ['stalled', 'advanced', 'unavailable']) {
+  test(`Claude-first inspection joins its independent ${outcome} verdict with the original findings`, async ($, on) => {
+    const fs = world(on)
+    let initial: Result | undefined
+    const merged: { initial: Result; rechecked: Result }[] = []
+    const finalText = '自動差戻し停止・未解決\n\n全部通った。' + UNMET
+    const calls = checker(on, fs, {
+      receive: r => (initial = { ...unmet(r.payload), recheck_required: true }),
+      bulk: p => outcome === 'unavailable' ? codexFailed(p) : outcome === 'advanced' ? unmet(p) :
+        { ...unmet(p), stopped: true, agent_message: null, text: finalText, bodies: [finalText] },
+      finish: r => {
+        merged.push(r)
+        return outcome === 'unavailable' ? { ...r.initial, stopped: true, agent_message: null,
+          text: finalText, bodies: [finalText] } : r.rechecked
+      },
+    })
+    claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
+    tools(on)
+    model(on, [[TEXT(0, '全部通った。'), STOP()]])
+    const { text, chunks } = await run($)
+    expect(merged.length).toBe(1)
+    expect(merged[0]?.initial.findings).toEqual(initial?.findings)
+    expect(merged[0]?.initial.corrected_bodies).toEqual(['全部通った。'])
+    expect(calls.length).toBe(2)
+    expect((calls[1] as unknown as { independent_recheck: boolean }).independent_recheck).toBe(true)
+    expect(calls[1]?.engines).toBeUndefined()
+    expect(merged[0]?.rechecked.status).toBe(outcome === 'unavailable' ? 'unchecked' : 'checked')
+    expect(text).toBe(outcome === 'advanced' ? '' : finalText)
+    expect(chunks.some(c => c.kind === 'tool')).toBe(outcome === 'advanced')
+  })
+}
 
 test('a failed state write shows the original, the reason and the findings', async ($, on) => {
   const fs = world(on)
@@ -511,8 +610,9 @@ test('a failed state write shows the original, the reason and the findings', asy
   await start($)
   const { chunks, text, result } = await run($)
   expect(chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(text).toBe(UNAVAILABLE + '全部通った。')
-  expect(text).not.toContain(UNMET_TEXT)
+  expect(text).toContain('全部通った。')
+  expect(text).toContain('自動差戻し停止・未解決')
+  expect(text).toContain(UNMET_TEXT)
   expect(result?.stopReason).toBe('end_turn')
 })
 
@@ -716,6 +816,26 @@ test('the start of the turn keeps the request a later answer is checked against'
   }
 })
 
+test('earlier requests and authorization reach the checker after many reports, including resume', async ($, on) => {
+  const texts = ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに']
+  const messages: Message[] = texts.map(text => ({ role: 'user', text, toolUses: [] }))
+  const fs = world(on, { messages })
+  const calls = checker(on, fs, checked)
+  tools(on)
+  model(on, [[TEXT(0, '説明する。'), STOP()]])
+  await start($, 'C の説明もして')
+  for (let n = 0; n < 12; n++) messages.push({ role: 'assistant', text: `途中報告${n}`, toolUses: [] })
+  messages.push({ role: 'user', text: '許可は取り消す。C の説明だけして', toolUses: [] })
+  await run($)
+  await run($, { turnId: 'resumed-turn', index: 1 })
+  for (const payload of calls) {
+    expect(payload.recent_messages.filter(m => m.role === 'user').map(m => m.text))
+      .toEqual([...texts, '許可は取り消す。C の説明だけして'])
+    expect(payload.turn_start_context.filter(m => m.role === 'user').map(m => m.text)).toEqual(
+      payload.latest_user === 'C の説明もして' ? [...texts, 'C の説明もして'] : [...texts, '許可は取り消す。C の説明だけして'])
+  }
+})
+
 test('previous turns come from the turn files, kept for 10 turns and 24 hours', async ($, on) => {
   const fs = world(on)
   const now = Date.now()
@@ -814,22 +934,49 @@ test('the turn file keeps which checker judged and why the other failed', async 
   expect(saved.checks[0]?.dropped.length).toBe(1)
 })
 
-test('the two checkers share the 45 second deadline, half of what is left to the first', async ($, on) => {
+test('the default shared budget keeps a checker running beyond 45 seconds', async ($, on) => {
   const fs = world(on)
+  const clock = clocks.get(fs)!
+  fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'claude' }))
+  checker(on, fs, { receive: r => checked(r.payload), bulk: codexFailed })
+  const completions = claudeModel(on, async () => {
+    await clock.sleep(65_000)
+    return { isAnswered: true, text: '{}', usage: usage(1) }
+  })
+  model(on, [[TEXT(0, '検査済みの回答'), STOP()]])
+  let finished = false
+  const pending = run($).then(result => { finished = true; return result })
+  await clock.settle()
+  await clock.advance(45_000)
+  expect(finished).toBe(false)
+  expect(runs.some(r => r.argv.includes('--judge'))).toBe(true)
+  await clock.advance(20_000)
+  expect((await pending).text).toBe('検査済みの回答')
+  expect((completions[0] as { timeoutMs: number }).timeoutMs > 590_000).toBe(true)
+  const prepared = runs.find(r => r.argv.includes('--prepare'))!
+  expect(Number(prepared.env['OUTPUT_GATE_TIMEOUT']) > 590).toBe(true)
+})
+
+test('the first Codex checker receives the full shared deadline', async ($, on) => {
+  const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'codex' }))
-  checker(on, fs, { bulk: codexFailed, receive: r => replaceKiku(r.payload) })
+  let attempts: Record<string, unknown>[] = []
+  checker(on, fs, { bulk: codexFailed, receive: r => { attempts = r.model_attempts as Record<string, unknown>[]; return replaceKiku(r.payload) } })
   const completions = claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(10) }))
   model(on, [[TEXT(0, '答え。'), STOP()]])
   await run($)
-  const bulk = runs.find(r => !r.argv.includes('--prepare') && !r.argv.includes('--receive'))!
+  const bulk = runs.find(r => r.argv.includes('--judge'))!
   const first = Number(bulk.env['OUTPUT_GATE_TIMEOUT'])
-  expect(first > 20 && first <= 22.5).toBe(true)
+  expect(first > 40 && first <= 45).toBe(true)
   const second = (completions[0] as { timeoutMs?: number }).timeoutMs!
   expect(second > 40_000 && second <= 45_000).toBe(true)
+  expect(attempts[0]?.outcome).toBe('failed')
+  expect(attempts[0]?.usage).toBe(null)
+  expect(attempts[1]?.usage).toEqual(usage(10))
 })
 
-test('with Claude first, Claude gets half and Codex the rest', async ($, on) => {
-  const fs = world(on)
+test('with Claude first, Claude gets the full deadline and raw failure falls back immediately', async ($, on) => {
+  const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
   fs.set('/state/output-gate/checker.json', JSON.stringify({ first: 'same' }))
   checker(on, fs, { bulk: replaceKiku, receive: r => replaceKiku(r.payload) })
   const completions = claudeModel(on, () => ({ isAnswered: false, reason: 'aborted', usage: usage(0) }))
@@ -837,8 +984,8 @@ test('with Claude first, Claude gets half and Codex the rest', async ($, on) => 
   const { text } = await run($)
   expect(text).toBe('これは速い。')
   const first = (completions[0] as { timeoutMs?: number }).timeoutMs!
-  expect(first > 20_000 && first <= 22_500).toBe(true)
-  const bulk = runs.find(r => !r.argv.includes('--prepare') && !r.argv.includes('--receive'))!
+  expect(first > 40_000 && first <= 45_000).toBe(true)
+  const bulk = runs.find(r => r.argv.includes('--judge'))!
   const second = Number(bulk.env['OUTPUT_GATE_TIMEOUT'])
   expect(second > 20 && second <= 45).toBe(true)
 })
@@ -851,7 +998,8 @@ for (const [name, content] of [['unreadable', '{"first": '], ['wrongly shaped', 
     const calls = checker(on, fs, replaceKiku)
     model(on, [[TEXT(0, 'これは効く。'), STOP()]])
     const { text } = await run($)
-    expect(text).toBe(UNAVAILABLE + 'これは効く。')
+    expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
     expect(calls.length).toBe(0)
   })
 }
@@ -872,7 +1020,8 @@ test('a failed prepare is the Claude checker failing, and both reasons are shown
   checker(on, fs, { prepare: () => ({ value: { ...done, exitCode: 1, stdout: '' } }), bulk: codexFailed })
   model(on, [[TEXT(0, 'これは効く。'), STOP()]])
   const { text } = await run($)
-  expect(text).toBe(UNAVAILABLE + 'これは効く。')
+  expect(text.includes('これは効く。')).toBe(false)
+  expect(text).toContain('出力検査')
 })
 
 // --- ターンの終わり ---
@@ -964,8 +1113,9 @@ test('a failed write of the issued call undoes the swap', async ($, on) => {
   await start($)
   const first = await run($)
   expect(first.chunks.some(c => c.kind === 'tool')).toBe(false)
-  expect(first.text).toBe(UNAVAILABLE + '速い全部通った。')
-  expect(first.text).not.toContain(UNMET_TEXT)
+  expect(first.text).toContain('速い全部通った。')
+  expect(first.text).toContain('自動差戻し停止・未解決')
+  expect(first.text).toContain(UNMET_TEXT)
   // 直させた回数は書く前に戻っている: 同じターンの次の最終回答は、まだ直させていない (round=0) として検査する。
   await run($, { index: 1 })
   expect(calls[1]?.round).toBe(0)
@@ -1041,4 +1191,206 @@ test('a mod loaded afresh with only $.state sends back again, counting on from t
   expect(calls[0]?.round).toBe(1)
   expect(calls[0]?.previous_findings).toEqual([FINDING])
   expect((written.at(-1) as { round: number }).round).toBe(2)
+})
+
+
+test('identical queued human messages remain separate inputs', async ($, on) => {
+  const fs = world(on)
+  const calls = checker(on, fs, replaceKiku)
+  tools(on)
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await start($)
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  expect(calls.at(-1)?.latest_user).toBe('設定を教えて\n\n同じ確認をして\n\n同じ確認をして')
+})
+
+test('semantic prepare receive rounds preserve their transaction and shared session directory', async ($, on) => {
+  const fs = world(on, { env: { OUTPUT_GATE_SETTINGS: '/checker.json' } })
+  fs.set('/checker.json', JSON.stringify({ first: 'claude' }))
+  let count = 0
+  const transactions: unknown[] = []
+  const calls = checker(on, fs, {
+    prepare: () => ok({ status: 'ready', system: 'SYSTEM', prompt: 'UPDATE', schema: {}, transaction: { id: 'one' } }),
+    receive: r => {
+      transactions.push(r.transaction)
+      count += 1
+      return count === 1 ? { status: 'ready', system: 'SYSTEM', prompt: 'JUDGE', schema: {}, transaction: { id: 'two' } } : checked(r.payload)
+    },
+  })
+  const completed = claudeModel(on, () => ({ isAnswered: true, text: '{}', usage: usage(1) }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await run($)
+  expect(completed.map(c => c.prompt)).toEqual(['UPDATE', 'JUDGE'])
+  expect(transactions).toEqual([{ id: 'one' }, { id: 'two' }])
+  expect(calls.map(c => c.context_dir)).toEqual(['/state/output-gate/claude-context/sess-1', '/state/output-gate/claude-context/sess-1'])
+})
+
+test('display confirmation follows the emitted text and uses its exact body', async ($, on) => {
+  const fs = world(on)
+  let emitted = ''
+  let confirmed = false
+  checker(on, fs, {
+    bulk: p => ({ ...checked(p), display_receipt: 'receipt' }),
+    confirm: r => {
+      expect(emitted).toBe('回答')
+      expect(r.text).toBe(emitted)
+      expect(r.token).toBe('receipt')
+      expect(r.context_dir).toBe('/state/output-gate/claude-context/sess-1')
+      confirmed = true
+      return { status: 'confirmed' }
+    },
+  })
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  const stream = $.turn.step(STEP)
+  for (;;) {
+    const part = await stream.next()
+    if (part.done) break
+    if (part.value.kind === 'text') emitted += part.value.text
+  }
+  expect(confirmed).toBe(true)
+})
+
+
+test('each accepted queued human event carries its own request identity even with identical text', async ($, on) => {
+  const fs = world(on)
+  const calls = checker(on, fs, replaceKiku)
+  tools(on)
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  model(on, [[TEXT(0, '回答'), STOP()]])
+  await start($)
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  const first = calls.at(-1)?.request_id
+  await $.prompt.submit({ text: '同じ確認をして' })
+  await run($)
+  const second = calls.at(-1)?.request_id
+  expect(first?.startsWith('t1:queued:')).toBe(true)
+  expect(second?.startsWith('t1:queued:')).toBe(true)
+  expect(second).not.toBe(first)
+})
+
+for (const first of ['claude', 'codex'] as const) {
+  test(`delayed ${first} keeps its full budget and only the winning raw reply is received`, async ($, on) => {
+    const fs = world(on, { env: { OUTPUT_GATE_TIMEOUT: '45' } })
+    const clock = clocks.get(fs)!
+    fs.set('/state/output-gate/checker.json', JSON.stringify({ first }))
+    const received: unknown[] = []
+    let attempts: Record<string, unknown>[] = []
+    let prepares = 0
+    let stopped = false
+    let codexStarts = 0
+    checker(on, fs, {
+      prepare: () => { prepares += 1; return ok({ status: 'ready', system: 'SYSTEM', prompt: 'PROMPT', transaction: { id: 'shared' } }) },
+      receive: r => { received.push(r.engine); attempts = r.model_attempts as Record<string, unknown>[]; return checked(r.payload) },
+      spawn: async function* (input) {
+        codexStarts += 1
+        const request = JSON.parse(input)
+        expect(request.prompt).toBe('PROMPT')
+        expect(request.transaction).toEqual({ id: 'shared' })
+        try {
+          await clock.sleep(first === 'codex' ? 35_000 : 30_000)
+          yield { stream: 'stdout' as const, text: JSON.stringify({ status: 'answered', reply: '{}', engine: { family: 'codex' }, model_attempts: [{ family: 'codex', outcome: 'answered', elapsed_ms: 35_000, usage: { input_tokens: 7, output_tokens: 2 } }] }) }
+          return { value: { code: 0, signal: null } }
+        } finally { stopped = true }
+      },
+    })
+    const completions = claudeModel(on, async () => {
+      await clock.sleep(first === 'claude' ? 35_000 : 30_000)
+      return { isAnswered: true, text: '{}', usage: usage(1) }
+    })
+    model(on, [[TEXT(0, '回答'), STOP()]])
+    const pending = run($)
+    await clock.settle()
+    expect(received.length).toBe(0)
+    await clock.advance(20_000)
+    expect(codexStarts).toBe(first === 'codex' ? 1 : 0)
+    expect(completions.length).toBe(first === 'claude' ? 1 : 0)
+    await clock.advance(15_000)
+    const result = await pending
+    expect(result.text).toBe('回答')
+    expect(prepares).toBe(1)
+    expect(received.length).toBe(1)
+    expect((received[0] as { family: string }).family).toBe(first)
+    expect(attempts.length).toBe(2)
+    const winner = attempts.find(a => a.family === first)!
+    const loser = attempts.find(a => a.family !== first)!
+    expect(winner.outcome).toBe('answered')
+    expect(winner.usage).toEqual(first === 'claude' ? usage(1) : { input_tokens: 7, output_tokens: 2 })
+    expect(loser.outcome).toBe('cancelled')
+    expect(loser.usage).toBe(null)
+    expect(typeof loser.elapsed_ms).toBe('number')
+    await clock.advance(30_000)
+    expect(received.length).toBe(1)
+    expect(stopped).toBe(true)
+  })
+}
+
+for (const saveFails of [false, true]) {
+  test(`unchecked final reply stays private when continuation ${saveFails ? 'cannot be saved' : 'is interrupted'}`, async ($, on) => {
+    const fs = world(on)
+    checker(on, fs, p => ({ ...checked(p), status: 'unchecked', text: null, bodies: null,
+      corrected_bodies: p.bodies, reason: '検査役が応答しない', agent_message: '検査未完了。原因を調査して修正を続けてください。',
+      fallback_text: '検査未完了', fallback_bodies: ['検査未完了'] }))
+    tools(on)
+    if (saveFails) on('state.set', (_$, e, next) => e.key === 'issued' && e.value !== null ? { deny: 'state is broken' } as never : next(e))
+    model(on, [[TEXT(0, '秘密の未検査草稿'), STOP()]])
+    await start($)
+    const first = await run($)
+    expect(first.text.includes('秘密の未検査草稿')).toBe(false)
+    expect(first.result.answer.includes('秘密の未検査草稿')).toBe(false)
+    if (!saveFails) {
+      expect(first.result.stopReason).toBe('tool_use')
+      const id = first.chunks.find(c => c.kind === 'tool')!
+      const feedback = await $.tool.call({ tool: GATE_TOOL, tool_use_id: (id as { id: string }).id })
+      expect(feedback.context?.join('').includes('原因を調査')).toBe(true)
+    }
+    const ended = await complete($, 'aborted')
+    expect(ended.text.includes('秘密の未検査草稿')).toBe(false)
+  })
+}
+
+test('checker invocation failures use the shared continuation policy without publishing the draft', async ($, on) => {
+  const fs = world(on)
+  let reason: string | undefined
+  checker(on, fs, {
+    prepare: () => ({ value: { ...done, exitCode: 1, stdout: '' } }),
+    receive: r => {
+      reason = (r as unknown as { unavailable_reason: string }).unavailable_reason
+      return { ...checked(r.payload), status: 'unchecked', text: null, bodies: null,
+        reason, agent_message: '検査未完了。原因を調査して修正を続けてください。', fallback_text: '検査未完了', fallback_bodies: ['検査未完了'] }
+    },
+  })
+  tools(on)
+  model(on, [[TEXT(0, '未検査の最終草稿'), STOP()]])
+  await start($)
+  const first = await run($)
+  expect(typeof reason).toBe('string')
+  expect(first.result.stopReason).toBe('tool_use')
+  expect(first.text).toBe('')
+  expect(first.result.answer).toBe('')
+})
+
+test('shared no-progress stop ends unchecked continuation without publishing the draft', async ($, on) => {
+  const fs = world(on)
+  const rounds: number[] = []
+  checker(on, fs, p => {
+    rounds.push(p.round)
+    return { ...checked(p), status: 'unchecked', text: p.round >= 3 ? '出力検査未完了のため保留' : null, bodies: null, reason: '同じ検査障害',
+      stopped: p.round >= 3, agent_message: p.round >= 3 ? null : '検査未完了。原因の調査と修正を続けてください。',
+      fallback_text: '出力検査未完了のため保留', fallback_bodies: ['出力検査未完了のため保留'] }
+  })
+  tools(on)
+  model(on, [[TEXT(0, '未検査の最終草稿'), STOP()]])
+  await start($)
+  for (let index = 0; index < 4; index += 1) {
+    const response = await run($, { index })
+    expect(response.text.includes('未検査の最終草稿')).toBe(false)
+    expect(response.result.answer.includes('未検査の最終草稿')).toBe(false)
+    expect(response.chunks.some(c => c.kind === 'tool')).toBe(index < 3)
+    if (index === 3) expect(response.text).toBe('出力検査未完了のため保留')
+  }
+  expect(rounds).toEqual([0, 1, 2, 3])
 })

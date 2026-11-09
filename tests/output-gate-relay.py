@@ -4,6 +4,7 @@ import http.client
 import http.server
 import json
 import os
+import runpy
 from pathlib import Path
 import socket
 import struct
@@ -18,7 +19,45 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 RELAY = REPO / 'agent-shared/bin/output-gate-relay.py'
 PREFIX = '/backend-api/codex'
-UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
+UNAVAILABLE = '出力検査を実行できなかったため、生成済みの回答を表示します。\n\n'
+
+
+def protocol_checker_source(source, family, cache_path, log_path):
+    protocol = runpy.run_path(str(REPO / 'tests/output-gate-check.py'))['PROTOCOL_MOCK']
+    return protocol + textwrap.dedent(f'''\
+        import io, json, os, sys
+        prompt = sys.stdin.read()
+        original_stdout = sys.stdout
+        sys.stdin = io.StringIO(prompt)
+        sys.stdout = io.StringIO()
+        exit_code = 0
+        try:
+            exec({source!r}, {{'__name__': '__main__'}})
+        except SystemExit as stopped:
+            exit_code = stopped.code
+        reply = sys.stdout.getvalue()
+        sys.stdout = original_stdout
+        with open({str(log_path)!r}, 'a', encoding='utf-8') as log:
+            log.write(json.dumps({{'family': {family!r}, 'prompt': prompt}}) + '\\n')
+        try:
+            data, obj = json.loads(prompt), json.loads(reply)
+            wrapper = obj if {family!r} == 'claude' else None
+            legacy = obj.get('structured_output') if wrapper else obj
+            if data.get('stage') in ('update', 'update_and_judge', 'judge') and isinstance(legacy, dict):
+                path = {str(cache_path)!r}
+                cache = json.load(open(path)) if os.path.exists(path) else {{'catalog': {{}}, 'served': [], 'aliases': {{}}}}
+                obj = protocol_reply(data, legacy, cache['catalog'], cache['served'], cache['aliases'])
+                json.dump(cache, open(path, 'w'))
+                if wrapper:
+                    wrapper['structured_output'] = obj
+                    wrapper['result'] = json.dumps(obj, ensure_ascii=False)
+                    obj = wrapper
+                reply = json.dumps(obj, ensure_ascii=False)
+        except (ValueError, TypeError, KeyError):
+            pass
+        sys.stdout.write(reply)
+        sys.exit(exit_code)
+        ''')
 
 
 def free_port():
@@ -112,6 +151,20 @@ class Upstream(http.server.BaseHTTPRequestHandler):
     do_GET = handle_any
 
 
+class RelayVersionTests(unittest.TestCase):
+    def test_changed_common_limits_invalidate_the_running_relay_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / RELAY.name
+            script.write_bytes(RELAY.read_bytes())
+            common = script.with_name('output_gate_context.py')
+            common.write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
+            command = [sys.executable, '-c', 'import runpy,sys; print(runpy.run_path(sys.argv[1])["VERSION"])', str(script)]
+            before = subprocess.check_output(command, text=True)
+            common.write_text(common.read_text() + '\nDEFAULT_TIMEOUT = 720\n')
+            after = subprocess.check_output(command, text=True)
+            self.assertNotEqual(before, after)
+
+
 class RelayTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -121,18 +174,31 @@ class RelayTests(unittest.TestCase):
         cls.checker = cls.tmp / 'check.py'
         # 共通の検査処理 (output-gate-check.py) の入出力の形を真似る。findings-on の印があれば、最終回答に未達を 1 件返す。
         cls.checker.write_text(textwrap.dedent(f'''\
-            import json, sys, time, os
+            import json, sys, time, os, subprocess
             payload = json.load(sys.stdin)
+            if '--ingest' in sys.argv:
+                import subprocess
+                no_secrets = 'import json,sys; from pathlib import Path; Path(sys.argv[sys.argv.index("--report-path") + 1]).write_text("[]")'
+                command = [sys.executable, '-I', {str(RELAY.with_name('output-gate-check.py'))!r}, '--ingest']
+                result = subprocess.run(command, input=json.dumps(payload), text=True, capture_output=True,
+                    env=dict(os.environ, OUTPUT_GATE_GITLEAKS=json.dumps([sys.executable, '-I', '-c', no_secrets])))
+                open({str(cls.tmp / 'ingest-input.json')!r}, 'a', encoding='utf-8').write(json.dumps(payload) + "\\n")
+                sys.stdout.write(result.stdout)
+                sys.stderr.write(result.stderr)
+                sys.exit(result.returncode)
             open({str(cls.tmp / 'checker-input.json')!r}, 'a', encoding='utf-8').write(json.dumps(payload) + "\\n")
             time.sleep(float(os.environ.get('FAKE_CHECK_SLEEP', '0')))
             open({str(cls.tmp / 'checker-finished')!r}, 'a').write('x')
             bodies = payload.get("bodies") or [payload.get("draft", "")]
-            if os.environ.get('FAKE_CHECK_NO_REASON'):
+            if payload.get('independent_recheck') and os.path.exists({str(cls.tmp / 'recheck-fail')!r}):
+                print(json.dumps({{"status": "unchecked", "reason": "recheck unavailable", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
+            elif os.environ.get('FAKE_CHECK_NO_REASON'):
                 print(json.dumps({{"status": "unchecked", "text": "\\n\\n".join(bodies), "bodies": bodies}}))
             elif os.environ.get('FAKE_CHECK_FAIL'):
-                shown = ["[出力ゲート: 検査できませんでした — fake failure]\\n\\n" + bodies[0]] + bodies[1:]
-                print(json.dumps({{"status": "unchecked", "reason": "fake failure", "text": "\\n\\n".join(shown),
-                                   "bodies": shown}}))
+                failed = subprocess.run([sys.executable, '-I', {str(REPO / 'agent-shared/bin/output-gate-check.py')!r}, '--receive'],
+                                        input=json.dumps(dict(payload=payload, unavailable_reason='fake failure')),
+                                        text=True, capture_output=True)
+                sys.stdout.write(failed.stdout)
             else:
                 fixed = [b.replace("効く", "速い") for b in bodies]
                 result = {{"status": "checked", "reason": None, "findings": [], "agent_message": None,
@@ -140,9 +206,11 @@ class RelayTests(unittest.TestCase):
                           "engine": {{"family": "codex", "model": "m", "effort": "high"}},
                           "engine_failures": [{{"family": "claude", "reason": "claude failed first"}}],
                           "dropped": [{{"finding": {{}}, "reason": "excerpt not in source"}}],
+                          "progress_state": {{"round": payload.get("round", 0), "stalled": 0,
+                            "bodies": fixed, "findings": [], "evidence": payload.get("evidence", [])}},
                           "text": "\\n\\n".join(fixed), "bodies": fixed}}
-                if os.path.exists({str(cls.tmp / 'findings-on')!r}) and payload.get("final"):
-                    found = [{{"kind": "unverified_claim", "source": "draft", "excerpt": "確認済み", "evidence": []}}]
+                if os.path.exists({str(cls.tmp / 'findings-on')!r}) and payload.get("final") and not (payload.get('independent_recheck') and os.path.exists({str(cls.tmp / 'recheck-clean')!r})):
+                    found = [{{"kind": "unverified_claim", "source": "draft", "excerpt": open({str(cls.tmp / 'findings-on')!r}, encoding='utf-8').read() or "確認済み", "evidence": []}}]
                     unmet = "出力ゲート: 次の点は確かめられていません\\n- UNMET-ITEM"
                     marked = fixed[:-1] + [fixed[-1] + "\\n\\n---\\n" + unmet]
                     result.update(findings=found, unmet_text=unmet, display_text="\\n\\n".join(marked),
@@ -164,8 +232,13 @@ class RelayTests(unittest.TestCase):
     def setUp(self):
         Upstream.script, Upstream.requests, Upstream.plain = [], [], None
         (self.tmp / 'checker-input.json').unlink(missing_ok=True)
+        (self.tmp / 'ingest-input.json').unlink(missing_ok=True)
+        (self.tmp / 'real-checker-prompts.jsonl').unlink(missing_ok=True)
+        (self.tmp / 'protocol-cache.json').unlink(missing_ok=True)
         (self.tmp / 'checker-finished').unlink(missing_ok=True)
         (self.tmp / 'findings-on').unlink(missing_ok=True)
+        (self.tmp / 'recheck-clean').unlink(missing_ok=True)
+        (self.tmp / 'recheck-fail').unlink(missing_ok=True)
         self.port = free_port()
         self.state = Path(tempfile.mkdtemp())
         self.start_relay()
@@ -305,6 +378,7 @@ class RelayTests(unittest.TestCase):
         status, events = self.turn(kind='compaction')
         self.assertEqual(events[0]['item']['encrypted_content'], 'ENC')
         self.assertFalse((self.tmp / 'checker-input.json').exists())
+        self.assertEqual(len((self.tmp / 'ingest-input.json').read_text().splitlines()), 1)
 
     def test_websocket_upgrade_426(self):
         status, _, _ = self.call('GET', PREFIX + '/responses',
@@ -398,6 +472,47 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(texts, ['答え1', '答え2'])
         self.assertFalse(sent['compacted_note'])
 
+    def test_compaction_keeps_requests_questions_and_answers_in_order(self):
+        original = [self.user('A と B を修正して'), self.assistant('push まで進めていい？')]
+        original += [self.assistant(f'追加の説明{n}') for n in range(5)]
+        self.compact(original, 'ENC-CONTEXT')
+        compacted = [self.user('A と B を修正して'),
+                     {'type': 'compaction', 'encrypted_content': 'ENC-CONTEXT'}, self.user('うん')]
+        sent = self.turn_after(compacted)
+        expected = [{'role': m['role'], 'text': input_text(m)} for m in original] + [{'role': 'user', 'text': 'うん'}]
+        self.assertEqual([{k: m[k] for k in ('role', 'text')} for m in sent['recent_messages']], expected)
+        self.assertFalse(sent['compacted_note'])
+        store = json.loads((self.state / 'compaction.json').read_text(encoding='utf-8'))
+        entry = next(iter(store.values()))
+        import hashlib
+        restored = []
+        self.assertTrue(entry['source_refs'])
+        for ref in entry['source_refs']:
+            key = json.dumps([ref['id'], ref['rev']], ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode()
+            source = json.loads((Path(entry['context_dir']) / 'sources' / (hashlib.sha256(key).hexdigest() + '.json')).read_text())
+            self.assertEqual((source['id'], source['rev']), (ref['id'], ref['rev']))
+            self.assertEqual((ref['start'], ref['end']), (0, len(source['fields']['text'].encode())))
+            restored.append({'role': source['kind'], 'text': source['fields']['text']})
+        self.assertEqual(restored, expected[:-1])
+        self.assertEqual(len({ref['id'] for ref in entry['source_refs']}), len(expected) - 1)
+        self.assertIn('source_cursor', entry)
+        self.assertIn('context_generation', entry)
+        self.assertNotIn('conversation', entry)
+        self.assertNotIn('answers', entry)
+
+    def test_legacy_compaction_answers_remain_available_with_a_gap_notice(self):
+        import hashlib
+        key = hashlib.sha256(b'ENC-LEGACY').hexdigest()
+        (self.state / 'compaction.json').write_text(json.dumps({key: {'answers': ['以前の回答'], 'used': time.time()}}),
+                                                    encoding='utf-8')
+        sent = self.turn_after([self.user('以前の依頼'), {'type': 'compaction', 'encrypted_content': 'ENC-LEGACY'},
+                                self.user('続けて')])
+        self.assertIn({'role': 'assistant', 'text': '以前の回答'}, sent['recent_messages'])
+        self.assertTrue(sent['compacted_note'])
+        self.compact([{'type': 'compaction', 'encrypted_content': 'ENC-LEGACY'}, self.user('追記')], 'ENC-NEW')
+        sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC-NEW'}, self.user('続けて')])
+        self.assertTrue(sent['compacted_note'])
+
     def test_compaction_pairs_survive_restart(self):
         self.compact([self.user('q1'), self.assistant('答え1')], 'ENC1')
         self.restart_relay()
@@ -473,6 +588,14 @@ class RelayTests(unittest.TestCase):
         status, _, _ = self.call('POST', '/__gate/shutdown')
         self.assertEqual(status, 409)
         thread.join(20)
+        self.assertFalse(thread.is_alive())
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            _, _, data = self.call('GET', '/__gate/version')
+            if json.loads(data)['active'] == 0:
+                break
+            time.sleep(0.05)
+        self.assertEqual(json.loads(data)['active'], 0)
         status, _, _ = self.call('POST', '/__gate/shutdown')
         self.assertEqual(status, 200)
         self.relay.wait(5)
@@ -485,6 +608,7 @@ class RelayTests(unittest.TestCase):
     def test_ensure_replaces_old_version(self):
         old = self.tmp / 'old-relay.py'
         old.write_text(RELAY.read_text(encoding='utf-8') + '\n# old version marker\n', encoding='utf-8')
+        old.with_name('output_gate_context.py').write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
         self.relay.kill(); self.relay.wait(5); self.relay.stderr.close()
         env = dict(os.environ, OUTPUT_GATE_CHECK_CMD=json.dumps([sys.executable, '-I', str(self.checker)]))
         self.relay = subprocess.Popen([sys.executable, '-I', str(old), '--port', str(self.port),
@@ -591,13 +715,13 @@ class RelayTests(unittest.TestCase):
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC9'}, self.user('q2')])
         self.assertIn('答え1', [t['text'] for t in sent['recent_messages']])
 
-    def test_commentary_not_kept_for_compaction(self):
-        commentary = dict(self.assistant('途中経過'), phase='commentary')
+    def test_commentary_keeps_questions_and_plans_for_compaction(self):
+        commentary = dict(self.assistant('この計画で進めていい？'), phase='commentary')
         self.compact([self.user('q1'), self.assistant('答え1'), commentary], 'ENC7')
         sent = self.turn_after([{'type': 'compaction', 'encrypted_content': 'ENC7'}, self.user('q2')])
         texts = [t['text'] for t in sent['recent_messages']]
         self.assertIn('答え1', texts)
-        self.assertNotIn('途中経過', texts)
+        self.assertIn('この計画で進めていい？', texts)
 
     def test_multi_part_message_checked_per_part(self):
         texts = ['これは効く。', '次も効く。']
@@ -681,6 +805,7 @@ class RelayTests(unittest.TestCase):
         new_dir.mkdir(exist_ok=True)
         new_relay = new_dir / 'output-gate-relay.py'
         new_relay.write_text(RELAY.read_text(encoding='utf-8') + '\n# new version marker\n', encoding='utf-8')
+        new_relay.with_name('output_gate_context.py').write_bytes(RELAY.with_name('output_gate_context.py').read_bytes())
         (new_dir / 'output-gate-check.py').write_text('def broken(:\n', encoding='utf-8')
         before = json.loads(self.call('GET', '/__gate/version')[2])
         result = subprocess.run([sys.executable, '-I', str(new_relay), '--port', str(self.port),
@@ -690,13 +815,35 @@ class RelayTests(unittest.TestCase):
         after = json.loads(self.call('GET', '/__gate/version')[2])
         self.assertEqual((after['version'], after['pid']), (before['version'], before['pid']))
 
+    def test_unchecked_response_is_private_and_resumes_in_same_session(self):
+        self.restart_relay(check_fail='1')
+        self.register()
+        events = self.answer('未検査の完了報告')
+        self.assertNotIn('未検査の完了報告', self.final_text(events))
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'substituted')
+        self.assertEqual(state['failure_kind'], 'unavailable')
+        notice = state['notice_marker']
+        events = self.answer('保留中', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertTrue(any('検査経路の原因を調べ' in text for text in self.upstream_texts()))
+        self.assertNotIn('保留中', self.final_text(events))
+        notice = self.gate_state()['notice_marker']
+        self.restart_relay()
+        events = self.answer('検査完了の回答', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertEqual(self.final_text(events), '検査完了の回答')
+        self.assertEqual(self.gate_state()['phase'], 'resolved')
+
     def test_checker_exit_code_failure_is_unchecked(self):
         self.restart_relay(check_exit='7')
         evs, item = message_events('msg_1', 'これは効く。')
         Upstream.script = [(0, e) for e in evs] + [(0, completed([item]))]
         status, events = self.turn()
         text = self.final_text(events)
-        self.assertEqual(text, UNAVAILABLE + 'これは効く。')
+        self.assertNotIn('これは効く。', text)
+        self.assertIn('保留', text)
+        checked = [json.loads(line) for line in (self.state / 'relay.log').read_text().splitlines()
+                   if json.loads(line).get('event') == 'checked']
+        self.assertEqual(checked[-1]['failure_kind'], 'unavailable')
 
     def test_partial_answer_not_kept_for_compaction(self):
         partials = [dict(self.assistant(f'断片{n}'), phase='partial_answer') for n in range(3)]
@@ -765,12 +912,14 @@ class RelayTests(unittest.TestCase):
         中継は origin=codex を渡すため、既定では Claude の系統が先に動く。偽の claude を渡さない試験は、設定
         (first=same) で Codex の系統を先にし、Claude の系統は未ログインですぐ失敗させる。"""
         fake = self.tmp / 'fake-codex.py'
-        fake.write_text(fake_codex_source, encoding='utf-8')
+        cache, log = self.tmp / 'protocol-cache.json', self.tmp / 'real-checker-prompts.jsonl'
+        cache.unlink(missing_ok=True)
+        fake.write_text(protocol_checker_source(fake_codex_source, 'codex', cache, log), encoding='utf-8')
         claude = self.tmp / 'fake-claude.py'
-        claude.write_text(fake_claude_source or (
+        claude.write_text(protocol_checker_source(fake_claude_source or (
             'import json, sys\nsys.stdin.read()\n'
             'print(json.dumps({"is_error": True, "result": "Not logged in - Please run /login"}))\n'),
-            encoding='utf-8')
+            'claude', cache, log), encoding='utf-8')
         # 本物の gitleaks と同じく、検査した入力に残っている秘密情報だけを報告する。検査処理は伏せた後の入力に
         # もう一度 gitleaks をかけ、検出が残れば検査役を起動しないため。
         gitleaks = self.tmp / 'gitleaks-fake.py'
@@ -853,7 +1002,7 @@ class RelayTests(unittest.TestCase):
         self.turn(body={'model': 'm', 'stream': True, 'input': items})
         payload = self.checker_inputs()[-1]
         texts = [turn['text'] for turn in payload['recent_messages']]
-        self.assertEqual(texts, [t for n in range(1, 6) for t in (f'質問{n}', f'回答{n}')])
+        self.assertEqual(texts, [t for n in range(6) for t in (f'質問{n}', f'回答{n}')])
         self.assertEqual(payload['latest_user'], '質問5')
 
     def review_with_finding(self, **changes):
@@ -1002,6 +1151,14 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(checked[-1]['engine_failures'], [{'family': 'claude', 'reason': 'claude failed first'}])
         self.assertEqual(checked[-1]['dropped'], 1)
         self.assertEqual(checked[-1]['dropped_reasons'], ['excerpt not in source'])
+        self.assertEqual(checked[-1]['statuses'], ['checked'])
+
+    def test_intermediate_answer_is_logged_as_unchecked_by_design(self):
+        call = {'id': 'fc_1', 'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'c1'}
+        self.answer('先に見るね', before=self.call_events(call), item_id='msg_a')
+        checked = [json.loads(line) for line in (self.state / 'relay.log').read_text(encoding='utf-8').splitlines()
+                   if json.loads(line).get('event') == 'checked']
+        self.assertEqual(checked[-1]['statuses'], ['skipped'])
 
     def test_steer_findings_stay_in_later_requests_of_the_turn(self):
         notice = self.substituted()
@@ -1064,7 +1221,7 @@ class RelayTests(unittest.TestCase):
         self.answer('続きの回答')
         self.assertIn('途中まで', self.checker_inputs()[-1]['shown_text'])
 
-    def test_incomplete_that_ends_the_turn_hides_the_findings(self):
+    def test_incomplete_that_ends_the_turn_preserves_the_checked_findings(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         end = {'type': 'response.incomplete', 'response': {'id': 'r', 'status': 'incomplete',
@@ -1073,13 +1230,13 @@ class RelayTests(unittest.TestCase):
         sent = self.checker_inputs()[-1]
         self.assertTrue(sent['final'])
         self.assertEqual(sent['continuation'], 'none')
-        self.assertEqual(self.final_text(events), UNAVAILABLE + '全部確認済み')
+        self.assertEqual(self.final_text(events), '全部確認済み\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
         self.assertIsNone(self.gate_state())
 
-    def test_missing_turn_identifier_hides_the_findings(self):
+    def test_missing_turn_identifier_preserves_the_checked_findings(self):
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         text = self.final_text(self.answer('全部確認済みだよ', turn_id=None))
-        self.assertEqual(text, UNAVAILABLE + '全部確認済みだよ')
+        self.assertEqual(text, '全部確認済みだよ\n\n---\n出力ゲート: 次の点は確かめられていません\n- UNMET-ITEM')
 
     def substituted(self):
         self.register()
@@ -1178,6 +1335,14 @@ class RelayTests(unittest.TestCase):
         self.assertEqual([e for e in events if e['type'] == 'response.output_item.done'][-1]['item']['id'],
                          state['notice_marker'])
 
+    def test_progress_checkpoint_is_forwarded_after_a_repair(self):
+        notice = self.substituted()
+        checkpoint = self.gate_state().get('progress_state')
+        self.assertIsNotNone(checkpoint)
+        self.sent_back()
+        self.answer('直し中だよ', body={'input': [self.user('元の依頼'), self.assistant_notice(notice)]})
+        self.assertEqual(self.checker_inputs()[-1].get('progress_state'), checkpoint)
+
     def test_second_answer_resolves_from_blocked_and_drops_the_original(self):
         notice = self.substituted()
         self.sent_back()
@@ -1227,12 +1392,110 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(answers, ['全部確認済みだよ', 'まだ確認済み', 'やっぱり確認済み'])
         self.assertEqual((self.gate_state()['phase'], self.gate_state()['round']), ('resolved', 3))
 
+    def test_recheck_through_relay_checker_and_stop_hook(self):
+        low = {'replacements': [], 'findings': [{'kind': 'unverified_claim', 'rule': '', 'source': 'draft',
+                'excerpt': '全部確認済みだよ', 'evidence': [{'id': None, 'state': 'absent'}]}]}
+        high = {'replacements': [], 'findings': []}
+        self.restart_with_real_checker('import json,sys\nsys.stdin.read()\n'
+            f'print(json.dumps({high!r} if "gpt-6-astra" in sys.argv else {low!r}))\n')
+        self.register()
+        xdg = Path(tempfile.mkdtemp())
+        root = xdg / 'output-gate'
+        root.mkdir()
+        (root / 'codex.json').write_text('{"enabled": true}')
+        (root / 'relay').symlink_to(self.state, target_is_directory=True)
+        hook = Path(RELAY).parent.parent / 'hooks/output-gate-codex.sh'
+        items = [self.user('元の依頼')]
+        self.answer('全部確認済みだよ')
+        notice = self.gate_state()['notice_marker']
+        for number in range(1, 4):
+            stopped = subprocess.run(['bash', str(hook), 'stop'], input='{"session_id":"s1","turn_id":"t1"}',
+                                     text=True, capture_output=True, env=dict(os.environ, XDG_STATE_HOME=str(xdg)), check=True)
+            self.assertEqual(json.loads(stopped.stdout)['decision'], 'block')
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">再確認</hook_prompt>')]
+            events = self.answer('全部確認済みだよ', body={'input': list(items)})
+            self.assertEqual(self.upstream_texts().count('全部確認済みだよ'), number)
+            if number < 3:
+                self.assertEqual(self.final_text(events), '')
+            notice = self.gate_state().get('notice_marker')
+        self.assertEqual(self.final_text(events), '全部確認済みだよ')
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'resolved')
+        self.assertEqual(state['engine']['model'], 'gpt-6-astra')
+
+    def test_new_tool_evidence_is_sent_to_the_checker(self):
+        items = [self.user('元の依頼')]
+        notice = self.substituted()
+        self.sent_back()
+        items += [self.assistant_notice(notice), self.user('<hook_prompt hook_run_id="h1">AGENT-MSG</hook_prompt>')]
+        self.answer('まだ確認済み', body={'input': list(items)})
+        notice = self.gate_state()['notice_marker']
+        self.sent_back()
+        call = {'type': 'function_call', 'name': 'shell', 'arguments': '{}', 'call_id': 'new-call'}
+        items += [self.assistant_notice(notice), self.user('<hook_prompt hook_run_id="h2">AGENT-MSG</hook_prompt>'),
+                  call, {'type': 'function_call_output', 'call_id': 'new-call', 'output': 'new evidence'}]
+        events = self.answer('もう一度確認済み', body={'input': items})
+        text = self.final_text(events)
+        self.assertNotIn('UNMET-ITEM', text)
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
+        self.assertTrue(any(item.get('output') == 'new evidence' for item in self.checker_inputs()[-1]['evidence']))
+
+    def stalled_answers(self, fail_high=False, advancing=False):
+        reply = {'replacements': [], 'findings': [{'kind': 'unverified_claim', 'rule': '', 'source': 'draft',
+                 'excerpt': '全部確認済みだよ', 'evidence': [{'id': None, 'state': 'absent'}]}],
+                 'progress': {'state': 'advanced' if advancing else 'stalled', 'reason': 'comparison'}}
+        source = 'import json,sys\nsys.stdin.read()\n'
+        if fail_high:
+            source += 'if "gpt-6-astra" in sys.argv: sys.exit(1)\n'
+        source += f'print(json.dumps({reply!r}))\n'
+        self.restart_with_real_checker(source)
+        self.register()
+        items = [self.user('元の依頼')]
+        events = self.answer('全部確認済みだよ')
+        for number in range(1, 6 if advancing else 4):
+            notice = self.gate_state()['notice_marker']
+            items += [self.assistant_notice(notice), self.user(f'<hook_prompt hook_run_id="h{number}">再確認</hook_prompt>')]
+            events = self.answer('全部確認済みだよ', body={'input': list(items)})
+        return self.final_text(events)
+
+    def test_stalled_recheck_stops_and_preserves_unmet_findings(self):
+        text = self.stalled_answers()
+        self.assertIn('自動差戻し停止・未解決', text)
+        self.assertIn('全部確認済みだよ', text)
+        self.assertIn('次の点は確かめられていません', text)
+        state = self.gate_state()
+        self.assertEqual(state['phase'], 'stopped')
+        self.assertEqual(state['progress_state']['stalled'], 3)
+        self.assertTrue(state['findings'])
+        self.assertNotIn('agent_message', state)
+
+    def test_failed_independent_recheck_stops_with_the_initial_finding(self):
+        text = self.stalled_answers(fail_high=True)
+        self.assertIn('再判定不能で自動差戻し停止・未解決', text)
+        self.assertIn('全部確認済みだよ', text)
+        self.assertTrue(self.gate_state()['findings'])
+        self.assertEqual(self.gate_state()['phase'], 'stopped')
+
+    def test_advancing_repairs_are_not_capped_by_the_total_rounds(self):
+        self.assertEqual(self.stalled_answers(advancing=True), '')
+        self.assertEqual(self.gate_state()['round'], 5)
+        self.assertEqual(self.gate_state()['progress_state']['stalled'], 0)
+        self.assertEqual(self.gate_state()['phase'], 'substituted')
+
+    def test_new_turn_has_no_previous_progress_checkpoint(self):
+        self.substituted()
+        self.answer('別の依頼への回答', turn_id='t2', body={'input': [self.user('新しい依頼')]})
+        self.assertEqual(self.checker_inputs()[-1]['round'], 0)
+        self.assertNotIn('progress_state', self.checker_inputs()[-1])
+
     def test_unwritable_state_falls_back_to_the_original(self):
         self.register()
         (self.tmp / 'findings-on').write_text('', encoding='utf-8')
         (self.state / 'gate').write_text('not a directory', encoding='utf-8')
         text = self.final_text(self.answer('全部確認済みだよ'))
-        self.assertEqual(text, UNAVAILABLE + '全部確認済みだよ')
+        self.assertIn('全部確認済みだよ', text)
+        self.assertIn('UNMET-ITEM', text)
+        self.assertIn('保存できなかった', text)
 
     def test_evidence_is_saved_in_order_with_failures_and_truncation(self):
         out1 = 'Script failed\nExit code: 3\nboom'
@@ -1284,6 +1547,18 @@ class RelayTests(unittest.TestCase):
             self.assertIn('元の依頼: A と B を直して', texts)
             self.assertIn('計画: A を直して B を直す', texts)
             self.assertEqual(sent['latest_user'], 'じゃあ進めて')
+
+    def test_earlier_requests_and_authorization_survive_long_conversations(self):
+        start = [self.user('A と B を修正して'), self.user('この作業の push は許可する'),
+                 self.assistant('A から作業する'), self.user('B も忘れずに')]
+        start += [self.assistant(f'途中報告{n}') for n in range(12)]
+        start += [self.user('その許可は取り消す。今は C の説明だけして')]
+        self.answer('C の説明', body={'input': start})
+        sent = self.checker_inputs()[-1]
+        for field in ('recent_messages', 'turn_start_context'):
+            self.assertEqual([m['text'] for m in sent[field] if m['role'] == 'user'],
+                             ['A と B を修正して', 'この作業の push は許可する', 'B も忘れずに',
+                              'その許可は取り消す。今は C の説明だけして'])
 
     def test_compaction_keeps_the_saved_evidence(self):
         items = [self.user('元の依頼'), self.exec_call('c1', 'await exec("make test")'), self.exec_output('c1', 'passed')]
@@ -1361,8 +1636,18 @@ class RelayTests(unittest.TestCase):
                  {'type': 'function_call_output', 'call_id': 'c1', 'output': f'token={secret}'}]
         self.answer('終わったよ', body={'input': items})
         prompt = prompt_file.read_text(encoding='utf-8')
-        self.assertIn('token=', prompt)
         self.assertNotIn(secret, prompt)
+        packets = [json.loads(json.loads(line)['prompt']) for line in
+                   (self.tmp / 'real-checker-prompts.jsonl').read_text().splitlines()]
+        self.assertTrue(any(packet.get('stage') in ('judge', 'update_and_judge') for packet in packets))
+        served = [entry for packet in packets for entry in packet.get('answers', []) + packet.get('retrieved', [])]
+        self.assertTrue(any('見るね [REDACTED]' in entry['text'] for entry in served))
+        archived = [json.loads(path.read_text()) for path in (self.state / 'context' / 's1' / 'sources').glob('*.json')]
+        evidence = [source for source in archived if source.get('native_id') == 'c1']
+        self.assertTrue(evidence)
+        self.assertTrue(any(source['fields']['output'] == 'token=[REDACTED]' for source in evidence))
+        self.assertNotIn(secret, json.dumps(packets))
+        self.assertNotIn(secret, json.dumps(archived))
 
     def test_self_test_covers_the_notice_and_restore(self):
         # 自己試験の偽の検査処理が未達を返し、案内への差し替えと、続けた要求での原文への戻しを通す。
@@ -1370,6 +1655,48 @@ class RelayTests(unittest.TestCase):
                                  '--self-test'], capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('notice', result.stdout)
+
+
+class CompactionIngestionTests(unittest.TestCase):
+    def test_checker_wait_covers_the_shared_budget_and_cleanup(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('timeout_relay', RELAY)
+        relay = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(relay)
+        for override, expected in [(None, 3640), ('720', 760)]:
+            with self.subTest(timeout=override), patch.dict(os.environ, clear=False):
+                if override is None:
+                    os.environ.pop('OUTPUT_GATE_TIMEOUT', None)
+                else:
+                    os.environ['OUTPUT_GATE_TIMEOUT'] = override
+                with patch.object(relay.subprocess, 'Popen') as popen:
+                    process = popen.return_value
+                    process.communicate.return_value = (b'{}', b'')
+                    process.returncode = 0
+                    self.assertEqual(relay.Checks().run({}), b'{}')
+                    self.assertEqual(process.communicate.call_args.kwargs['timeout'], expected)
+
+    def test_ingestion_failure_preserves_the_original_conversation(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('compaction_relay', RELAY)
+        relay = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(relay)
+        with tempfile.TemporaryDirectory() as directory:
+            relay.Settings.state_dir = Path(directory)
+            body = {'input': [{'type': 'message', 'role': 'user',
+                              'content': [{'type': 'input_text', 'text': 'Keep this request'}]}]}
+            failures = [subprocess.CompletedProcess([], 1, b'{"status":"unchecked"}'),
+                        subprocess.TimeoutExpired('ingest', 45)]
+            for n, failure in enumerate(failures):
+                item = {'type': 'compaction', 'encrypted_content': 'failed-' + str(n)}
+                option = {'side_effect': failure} if isinstance(failure, Exception) else {'return_value': failure}
+                with patch.object(relay.subprocess, 'run', **option):
+                    relay.remember_compaction(body, [item], 'session')
+                conversation, incomplete = relay.stored_conversation(item)
+                self.assertTrue(incomplete)
+                self.assertEqual([(m['role'], m['text']) for m in conversation], [('user', 'Keep this request')])
 
 
 class RunJudgeTests(unittest.TestCase):

@@ -16,23 +16,43 @@ done
 # 判定役が動くかを確かめる問いには STUB_PROBE を出して STUB_PROBE_EXIT で終わる。
 mkdir -p "$work/bin"
 cat >"$work/bin/fake_codex.py" <<'PY'
-import os, sys, time
+import json, os, re, sys, time
 work = os.environ["STUB_WORK"]
 data = sys.stdin.buffer.read()
 if b"Reply with exactly: OK" in data:
     print(os.environ.get("STUB_PROBE", "OK"))
     sys.exit(int(os.environ.get("STUB_PROBE_EXIT", "0")))
-with open(os.path.join(work, "judge-input"), "wb") as f:
+stage_match = re.search(rb'\n<<<STAGE [^>]+>>>\n(.*?)\n', data)
+stage = stage_match[1].decode() if stage_match else 'legacy'
+with open(os.path.join(work, "judge-input"), "wb" if stage in ('effect', 'legacy') else "ab") as f:
     f.write(data)
-with open(os.path.join(work, "calls"), "a") as f:
-    f.write("x\n")
+with open(os.path.join(work, "stages"), "a") as f:
+    f.write(stage + "\n")
+if stage in ('effect', 'legacy'):
+    with open(os.path.join(work, "calls"), "a") as f:
+        f.write("x\n")
 if os.environ.get("STUB_AUTH_FAIL"):   # ログインが無効な codex のように 401 を出し続ける
     for _ in range(5):
         print("2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to connect "
               "to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses",
               file=sys.stderr, flush=True)
 time.sleep(float(os.environ.get("STUB_SLEEP", "0")))
-print(os.environ.get("STUB_OUTPUT", ""))
+raw = os.environ.get("STUB_OUTPUT", "")
+try:
+    verdict = json.loads(raw.splitlines()[-1])
+except (ValueError, IndexError):
+    print(raw)
+else:
+    if stage == 'state':
+        update = json.loads(re.search(rb'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', data, re.S)[2])
+        facts = update['previous'] + [{'sources': [row['ref']], 'purpose': '', 'target': '',
+            'effect': '', 'scope': row['input'] + row['input_context'], 'status': 'pending'} for row in update['new_inputs']]
+        print(json.dumps({'facts': facts}, ensure_ascii=False))
+    elif stage.startswith('authorize'):
+        print(json.dumps({'user_requested': verdict['user_requested'], 'needs_context': False, 'reason': verdict['reason']}, ensure_ascii=False))
+    else:
+        verdict.update(needs_context=os.environ.get('STUB_CONTEXT') == '1' and stage == 'effect', context_free=True)
+        print(json.dumps(verdict, ensure_ascii=False))
 sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 PY
 printf '#!/bin/sh\nexec "%s" -I "%s/bin/fake_codex.py" "$@"\n' "$py_bin" "$work" >"$work/bin/codex"
@@ -52,9 +72,43 @@ decision() { [ -n "$1" ] || { echo none; return; }; jq -r '.hookSpecificOutput.p
 reason() { jq -r '.hookSpecificOutput.permissionDecisionReason // .systemMessage // ""' <<<"$1"; }
 fail() { echo "not ok: $1" >&2; exit 1; }
 token=$("$py_bin" -I -c "import secrets,string;print('ghp_'+''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))")
-SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"reason":""}'
+SAFE='{"danger":false,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":""}'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"マシンを再起動する"}'
+generic_tool() {
+  jq -n --arg name "$1" --argjson args "$2" '{session_id:"s1",tool_name:$name,tool_input:$args}'
+}
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"共有のコメントを投稿する"}'
+for agent in claude codex; do
+  out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文\n二行目","metadata":{"labels":["確認",null],"notify":false}}' | bash "$HOOK" --cli "$agent")
+  expected=ask; [ "$agent" = codex ] && expected=deny
+  [ "$(decision "$out")" = "$expected" ] || fail "$agent judges an unauthorized MCP write: $out"
+done
+"$py_bin" -I - "$work/judge-input" <<'PY'
+import json, re, sys
+data = open(sys.argv[1]).read()
+assert re.search(r'<<<TOOL_NAME [^>]+>>>\nmcp__github__add_comment\n', data)
+match = re.search(r'<<<TOOL_INPUT [^>]+>>>\n(.*?)\n<<<END TOOL_INPUT ', data, re.S)
+assert match, "the judge receives the full tool input"
+assert json.loads(match[1]) == {"issue": 42, "body": "本文\n二行目", "metadata": {"labels": ["確認", None], "notify": False}}
+PY
+record 'issue 42 にコメントして'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"利用者がコメントを依頼している"}'
+out=$(generic_tool 'mcp__github__add_comment' '{"issue":42,"body":"本文"}' | bash "$HOOK")
+[ -z "$out" ] || fail "an authorized MCP write is allowed: $out"
+grep -q 'issue 42 にコメントして' "$work/judge-input" || fail "MCP judge receives the recorded permission"
+rm -f "$work/calls" "$work/state/prompts/s1"
+STUB_OUTPUT=$SAFE
+generic_tool 'mcp__example__read' '{"id":1,"options":{"format":"text"}}' | bash "$HOOK" >/dev/null
+generic_tool 'mcp__example__read' '{"options":{"format":"text"},"id":1}' | bash "$HOOK" >/dev/null
+[ "$(calls)" = 1 ] || fail "the same tool and JSON input reuse the safe verdict"
+generic_tool 'mcp__example__other' '{"id":1,"options":{"format":"text"}}' | bash "$HOOK" >/dev/null
+generic_tool 'mcp__example__read' '{"id":1,"options":{"format":"json"}}' | bash "$HOOK" >/dev/null
+[ "$(calls)" = 3 ] || fail "tool names and nested arguments separate safe verdicts"
+out=$(generic_tool 'mcp__example__write' "{\"body\":\"$token\"}" | bash "$HOOK")
+[ "$(decision "$out")" = ask ] && [ "$(calls)" = 3 ] || fail "Claude checks the complete MCP input for secrets before sending it: $out"
+echo 'ok: generic tool input, permission decisions, cache separation and secret checks'
+
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"マシンを再起動する"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "danger is denied: $out"
 reason "$out" | grep -q 'マシンを再起動する' || fail "deny reason carries the judge reason"
@@ -70,7 +124,7 @@ grep -q '状態を確認する' "$work/judge-input" || fail "judge input contain
 grep -q 'エージェント: claude' "$work/judge-input" || fail "judge input names the shell and the agent"
 echo 'ok: a safe command is allowed silently'
 
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"cache must not be bypassed"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"cache must not be bypassed"}'
 out=$(pre_tool_use '"git status"' | bash "$HOOK")
 [ -z "$out" ] && [ "$(calls)" = 1 ] || fail "second identical command reuses the safe verdict"
 out=$(pre_tool_use '"git status"' | bash "$HOOK" --cli codex)
@@ -86,7 +140,7 @@ echo 'ok: a safe verdict is reused only for the same command, purpose, shell, ag
 
 rm -f "$work/calls"
 record 'このマシンを再起動して'
-STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"external":false,"reason":"利用者が再起動を依頼している"}'
+STUB_OUTPUT='{"danger":true,"user_requested":true,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"利用者が再起動を依頼している"}'
 out=$(pre_tool_use '"sudo reboot"' | bash "$HOOK")
 [ -z "$out" ] || fail "an explicitly requested effect is allowed: $out"
 grep -q 'このマシンを再起動して' "$work/judge-input" || fail "judge input contains the recorded user message"
@@ -96,9 +150,9 @@ echo 'ok: the recorded user message reaches the judge and requested danger is no
 
 record 'このマシンを再起動して'
 AGENT_DELEGATED_SESSION=1 record '親エージェントからの依頼: 再起動して確認すること'
-STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"reason":"再起動する"}'
+STUB_OUTPUT='{"danger":true,"user_requested":false,"body_from_file":false,"external":false,"short_cutoff":false,"reason":"再起動する"}'
 pre_tool_use '"sudo shutdown -r now"' | bash "$HOOK" >/dev/null
-grep -q '(none)' "$work/judge-input" && ! grep -q '再起動して' "$work/judge-input" ||
+grep -q '"facts":\[\]' "$work/judge-input" && ! grep -q 'このマシンを再起動して' "$work/judge-input" ||
   fail "a delegated session's prompt is not treated as the user's request"
 echo 'ok: a delegated session does not record the delegating prompt as the user request'
 
@@ -118,16 +172,29 @@ out=$(jq -n '{session_id:"s1",tool_name:"Bash",tool_input:{}}' | bash "$HOOK")
 reason "$out" | grep -q '判定せずに通した' || fail "missing command is reported, not passed silently: $out"
 echo 'ok: argv arrays and the cmd field are judged, and a missing command is reported'
 
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"external":true,"reason":"gh pr create が本文をファイルから読む"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":true,"external":true,"short_cutoff":false,"reason":"gh pr create が本文をファイルから読む"}'
 record 'PR を作って'
 out=$(pre_tool_use '"gh pr create --body-file /tmp/body.md"' | bash "$HOOK")
 [ "$(decision "$out")" = deny ] || fail "a body read from a file path is denied: $out"
 reason "$out" | grep -q '標準入力' || fail "the deny reason tells how to pass the body"
 echo 'ok: posting a body from a file path is denied with the fix'
 
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":false,"short_cutoff":true,"reason":"テスト一式を 30 秒で打ち切る"}'
+record 'テストを流して'
+for agent in claude codex; do
+  out=$(pre_tool_use '"timeout 30 make test"' | bash "$HOOK" --cli "$agent")
+  [ "$(decision "$out")" = deny ] || fail "$agent denies a short cutoff without basis: $out"
+  reason "$out" | grep -q '内容' || fail "$agent tells to monitor the content instead: $out"
+done
+before=$(calls)
+pre_tool_use '"timeout 30 make test"' | bash "$HOOK" >/dev/null
+[ "$(calls)" = $((before + 1)) ] || fail "a short cutoff is not cached as safe"
+grep -q '打ち切' "$work/judge-input" || fail "the judge prompt asks about cutoffs"
+echo 'ok: a short cutoff without basis is denied with the content-monitoring fix'
+
 rm -f "$work/calls"
 record 'テストを直して'
-STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"commit を共有の remote へ送る"}'
 out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK")
 [ "$(decision "$out")" = ask ] && reason "$out" | grep -q 'commit を共有の remote へ送る' ||
   fail "Claude asks the user before an unauthorized external effect: $out"
@@ -136,7 +203,7 @@ out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli codex)
   fail "Codex denies an unauthorized external effect and tells the agent to get permission: $out"
 [ "$(calls)" = 2 ] || fail "an external effect is not cached as safe"
 record 'push して'
-STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"reason":"commit を共有の remote へ送る"}'
+STUB_OUTPUT='{"danger":false,"user_requested":true,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"commit を共有の remote へ送る"}'
 for agent in claude codex; do
   out=$(pre_tool_use '"git push origin HEAD"' | bash "$HOOK" --cli "$agent")
   [ -z "$out" ] || fail "$agent allows an external effect the user permitted: $out"
@@ -146,30 +213,48 @@ echo 'ok: an external effect needs the user permission, asked in Claude and deni
 
 record '修正して push までして'
 record '進捗は？'
-STUB_OUTPUT=$SAFE
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"push"}'
 pre_tool_use '"git push origin HEAD"' | bash "$HOOK" >/dev/null
 grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？' "$work/judge-input" ||
   fail "the judge sees a permission given in an earlier message of the session"
-[ "$(grep -n '修正して push までして' "$work/judge-input" | cut -d: -f1)" -lt "$(grep -n '進捗は？' "$work/judge-input" | cut -d: -f1)" ] ||
-  fail "the user's messages reach the judge oldest first"
+"$py_bin" -I - "$work/judge-input" <<'PY_ORDER'
+import json, re, sys
+text = open(sys.argv[1]).read()
+update = json.loads(re.search(r'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', text, re.S)[2])
+inputs = [row['input'] for row in update['new_inputs']]
+assert inputs.index('修正して push までして') < inputs.index('進捗は？')
+PY_ORDER
 for n in $(seq 1 6); do record "進捗は？ $n"; done
 pre_tool_use '"git push origin main"' | bash "$HOOK" >/dev/null
 grep -q '修正して push までして' "$work/judge-input" || fail "a permission survives several progress checks"
 for n in $(seq 7 20); do record "進捗は？ $n"; done
 pre_tool_use '"git push origin dev"' | bash "$HOOK" >/dev/null
-! grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？ 20' "$work/judge-input" ||
-  fail "only the recent user messages reach the judge"
-echo 'ok: the judge sees the recent user messages, oldest first'
+grep -q '修正して push までして' "$work/judge-input" && grep -q '進捗は？ 20' "$work/judge-input" ||
+  fail "approval context survives more than twenty progress messages"
+echo 'ok: the judge retains session messages, oldest first'
 
 rm -f "$work/state/prompts/s1"
 jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"final_answer",content:[{type:"output_text",text:"DNS サーバーの設定を反映していい？"}]}}' >"$work/transcript.jsonl"
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
 record '進めて' --cli codex
-STUB_OUTPUT=$SAFE
+STUB_OUTPUT='{"danger":false,"user_requested":false,"body_from_file":false,"external":true,"short_cutoff":false,"reason":"external"}'
 pre_tool_use '"ssh dns-host apply"' | bash "$HOOK" --cli codex >/dev/null
 grep -q 'DNS サーバーの設定を反映していい？' "$work/judge-input" && grep -q 'いい' "$work/judge-input" ||
   fail 'the preceding assistant question and the user approval must reach the judge together'
+"$py_bin" -I - "$work/judge-input" <<'PY_PAIRED'
+import json, re, sys
+text = open(sys.argv[1]).read()
+user = re.search(r'\n<<<UPDATE ([^>]+)>>>\n(.*?)\n<<<END UPDATE \1>>>', text, re.S).group(2)
+try:
+    rows = json.loads(user)["new_inputs"]
+except ValueError:
+    raise AssertionError('USER must preserve each input with its recorded context')
+assert rows[0]['input'] == 'いい'
+assert rows[0]['input_context'] == 'DNS サーバーの設定を反映していい？'
+context = re.search(r'<<<CONTEXT ([^>]+)>>>\n(.*?)\n<<<END CONTEXT \1>>>', text, re.S).group(2)
+assert 'DNS サーバーの設定を反映していい？' not in context
+PY_PAIRED
 echo 'ok: the preceding assistant question accompanies the user approval'
 
 rm -f "$work/state/prompts/s1"
@@ -177,9 +262,10 @@ jq -nc '{type:"response_item",payload:{type:"message",role:"assistant",phase:"fi
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"その話は中止"}]}}' >>"$work/transcript.jsonl"
 jq -nc '{type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"いい"}]}}' >>"$work/transcript.jsonl"
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
-pre_tool_use '"ssh another-host apply"' | bash "$HOOK" --cli codex >/dev/null
-! grep -q '古い提案' "$work/judge-input" || fail 'an intervening user message must not attach an old proposal'
-echo 'ok: an intervening user message prevents stale proposal association'
+pre_tool_use '"ssh another-host apply"' | jq --arg t "$work/transcript.jsonl" '. + {transcript_path:$t}' | bash "$HOOK" --cli codex >/dev/null
+grep -q '古い提案' "$work/judge-input" && grep -q 'その話は中止' "$work/judge-input" || fail 'the judge needs both the proposal and its cancellation'
+jq -se '.[-1].text == "いい" and .[-1].assistant_context == ""' "$work/state/prompts/s1" >/dev/null || fail 'a cancelled proposal must not become the context of a later answer'
+echo 'ok: cancellation is retained without attaching the old proposal to a later answer'
 
 rm -f "$work/state/prompts/s1"
 record 'origin main への push を許可する' --cli codex
@@ -188,8 +274,32 @@ jq -nc --arg q "$long_question" '{type:"response_item",payload:{type:"message",r
 jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt
 rm -f "$work/state/safe/"*
 pre_tool_use '"git push origin main"' | bash "$HOOK" --cli codex >/dev/null
-! grep -q 'origin main への push を許可する' "$work/judge-input" || fail 'an omitted assistant response must not leave earlier permissions in effect'
-echo 'ok: omitted oversized context clears earlier permissions'
+grep -q 'origin main への push を許可する' "$work/judge-input" && grep -q "$long_question" "$work/judge-input" || fail 'long assistant context is retained with the earlier approval'
+echo 'ok: long assistant context preserves earlier permissions'
+
+"$py_bin" -I - "$work/transcript.jsonl" <<'PY_LARGE'
+import json, sys
+with open(sys.argv[1], 'w') as transcript:
+    transcript.write(json.dumps({'type': 'response_item', 'payload': {'type': 'message', 'role': 'assistant', 'phase': 'final_answer', 'content': [{'type': 'output_text', 'text': 'Q' * 150000 + '?'}]}}) + '\n')
+PY_LARGE
+out=$(jq -n --arg t "$work/transcript.jsonl" '{session_id:"s1",prompt:"いい",transcript_path:$t}' | bash "$HOOK" --cli codex --record-prompt)
+[ -z "$out" ] || fail "large assistant context is recorded without shell argument limits: $out"
+rm -f "$work/state/safe/"*
+pre_tool_use '"git push origin main"' | bash "$HOOK" --cli codex >/dev/null
+"$py_bin" -I - "$work/judge-input" <<'PY_LARGE'
+import sys
+text = open(sys.argv[1]).read()
+assert 'Q' * 150000 + '?' in text, 'the complete large assistant context reaches the judge'
+assert 'origin main への push を許可する' in text, 'the earlier permission remains intact'
+PY_LARGE
+echo 'ok: assistant context is passed without shell argument limits'
+
+record 'origin main への push を許可する'
+jq -nc --arg token "$token" '{type:"attachment",attachment:{type:"queued_command",origin:{kind:"human"},prompt:("push は取り消す。送信しないで " + $token)}}' >"$work/transcript.jsonl"
+pre_tool_use '"git push origin main"' | jq --arg t "$work/transcript.jsonl" '. + {transcript_path:$t}' | bash "$HOOK" >/dev/null
+grep -q 'push は取り消す。送信しないで' "$work/judge-input" || fail 'queued revocation survives secret masking'
+! grep -q "$token" "$work/judge-input" || fail 'queued secret is never sent'
+echo 'ok: queued revocation survives while its secret is masked'
 
 record 'push して'
 record "push はしないで $token" >/dev/null
@@ -205,10 +315,10 @@ now=$(date +%s)
   jq -nc --argjson at $((now - 50000)) --arg t "$(printf 'E%.0s' $(seq 3000))最新の中央" '{at: $at, text: $t}'
 } >"$work/state/prompts/s1"
 pre_tool_use '"git push origin old"' | bash "$HOOK" >/dev/null
-! grep -q '半日以上前' "$work/judge-input" && ! grep -q 'CCCC' "$work/judge-input" && ! grep -q '省略した長文の前' "$work/judge-input" &&
+grep -q '半日以上前' "$work/judge-input" && grep -q 'CCCC' "$work/judge-input" && grep -q '省略した長文の前' "$work/judge-input" &&
   grep -q '最新の中央' "$work/judge-input" ||
-  fail "old earlier messages, a long earlier message and those before it are dropped, and the latest is kept whole"
-echo 'ok: earlier messages older than the window or a long earlier message and those before it are dropped, but the latest is kept whole'
+  fail "all session messages survive age and length changes without losing approval or withdrawal"
+echo 'ok: session messages survive time and length changes'
 
 rm -f "$work/calls"
 STUB_EXIT=1 STUB_OUTPUT='boom' STUB_PROBE='' STUB_PROBE_EXIT=1
@@ -287,8 +397,18 @@ set -e
 echo 'ok: run-judge stops a slow judge and reports a missing one'
 
 for config in claude/settings.json codex/hooks.json; do
-  jq -e '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("command-judge\\.sh"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config registers the judge for Bash"
+  jq -e '[.hooks.PreToolUse[] | select((.matcher // "") == "" or .matcher == "*") | .hooks[] | select(.command | test("command-judge\\.sh"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config registers the judge for all tools"
   jq -e '[.hooks.UserPromptSubmit[].hooks[] | select(.command | test("command-judge\\.sh .*--record-prompt"))] | length == 1' "$HOOK_DIR/../../$config" >/dev/null || fail "$config records the prompt"
   jq -e '[.. | strings | select(test("gh-body-file-guard"))] | length == 0' "$HOOK_DIR/../../$config" >/dev/null || fail "$config no longer runs the pattern-based gh guard"
+  jq -e '[.hooks.PreToolUse[].hooks[] | select(.command | test("command-judge\\.sh")) | .timeout] == [180]' "$HOOK_DIR/../../$config" >/dev/null || fail "$config allows all judgement stages and the health probe to finish"
   echo "ok: $config registers the judge and the prompt recorder"
 done
+
+rm -f "$work/calls" "$work/state/safe/"* "$work/state/judge-down-"*
+STUB_EXIT=0 STUB_AUTH_FAIL= STUB_OUTPUT=$SAFE
+record 'この作業の状態を調べて' --cli codex
+pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
+record '宛先の変更はせず、引き続き確認して' --cli codex
+pre_tool_use '"git status --short"' | bash "$HOOK" --cli codex >/dev/null
+[ "$(calls)" = 1 ] || fail 'unrelated conversation must not invalidate a context-free safe verdict'
+echo 'ok: context-free verdicts do not resend unrelated conversation'

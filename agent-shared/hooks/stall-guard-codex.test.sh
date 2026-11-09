@@ -211,19 +211,138 @@ reset; a=$(stop p1); b=$(prewait 10000 p1); c=$(inject p1)
 ok "empty session is silent"
 
 reset; child_a; out=$(stop p1)
-blocked "$out" && [[ "$(field .reason "$out")" == *"/root/child_a"* ]] && [[ "$(field .reason "$out")" == *1200000* ]] || fail "run accepted in this turn blocks the turn: $out"
+blocked "$out" && [[ "$(field .reason "$out")" == *"/root/child_a"* ]] && [[ "$(field .reason "$out")" == *180000* ]] || fail "run accepted in this turn blocks the turn: $out"
 ok "run accepted in this turn blocks the turn"
+
+reset; child_a; at 180; out=$(waited 180000); at 181; prompt=$(inject p2); at 0
+[ -z "$out$prompt" ] || fail "lifecycle-only wait and prompt before observation due are silent: $out$prompt"
+ok "lifecycle-only wait and prompt before observation due are silent"
+
+reset; child_a; at 180
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Reasoning","id":"empty-reasoning","summary_text":[],"raw_content":[]}}}' \
+  '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"SubAgentActivity","model":null,"reasoning_effort":null,"id":"activity","kind":"spawn","agent_thread_id":"child","agent_path":"/root/child_a"}}}' >>"$R"
+out=$(waited 180000)
+[ -z "$out" ] || fail "native items without substantive content do not notify before the deadline: $out"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Reasoning","id":"real-reasoning","summary_text":["native summary evidence"],"raw_content":["native raw evidence"]}}}' \
+  '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"native-message","content":[{"type":"Text","text":"native assistant evidence"}]}}}' \
+  '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"native-command","command":["test-command"],"status":"Completed","aggregated_output":"native command result","exit_code":0}}}' >>"$R"
+out=$(waited 180000)
+for text in 'native summary evidence' 'native raw evidence' 'native assistant evidence' 'native command result'; do
+  [[ "$(ctx "$out")" == *"$text"* ]] || fail "native item content remains available: $text / $out"
+done
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"paired-message","content":[{"type":"Text","text":"paired assistant evidence"}]}}}' \
+  '{"type":"response_item","payload":{"type":"message","id":"paired-message","role":"assistant","content":[{"type":"output_text","text":"paired assistant evidence"}]}}' >>"$R"
+out=$(waited 180000)
+[ "$(ctx "$out" | grep -o 'paired assistant evidence' | wc -l)" = 1 ] || fail "native and canonical records of the same item notify once: $out"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UnknownEvidence","id":"unknown-item","result":"unknown native evidence"}}}' >>"$R"
+out=$(waited 180000)
+[[ "$(ctx "$out")" == *"unknown native evidence"* ]] || fail "unknown native evidence remains available: $out"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"split-message","content":[{"type":"Text","text":"split assistant evidence"}]}}}' >>"$R"
+out=$(waited 180000)
+[[ "$(ctx "$out")" == *"split assistant evidence"* ]] || fail "native content is notified before its canonical record arrives: $out"
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","id":"split-message","role":"assistant","content":[{"type":"output_text","text":"split assistant evidence"}]}}' >>"$R"
+out=$(waited 180000)
+[ -z "$out" ] || fail "the same item across an observation offset is not notified twice: $out"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"native-command","command":["test-command"],"status":"Completed","aggregated_output":"updated native command result","exit_code":0}}}' >>"$R"
+out=$(waited 180000)
+[[ "$(ctx "$out")" == *"updated native command result"* ]] || fail "changed substantive output on an existing item is not suppressed: $out"
+at 0
+ok "native items notify substantive content once and retain unknown evidence"
+
+reset; child_a
+for ((iteration = 1; iteration <= 50; iteration++)); do
+  jq -nc --argjson cycle "$iteration" '[range(0; 8)][] as $i
+    | {type:"event_msg",payload:{type:"item_completed",item:{type:"AgentMessage",id:"cycle-\($cycle)-\($i)",
+        content:[{type:"Text",text:("cycle \($cycle) item \($i) " + ("x" * 280))}]}}}' >>"$R"
+  at $((iteration * 180)); out=$(waited 180000)
+  [[ "$(ctx "$out")" == *"cycle $iteration item 7"* ]] || fail "long observation history retains fresh content at cycle $iteration: $out"
+done
+at 0
+ok "long observation history retains fresh content"
+
+reset; child_a; at 1200; out=$(inject p2); at 0
+[[ "$(ctx "$out")" == *c1* ]] || fail "observation deadline still requests a content check: $out"
+at 1201; out=$(inject p3); at 0
+[ -z "$out" ] || fail "a delivered observation postpones the next check: $out"
+ok "observation deadline requests a check once per interval"
+
+# 子の rollout の内容 (発言・ツールの呼出し・結果) を示し、更新時刻では示さない。
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"差分の 3 件目を照合した"}]}}' \
+  '{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"rg -n review src"}}' \
+  '{"type":"response_item","payload":{"type":"function_call_output","output":"src/a.rb:3: review"}}' \
+  '{"type":"response_item","payload":{"type":"reasoning","encrypted_content":"gAAAA"}}' >>"$R"
+out=$(stop p1); r=$(field .reason "$out"); at 1200; c=$(ctx "$(inject p2)"); at 0
+for t in "$r" "$c"; do
+  [[ "$t" == *"差分の 3 件目を照合した"* && "$t" == *"[tool exec] rg -n review src"* && "$t" == *"src/a.rb:3: review"* \
+    && "$t" != *gAAAA* && "$t" != *最終更新* ]] || fail "run facts show the child's content: $t"
+done
+ok "run facts show the child's content"
+
+# wait_agent から戻ると、その時点の子の内容を示す (待機が内容の確認点になる)。
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"4 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ "$(field .hookSpecificOutput.hookEventName "$out")" = PostToolUse ] && [[ "$(field .hookSpecificOutput.additionalContext "$out")" == *"4 件目を確認中"* ]] \
+  || fail "returning from wait_agent shows the child's content: $out"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ -z "$out" ] || fail "unchanged child content is not repeated after another wait: $out"
+printf '%s\n' '{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":42}}}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ -z "$out" ] || fail "new lifecycle metadata is not a new progress observation: $out"
+printf '%s\n' '{"type":"response_item","payload":{"type":"function_call_output","output":"new substantive result"}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[[ "$(ctx "$out")" == *"new substantive result"* && "$(ctx "$out")" != *"4 件目を確認中"* ]] || fail "only new substantive content is delivered after another wait: $out"
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ordinary progress"}]}}' \
+  '{"type":"custom_progress","payload":{"message":"unknown structured evidence"}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[[ "$(ctx "$out")" == *"unknown structured evidence"* ]] || fail "unknown rollout records retain their content beside known messages: $out"
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"after usage"}]}}' \
+  '{"timestamp":"2026-11-09T05:23:32.071Z","ordinal":21,"type":"token_usage_record","payload":{"thread_id":"01a1bec2-d1bb","turn_id":"01a1bec2-d1de","usage":{"input_tokens":42}}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[[ "$(ctx "$out")" == *"after usage"* && "$(ctx "$out")" != *token_usage_record* ]] || fail "records with only identifiers and numbers are not shown as progress: $out"
+printf '%s\n' '{"type":"custom_progress","payload":{"message":"六件目を確認中","id":"01a1bec2-d1bb"}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[[ "$(ctx "$out")" == *"六件目を確認中"* ]] || fail "unknown records keep Japanese text without spaces: $out"
+complete "$R" c1 5; out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+[ -z "$out" ] || fail "returning from wait_agent after the run ended is silent: $out"
+reset; child_a
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"5 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p2)
+[[ "$(field .hookSpecificOutput.additionalContext "$out")" == *"5 件目を確認中"* ]] || fail "returning from wait_agent shows a carried-over child's content: $out"
+ok "returning from wait_agent shows the child's content"
+
+# 子の rollout に 4 MiB を超える 1 行が来ても、その後の進捗を示し、大きな行の断片を示さない。
+reset; child_a
+{ printf '%s' '{"type":"response_item","payload":{"type":"function_call_output","output":"'; head -c 5000000 /dev/zero | tr '\0' 'q'; printf '%s\n' '"}}'; } >>"$R"
+printf '%s\n' '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"大きな出力のあと 6 件目を確認中"}]}}' >>"$R"
+out=$(post wait_agent '{"timeout_ms":180000}' '{"status":{}}' p1)
+c=$(field .hookSpecificOutput.additionalContext "$out")
+[[ "$c" == *"大きな出力のあと 6 件目を確認中"* && "$c" != *qqqqqqqq* ]] || fail "returning from wait_agent after a line over 4 MiB shows the following progress: $(head -c 300 <<<"$c")"
+ok "returning from wait_agent after a line over 4 MiB shows the following progress"
+
+reset; child_a
+jq -nc --arg text "$(head -c 2000 /dev/zero | tr '\0' x)" '{type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:$text}]}}' >>"$R"
+waited 180000 >/dev/null
+head -n 2 "$R" >"$R.replacement"; mv "$R.replacement" "$R"
+printf '%s\n' '{"type":"response_item","payload":{"type":"function_call_output","output":"replacement child output"}}' >>"$R"
+out=$(waited 180000)
+[[ "$(ctx "$out")" == *"replacement child output"* ]] || fail "a replaced rollout is read from its beginning: $out"
+printf '%s\n' '{"type":"response_item","payload":{"type":"function_call_output","output":"latest appended output"}}' >>"$R"
+out=$(waited 180000)
+[[ "$(ctx "$out")" == *"latest appended output"* && "$(ctx "$out")" != *"replacement child output"* ]] || fail "a replaced rollout continues from its latest observation: $out"
+ok "a replaced rollout continues from its latest observation"
 
 reset; child_a; complete "$R" c1 5; adv; out=$(stop p1)
 [ -z "$out" ] || fail "closed run does not: $out"
 ok "closed run does not"
 
 reset; child_a; a=$(stop p2); b=$(prewait 10000 p2); c=$(inject p2)
-[ -z "$a$b" ] && [[ "$(ctx "$c")" == *c1* ]] || fail "carried-over run does not block: $a$b / $c"
+[ -z "$a$b$c" ] || fail "carried-over run does not block: $a$b / $c"
 ok "carried-over run does not block"
 
 reset; child_a; out=$(prewait 10000 p1); out2=$(prewait 1200000 p1)
-[ "$(field .hookSpecificOutput.permissionDecision "$out")" = deny ] && [[ "$(field .hookSpecificOutput.permissionDecisionReason "$out")" == *1200000* ]] \
+[ "$(field .hookSpecificOutput.permissionDecision "$out")" = deny ] && [[ "$(field .hookSpecificOutput.permissionDecisionReason "$out")" == *180000* ]] \
   && [ -z "$out2" ] || fail "short wait is denied: $out / $out2"
 ok "short wait is denied"
 

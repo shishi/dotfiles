@@ -31,7 +31,7 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
   gate/<session_id>/<turn_id>.json
                           差し戻しの状態 {phase, round, findings, agent_message, original, display, display_clean,
                           notice_marker, notices, shown?, created, engine, engine_failures, dropped}。
-                          phase は未達が残る間 substituted → blocked をくり返し、resolved で
+                          phase は substituted → blocked で修正を続け、resolved または停滞による stopped で
                           終わる。round は直させた回数。resolved にするときは original と agent_message を消す。
                           original は保留した置き換え前の原文、display は訂正済みの回収用本文、
                           shown は hook の回収が表示した印。notices は保留した回答ごとの
@@ -41,7 +41,7 @@ response.in_progress を流し、Codex が待ち時間切れで切断しない�
                           ターンの証拠 {turn_id, time, records, shown, start}。records は呼び出しと出力 (と取得
                           できなかった範囲の印) を起きた順に、shown は表示済みの途中の文章、start はターンの開始時の
                           会話。セッションごとに直近 10 ターン・24 時間を残す。
-  compaction.json         サーバー側の compaction の項目 (暗号化データの SHA-256) と、その時点の直近の回答の組。
+  compaction.json         サーバー側の compaction の項目 (暗号化データの SHA-256) と、その時点の利用者と assistant の会話の組。
                           compaction の後は要求本文から前の回答が消えるため、検査役へはここから渡す。
   relay.log               種類・判定・時刻の記録。
 """
@@ -51,6 +51,7 @@ import gzip
 import hashlib
 import http.client
 import http.server
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -73,7 +74,10 @@ except ImportError:  # Python 3.14 より前
     DECODE_ERRORS = (ValueError, OSError, EOFError)
 
 SCRIPT = Path(__file__).resolve()
-VERSION = hashlib.sha256(SCRIPT.read_bytes()).hexdigest()[:12]
+_context_spec = importlib.util.spec_from_file_location('output_gate_context', SCRIPT.parent / 'output_gate_context.py')
+context = importlib.util.module_from_spec(_context_spec)
+_context_spec.loader.exec_module(context)
+VERSION = context.runtime_version(SCRIPT)
 PREFIX = '/backend-api/codex'
 DEFAULT_UPSTREAM = 'https://chatgpt.com/backend-api/codex'
 HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorization', 'proxy-authenticate',
@@ -81,15 +85,10 @@ HOP = {'host', 'connection', 'keep-alive', 'proxy-connection', 'proxy-authorizat
        'accept-encoding'}
 PASS_KINDS = {'compaction', 'memory', 'prewarm'}
 KEEPALIVE = b'event: response.in_progress\ndata: {"type":"response.in_progress","response":{}}\n\n'
-UNAVAILABLE = '回答の確認を完了できませんでした。\n\n'
-RECENT_MESSAGES = 10
+UNAVAILABLE = '出力検査が完了していないため、最終回答を保留しています。\n\n'
 # Codex が会話の先頭などに利用者の発言として入れる文脈 (AGENTS.md と環境の情報) の書き出し。
 INJECTED_CONTEXT = ('# AGENTS.md instructions', '<environment_context>')
 COMPACTION_TYPES = {'compaction', 'context_compaction'}
-KEEP_ANSWERS = 3
-# compaction の組に残す回答の phase。途中経過 (commentary) と回答の断片 (partial_answer) は残さない。
-# phase の無い項目は、phase を送らない版の最終回答として残す。
-FINAL_PHASES = (None, 'final_answer')
 STORE_LIMIT = 1000
 DELEGATED_TTL = 24 * 3600
 STATE_TTL = 24 * 3600      # 差し戻しの状態・続行の登録・保存した証拠を残す時間
@@ -214,8 +213,8 @@ def split_at_compaction(items):
     return items[last], items[last + 1:]
 
 
-def stored_answers(compaction_item):
-    """compaction の項目に結び付けた回答。組が無ければ None。"""
+def stored_conversation(compaction_item):
+    """旧版の answers には依頼と古い回答が無いため、復元できた発言にも欠落の印を付ける。"""
     key = compaction_key(compaction_item)
     if key is None:
         return None
@@ -229,7 +228,19 @@ def stored_answers(compaction_item):
             save_store(store)
         except OSError:
             pass
-    return list(entry.get('answers') or [])
+    if isinstance(entry.get('source_refs'), list):
+        conversation = []
+        directory = Path(entry['context_dir'])
+        for ref in entry['source_refs']:
+            key = json.dumps([ref['id'], ref['rev']], ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode()
+            source = read_json(directory / 'sources' / (hashlib.sha256(key).hexdigest() + '.json'))
+            if not source:
+                return conversation, True
+            conversation.append({'role': source['kind'], 'text': source['fields']['text'], 'native_id': source['native_id'], 'displayed': source.get('metadata', {}).get('displayed', False)})
+        return conversation, bool(entry.get('incomplete'))
+    if isinstance(entry.get('conversation'), list):
+        return list(entry['conversation']), bool(entry.get('incomplete'))
+    return [{'role': 'assistant', 'text': a} for a in entry.get('answers') or []], True
 
 
 def save_store(store):
@@ -242,18 +253,32 @@ def save_store(store):
     os.replace(tmp, path)
 
 
-def remember_compaction(body, output_items):
-    """compaction の応答の項目と、その要求本文の直近の回答を組にして保存する。失敗は OSError。"""
-    compaction_item, rest = split_at_compaction(body.get('input') or [])
-    answers = (stored_answers(compaction_item) or []) if compaction_item else []
-    answers += [input_text(i) for i in rest if isinstance(i, dict) and i.get('type') == 'message'
-                and i.get('role') == 'assistant' and i.get('phase') in FINAL_PHASES]
-    answers = answers[-KEEP_ANSWERS:]
+def remember_compaction(body, output_items, session_id=None):
+    conversation, incomplete = conversation_with_compaction(body.get('input') or [])
+    snapshot = None
+    if safe_id(session_id):
+        directory = Settings.state_dir / 'context' / session_id
+        payload = checker_payload(body, [''], final=True, session_id=session_id, context_dir=str(directory))
+        try:
+            limits = context.limits()
+            result = subprocess.run([*Settings.check_cmd, '--ingest'], input=json.dumps(payload).encode(),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    timeout=limits['timeout_seconds'] + limits['cleanup_seconds'])
+            snapshot = json.loads(result.stdout)
+            if result.returncode or snapshot.get('status') != 'ingested':
+                raise ValueError('compaction source ingestion failed')
+            snapshot = {k: snapshot[k] for k in ('source_cursor', 'context_generation', 'source_refs')}
+            snapshot['context_dir'] = str(directory)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            snapshot = None
+            incomplete = True
+
     with Settings.store_lock:
         store = load_store()
         for item in output_items:
             if isinstance(item, dict) and item.get('type') in COMPACTION_TYPES and compaction_key(item):
-                store[compaction_key(item)] = {'answers': answers, 'used': time.time()}
+                store[compaction_key(item)] = {**(snapshot if snapshot is not None else {'conversation': conversation}),
+                                               'incomplete': incomplete, 'used': time.time()}
         save_store(store)
 
 
@@ -275,30 +300,50 @@ def request_index(items):
 
 def conversation_of(items, end=None):
     """会話の発言 (依頼と回答) を {role, text} で返す。end までの項目だけを見る。"""
-    return [{'role': i['role'], 'text': input_text(i)} for i in items[:end]
-            if is_request(i) or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant')]
+    return [{'role': i['role'], 'text': input_text(i), **({'native_id': i['id']} if i.get('id') else {})} for i in items[:end]
+            if is_request(i) or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant'
+                                 and i.get('phase') != 'partial_answer')]
+
+
+def conversation_with_compaction(items):
+    compaction_item, rest = split_at_compaction(items)
+    if compaction_item is None:
+        return conversation_of(items), False
+    saved = stored_conversation(compaction_item)
+    if saved is None:
+        log(event='compaction-pair-missing')
+        return conversation_of(items), True
+    conversation, incomplete = saved
+    before = conversation_of(items[:len(items) - len(rest)])
+    cursor, extra = 0, []
+    # Codex は過去の user 発言を compaction の前にも残す。位置を進めて照合し、同じ回答の別の出現は区別する。
+    for message in before:
+        found = next((n for n in range(cursor, len(conversation))
+                      if all(conversation[n].get(k) == message.get(k) for k in ('role', 'text'))
+                      and (not conversation[n].get('native_id') or not message.get('native_id')
+                           or conversation[n]['native_id'] == message['native_id'])), None)
+        if found is None:
+            extra.append(message)
+        else:
+            cursor = found + 1
+    return conversation + extra + conversation_of(rest), incomplete or bool(extra)
 
 
 def checker_payload(body, bodies, **extra):
-    items = body.get('input') or []
-    compaction_item, rest = split_at_compaction(items)
-    after = len(items) - len(rest)
-    # 利用者の発言は compaction より前にも保持されて届く。回答は compaction より前の分を保存済みの組から取る。
-    # AGENTS.md・環境の情報と Stop hook の reason は、利用者の依頼ではないので数える前に除く。
-    messages = [i for n, i in enumerate(items) if is_request(i)
-                or (isinstance(i, dict) and i.get('type') == 'message' and i.get('role') == 'assistant' and n >= after)]
-    users = [m for m in messages if m.get('role') == 'user']
-    conversation = [{'role': m['role'], 'text': input_text(m)} for m in messages[-RECENT_MESSAGES:]]
-    compacted_note = False
-    if compaction_item is not None:
-        answers = stored_answers(compaction_item)
-        if answers is None:
-            compacted_note = True
-            log(event='compaction-pair-missing')
-        else:
-            conversation = [{'role': 'assistant', 'text': a} for a in answers] + conversation
+    conversation, compacted_note = conversation_with_compaction(body.get('input') or [])
+    sid = extra.get('session_id')
+    if safe_id(sid):
+        hidden = [entry for path in (Settings.state_dir / 'gate' / sid).glob('*.json')
+                  for entry in notice_entries(read_json(path) or {}).values()]
+        for message in conversation:
+            if message.get('role') == 'assistant' and any(
+                    (entry.get('source_id') and entry['source_id'] == message.get('native_id')) or
+                    (not entry.get('source_id') and entry.get('original') == message.get('text')) for entry in hidden):
+                message['displayed'] = False
+    users = [m for m in conversation if m.get('role') == 'user']
     programs = body.get('access_programs') or {}
-    payload = {'origin': 'codex', 'latest_user': input_text(users[-1]) if users else '',
+    payload = {'origin': 'codex', 'source_collector': 'codex-relay', 'source_mode': 'partial' if compacted_note else 'snapshot',
+               'request_id': users[-1].get('native_id') if users else None, 'latest_user': users[-1]['text'] if users else '',
                'recent_messages': conversation, 'bodies': list(bodies), 'final': False,
                'cyber_program': programs.get('cyber') if isinstance(programs, dict) else None,
                'compacted_note': compacted_note}
@@ -403,15 +448,16 @@ def evidence_items(records, prefix):
     items, calls = [], {}
     for record in records:
         if record['kind'] == 'gap':
-            items.append({'id': f'{prefix}{len(items) + 1}', 'unavailable': True, 'note': record['note']})
+            items.append({'id': f'{prefix}{len(items) + 1}', 'native_id': record['key'], 'unavailable': True, 'note': record['note']})
             continue
-        item = calls.get(record.get('call_id')) if record['kind'] == 'output' else None
+        item = calls.get(record.get('call_id'))
         if item is None:
-            item = {'id': f'{prefix}{len(items) + 1}', 'tool': record.get('tool')}
+            item = {'id': f'{prefix}{len(items) + 1}', 'native_id': record.get('call_id') or record['key'], 'tool': record.get('tool')}
             items.append(item)
             if record.get('call_id') is not None:
                 calls[record['call_id']] = item
         if record['kind'] == 'call':
+            item['tool'] = record.get('tool')
             item['input'] = record.get('input')
             if record.get('command'):
                 item['command'] = record['command']
@@ -448,35 +494,99 @@ def sweep(force=False):
                        key=lambda pair: pair[0], reverse=True)
         for rank, (stamp, path) in enumerate(turns):
             if rank >= KEEP_TURNS or now - stamp > STATE_TTL:
-                path.unlink(missing_ok=True)
+                pending = root / 'context' / session.name / 'pending-turns' / path.name
+                pending.parent.mkdir(parents=True, exist_ok=True)
+                with Settings.store_lock, context.locked(pending.parent.parent):
+                    record = read_json(path)
+                    if record is not None:
+                        write_json(pending, dict(record, items=evidence_items(record.get('records') or [], '')) )
+                        path.unlink(missing_ok=True)
 
 
 def record_turn(sid, tid, items):
-    """要求ごとに、利用者の最新の依頼より後の呼び出しと出力のうち保存していないものを足す。新しいターンの最初の
-    要求では、ターンの開始時の会話を保存する。セッションに保存済みの証拠が無ければ、依頼より前の呼び出しを
-    「前のターン (区別不明)」として取り込む。失敗は OSError。"""
-    with Settings.store_lock:
+    """未保存の呼び出しと結果を取り込む。依頼が割り込んだ場合も既知の呼び出しのターンへ結果を戻し、
+    所属不明の過去の記録は区別不明のターンへ保全する。失敗は OSError。"""
+    start, _ = conversation_with_compaction(items)
+    context_dir = Settings.state_dir / 'context' / sid
+    with Settings.store_lock, context.locked(context_dir):
         directory = Settings.state_dir / 'turns' / sid
         path = directory / f'{tid}.json'
-        turn = read_json(path)
+        pending = Settings.state_dir / 'context' / sid / 'pending-turns'
+        history = {p: value for p in [*pending.glob('*.json'), *directory.glob('*.json')]
+                   if (value := read_json(p)) is not None}
+        turn = history.get(path)
         index = request_index(items)
         after = items[index + 1:] if index is not None else items
         if turn is None:
-            known_turns = list(directory.glob('*.json')) if directory.exists() else []
             turn = {'turn_id': tid, 'time': time.time(), 'records': [], 'shown': [],
-                    'start': conversation_of(items, None if index is None else index + 1)[-5:]}
-            if not known_turns and index is not None:
-                before = records_from(items[:index])
-                if has_compaction(items[:index]):
-                    before.insert(0, gap_record('compaction で消えた前のターンの範囲 (中継が保存していない)'))
-                if before:
-                    write_json(directory / 'unknown.json', {'turn_id': UNKNOWN_TURN, 'time': time.time() - 1,
-                                                            'records': before})
+                    'start': start}
             if has_compaction(after):
                 turn['records'].append(gap_record('compaction で消えたこのターンの範囲 (中継が保存していない)'))
-        saved = {record['key'] for record in turn['records']}
-        turn['records'] += [record for record in records_from(after) if record['key'] not in saved]
+        first_snapshot = not history
+        history[path] = turn
+        unknown = directory / 'unknown.json'
+        if unknown not in history and pending / 'unknown.json' in history:
+            unknown = pending / 'unknown.json'
+        relocated = []
+        for previous_path, value in list(history.items()):
+            if value['turn_id'] == UNKNOWN_TURN and previous_path != unknown:
+                bucket = history.setdefault(unknown, dict(value, records=[]))
+                bucket['records'] = list({r['key']: r for r in [*value['records'], *bucket['records']]}.values())
+                history.pop(previous_path)
+                relocated.append(previous_path)
+        archived = context.read(context_dir / 'record-index.json', {})
+        archived_sources = {}
+        for source in context.read(context_dir / 'manifest.json', []):
+            if source['kind'] not in ('evidence', 'gap'):
+                continue
+            previous = archived_sources.get(source['native_id'])
+            if previous is None or previous['id'] == source['id']:
+                archived_sources[source['native_id']] = source
+        saved = set(archived) | {r['key'] for t in history.values() for r in t['records']}
+        turn_paths = {str(t['turn_id']): p for p, t in history.items()}
+        turn_paths[UNKNOWN_TURN] = unknown
+        owners = {s['native_id']: turn_paths.get(s['turn_id'], directory / f'{s["turn_id"]}.json') for s in archived_sources.values()}
+        owners.update({r['call_id']: turn_paths.get(r['turn_id'], directory / f'{r["turn_id"]}.json')
+                       for r in archived.values() if r.get('call_id')})
+        owners.update({r['call_id']: p for p, t in history.items() for r in t['records'] if r.get('call_id')})
+        before = records_from(items[:index]) if index is not None else []
+        if first_snapshot and index is not None and has_compaction(items[:index]):
+            before.insert(0, gap_record('compaction で消えた前のターンの範囲 (中継が保存していない)'))
+        changed = {unknown} if relocated else set()
+        for records, default in ((before, unknown), (records_from(after), path)):
+            for record in records:
+                if record['key'] in saved:
+                    continue
+                legacy = archived_sources.get(record.get('call_id') or record['key'])
+                target = owners.get(record.get('call_id') or record['key'], default)
+                original = [r for r in archived.values() if record.get('call_id') and r.get('call_id') == record['call_id']]
+                if not original and legacy and legacy['kind'] == 'evidence':
+                    fields = (['call'] if legacy.get('metadata', {}).get('tool') is not None else []) + (['output'] if legacy['fields'].get('output') else [])
+                    original = [dict(key=f'archive:{legacy["id"]}:{legacy["rev"]}:{field}', kind=field,
+                                     call_id=record['call_id'], turn_id=legacy['turn_id'],
+                                     source={'id': legacy['id'], 'rev': legacy['rev']}) for field in fields]
+                owner_turn = history.setdefault(target, {'turn_id': original[0]['turn_id'] if original else legacy['turn_id'] if legacy else UNKNOWN_TURN,
+                                                        'time': time.time() - 1, 'records': []})
+                existing = {r['key'] for r in owner_turn['records']}
+                for prior in original:
+                    if prior['key'] in existing:
+                        continue
+                    source = context.read(context_dir / 'sources' / (context.digest([prior['source']['id'], prior['source']['rev']]) + '.json'))
+                    if source is None:
+                        raise OSError('archived tool original is missing')
+                    fields = json.loads(source['fields']['call']) if prior['kind'] == 'call' else {'output': source['fields']['output']}
+                    owner_turn['records'].append(dict(key=prior['key'], kind=prior['kind'], call_id=prior['call_id'], **fields))
+                    existing.add(prior['key'])
+                owner_turn['records'].append(record)
+                if record.get('call_id'):
+                    owners[record['call_id']] = target
+                saved.add(record['key'])
+                changed.add(target)
+        for target in changed - {path}:
+            write_json(target, dict(history[target], items=evidence_items(history[target]['records'], '')))
         write_json(path, turn)
+        for previous_path in relocated:
+            previous_path.unlink(missing_ok=True)
     sweep()
     return turn
 
@@ -485,8 +595,10 @@ def turn_evidence(sid, tid):
     """(今のターンの証拠, 前のターンの証拠) を返す。ID はターンごとの接頭辞で全体を通して一意にする。"""
     directory = Settings.state_dir / 'turns' / sid
     current = read_json(directory / f'{tid}.json') or {'records': []}
-    others = sorted((t for p in directory.glob('*.json') if p.stem != tid for t in [read_json(p)] if t),
-                    key=lambda t: float(t.get('time') or 0))[-KEEP_TURNS:]
+    pending = Settings.state_dir / 'context' / sid / 'pending-turns'
+    paths = {p.stem: p for p in [*pending.glob('*.json'), *directory.glob('*.json')]}
+    others = sorted((t for key, p in paths.items() if key != tid for t in [read_json(p)] if t),
+                    key=lambda t: float(t.get('time') or 0))
     previous = []
     for number, turn in enumerate(others, 1):
         items = evidence_items(turn.get('records') or [], f'p{number}-')
@@ -537,8 +649,12 @@ def restore_notices(items, entries):
 
 
 def engine_record(result):
-    return {'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
-            'dropped': result.get('dropped') or []}
+    failure = result.get('failure_kind')
+    if failure not in ('input_limit', 'unavailable'):
+        failure = 'unavailable' if result.get('status') == 'unchecked' else None
+    return {'failure_kind': failure, 'reason': result.get('reason'), 'context_diagnostics': result.get('context_diagnostics'), 'context_metrics': result.get('context_metrics'), 'engine': result.get('engine'), 'engine_failures': result.get('engine_failures') or [],
+            'dropped': result.get('dropped') or [], 'progress': result.get('progress'),
+            'independent_recheck': result.get('independent_recheck')}
 
 
 def kill_tree(proc):
@@ -580,7 +696,9 @@ class Checks:
                                     stderr=subprocess.DEVNULL, start_new_session=os.name != 'nt')
             self.procs.append(proc)
         try:
-            out, _ = proc.communicate(json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=300)
+            limits = context.limits()
+            out, _ = proc.communicate(json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                                      timeout=limits['timeout_seconds'] + limits['cleanup_seconds'])
         except subprocess.TimeoutExpired:
             kill_tree(proc)
             raise
@@ -608,7 +726,7 @@ def run_check(payload, checks):
         out = json.loads(checks.run(payload).decode('utf-8'))
         if not isinstance(out, dict) or out.get('status') not in ('checked', 'unchecked'):
             raise ValueError('unexpected result')
-        withheld = out['status'] == 'checked' and out.get('bodies') is None and \
+        withheld = out.get('bodies') is None and \
             isinstance(out.get('agent_message'), str) and strings(out.get('fallback_bodies'), count)
         if not (withheld or strings(out.get('bodies'), count)) or \
                 (out['status'] == 'unchecked' and not (isinstance(out.get('reason'), str) and out['reason'].strip())):
@@ -616,7 +734,7 @@ def run_check(payload, checks):
         return out
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         reason = f'検査処理を実行できなかった ({type(error).__name__})'
-        bodies = [UNAVAILABLE + payload['bodies'][0], *payload['bodies'][1:]]
+        bodies = [UNAVAILABLE, *[''] * (len(payload['bodies']) - 1)]
         return {'status': 'unchecked', 'bodies': bodies, 'reason': reason, 'findings': []}
 
 
@@ -1074,7 +1192,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if etype == 'response.completed' and kind == 'compaction':
                     output = (obj.get('response') or {}).get('output') or []
                     try:
-                        remember_compaction(body, compaction_items + list(output))
+                        remember_compaction(body, compaction_items + list(output), self.meta().get('session_id'))
                     except OSError as error:
                         # 組を保存できないまま compaction を確定させない。Codex の再試行に任せる。
                         log(event='compaction-store-failed', error=type(error).__name__)
@@ -1145,6 +1263,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # 呼び出しが無くても、end_turn=false の完了と、Codex が同じターンで続ける打ち切りは最終回答ではない。
         final = not client_call and response.get('end_turn') is not False and reason not in CONTINUED_INCOMPLETE
         if not final:
+            self.check_status = 'skipped'
             # 途中の応答は検査せずに流す (待たせないため)。表示した文章は最終回答の検査に「表示済み」として渡す。
             if self.turn_key is not None:
                 try:
@@ -1154,14 +1273,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return list(bodies)
         if self.turn_key is None:
             result = run_check(checker_payload(body, bodies, final=final, continuation='none'), self.checks)
+            self.check_status = result.get('status')
             self.result_record = engine_record(result)
             if result.get('status') == 'unchecked':
-                return [UNAVAILABLE + bodies[0], *bodies[1:]]
-            if result.get('findings'):
-                corrected = result.get('corrected_bodies')
-                shown = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-                shown[0] = UNAVAILABLE + shown[0]
-                return shown
+                return result.get('bodies') or [UNAVAILABLE, *[''] * (len(bodies) - 1)]
             return result['bodies']
         sid, tid, turn = self.turn_key
         gate = read_json(gate_path(sid, tid))
@@ -1172,26 +1287,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             add_records(sid, tid, [i for i in seen if isinstance(i, dict) and not is_client_call(i)])
         except OSError as error:
             log(event='turn-store-failed', error=type(error).__name__)
-        evidence, previous = turn_evidence(sid, tid)
+        evidence, previous = turn_evidence(sid, tid) if final else ([], [])
         # Codex が同じ要求を送り直した回は、まだ直させていないので数えない。
         sent_back = int(gate.get('round') or 0) if gate is not None else 0
         withhold = final and not incomplete
         extra = {'final': final, 'round': sent_back,
                  'continuation': 'withhold' if withhold else 'none', 'evidence': evidence,
-                 'previous_evidence': previous, 'turn_start_context': (turn or {}).get('start') or [],
+                 'previous_evidence': previous, 'session_id': sid, 'turn_id': tid,
+                 'context_dir': str(Settings.state_dir / 'context' / sid), 'turn_start_context': (turn or {}).get('start') or [],
                  'shown_text': '\n\n'.join((read_json(Settings.state_dir / 'turns' / sid / f'{tid}.json') or {})
                                            .get('shown') or [])}
         if sent_back >= 1:
             extra['previous_findings'] = gate.get('findings') or []
-        result = run_check(checker_payload(body, bodies, **extra), self.checks)
+            extra['progress_state'] = gate.get('progress_state')
+        payload = checker_payload(body, bodies, **extra)
+        result = run_check(payload, self.checks)
+        if result.get('display_receipt') and result.get('text') is not None:
+            self.context_delivery = {'context_dir': payload['context_dir'], 'token': result['display_receipt'], 'text': result['text']}
+        self.check_status = result.get('status')
         self.result_record = engine_record(result)
         texts = result.get('bodies')
-        if result.get('status') == 'unchecked':
-            texts = [UNAVAILABLE + bodies[0], *bodies[1:]]
-        elif texts is not None and result.get('findings'):
-            corrected = result.get('corrected_bodies')
-            texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-            texts[0] = UNAVAILABLE + texts[0]
+        if result.get('status') == 'unchecked' and texts is not None:
+            texts = result['bodies']
         if texts is None:
             source = next(key[0] for key, value in collect_drafts(held).items() if value.strip())
             marker = 'msg_' + os.urandom(16).hex()
@@ -1200,8 +1317,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             notices[marker] = {'original': original, 'inject': result['agent_message'],
                                'source_id': source if isinstance(source, str) else None}
             state = {'phase': 'substituted', 'round': sent_back, 'findings': result.get('findings') or [],
+                     'progress_state': result.get('progress_state'),
                      'agent_message': result['agent_message'], 'original': original,
-                     'display': '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
+                     'display': (result.get('fallback_text') or UNAVAILABLE) if result.get('status') == 'unchecked' else '\n\n'.join(result.get('corrected_bodies') or bodies), 'display_clean': True,
                      'notice_marker': marker, 'notices': notices,
                      'created': time.time(), **self.result_record}
             try:
@@ -1211,13 +1329,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 log(event='substituted')
             except OSError as error:
                 log(event='gate-state-failed', error=type(error).__name__)
-                corrected = result.get('corrected_bodies')
-                texts = list(corrected) if strings(corrected, len(bodies)) else list(bodies)
-                texts[0] = UNAVAILABLE + texts[0]
+                fallback = result.get('fallback_bodies')
+                texts = list(fallback) if strings(fallback, len(bodies)) else [
+                    UNAVAILABLE, *[''] * (len(bodies) - 1)]
         elif final and gate is not None:
-            # 未達が無くなった (または続けさせられない) 回答を流す前に resolved で残す。最後の原文と指摘は回収に
+            # 本文を表示した後は最後の原文と指摘を回収に
             # 使わないので消す。各回の案内を原文に戻す notices は、同じターンの以後の要求のために残す。
-            state = dict(gate, phase='resolved', round=sent_back, findings=result.get('findings') or [],
+            state = dict(gate, phase='stopped' if result.get('stopped') else 'resolved', round=sent_back,
+                         findings=result.get('findings') or [], progress_state=result.get('progress_state'),
                          notices=notice_entries(gate), **self.result_record)
             state.pop('original', None)
             state.pop('agent_message', None)
@@ -1233,8 +1352,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         results, statuses = {}, []
         check_started = time.time()
         if mode == 'unchecked':
-            results.update({key: (UNAVAILABLE if i == 0 else '') + draft
-                            for i, (key, draft) in enumerate(drafts.items())})
+            results.update({key: '' for key in drafts})
         elif mode == 'check':
             # 空白だけのパートは規則に反しようがないので、検査処理に渡さずにそのまま流す。本文の要素が複数あっても
             # 検査処理は 1 回だけ呼び、1〜3 を本文全体で判定させる。
@@ -1242,9 +1360,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             keys = [key for key, draft in drafts.items() if draft.strip()]
             if keys:
                 try:
+                    self.check_status = None
                     texts = self.wait(self.check_answer, body, held, [drafts[key] for key in keys])
+                    statuses.append(self.check_status)
                 except Exception:
-                    texts = [UNAVAILABLE + drafts[keys[0]], *[drafts[key] for key in keys[1:]]]
+                    texts = [''] * len(keys)
                     statuses.append('unchecked')
                 results.update(zip(keys, texts))
         else:
@@ -1261,10 +1381,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     try:
                         results[key], status = future.result()
                     except Exception:
-                        results[key], status = UNAVAILABLE + drafts[key], 'unchecked'
+                        results[key], status = '', 'unchecked'
                     statuses.append(status)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
+        if (mode == 'unchecked' or 'unchecked' in statuses) and not self.silent_item:
+            results = {key: ('出力検査が完了していないため、最終回答を保留しています。' if n == 0 else '')
+                       for n, key in enumerate(drafts)}
         delta_sent = set()
         for etype, obj, raw in held:
             key = message_key(etype, obj)
@@ -1317,11 +1440,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if changed:
                     raw = encode_event(etype, obj)
             self.send_chunk(self.stripped(etype, obj, raw))
+        delivery = getattr(self, 'context_delivery', None)
+        if delivery is not None and not self.silent_item:
+            try:
+                subprocess.run([*Settings.check_cmd, '--confirm-display'], input=json.dumps(delivery).encode(),
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            self.context_delivery = None
         record = self.result_record or {}
         log(event='checked', mode=mode, items=len(results), check_dur=round(time.time() - check_started, 3),
             engine=record.get('engine'), engine_failures=record.get('engine_failures') or [],
+            failure_kind=record.get('failure_kind'), reason=record.get('reason'),
+            context_diagnostics=record.get('context_diagnostics'),
+            model_attempts=(record.get('context_metrics') or {}).get('model_attempts'),
             dropped=len(record.get('dropped') or []),
             dropped_reasons=[d.get('reason') for d in record.get('dropped') or [] if isinstance(d, dict)],
+            recheck=record.get('recheck'),
             statuses=sorted({s or '' for s in statuses}))
         return 'rewritten' if results else 'no-message'
 

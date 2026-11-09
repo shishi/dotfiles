@@ -77,6 +77,11 @@ targets_include() { # $1=canonical targets, $2=agent
   case ",$1," in *",$2,"*) return 0 ;; *) return 1 ;; esac
 }
 
+manager_owns_skill() {
+  # checkout で残るマーカーだけでは、Git 追跡へ切り替えた自前 fork を所有できない。
+  [ -f "$1/$MARKER" ] && ! git -C "$1" ls-files --error-unmatch -- SKILL.md >/dev/null 2>&1
+}
+
 skill_root() {
   case "$1" in
     claude) printf '%s\n' "$CLAUDE_SKILLS" ;;
@@ -142,6 +147,10 @@ prune_managed() {
       [ -f "$marker" ] || continue
       path="$(dirname "$marker")"
       name="$(basename "$path")"
+      if ! manager_owns_skill "$path"; then
+        rm -f "$marker" || return 1
+        continue
+      fi
       if ! desired_for_agent "$name" "$agent"; then
         rm -rf "$path" || return 1
         removed=$((removed + 1))
@@ -157,7 +166,7 @@ sync_one() { # $1=name, $2=repo, $3=selector, $4=agent
   mkdir -p "$root" || return 1
 
   if [ -e "$path" ] || [ -L "$path" ]; then
-    if [ ! -f "$path/$MARKER" ]; then
+    if ! manager_owns_skill "$path"; then
       warn "$path already exists and is not manager-owned"
       return 1
     fi
@@ -229,7 +238,7 @@ add_skill() {
     targets_include "$targets" "$agent" || continue
     root="$(skill_root "$agent")"
     path="$root/$name"
-    if { [ -e "$path" ] || [ -L "$path" ]; } && [ ! -f "$path/$MARKER" ]; then
+    if { [ -e "$path" ] || [ -L "$path" ]; } && ! manager_owns_skill "$path"; then
       die "$path already exists and is not manager-owned"
     fi
   done
@@ -251,9 +260,10 @@ EOF
     targets_include "$targets" "$agent" || continue
     root="$(skill_root "$agent")"
     path="$root/$name"
-    if [ -f "$path/$MARKER" ]; then
+    if manager_owns_skill "$path"; then
       rm -rf "$path" || failed=$((failed + 1))
     elif [ -e "$path" ] || [ -L "$path" ]; then
+      rm -f "$path/$MARKER" || failed=$((failed + 1))
       warn "$path is not manager-owned; preserved"
     fi
   done
@@ -347,6 +357,10 @@ list_skills() {
     printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$repo" "$selector" "$targets" "$state"
   done <"$MANIFEST"
 }
+
+case "${1:-}" in
+  add | sync | remove | fork) command -v git >/dev/null 2>&1 || die "git is required to preserve tracked local skills" ;;
+esac
 
 case "${1:-}" in
   add) shift; add_skill "$@" ;;

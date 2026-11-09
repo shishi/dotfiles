@@ -34,6 +34,108 @@ WATCHED_ENV = ('AGENT_DELEGATED_SESSION', 'CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_
                'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'OPENAI_BASE_URL')
 AUTH_ERROR_LINE = ('2026-11-02T03:25:44.557043Z ERROR codex_api::endpoint::responses_websocket: failed to '
                    'connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses')
+PROTOCOL_MOCK = r'''def protocol_reply(data, legacy, catalog, served, aliases=None):
+    """Fixture protocol mechanics only; these claims do not assess semantic quality."""
+    literals = data.get('_source_literals', {})
+    handles = data.get('_reference_handles', {})
+    def expand(value, key=''):
+        if isinstance(value,dict) and set(value)=={'$source_ref'}:
+            return handles[value['$source_ref']]
+        if isinstance(value, list):
+            return [expand(v,key) for v in value]
+        if not isinstance(value, dict):
+            return value
+        out = {k: expand(v,k) for k, v in value.items()}
+        text = out.get('text')
+        if 'ref' in out and 'kind' in out and isinstance(text, dict) and text.get('encoding') == 'literal_repeat_v1':
+            out['text'] = ''.join(p if isinstance(p, str) else p['literal'] * p['repeat'] for p in text['parts'])
+            assert len(out['text'].encode('utf-8')) == out['ref']['end'] - out['ref']['start']
+        elif 'ref' in out and 'kind' in out and isinstance(text, dict) and text.get('encoding') == 'literal_table_v1':
+            out['text'] = ''.join(p if isinstance(p,str) else literals[p['literal_id']] for p in text['parts'])
+            assert len(out['text'].encode('utf-8')) == out['ref']['end'] - out['ref']['start']
+        return out
+    data = expand(data)
+    if not isinstance(legacy, dict) or set(legacy) - {'replacements', 'findings', 'progress'}:
+        return legacy
+    if not isinstance(legacy.get('replacements'), list) or not isinstance(legacy.get('findings'), list):
+        return legacy
+    if any(not isinstance(p, dict) or set(p) != {'find', 'replace', 'rule', 'meaning_changed'}
+           for p in legacy['replacements']):
+        return legacy
+    legacy = json.loads(json.dumps(legacy))
+    def envelope(response):
+        for key in ('refs', 'user_coverage', 'focus_refs', 'answer_coverage', 'focus_candidates', 'focus_resolved',
+                    'catalog_coverage', 'user_assessments', 'rule_assessments', 'decisions', 'additions', 'unresolved', 'claims', 'obligations',
+                    'item_coverage', 'replacements', 'findings'):
+            response.setdefault(key, [])
+        response.setdefault('progress', {'state': 'unknown', 'reason': ''})
+        for f in response['findings']:
+            if isinstance(f, dict):
+                f.setdefault('rule', '')
+        return response
+    aliases = aliases if aliases is not None else {}
+    aliases.update(data.get('aliases', {}))
+    if data['stage'] in ('update', 'update_and_judge') and any(r['id'].startswith('answer-') for r in served):
+        served.clear()
+    catalog.update({c['id']: c for c in data.get('catalog', [])})
+    originals = data.get('grounding', []) + data.get('catalog_grounding', []) + data.get('retrieved', [])
+    for entry in originals:
+        if entry['ref']['id'].startswith('catalog-'):
+            for line in entry['text'].splitlines():
+                c = json.loads(line)
+                catalog[c['id']] = c
+    served.extend(e['ref'] for e in data.get('users', []) + data.get('answers', []) + originals)
+    def is_served(r):
+        return any(s['id'] == r['id'] and s['rev'] == r['rev'] and s['field'] == r['field']
+                   and s['start'] <= r['start'] and s['end'] >= r['end'] for s in served)
+    items = {i['id']: i for i in data.get('items', [])}
+    if data['stage'] in ('judge', 'update_and_judge'):
+        items.update({i['id']: i for i in data.get('check_items', [])})
+    update = {'remaining_users': {'disposition':'context_only','reason':'fixture residual context'}, 'user_coverage': [u['ref'] for u in data.get('users', [])],
+              'user_assessments': [{'refs': [u['ref'] for u in data.get('users', [])], 'disposition': 'context_only', 'item_ids': [], 'resolution_refs': [], 'reason': 'fixture has no semantic update'}] if data.get('users') else [],
+              'focus_refs': data.get('focus', []),
+              'decisions': [{'item_id': i['id'], 'action': 'keep', 'basis': 'current', 'refs': [],
+                             'reason': 'fixture keeps item'} for i in items.values()],
+              'catalog_coverage': [{'id': c['id'], 'rev': c['rev'], 'disposition': 'unrelated',
+                                    'related_item_ids': [], 'grounding_refs': [],
+                                    'reason': 'fixture has no semantic update'} for c in data.get('catalog', [])],
+              'additions': [], 'unresolved': data.get('gaps', [])}
+    if data['stage'] == 'update':
+        return envelope(dict(update, kind='update'))
+    refs = []
+    for finding in legacy['findings']:
+        if not isinstance(finding, dict):
+            continue
+        referenced_aliases = [finding.get('source')] + [e.get('id') for e in finding.get('evidence', []) if isinstance(e, dict)]
+        for alias in referenced_aliases:
+            if not isinstance(alias, str):
+                continue
+            a = aliases.get(alias)
+            c = catalog.get(a['id']) if a else next((c for c in catalog.values() if c.get('native_id') == alias), None)
+            if c:
+                field = 'output' if alias != finding.get('source') else 'text'
+                if field in c['fields']:
+                    r = {'id': c['id'], 'rev': c['rev'], 'field': field, 'start': 0, 'end': c['fields'][field]}
+                    if not is_served(r) and r not in refs:
+                        refs.append(r)
+    if not refs and legacy['findings']:
+        unresolved_aliases = [f.get('source') for f in legacy['findings'] if isinstance(f, dict)]
+        unresolved_aliases += [e.get('id') for f in legacy['findings'] if isinstance(f, dict)
+                               for e in f.get('evidence', []) if isinstance(e, dict) and e.get('id')]
+        if any(isinstance(a, str) and a not in aliases and not any(c.get('native_id') == a for c in catalog.values())
+               for a in unresolved_aliases):
+            refs = [r for r in data.get('catalog_refs', []) if not is_served(r)]
+    if refs:
+        return envelope({'kind': 'need_refs', 'refs': refs})
+    return envelope(dict(legacy, **update, rule_assessments=[{'rule':r['id'],'result':'violation' if any(f.get('rule')==r['id'] for f in legacy['findings']) else 'pass','reason':'fixture rule result'} for r in data.get('checked_rules',[])], kind='judgment', answer_coverage=[a['ref'] for a in data.get('answers', [])],
+                item_coverage=list(items),
+                claims=[{'id': 'fixture-' + str(n), 'answer_ref': a['ref'], 'text': a['text'],
+                         'requirement_ids': [], 'evidence': [], 'verdict': 'nonfactual', 'reason': 'fixture protocol coverage'}
+                        for n, a in enumerate(data.get('answers', []))], obligations=[]))
+'''
+exec(PROTOCOL_MOCK)
+
+
 FAKE_CLI = '''\
 import json, os, shutil, sys, time
 family, args = sys.argv[1], sys.argv[2:]
@@ -51,7 +153,25 @@ with open(LAUNCH_LOG, 'a', encoding='utf-8') as log:
 for line in spec.get('stderr', []):
     print(line, file=sys.stderr, flush=True)
 time.sleep(spec.get('sleep', 0))
-sys.stdout.write(spec.get('stdout', ''))
+reply = spec.get('stdout', '')
+try:
+    data = json.loads(prompt)
+    obj = json.loads(reply)
+    wrapper = obj if family == 'claude' else None
+    legacy = obj.get('structured_output') if wrapper else obj
+    if data.get('stage') in ('update', 'update_and_judge', 'judge') and isinstance(legacy, dict):
+        cache_path = PROMPT_LOG + '.protocol'
+        cache = json.load(open(cache_path)) if os.path.exists(cache_path) else {'catalog': {}, 'served': [], 'aliases': {}}
+        obj = protocol_reply(data, legacy, cache['catalog'], cache['served'], cache.setdefault('aliases', {}))
+        json.dump(cache, open(cache_path, 'w'))
+        if wrapper:
+            wrapper['structured_output'] = obj
+            wrapper['result'] = json.dumps(obj, ensure_ascii=False)
+            obj = wrapper
+        reply = json.dumps(obj, ensure_ascii=False)
+except (ValueError, TypeError, KeyError):
+    pass
+sys.stdout.write(reply)
 sys.exit(spec.get('exit_code', 0))
 '''
 
@@ -103,13 +223,14 @@ class GateTestCase(unittest.TestCase):
         constants = (f'SPEC = {str(self.spec)!r}\nPROMPT_LOG = {str(self.prompt_log)!r}\n'
                      f'INSTRUCTIONS_LOG = {str(self.instructions_log)!r}\nLAUNCH_LOG = {str(self.launch_log)!r}\n'
                      f'WATCHED_ENV = {WATCHED_ENV!r}\n')
-        self.fake.write_text(constants + FAKE_CLI, encoding='utf-8')
+        self.fake.write_text(constants + PROTOCOL_MOCK + FAKE_CLI, encoding='utf-8')
 
     def fake_checker(self, reply, sleep=0, exit_code=0):
         """codex の系統だけを使う既存の試験用: 偽の codex の返答を決める。"""
         self.set_spec(codex={'stdout': reply, 'sleep': sleep, 'exit_code': exit_code})
 
     def set_spec(self, **families):
+        Path(str(self.prompt_log) + '.protocol').unlink(missing_ok=True)
         self.spec.write_text(json.dumps(families, ensure_ascii=False), encoding='utf-8')
 
     def launches(self):
@@ -162,11 +283,40 @@ class GateTestCase(unittest.TestCase):
         return env
 
     def invoke(self, payload, *flags, timeout=10, gitleaks=None, extra_env=None):
+        if flags == ('--receive',) and payload.get('payload', {}).get('final') and 'transaction' not in payload:
+            return self.receive_protocol(payload, timeout, gitleaks, extra_env)
+        if not flags:
+            Path(str(self.prompt_log) + '.protocol').unlink(missing_ok=True)
         result = subprocess.run([sys.executable, '-I', str(CHECK), *flags], input=json.dumps(payload),
                                 capture_output=True, text=True, encoding='utf-8',
                                 env=self.env(timeout, gitleaks, extra_env), timeout=90)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
+
+    def receive_protocol(self, request, timeout=10, gitleaks=None, extra_env=None):
+        prepared = self.invoke(request['payload'], '--prepare', timeout=timeout, gitleaks=gitleaks,
+                               extra_env=extra_env)
+        raw = request['reply'].strip()
+        fenced = re.fullmatch(r"```(?:json)?\s*\n(.*?)\n```", raw, re.S)
+        try:
+            legacy = json.loads(fenced.group(1) if fenced else raw)
+        except ValueError:
+            legacy = None
+        catalog, served, aliases = {}, [], {}
+        while prepared['status'] == 'ready':
+            data = json.loads(prepared['prompt'])
+            if legacy is None:
+                reply = request['reply']
+            else:
+                obj = protocol_reply(data, legacy, catalog, served, aliases)
+                reply = json.dumps(obj, ensure_ascii=False)
+                if fenced:
+                    reply = '```json\n' + reply + '\n```'
+                elif request['reply'] != raw:
+                    reply = '\n  ' + reply + '  \n'
+            prepared = self.invoke(dict(request, reply=reply, transaction=prepared['transaction']),
+                                   '--receive', timeout=timeout, gitleaks=gitleaks, extra_env=extra_env)
+        return prepared
 
     def run_check(self, draft, reply, sleep=0, timeout=10, gitleaks=None, extra=None, exit_code=0):
         """応答の規則だけの検査 (final=false) を、codex の系統だけで行う。"""
@@ -186,9 +336,14 @@ class GateTestCase(unittest.TestCase):
     def assert_unchecked(self, out, draft):
         self.assertEqual(out['status'], 'unchecked')
         self.assertTrue(out['reason'])
-        self.assertTrue(out['text'].startswith('回答の確認を完了できませんでした。'))
-        self.assertTrue(out['text'].endswith(draft))
-        self.assertNotIn(out['reason'], out['text'])
+        # 検査できなかった回答は公開しない。続行できる間は本文を出さずに理由をエージェントへ返し、
+        # 続行できないときは保留の案内だけを出す。
+        shown = out['fallback_text'] if out['text'] is None else out['text']
+        self.assertTrue(shown.startswith('出力検査が完了していないため、最終回答を保留しています。'))
+        self.assertNotIn(draft, shown)
+        self.assertNotIn(out['reason'], shown)
+        if out['text'] is None:
+            self.assertIn(out['reason'], out['agent_message'])
 
 
 class CheckTests(GateTestCase):
@@ -656,6 +811,152 @@ class FindingTests(GateTestCase):
 
     CLAIM = finding('unverified_claim', 'draft', 'テストは全て通った', ('call_1', 'failed'))
 
+    def progress_payload(self, stalled=2, round=3, checkpoint_round=2):
+        return {'origin': 'claude', 'final': True, 'round': round,
+                'latest_user': 'テストを実行して結果を教えて',
+                'draft': 'テストは全て通ったので、変更は完了しているよ。', 'evidence': [PYTEST_FAILED],
+                'progress_state': {'round': checkpoint_round, 'stalled': stalled,
+                                   'bodies': ['前の回答'], 'findings': [self.CLAIM], 'evidence': [PYTEST_FAILED]}}
+
+    def progress_receive(self, state='stalled', payload=None, **extra):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': state, 'reason': '比較結果'})
+        return self.invoke(dict(payload=payload or self.progress_payload(), reply=json.dumps(reply),
+                                engine={'family': 'codex', 'model': 'gpt-6-astra', 'effort': 'high'}, **extra),
+                           '--receive')
+
+    def test_stagnation_requests_recheck_without_starting_an_engine_in_receive(self):
+        out = self.progress_receive()
+        self.assertEqual(out['status'], 'checked')
+        self.assertTrue(out['recheck_required'])
+        self.assertFalse(out['stopped'])
+        self.assertEqual(out['progress_state']['stalled'], 3)
+        self.assertEqual(self.launches(), [])
+
+    def test_progress_counts_only_new_correction_rounds_and_resets_on_advancement(self):
+        for state, round, checkpoint_round, want in [('advanced', 3, 2, 0), ('stalled', 2, 2, 2),
+                                                     ('unknown', 3, 2, 3), ('stalled', 0, 2, 0)]:
+            with self.subTest(state=state, round=round):
+                out = self.progress_receive(state, self.progress_payload(round=round, checkpoint_round=checkpoint_round))
+                self.assertEqual(out['progress_state']['stalled'], want)
+        out = self.progress_receive(payload={k: v for k, v in self.progress_payload().items() if k != 'progress_state'})
+        self.assertEqual(out['progress_state']['stalled'], 0)
+
+    def test_independent_stalled_recheck_stops_but_preserves_the_unresolved_answer(self):
+        payload = self.progress_payload()
+        payload['independent_recheck'] = True
+        out = self.progress_receive(payload=payload)
+        self.assertTrue(out['stopped'])
+        self.assertFalse(out['recheck_required'])
+        self.assertIsNone(out['agent_message'])
+        self.assertIn('未解決', out['text'])
+        self.assertIn('自動差戻し停止', out['text'])
+        self.assertIn(payload['draft'], out['text'])
+        self.assertIn(out['unmet_text'], out['text'])
+        resumed = self.progress_receive('advanced', payload)
+        self.assertFalse(resumed['stopped'])
+        self.assertEqual(resumed['progress_state']['stalled'], 0)
+        self.assertIsNotNone(resumed['agent_message'])
+
+    def test_receive_retains_initial_findings_when_independent_recheck_is_unavailable(self):
+        initial = self.progress_receive()
+        out = self.invoke({'initial': initial, 'rechecked': {'status': 'unchecked', 'reason': 'offline',
+                            'engine_failures': [{'family': 'codex', 'reason': 'offline'}]}}, '--finish-recheck')
+        self.assertTrue(out['stopped'])
+        self.assertIsNone(out['agent_message'])
+        self.assertEqual(out['findings'][0]['excerpt'], self.CLAIM['excerpt'])
+        self.assertIn('再判定不能', out['text'])
+        self.assertIn('未解決', out['text'])
+        self.assertEqual(out['independent_recheck']['reason'], 'offline')
+
+    def test_one_shot_stagnation_rechecks_once_using_the_independent_models(self):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': 'stalled', 'reason': '同じ未達'})
+        self.set_spec(codex={'stdout': codex_reply(reply)})
+        out = self.invoke(dict(self.progress_payload(), engines=['codex']))
+        self.assertTrue(out['stopped'])
+        launches = self.launches()
+        models = [entry['args'][entry['args'].index('-m') + 1] for entry in launches]
+        self.assertEqual(list(dict.fromkeys(models)), ['gpt-6.1-terra', 'gpt-6-astra'])
+        self.assertEqual(sum(json.loads(e['stdin']).get('stage') in ('update', 'update_and_judge') and bool(json.loads(e['stdin']).get('users'))
+                             for e in launches), 2)
+        self.assertIsNotNone(out['independent_recheck'])
+
+    def test_progress_can_continue_after_many_corrections_and_missing_assessment_is_conservative(self):
+        payload = self.progress_payload(stalled=2, round=101, checkpoint_round=100)
+        out = self.progress_receive('advanced', payload)
+        self.assertFalse(out['recheck_required'])
+        self.assertFalse(out['stopped'])
+        self.assertIsNotNone(out['agent_message'])
+        legacy = self.invoke({'payload': payload, 'reply': json.dumps(answer(findings=[self.CLAIM]))}, '--receive')
+        self.assertEqual(legacy['progress']['state'], 'unknown')
+        self.assertTrue(legacy['recheck_required'])
+
+    def test_independent_recheck_can_fall_back_to_fable_outside_the_initial_engine_constraint(self):
+        reply = dict(answer(findings=[self.CLAIM]), progress={'state': 'stalled', 'reason': '未達は変わらない'})
+        self.set_spec(codex={'exit_code': 1}, claude={'stdout': claude_reply(reply)})
+        out = self.invoke(dict(self.progress_payload(), origin='codex', engines=['claude']))
+        self.assertTrue(out['stopped'])
+        launches = self.launches()
+        phases = [(entry['family'], entry['args'][entry['args'].index('--model') + 1] if entry['family'] == 'claude' else 'gpt-6-astra')
+                  for entry in launches]
+        self.assertEqual(list(dict.fromkeys(phases)), [('claude', 'opus'), ('codex', 'gpt-6-astra'), ('claude', 'fable')])
+        self.assertIn('fable', launches[-1]['args'])
+        self.assertIn('high', launches[-1]['args'])
+        self.assertEqual(out['independent_recheck']['engine']['family'], 'claude')
+
+    def test_automatic_recheck_shares_the_initial_deadline_and_preserves_findings_when_it_expires(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('output_gate_check', CHECK)
+        check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(check)
+        legacy = dict(answer(findings=[self.CLAIM]), progress={'state': 'stalled', 'reason': '未達は変わらない'})
+        for elapsed in (35, 45):
+            with self.subTest(elapsed=elapsed):
+                clock = [0]
+                timeouts, catalog, served, aliases = [], {}, [], {}
+
+                def run_codex(prompt, config, cyber_program, workdir, timeout, final, cancel=None):
+                    timeouts.append((config['model'], timeout))
+                    obj = protocol_reply(json.loads(prompt), legacy, catalog, served, aliases)
+                    if obj.get('kind') == 'judgment' and config['model'] != 'gpt-6-astra':
+                        clock[0] = elapsed
+                    return json.dumps(obj), dict(family='codex', **config)
+
+                with patch.object(check, 'run_codex', run_codex), \
+                        patch.object(check, 'secret_findings', return_value=[]), \
+                        patch.object(check.time, 'monotonic', side_effect=lambda: clock[0]), \
+                        patch.dict(os.environ, self.env(timeout=45)):
+                    out = check.check(dict(self.progress_payload(), engines=['codex']))
+                initial = [timeout for model, timeout in timeouts if model != 'gpt-6-astra']
+                recheck = [timeout for model, timeout in timeouts if model == 'gpt-6-astra']
+                self.assertTrue(initial)
+                self.assertTrue(all(timeout == 45 for timeout in initial))
+                if elapsed == 35:
+                    self.assertTrue(recheck)
+                    self.assertTrue(all(0 < timeout <= 45 - elapsed for timeout in recheck))
+                else:
+                    self.assertEqual(recheck, [])
+                    self.assertEqual(out['independent_recheck']['status'], 'unchecked')
+                    self.assertIn('再判定不能', out['text'])
+                self.assertTrue(out['stopped'])
+                self.assertEqual(out['findings'][0]['excerpt'], self.CLAIM['excerpt'])
+
+    def test_checkpoint_is_masked_before_it_is_sent_to_a_checker(self):
+        secret = fake_secret()
+        payload = self.progress_payload()
+        payload['progress_state']['bodies'] = ['api_key=' + secret]
+        prepared = self.invoke(payload, '--prepare', gitleaks=self.fake_gitleaks([secret]))
+        self.assertEqual(prepared['status'], 'ready')
+        checkpoint = json.loads(prepared['prompt'])['progress_state']
+        self.assertNotIn(secret, json.dumps(checkpoint))
+        self.assertEqual(checkpoint['stalled'], 2)
+
+    def test_independent_recheck_uses_a_stronger_model(self):
+        self.final(answer(), independent_recheck=True)
+        args = self.launches()[0]['args']
+        self.assertIn('gpt-6-astra', args)
+        self.assertIn('model_reasoning_effort=high', ' '.join(args))
+
     def test_findings_survive_a_meaning_changing_replacement(self):
         out = self.final(answer([{'find': 'テストは全て通った', 'replace': 'テストは実行していない', 'rule': 'r',
                                   'meaning_changed': True}], [self.CLAIM]))
@@ -752,11 +1053,15 @@ class FindingTests(GateTestCase):
         evidence = [PYTEST_FAILED, dict(gate, id='g1', tool='gate_findings'),
                     dict(gate, id='g2', tool='mcp__output-gate__gate_findings')]
         self.final(answer(), evidence=evidence, previous_evidence=previous)
-        data = self.checker_input()
-        self.assertEqual([e['id'] for e in data['evidence']], ['call_1'])
-        self.assertEqual(data['previous_evidence'][0]['turn_id'], 't-1')
-        self.assertEqual([e['id'] for e in data['previous_evidence'][0]['items']], ['old_1'])
-        self.assertNotIn('指摘の本文', self.prompt_log.read_text(encoding='utf-8'))
+        # 証拠の一覧は catalog か、原文として渡す catalog の行 (JSONL) のどちらかで届く。
+        packets = [json.loads(entry['stdin']) for entry in self.launches()]
+        catalog = [c for data in packets for c in data.get('catalog', [])]
+        catalog += [json.loads(line) for data in packets for g in data.get('catalog_grounding', [])
+                    if g['kind'] == 'catalog' for line in g['text'].splitlines()]
+        catalog = [c for c in catalog if c['kind'] == 'evidence']
+        self.assertEqual({c['native_id'] for c in catalog}, {'call_1', 'old_1'})
+        self.assertEqual(next(c['turn_id'] for c in catalog if c['native_id'] == 'old_1'), 't-1')
+        self.assertNotIn('指摘の本文', ''.join(e['stdin'] for e in self.launches()))
 
     def test_unmet_text_is_the_paragraph_shown_at_the_end(self):
         # 呼び出し側 (中継の回収、mod の turn.complete) は、未達の段落を自分で組み立てずにこの欄を使う。
@@ -813,6 +1118,17 @@ class FindingTests(GateTestCase):
         self.assertNotIn('hunter2-prod-7731', out['agent_message'])
         self.assertIsNone(out['text'])
 
+    def test_secret_in_previous_evidence_is_not_safe_to_display(self):
+        self.checked.write_text(json.dumps([{'id': 'T9', 'text': '秘密情報を出さない'}]), encoding='utf-8')
+        script = self.tmp / 'keyed-secret.py'
+        script.write_text('import json, sys\na=sys.argv\ns=open(a[a.index("--source")+1]).read()\n'
+                          'found=[{"Secret":"sample-value"}] if "credential=sample-value" in s else []\n'
+                          'open(a[a.index("--report-path")+1],"w").write(json.dumps(found))\n')
+        self.gitleaks = json.dumps([sys.executable, str(script)])
+        previous = [{'turn_id': 'old', 'items': [{'id': 'p1', 'tool': 'Read', 'output': 'credential=sample-value'}]}]
+        out = self.final(answer(), draft='以前のファイルに書かれていた値は sample-value だったよ。', previous_evidence=previous)
+        self.assertEqual([f['rule'] for f in out['findings']], ['T9'])
+
     def test_a_violation_of_a_rule_not_in_the_list_is_dropped(self):
         violation = {'kind': 'rule_violation', 'rule': 'R9', 'source': 'draft',
                      'excerpt': 'テストは全て通ったので', 'evidence': []}
@@ -845,7 +1161,10 @@ class FindingTests(GateTestCase):
         out = self.invoke({'origin': 'claude', 'engines': ['codex'], 'final': True,
                            'bodies': ['A は効く。', 'B も効く。']})
         self.assertEqual(len(self.launches()), 1)
-        draft = next(m for m in self.checker_input()['messages'] if m['id'] == 'draft')['text']
+        data = self.checker_input()
+        handles = data.get('_reference_handles', {})
+        draft = next(a for a in data['answers']
+                     if handles.get(a['ref'].get('$source_ref'), a['ref'])['id'] == data['aliases']['draft']['id'])['text']
         self.assertIn('A は効く。', draft)
         self.assertIn('B も効く。', draft)
         self.assertEqual(out['bodies'], ['A は速い。', 'B も速い。'])
@@ -858,19 +1177,27 @@ class FindingTests(GateTestCase):
     def test_unavailable_evidence_is_marked_for_the_checker_and_not_added_to_the_answer(self):
         evidence = [{'id': 'gap_1', 'unavailable': True, 'note': 'compaction で消えた範囲'}, PYTEST_FAILED]
         out = self.final(answer(), evidence=evidence, draft='テストは 1 件失敗したよ。')
-        self.assertTrue(self.checker_input()['evidence'][0]['unavailable'])
+        gap = next(c for entry in self.launches() for c in json.loads(entry['stdin']).get('catalog', [])
+                   if c['native_id'] == 'gap_1')
+        self.assertEqual(gap['kind'], 'gap')
+        self.assertFalse(gap['available'])
+        self.assertEqual(gap['metadata']['note'], 'compaction で消えた範囲')
         self.assertEqual(out['text'], 'テストは 1 件失敗したよ。')
 
     def test_secrets_in_evidence_are_masked_in_both_entry_points(self):
         self.gitleaks = self.fake_gitleaks(['sk-test-SECRETVALUE', 'ghp_SHOWNSECRET'])
         evidence = [dict(PYTEST_FAILED, output='token=sk-test-SECRETVALUE')]
         self.final(answer(), evidence=evidence, shown_text='鍵は ghp_SHOWNSECRET')
-        self.assertNotIn('sk-test-SECRETVALUE', self.prompt_log.read_text(encoding='utf-8'))
-        self.assertNotIn('ghp_SHOWNSECRET', self.prompt_log.read_text(encoding='utf-8'))
+        sent = ''.join(entry['stdin'] for entry in self.launches())
+        self.assertNotIn('sk-test-SECRETVALUE', sent)
+        self.assertNotIn('ghp_SHOWNSECRET', sent)
         prepared = self.invoke({'origin': 'claude', 'final': True, 'draft': 'x', 'evidence': evidence,
                                 'shown_text': '鍵は ghp_SHOWNSECRET'}, '--prepare')
         self.assertNotIn('sk-test-SECRETVALUE', prepared['prompt'])
         self.assertNotIn('ghp_SHOWNSECRET', prepared['prompt'])
+        archived = json.dumps(prepared['transaction']['sources'])
+        self.assertNotIn('sk-test-SECRETVALUE', archived)
+        self.assertNotIn('ghp_SHOWNSECRET', archived)
 
     def test_rules_only_check_does_not_ask_for_findings(self):
         self.run_check('問題ありません。', json.dumps(answer()))
@@ -897,7 +1224,7 @@ class FindingTests(GateTestCase):
         one_shot = self.invoke(payload)
         prepared = self.invoke(payload, '--prepare')
         self.assertEqual(prepared['status'], 'ready')
-        self.assertEqual(json.loads(prepared['prompt']), self.checker_input())
+        self.assertEqual(json.loads(prepared['prompt']), json.loads(self.launches()[0]['stdin']))
         self.assertIn('replacements', json.dumps(prepared['schema']))
         self.assertTrue(prepared['system'])
         received = self.invoke({'payload': payload, 'reply': json.dumps(reply, ensure_ascii=False),
@@ -1101,6 +1428,42 @@ class TrimTests(GateTestCase):
         self.assertLessEqual(self.size(data), full - 5000)
         self.assertEqual(data['evidence'][1]['output'], 'y' * 3000)
 
+    def test_checkpoint_evidence_is_trimmed_without_changing_the_saved_checkpoint(self):
+        check = self.load()
+        old = dict(PYTEST_FAILED, output='H' * 50 + 'x' * 8000 + 'T' * 50)
+        checkpoint = {'round': 2, 'stalled': 2, 'bodies': ['前の回答'], 'findings': [], 'evidence': [old]}
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答', 'progress_state': checkpoint}
+        data = check.build_input(payload, 'rules', limit=5000)
+        output = data['progress_state']['evidence'][0]['output']
+        self.assertIn('omitted', output)
+        self.assertTrue(output.startswith('H' * 50) and output.endswith('T' * 50))
+        self.assertLessEqual(self.size(data), 5000)
+        self.assertEqual(checkpoint['evidence'][0]['output'], old['output'])
+
+    def test_checkpoint_shares_unchanged_evidence_instead_of_exhausting_the_input_budget(self):
+        check = self.load()
+        items = [dict(PYTEST_FAILED, id=f'e{n}', output='x' * 1000) for n in range(5)]
+        checkpoint = {'round': 1, 'stalled': 1, 'bodies': ['前の回答'], 'findings': [], 'evidence': items}
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答',
+                   'evidence': items, 'progress_state': checkpoint}
+        data = check.build_input(payload, 'rules', limit=10000)
+        self.assertLessEqual(self.size(data), 10000)
+        self.assertEqual(data['evidence'], items)
+        self.assertEqual(data['progress_state']['evidence'], [])
+        self.assertEqual(data['progress_state']['evidence_refs'], [f'e{n}' for n in range(5)])
+        self.assertEqual(checkpoint['evidence'], items)
+
+    def test_changed_checkpoint_evidence_remains_available_for_progress_comparison(self):
+        check = self.load()
+        old = dict(PYTEST_FAILED, output='old failure')
+        current = dict(PYTEST_FAILED, output='new failure')
+        payload = {'origin': 'claude', 'final': True, 'draft': '回答', 'evidence': [current],
+                   'progress_state': {'round': 1, 'stalled': 1, 'bodies': ['前の回答'],
+                                      'findings': [], 'evidence': [old]}}
+        data = check.build_input(payload, 'rules')
+        self.assertEqual(data['progress_state']['evidence'], [old])
+        self.assertEqual(data['progress_state'].get('evidence_refs', []), [])
+
     def test_large_messages_count_toward_the_limit(self):
         check = self.load()
         payload = {'origin': 'claude', 'final': True, 'draft': 'd' * 20000,
@@ -1116,16 +1479,56 @@ class TrimTests(GateTestCase):
         data = check.build_input(payload, 'rules', limit=10**9)
         self.assertEqual(data['evidence'], payload['evidence'])
 
+    def test_overlapping_start_and_current_history_is_sent_once(self):
+        check = self.load()
+        history = [{'role': 'user', 'text': 'A を変更して'}, {'role': 'assistant', 'text': '実行していい？'},
+                   {'role': 'user', 'text': 'y'}, {'role': 'assistant', 'text': 'B も変更していい？'},
+                   {'role': 'user', 'text': 'y'}]
+        payload = {'draft': '進める', 'recent_messages': history, 'turn_start_context': history[:3]}
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+        payload['turn_start_context'] = history[2:4]
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+        payload['turn_start_context'] = history[:3]
+        payload['recent_messages'] = history[2:]
+        data = check.build_input(payload, 'rules')
+        sent = [m['text'] for m in data['messages'] if m['origin'] in ('recent', 'turn_start')]
+        self.assertEqual(sent, [m['text'] for m in history])
+
+    def test_untrimmable_history_returns_unchecked_without_starting_an_engine(self):
+        out = self.run_check('説明する', json.dumps(answer()), extra={
+            'recent_messages': [{'role': 'user', 'text': 'a' * 410000}]})
+        self.assertEqual(out['status'], 'unchecked')
+        self.assertIn('会話を省かずに', out['reason'])
+        self.assertEqual(out['failure_kind'], 'input_limit')
+        self.assertEqual(self.launches(), [])
+
 
 class EngineTests(GateTestCase):
     """検査役の系統の順序、代わりの系統への切り替え、起動行と環境。"""
 
     DRAFT = 'テストは 1 件失敗したよ。'
 
+    def launches(self):
+        """Compare selection attempts in update; check() also verifies the final judge launch."""
+        entries = super().launches()
+        updates = [entry for entry in entries if json.loads(entry['stdin']).get('stage') in ('update', 'update_and_judge')]
+        return updates or entries
+
     def check(self, origin='claude', timeout=10, extra_env=None, **extra):
         payload = {'origin': origin, 'final': True, 'draft': self.DRAFT, 'evidence': [PYTEST_FAILED]}
         payload.update(extra)
-        return self.invoke(payload, timeout=timeout, extra_env=extra_env)
+        out = self.invoke(payload, timeout=timeout, extra_env=extra_env)
+        if out['status'] == 'checked':
+            last = super().launches()[-1]
+            self.assertIn(json.loads(last['stdin'])['stage'], ('judge', 'update_and_judge'))
+            self.assertEqual(last['family'], out['engine']['family'])
+            model_flag = '--model' if last['family'] == 'claude' else '-m'
+            self.assertEqual(last['args'][last['args'].index(model_flag) + 1], out['engine']['model'])
+        return out
 
     def families(self):
         return [entry['family'] for entry in self.launches()]
@@ -1223,8 +1626,8 @@ class EngineTests(GateTestCase):
         self.set_spec(codex={'stdout': '', 'exit_code': 3}, claude={'stdout': '', 'exit_code': 4})
         out = self.check()
         self.assert_unchecked(out, self.DRAFT)
-        self.assertIn('終了コード 3', out['reason'])
-        self.assertIn('終了コード 4', out['reason'])
+        self.assertIn('終了コード 3', out['engine_failures'][0]['reason'])
+        self.assertIn('終了コード 4', out['engine_failures'][1]['reason'])
 
     def test_settings_can_put_the_same_family_first_and_pick_opus(self):
         self.ok_both()
@@ -1258,6 +1661,7 @@ class EngineTests(GateTestCase):
                           if k != 'OPENAI_BASE_URL'})
         self.assertIn('openai_base_url=""', codex['args'])
         self.assertIsNone(codex['env']['OPENAI_BASE_URL'])
+        self.assertEqual(codex['env']['AGENT_DELEGATED_SESSION'], '1')
 
     def test_claude_answer_with_stop_reason_tool_use_is_not_a_failure(self):
         # claude -p --json-schema は、構造化出力をツール呼び出しで返し、stop_reason が tool_use になる (実測)。
