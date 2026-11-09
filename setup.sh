@@ -127,6 +127,16 @@ esac
 mkdir -p "$herdr_config_dir"
 ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
 
+# Herdr app keeps its own state in the same folder, so link only the keymap.
+# Each OS starts from the app's own defaults (Cmd-based on macOS); the Ctrl+;
+# chords for panes, tabs, spaces and agents are the same on every OS.
+case "$(uname -s)" in
+Darwin) herdr_app_keys="$DOTDIR/herdr-app/keys.macos.json" ;;
+*) herdr_app_keys="$DOTDIR/herdr-app/keys.json" ;;
+esac
+mkdir -p "$XDG_CONFIG_HOME/herdr-app"
+ln -sfn "$herdr_app_keys" "$XDG_CONFIG_HOME/herdr-app/keys.json"
+
 mkdir -p "$XDG_CONFIG_HOME/hunk"
 ln -sfn "$DOTDIR/hunk/config.toml" "$XDG_CONFIG_HOME/hunk/config.toml"
 
