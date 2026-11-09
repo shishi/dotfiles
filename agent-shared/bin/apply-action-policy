@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""エージェントの操作の判定ルールを、正本 (agent-shared/policy/action-policy.json) から各 CLI の設定へ書き出す。
+
+    apply-action-policy           claude/settings.json の autoMode と codex/config.toml の [auto_review] を書き換える
+    apply-action-policy --check   書き出す内容と設定ファイルが食い違えば差分を示して 1 で終える
+
+判定そのものは Claude Code の auto mode の分類器と Codex の auto-review が行う。ここは両者に同じルールを渡すだけ。
+Claude の allow は "$defaults" を使わず、標準の一覧から drop_default_allow を除いた全文を書く。標準の
+"Git Push Destination" は session の repository への push を通し、soft_deny に足した "Unrequested Push" より
+allow が優先されるため、その 1 件だけを外すにはこの書き方しかない。標準の一覧は `claude auto-mode defaults` から
+取るので、Claude Code の更新で標準が変われば --check が食い違いとして知らせる。
+
+TOML と JSON を壊さずに書き換えるため python で書く (sh では TOML の表の置き換えを安全に書けない)。
+"""
+import difflib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+import tomllib
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+POLICY = ROOT / "agent-shared/policy/action-policy.json"
+CLAUDE_SETTINGS = ROOT / "claude/settings.json"
+CODEX_CONFIG = ROOT / "codex/config.toml"
+
+
+def claude_defaults():
+    out = subprocess.run(["claude", "auto-mode", "defaults"], check=True, capture_output=True, text=True).stdout
+    return json.loads(out)
+
+
+def rule_texts(policy, section, target):
+    # targets を省いたルールは両 CLI に渡す。片方の組み込みルールで足りるものだけ targets で絞る。
+    return [rule["text"] for rule in policy["rules"]
+            if rule["section"] == section and target in rule.get("targets", ["claude", "codex"])]
+
+
+def claude_auto_mode(policy, defaults):
+    dropped = tuple(policy["drop_default_allow"])
+    kept = [rule for rule in defaults["allow"] if not rule.startswith(dropped)]
+    missing = [label for label in dropped if not any(rule.startswith(label) for rule in defaults["allow"])]
+    if missing:
+        sys.exit(f"apply-action-policy: 標準の allow に見つからない: {', '.join(missing)}")
+    return {
+        "environment": ["$defaults", *rule_texts(policy, "environment", "claude")],
+        "allow": kept + rule_texts(policy, "allow", "claude"),
+        "soft_deny": ["$defaults", *rule_texts(policy, "soft_deny", "claude")],
+        # 狭い Bash の allow 規則 (例: "Bash(gh pr:*)") が分類器を通さずに許可しないよう、auto mode の間は止める。
+        "classifyAllShell": True,
+    }
+
+
+def codex_extra_policy(policy):
+    sections = [
+        ("Environment", "environment"),
+        ("Block unless the user authorized this exact action", "soft_deny"),
+        ("Allow", "allow"),
+    ]
+    lines = ["# User-specific rules", ""]
+    for title, section in sections:
+        lines += [f"## {title}", ""]
+        # 必須記述の注記 "[named+specifics — ...]" は Claude の分類器の書式なので、Codex には渡さない。
+        for text in rule_texts(policy, section, "codex"):
+            plain = re.sub(r" \[named\+specifics[^\]]*\]", "", text)
+            lines.append(f"- {plain}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_settings(text, auto_mode):
+    settings = json.loads(text)
+    settings["autoMode"] = auto_mode
+    return json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
+
+
+def render_codex(text, extra_policy):
+    if "'''" in extra_policy:
+        sys.exit("apply-action-policy: extra_policy に ''' を含められない (TOML のリテラル文字列の終端になる)")
+    block = ["[auto_review]", f"extra_policy = '''\n{extra_policy}'''", ""]
+    lines = text.split("\n")
+    start = next((i for i, line in enumerate(lines) if line.strip() == "[auto_review]"), None)
+    if start is None:
+        # 最初の表の前に置く。表より前は最上位のキーだけなので、ここなら他の表の中身を分断しない。
+        start = end = next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
+    else:
+        end = start + 1
+        in_literal = False
+        while end < len(lines):
+            if lines[end].count("'''") % 2:
+                in_literal = not in_literal
+            elif not in_literal and lines[end].lstrip().startswith("["):
+                break
+            end += 1
+    rendered = "\n".join(lines[:start] + block + lines[end:])
+    parsed = tomllib.loads(rendered)
+    if parsed.get("auto_review", {}).get("extra_policy") != extra_policy:
+        sys.exit("apply-action-policy: codex/config.toml の書き換え結果を読み直せなかった")
+    return rendered
+
+
+def main():
+    check = sys.argv[1:] == ["--check"]
+    if sys.argv[1:] not in ([], ["--check"]):
+        sys.exit(__doc__)
+    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    targets = [
+        (CLAUDE_SETTINGS, lambda text: render_settings(text, claude_auto_mode(policy, claude_defaults()))),
+        (CODEX_CONFIG, lambda text: render_codex(text, codex_extra_policy(policy))),
+    ]
+    drift = False
+    for path, render in targets:
+        current = path.read_text(encoding="utf-8")
+        wanted = render(current)
+        if current == wanted:
+            continue
+        if check:
+            drift = True
+            rel = str(path.relative_to(ROOT))
+            sys.stdout.writelines(difflib.unified_diff(current.splitlines(True), wanted.splitlines(True), rel, rel))
+        else:
+            path.write_text(wanted, encoding="utf-8")
+    sys.exit(1 if drift else 0)
+
+
+if __name__ == "__main__":
+    main()

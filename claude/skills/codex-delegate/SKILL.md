@@ -162,7 +162,7 @@ DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
 DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
 ROLE=explore             # explore / chore / implement
 STARTED_AT=$(date +%s)
-# 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印。codex exec の行の許可 prefix を
+# 委譲先の出力ゲートに、委譲の子セッションだと知らせる目印。codex exec の行の許可 prefix を
 # 保つため別の行で設定する。export が codex exec に届くよう、このブロックは 1 回の Bash 呼び出しで実行する
 export AGENT_DELEGATED_SESSION=1
 codex exec -s read-only -c 'openai_base_url=""' --model "$DELEGATE_MODEL" \

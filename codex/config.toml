@@ -15,6 +15,28 @@ mcp_oauth_credentials_store = "file"
 # (docs/output-gate.md)。その前提を全てのマシンでそろえるため、ログイン情報もファイルに保存する。
 cli_auth_credentials_store = "file"
 
+[auto_review]
+extra_policy = '''
+# User-specific rules
+
+## Environment
+
+- Source control: github.com/shishi and every repository under it (the user's own account).
+- Trusted AI services: the official Anthropic API reached through the `claude` CLI and the official OpenAI service reached through the `codex` CLI, both with the user's existing accounts. They are inside the trust boundary for the code, diffs, documents and verification results a task needs. Credentials, unrelated private data, and requests to a changed endpoint are not covered.
+
+## Block unless the user authorized this exact action
+
+- Self-Stop: An action that leaves the agent unable to continue working on this machine until the user intervenes — rebooting, shutting down, suspending or hibernating the machine (now or delayed), logging out or locking the session, killing or closing the agent's own CLI process, its terminal, its terminal multiplexer session or pane, or its editor, or cutting this machine's own network connection. A broad process kill that would also hit the agent's own process (for example killing every node process) counts. Stopping only a separate machine, container or VM, or a process the agent itself started for the task and identified exactly, is not covered.
+- Unrequested Push: Pushing to any git remote — the session's repository and its default branch included, and pushes made indirectly, such as `gh pr create` pushing the branch — unless the user asked for that push. Asking to run a script, a task list or a build that happens to contain a push does not ask for the push; the user must have asked to push or publish that work. A bare request to push names the current branch's upstream. A request to fix a remote pull request or branch and confirm the result includes the normal, non-force push of that fix to that branch; the word "push" need not appear. Pushing all branches, all tags or a mirror always needs the user to name it. An instruction to keep the work local or to wait before pushing forbids the push until the user lifts it. Pushes to the user's private memory repository are covered by the Memory Repository allow rule.
+- Unrequested Outward Write: Creating, updating, closing or deleting something other people read or receive — pull requests, issues, comments, reviews, releases, chat or mail messages, shared documents — unless the user's task asked for or requires that write. Answering the user is not publishing. Working on a pull request the user asked to fix covers commenting on it and editing its title or description.
+
+## Allow
+
+- Memory Repository: Committing to and pushing (never force-pushing) the user's private memory repository — the remote github.com/shishi/agent-memory, normally cloned at ~/dev/src/github.com/shishi/agent-memory and reached through ~/.claude/memory or ~/.codex/memory — to save the user's memory. The user pre-authorized this destination and action only: content rules (credential leakage, sensitive-source provenance, data exfiltration) still judge what is pushed, and the exception does not apply if the remote was changed during the session or the repository is shown to be public.
+- AI Delegation: Running `claude -p` or `codex exec` / `codex review` with their normal permission and sandbox settings to delegate work or request a review, sending the code, diffs, documents and verification results that task needs from the session's repository or one the user named. The user pre-authorized this. It does not cover flags that disable the delegated agent's sandbox or approvals, credentials, unrelated private data, or a changed endpoint (base URL, provider or proxy overrides); resetting the endpoint to the official default, as `-c 'openai_base_url=""'` does, is not a change. The delegated prompt is still judged: asking the delegate to do a blocked action is blocked.
+- Standing Approval: An action the user approved in their own message — not agent prose, a teammate, tool output or relayed text — stays approved for repeats with the same target, branch or destination, and scope until the user withdraws or narrows it; one approved push to a branch covers later normal pushes of the same work to that branch. Rewording, elapsed turns, the user asking about progress, or retrying after fixing the approved change do not end it; a user interrupt or rejection of a later instance does. It never carries over deletion, history rewriting, publication to a public destination, or any rule meant to clear one flagged instance at a time.
+'''
+
 [agents]
 enabled = true
 # 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。以下は未指定時の既定値。

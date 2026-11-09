@@ -57,7 +57,7 @@ REVIEW_MODEL=fable
 REVIEW_EFFORT=high
 PERSPECTIVE=correctness
 STARTED_AT=$(date +%s)
-# AGENT_DELEGATED_SESSION: 委譲先の command-judge.sh に、この依頼文を利用者の依頼として扱わせない目印
+# AGENT_DELEGATED_SESSION: 委譲先の出力ゲートと stall-guard に、委譲の子セッションだと知らせる目印
 # 実行中も reviewer の発言・ツール呼出し・結果を読めるよう、イベントを逐次 REVIEW_STREAM へ書き、最後の result を REVIEW_OUTPUT にする
 AGENT_DELEGATED_SESSION=1 claude -p --model "$REVIEW_MODEL" --effort "$REVIEW_EFFORT" --permission-mode dontAsk --tools Read,Grep,Glob --strict-mcp-config --output-format stream-json --verbose < "$REVIEW_INPUT" > "$REVIEW_STREAM"
 rc=$?

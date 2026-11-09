@@ -27,7 +27,7 @@ description: GitHub の issue・PR・コメント・レビュー本文の投稿�
 | REST の本文更新 | 本文を標準入力から JSON serializer に渡して `{"body": 本文}` を作り (例: `jq -Rs '{body: .}' <<'EOF'` … `EOF`。PowerShell では here-string から `ConvertTo-Json`)、パイプで `gh api --method PATCH <endpoint> --input -` に渡します |
 | GraphQL | `query` と `variables` を同じ方法で JSON にし、パイプで `gh api graphql --input -` に渡します |
 
-実行前からあるファイルを本文や payload にしません。sandbox の有無で一時ディレクトリが変わり、同じパスで別の残骸ファイルが読まれても gh は失敗しないためです。Bash の実行前ガード (`command-judge.sh`) もこの形を止めます。文字コードと改行が保持されることを確認します。Windows PowerShell 5.1 はネイティブコマンドへのパイプで非 ASCII 文字を失うため、本文を流す同じコマンドの先頭で `$OutputEncoding = [Text.UTF8Encoding]::new($false);` を設定します (別のコマンドで設定しても引き継がれません)。
+実行前からあるファイルを本文や payload にしません。sandbox の有無で一時ディレクトリが変わり、同じパスで別の残骸ファイルが読まれても gh は失敗しないためです。文字コードと改行が保持されることを確認します。Windows PowerShell 5.1 はネイティブコマンドへのパイプで非 ASCII 文字を失うため、本文を流す同じコマンドの先頭で `$OutputEncoding = [Text.UTF8Encoding]::new($false);` を設定します (別のコマンドで設定しても引き継がれません)。
 
 `gh api -f body=@-` は禁止です。`-f` はリテラル文字列なので、本文を `@-` に置き換えます。`-F` は別の型変換規則です。本文を含む複雑な payload には JSON と `--input` を使います。[gh api の仕様](https://cli.github.com/manual/gh_api)
 

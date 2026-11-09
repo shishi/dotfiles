@@ -15,15 +15,20 @@ bash setup.sh
 | 共通の指示 | `codex/AGENTS.md` |
 | Claude Code の共通指示の読み込み | `claude/CLAUDE.md` |
 | 実行前ガードとイベント処理 | `agent-shared/hooks/` |
+| 操作の判定ルールの正本と生成 | `agent-shared/policy/action-policy.json`、`agent-shared/bin/apply-action-policy` |
 | 作業別の手順 | `claude/skills/`、`codex/skills/` |
 | モデル間の委譲 | [codex-delegate](../claude/skills/codex-delegate/SKILL.md)、[claude-delegate](../codex/skills/claude-delegate/SKILL.md) |
 | 独立レビュー | [review-gate](../codex/skills/review-gate/SKILL.md)、[codex-review](../claude/skills/codex-review/SKILL.md)、[claude-review](../codex/skills/claude-review/SKILL.md) |
 
-`command-judge.sh` は両 CLI のツール呼び出しを実行前に判定します。最初はツール名・引数・実行環境だけから効果を分類し、操作の対象や所要時間の根拠が不足するときに必要な証拠を取得します。通常の操作では履歴を送信しません。スクリプトの内容が必要なら現在のプロジェクト内の対象ファイルを読み、過去のツール結果は索引から必要な原文だけを取り寄せます。ファイルは通常の UTF-8 ファイルを対象とし、判定役の入力制約に合わせて各ファイルの証拠用スナップショットを 4 MiB 以内に収めます。秘密情報を伏せてから文字範囲を切り出し、取得したファイルの版は実行を許可する直前にも照合します。会話や変化する実行状態に依存しない安全判定だけを再利用します。
+両 CLI の操作の判定は、各 CLI に組み込まれた AI の判定に任せます。Claude Code は auto mode の分類器、Codex は Auto-review が判定します。このリポジトリが追加する判定役は、Claude Code で確認画面が出る場面だけで動きます。
 
-エージェント自身の作業を止める操作と外部への重要な操作は、本人入力から作った承認状態に照合します。本人入力の全原文を保存し、承認の更新には前回の状態と新しい入力だけを送ります。状態の各事実には出典・目的・対象・効果・範囲を残し、使用時に原文の版と照合します。撤回や範囲変更があれば再判定し、状態だけで確定できない場合は原文へ戻ります。未記録の会話や作業エージェントの自己申告から、新しい許可は作りません。
+止める操作と事前に許可する操作は `agent-shared/policy/action-policy.json` にまとめます。このファイルで両 CLI について止めるのは、エージェント自身の作業を続けられなくする操作と、依頼のない push です。依頼のない投稿は、Claude Code では auto mode に組み込まれたルールが止め、Codex では同じファイルの Codex 向けの規則が止めます。片方の CLI にだけ渡す規則は `targets` で絞ります。破壊的な Git 操作や認証情報の露出は、Claude Code では auto mode に組み込まれたルールが止めます。Codex の Auto-review も、組み込みの方針で取り返しのつかない破壊や認証情報の不正な取得を止めます。記憶リポジトリへの push と、Claude と Codex への委譲・レビューは許可します。同じ会話で承認済みの操作も、同じ対象と範囲なら許可します。ただし削除、履歴の書き換え、公開先への公開は、承認を持ち越しません。`agent-shared/bin/apply-action-policy` は、このファイルから `claude/settings.json` の `autoMode` と `codex/config.toml` の `[auto_review].extra_policy` を書き出します。ファイルを変えたら実行し、`--check` で設定とのずれがないことを確かめます。
 
-投稿本文を既存ファイルから読む操作と、根拠のない短い上限で処理を打ち切る操作は、承認の有無にかかわらず止めます。判定役が利用できない場合は警告して通し、個別の判定が失敗した場合は Claude では確認、Codex では停止します。各判定は 25 秒、障害確認は 12 秒の上限です。証拠の追加取得を含む判定には全体で 137 秒の予算を設け、次の判定に 25 秒を確保できない場合は開始しません。両 CLI の hook 上限は障害確認と後処理の余裕を含めて 180 秒です。Codex の入力上限である 1048576 文字を送信前に確認し、同じ証拠の取得を繰り返しても確定できない場合は停止します。原文の一部だけを取得した場合は、その範囲と未取得部分を明示します。Codex の `write_stdin` による追加入力など、実行前 hook が発火しない経路は対象外です。外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。対象と制限は各スクリプトを参照してください。
+Claude Code の allow は、組み込みの一覧を `$defaults` で取り込まずに全文を書き出します。組み込みの「Git Push Destination」は作業中のリポジトリへの push を許可し、soft_deny に足した規則より優先されるため、この 1 件だけを除く必要があるからです。Claude Code の更新で組み込みの一覧が変わると、`--check` が差分を示します。`classifyAllShell` も有効にし、`permissions.allow` の Bash 規則が auto mode の判定を飛ばさないようにします。
+
+auto mode でも確認画面は出ます。ホームディレクトリなど保護されたパスに対する `rm` や、symlink された設定ファイルの実体への書き込みは、組み込みの検査が確認画面を出します。分類器が拒否を重ねた後も、auto mode は確認画面に戻ります。`permission-judge.sh` は `PermissionRequest` hook としてこれらの確認画面に答えます。判定役の `claude -p` には、分類器と同じルール一式 (`claude auto-mode config`)、利用者の発言、エージェントのこれまでのツール呼び出し、保留中の操作を渡し、許可か拒否を返させます。ツールの結果とアシスタントの文章は、紛れ込んだ指示に判定を左右されないよう渡しません。判定役や hook が失敗した場合も、確認画面を出さずに拒否します。利用者への質問 (`AskUserQuestion`) と計画の承認 (`ExitPlanMode`) は判定せず、通常どおり表示します。Codex の Auto-review は承認が必要な操作をすべて審査するため、Codex 側にこの hook はありません。
+
+外部への書き込み後は `outward-write-readback.sh` が対応する内容の取得結果を通知します。
 
 `stall-guard.sh` はバックグラウンド処理と確認予定をローカルで管理し、判定用の AI は呼びません。Claude では有効な確認予定がある作業を通常の入力時に通知しません。Codex では待機後に新しい作業内容がある場合と、確認時期を迎えた場合に通知します。起動などの管理情報だけでは通知せず、通知済みの本文も繰り返しません。確認予定の欠落、未回収の中断、残った予約など、対応が必要な通知は維持します。
 
