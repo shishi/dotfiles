@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# stall-guard: 背景作業 (Claude Code の Agent/Bash の背景、Codex の子の run) があるのに
+# stall-guard: バックグラウンド処理 (Claude Code の Agent/Bash の背景、Codex の子の run) があるのに
 # 確認の予定が無いままターンを終えることを、hook とコマンドで止める。
 #
 #   stall-guard.sh [--cli claude|codex] <subcommand> [args]

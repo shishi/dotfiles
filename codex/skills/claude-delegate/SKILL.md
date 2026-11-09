@@ -82,7 +82,7 @@ rc=$?
 FINISHED_AT=$(date +%s)
 RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" claude "$DELEGATE_MODEL" "$DELEGATE_EFFORT" "$ROLE" "$STARTED_AT" "$rc" "$WORK/result.json" "" "$FINISHED_AT") || exit 95
 printf 'Run record: %s\n' "$RUN_RECORD" >&2
-# stall-guard: 委譲先に終わっていない背景作業が残っていないかを読む (stall-guard を外していれば何もしない)
+# stall-guard: 委譲先に終わっていないバックグラウンド処理が残っていないかを読む (stall-guard を外していれば何もしない)
 SG="$HOME/.agent-shared/hooks/stall-guard.sh"
 SG_SESSION=$(jq -r '.session_id // empty' "$WORK/result.json" 2>/dev/null)
 if [ -f "$SG" ] && [ -n "$SG_SESSION" ]; then
@@ -105,7 +105,7 @@ AGENT_DELEGATED_SESSION=1 claude -p --model "$DELEGATE_MODEL" --effort "$DELEGAT
 - 正常終了と JSON 受領は作業完了の証明ではありません。`status`、`blockers`、検証結果を
   読み、`done` なら blockers が空、未完了なら理由があることを確認します。
   `permission_denials` に必要な操作の拒否があれば、完了した代替操作の証拠か未完了理由が必要です。
-- `$WORK/stall-guard.json` があれば読みます。`.tasks` が空でなければ、委譲先が背景作業を
+- `$WORK/stall-guard.json` があれば読みます。`.tasks` が空でなければ、委譲先がバックグラウンド処理を
   終わらせないまま終了しています。委譲を失敗の結果として扱い、作業の `id`・`kind`・
   `elapsed_sec` を報告して、回収するか別経路にするかを決めます。`.hooked == false` は
   「stall-guard の hook が動いていない」と報告し、未完了なしとは扱いません。

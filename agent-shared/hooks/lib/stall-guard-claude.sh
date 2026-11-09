@@ -178,9 +178,9 @@ claude_inject() {
       ($added | to_entries[] | select(.value.end != null) | "A\tobs\t\({path: .key, size: .value.end, at: $now} | tojson)"),
       ($left[] | "A\tleftover\t\({event: "delivered", set: .set, via: "inject", at: $now} | tojson)"),
       "S\t\($L._skipped)",
-      (($facts | if length > 0 then ["stall-guard: 動いている背景作業の事実 (確認するか、続けるか止めるかの判断に使う。進捗は追加された内容が目的の結果へ近づいているかで判断し、大きさや更新時刻の変化だけでは判断しない):"] + . else [] end)
+      (($facts | if length > 0 then ["stall-guard: 動いているバックグラウンド処理の事実 (確認するか、続けるか止めるかの判断に使う。進捗は追加された内容が目的の結果へ近づいているかで判断し、大きさや更新時刻の変化だけでは判断しない):"] + . else [] end)
         + $rel
-        + [$left[] | .live[] | "- 背景作業は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる): \(.source) \(.key) が \(hm(.fire)) に発火予定 (同時に動いていた作業: \(observed_of($L; .key) // [] | join(", ")))"]
+        + [$left[] | .live[] | "- バックグラウンド処理は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる): \(.source) \(.key) が \(hm(.fire)) に発火予定 (同時に動いていた作業: \(observed_of($L; .key) // [] | join(", ")))"]
        | if length > 0 then "O\t\({hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: join("\n")}} | tojson)" else empty end)' \
     "${files[@]}" 2>/dev/null) || return 0
   sg_apply "$dir" "$plan"
@@ -302,7 +302,7 @@ claude_watch() {
       [[ "$lock" =~ \"pid\":([0-9]+) ]] && [ "${BASH_REMATCH[1]}" = "$me" ] || return 0
       sg_append "$dir/turns.jsonl" "{\"at\":$now,\"event\":\"watch\"}"
       {
-        echo "stall-guard: 確認時刻を過ぎた背景作業がある。追加された内容が目的の結果へ近づいているかで進捗を判断し (大きさや更新時刻の変化だけでは判断しない)、続けるなら確認を予約し直すか、止める・未完了として報告するかを決める。"
+        echo "stall-guard: 確認時刻を過ぎたバックグラウンド処理がある。追加された内容が目的の結果へ近づいているかで進捗を判断し (大きさや更新時刻の変化だけでは判断しない)、続けるなら確認を予約し直すか、止める・未完了として報告するかを決める。"
         claude_wake_facts "$dir" "$now" <<<"$res"
       } >&2
       return 2
@@ -398,7 +398,7 @@ claude_status() {
   sg_apply "$dir" "$out"
 }
 
-# 終了の関所。running の背景作業それぞれに、今から interval 以内に発火する生きた予約が無ければ block する。
+# 終了の関所。running のバックグラウンド処理それぞれに、今から interval 以内に発火する生きた予約が無ければ block する。
 # 同じ prompt_id の中で、満たさない作業の集合が縮まない block が 2 回続くか、block が合計 6 回になれば抜ける
 # (本体の連続 block の上限 8 を出力ゲートと共有するため。抜けた後は見張りが確認時刻に起こす)。
 claude_stop_check() {
@@ -415,7 +415,7 @@ claude_stop_check() {
   sg_mark_hooked claude "$sid"
   local dir
   dir=$(sg_session_dir claude "$sid") || return 0
-  # 背景作業も台帳も無い普段のセッションは、ここで終える (jq 1 回だけ)。
+  # バックグラウンド処理も台帳も無い普段のセッションは、ここで終える (jq 1 回だけ)。
   [ ! -d "$dir" ] && [[ "$st" == *'"running":[]'* ]] && return 0
   if sg_disabled; then
     # 無効化の後も、撤去の照合のために session_crons の観測値だけを書く。
@@ -480,7 +480,7 @@ claude_stop_check() {
          (if $already then empty else "A\treleased\t\({prompt_id: $S.pid, at: $now, unmet: $uids, cause: $release} | tojson)" end)
        else
          "A\tblocks\t\({prompt_id: $S.pid, unmet: $uids, at: $now, kind: "tasks"} | tojson)",
-         "O\t\({decision: "block", reason: (["stall-guard: 背景作業が確認の予定なしで動いている。ターンを終える前に、作業ごとに次のどれかを行う。"] + [$unmet[] | fact(.), means(.)] | join("\n"))} | tojson)"
+         "O\t\({decision: "block", reason: (["stall-guard: バックグラウンド処理が確認の予定なしで動いている。ターンを終える前に、作業ごとに次のどれかを行う。"] + [$unmet[] | fact(.), means(.)] | join("\n"))} | tojson)"
        end
      elif ($lkeys | length) > 0 then
        (if any(($L.leftover // [])[]; .event == "detected" and same_set(.set; $lkeys)) then empty
@@ -488,7 +488,7 @@ claude_stop_check() {
        (if $left_block then
           "A\tleftover\t\({event: "delivered", set: $lkeys, via: "stop", at: $now} | tojson)",
           "A\tblocks\t\({prompt_id: $S.pid, unmet: [], at: $now, kind: "leftover"} | tojson)",
-          "O\t\({decision: "block", reason: (["stall-guard: 背景作業は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる)。"]
+          "O\t\({decision: "block", reason: (["stall-guard: バックグラウンド処理は全て終わったが、作業のために作った確認の予約が残っている (事実の連絡。取り消すかは判断に任せる)。"]
              + [$left[] | "- \(.source) \(.key): \(hm(.fire)) に発火予定 (同時に動いていた作業: \(observed_of($O; .key) | join(", ")))"] | join("\n"))} | tojson)"
         else empty end)
      else empty end)' ${SG_FILES[@]+"${SG_FILES[@]}"}) || return 0
