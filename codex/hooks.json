@@ -25,31 +25,6 @@
         "matcher": "collaborationspawn_agent|collaborationfollowup_task|collaborationinterrupt_agent|collaborationwait_agent"
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-compact",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-compact'",
-            "timeout": 15,
-            "type": "command"
-          }
-        ]
-      }
-    ],
-    "PreModelRequest": [
-      {
-        "hooks": [
-          {
-            "async": true,
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh pre-model",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh pre-model'",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -100,16 +75,6 @@
       {
         "hooks": [
           {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh session-start",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh session-start'",
-            "timeout": 15,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
             "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
             "timeout": 10
@@ -118,16 +83,6 @@
       }
     ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh stop",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh stop'",
-            "timeout": 15,
-            "type": "command"
-          }
-        ]
-      },
       {
         "hooks": [
           {
@@ -181,16 +136,6 @@
             "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory lookup",
             "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/inject-memory.sh ~/.codex/memory lookup'",
             "timeout": 10,
-            "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.agent-shared/hooks/output-gate-codex.sh prompt",
-            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/output-gate-codex.sh prompt'",
-            "timeout": 15,
             "type": "command"
           }
         ]
