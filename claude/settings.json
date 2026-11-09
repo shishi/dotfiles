@@ -41,7 +41,6 @@
       "Bash(uniq:*)",
       "Bash(date:*)",
       "Bash(pwd)",
-      "Bash(env)",
       "Bash(printenv:*)",
       "Bash(printf:*)",
       "Bash(tree:*)",
@@ -52,7 +51,6 @@
       "Bash(nix develop:*)",
       "Bash(nix flake metadata:*)",
       "Bash(nix log:*)",
-      "Bash(ruby:*)",
       "Bash(claude mcp list)",
       "Bash(git status:*)",
       "Bash(git log:*)",
@@ -327,8 +325,8 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/stall-guard.sh watch",
-            "asyncRewake": true,
-            "timeout": 2100
+            "timeout": 2100,
+            "asyncRewake": true
           }
         ]
       }
