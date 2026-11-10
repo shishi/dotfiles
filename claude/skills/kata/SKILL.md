@@ -35,7 +35,6 @@ description: 変更作業の着手時と工程の切替時に適用する。設�
 原因調査・テストは次の条件で作業へ組み込みます。
 
 - 方式選定・実装着手・高コスト処理・再試行の前に、判断を左右する未確認事項があれば [investigation-discipline](../investigation-discipline/SKILL.md) の「次の操作を選ぶ前に確認する」を使います。既存資料・現物で得られる事実を回収してから、その結果に基づいて次の工程を選びます。
-
 - 不具合・想定外の挙動では、修正案の前に [investigation-discipline](../investigation-discipline/SKILL.md) で観測・原因・既存保証を確認し、原因に対応する設計・計画へ戻します。調査だけの依頼を実装へ広げません。
 - テストの作成・変更は [test-red-first](../test-red-first/SKILL.md) に従います。
 - 工程 1 で始めた受入は、別の実装・レビューを重ねず、同じ対象・目的・前提・証拠が一致する結果を組み込みます。
@@ -48,7 +47,7 @@ description: 変更作業の着手時と工程の切替時に適用する。設�
 
 ## 専門作業
 
-- ADR・ドメイン設計・RSpec・コメント・文章・GitHub 投稿などは、対応する既存 skill の固有要求を維持します。日本語説明文の草稿後は `explain-before-shorten` を適用し、文章作成を再実行しません。
+- ADR・ドメイン設計・RSpec・コメント・文章・GitHub 投稿などは、対応する既存 skill の固有要求を維持します。文章は `writing-prose` の「併用する skill」に従い、文章作成を再実行しません。
 
 ## skill 作成
 

@@ -3,60 +3,72 @@ name: adr
 description: 既存 ADR の理由・制約を調べる、意思決定の記録を作成・更新する、関連 ADR に沿って実装・レビューする場合に使います。会話上の選択やエージェントの作業計画だけでは ADR を新設しません。
 ---
 
-# INSTRUCTIONS
+# ADR (意思決定の記録)
 
-Manage Architecture Decision Records (ADRs) throughout their lifecycle: read existing decisions, write new ones, and ensure development aligns with documented decisions.
+ADR は、作業の文脈を知らない今後の読み手に、何を決めたかとその理由を伝える文書です。この skill は、ADR を読む・書く・ADR に沿って実装する場面と、状態の更新・置き換えを扱います。
 
-- **Template**: See `template.md` for the MADR structure (status, context, drivers, options, consequences)
-- **Operations**: See `operations.md` for directory discovery, naming conventions, commit integration, deprecation/supersession status, and ADR-aligned development workflow
-- **Queries**: See `queries.md` for finding ADRs by topic, status, or relationship
+## 作業用の文書との違い
 
-## Modes
+kata-design の「設計の記録」や実行計画は、自分たちが実装するための Git 管理外の文書です。ADR はそれらを写したものではありません。ADR には、決定・理由・退けた案・受け入れた影響・確かめ方だけを書きます。作業手順・担当の割り振り・検討の経緯は書きません。内容と公開範囲は [writing-prose](../writing-prose/SKILL.md) の意思決定文書の方針と公開境界に従います。
 
-### Read Mode
-**Trigger**: "why did we choose X?", "what's our approach to Y?", "is there an ADR for Z?"
+## 作るかどうか
 
-1. Discover ADR directory (see `operations.md`)
-2. Search for relevant ADRs by keyword/topic
-3. Summarize the decision and its rationale
-4. Note if the ADR is active, deprecated, or superseded
+ADR を新しく作るのは、依頼されたときか、repo の文書方針が記録を求めるときだけです。会話の中での選択やエージェントの作業計画では作りません。
 
-### Write Mode
-**Trigger**: A requested architectural decision record, or a project decision that the repository's documentation policy requires recording. A conversational choice or agent execution plan alone does not require an ADR.
+記録を勧めるのは、次の 3 つがすべて当てはまる決定です。どれかが欠ければ勧めません。
 
-1. Check for existing ADRs on the topic (may need to supersede)
-2. Establish the project decision and intended readers from the request and existing evidence
-3. Draft ADR using `template.md` and writing-prose's content and publication rules. Keep private environment knowledge in private memory and agent working notes outside Git
-4. Save the requested project record in the established ADR location; commit only within the authorized workflow
+- 後から変えるのに大きな手間がかかる
+- 理由を知らない読み手が、なぜこうしたのかと疑問に思う
+- 実際に別の案があり、理由があって一つを選んだ
 
-### ADR-Aligned Development Mode
-**Trigger**: Implementing features, making architectural changes, deviating from existing patterns
+## 既存の慣例を確かめる
 
-1. **Before implementation**: Check for relevant ADRs
-2. **During implementation**: Reference ADR in commits
-3. **On completion**: Check the project's acceptance criteria. Change proposed → accepted only when the decision has been approved under that process; implementation completion alone does not imply acceptance.
-4. **On deviation**: Create superseding ADR, mark the old record as superseded using the repository's convention
+読む・書く前に、repo の ADR の置き場所・命名・書式・言語を確かめます。既存の ADR があれば、すべてそれに合わせます。
 
-## Quality Checklist
+- 置き場所: `docs/adr/`・`docs/ADR/`・`doc/adr/`・`doc/architecture/decisions/`・`adr/`・`ADR/` などを探します。見つからず、ADR を作ることが決まった場合だけ `docs/ADR/` を作ります。読むだけのときや作業メモのためには作りません。
+- 命名: 連番 (`0001-slug.md`)・日付 (`YYYYMMDD-slug.md`)・日時 (`YYYYMMDD-HHMMSS-slug.md`) などの既存の形式に合わせます。連番なら最大の番号に 1 を足します。既存の ADR が無ければ日時の形式にします。
+- 書式と言語: 既存の ADR の見出し・状態の書き方・言語に合わせます。無ければ [template.md](template.md) を使い、見出しも文書の主言語にそろえます。domain-modeling の作業で書く場合は、その最小形 (ADR-FORMAT.md) でかまいません。
 
-Before finalizing an ADR:
+## 読む
 
-- [ ] Title clearly states the decision (not the problem)
-- [ ] Context explains WHY this decision is needed now
-- [ ] At least 2 options were genuinely considered
-- [ ] Decision drivers link to actual project constraints
-- [ ] Consequences include both positive AND negative impacts
-- [ ] Confirmation section describes how to validate the decision
+「なぜ X にしたのか」「Y の方針は何か」「Z の ADR はあるか」と聞かれたときに使います。
 
-## Anti-Patterns
+1. ADR の置き場所を題名と本文のキーワードで検索します (例: `grep -ril 'キーワード' docs/ADR/`)。
+2. 各 ADR の状態を本文で確かめます。ファイル名の `_` 接頭辞は、その repo が使う場合だけ手がかりにします。
+3. 決定・理由・受け入れた影響・状態を要約して伝えます。置き換えられた ADR なら、置き換え先の ADR も示します。
 
-- **Decision without options**: Always document alternatives considered
-- **Vague consequences**: Be specific about trade-offs
-- **Missing "why"**: The ADR should answer "why this, why now"
-- **Orphan ADRs**: Link to related ADRs when relevant
-- **Stale ADRs**: Update status when the project's acceptance or supersession criteria are met
-- **Undocumented deviation**: If you deviate from an ADR, create a new one
+## 書く
 
-## Reference
+1. 同じ主題の既存 ADR を探します。決定を変える場合は、新しい ADR で古い ADR を置き換えます (下の「状態の更新と置き換え」)。
+2. 依頼と既存の資料から、記録する決定と読み手を確かめます。
+3. 確かめた書式で書き、次を満たしているか見直します。
+   - 題名が課題ではなく決定を表している
+   - 背景が、なぜ今この決定が必要かを説明している
+   - 実際に検討した案が二つ以上あり、退けた案ごとに理由がある
+   - 判断の基準が repo の実際の制約に結び付いている
+   - 影響に、良い面と悪い面の両方が具体的に書かれている
+   - 決定が守られていることを確かめる方法 (テスト・レビュー・計測) がある
+   - 関連する ADR へリンクしている
+4. 確かめた置き場所へ保存します。commit は、承認された作業の範囲でだけ行います。
 
-Based on [MADR - Markdown Architectural Decision Records](https://adr.github.io/madr/) (Version 4.0, 2024)
+新しい ADR の状態は「提案」から始めます。repo の決め方で既に承認されていれば「採用」で書きます。
+
+## ADR に沿って実装する
+
+機能の実装、構成の変更、既存の方式から外れる変更のときに使います。
+
+1. 着手前に、変更する領域 (認証・データベース・API など) の ADR を探し、廃止・置き換えされていないかを確かめます。
+2. 有効な ADR の決定と受け入れた影響を、守る制約として扱います。
+3. ADR に基づく変更の commit 本文で、その ADR を参照します。
+4. ADR に反する方式を選ぶ場合は、置き換えの ADR を書きます。ADR を更新しないまま外れた実装をしません。
+5. 実装が終わっただけでは「提案」を「採用」にしません。repo の決め方で承認されたときだけ状態を変えます。
+
+## 状態の更新と置き換え
+
+- 状態は「提案」から「採用」へ、「採用」から「廃止」か「置き換え」へ移ります。状態の名前は既存の ADR に合わせます。
+- 置き換えでは、新しい ADR から置き換える ADR へ、古い ADR から置き換え先の ADR へ、互いにリンクします。両方の変更を同じ commit に含めます。
+- 廃止・置き換えた ADR のファイル名に `_` を付けるのは、その repo が既にその慣例を使っている場合だけです。その場合は `git mv` で名前を変えて履歴を残します。使っていない repo では、ファイル名を変えずに状態とリンクだけを更新します。
+
+## 参考
+
+既定の書式は [MADR](https://adr.github.io/madr/) 4.0 を参考にしています。

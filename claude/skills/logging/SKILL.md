@@ -3,101 +3,55 @@ name: logging
 description: Ruby/Rails の logger や Go の log 等でログを追加・レビューし、重複記録、例外の伝播、ログレベル、障害の記録境界を設計するときに使います。ログを読むだけの原因調査には適用しません。
 ---
 
-# INSTRUCTIONS
+# ログの設計
 
-Apply Dave Cheney's logging philosophy: simplify ruthlessly, handle errors properly, and log only what matters.
+ログは、運用者がシステムの状態を把握するためと、開発者が問題を調べるために出します。一つの失敗を記録する箇所を一つに決め、運用者が読むログを必要なものだけにします。
 
-Before changing levels or removing logs, inspect the framework conventions, alerts, audit requirements, and the boundary that consumes each error. Preserve required operational signals. The level simplifications below are choices for application-owned logging, not permission to reclassify framework or monitoring contracts.
+## 変更の前に確かめること
 
-## Core Principles
+ログのレベルを変える前やログを削る前に、次を確かめます。
 
-1. **Only Two Log Levels Matter**
-   - **Info**: For operators/users—things they need to know during normal operation
-   - **Debug**: For developers—controlled per-package during development
+- フレームワークとプロジェクトのログの慣習
+- そのログを条件にしたアラートや監視
+- 監査のために残す必要がある記録
+- そのエラーを最終的に受け取って処理する箇所
 
-2. **Eliminate Unnecessary Levels**
-   | Level | Verdict | Reason |
-   |-------|---------|--------|
-   | Warning | Remove | "Nobody reads warnings"—either it's an error or info |
-   | Fatal | Avoid | Bypasses `defer`, prevents cleanup. Let errors bubble to `main()` |
-   | Error | Rethink | If handled, it's info. If not handled, return it to caller |
+以下の方針は、アプリケーションが自分で出すログに使う判断です。フレームワークや監視が前提にしているレベル・形式を変える根拠にはしません。運用に必要な信号は残します。
 
-   **Exception**: Warnings from runtimes and external libraries should be logged at warning level. You don't control these sources, and their warnings often signal deprecations or upcoming breaking changes that operators need to track.
+## エラーは処理するか返すかのどちらか
 
-3. **The Golden Rule of Error Logging**
-   > "You should either handle the error, or pass it back to the caller."
+エラーを受け取ったコードは、その場で処理するか、呼び出し元へ返すかの一方だけを行います。
 
-   - **Don't** log an error AND return it (causes duplicate logs up the stack)
-   - **Don't** log errors in library code (caller decides what to do)
-   - **Do** let errors bubble up to where they can be meaningfully handled
+- ログに出したうえで同じエラーを返しません。呼び出し元でも記録されるので、一つの失敗が呼び出しの段数だけ重なって残ります。返すときは、何をしていて失敗したかを文脈としてエラーに付けます (Go の `fmt.Errorf("connect: %w", err)`、Ruby の `rescue` の中で文脈を表す例外を `raise` し、元の例外を `cause` に残すなど)。
+- ライブラリのコードはエラーをログに出しません。どう扱うかは呼び出し元が決めます。`Fatal`・`panic`・プロセスの終了も使わず、エラーを返します。
+- エラーは、意味のある対処ができる箇所まで伝播させます。そこで処理して回復したエラーはもう失敗ではないため、運用者が知る必要があれば info で記録します。
 
-4. **Terminal Error Handlers: When Error Level IS Appropriate**
+## error で記録する境界
 
-   At the boundary where errors become **user-facing unexpected failures** (e.g., 5xx responses), error-level logging is correct:
+想定外の失敗を利用者へ返す境界 (HTTP の 5xx を返すハンドラーなど) では、error レベルで詳細を記録します。ここでエラーの伝播が終わり、返す先がありません。利用者には安全と使いやすさのために一般的なメッセージだけを返すので、運用者が原因を調べる手がかりはこの記録だけです。エラーの内容と、リクエスト ID など他の記録と突き合わせる値を残します。
 
-   - The error chain ends here—no caller to return to
-   - The user receives a generic message (for security/UX)
-   - Operators need the full error details for debugging
+これは途中の層での記録とは別物です。エラーを返す途中ではなく、エラーの扱いが終わる最後の箇所で一度だけ記録します。
 
-   ```go
-   // At HTTP handler boundary - error level is appropriate
-   if err != nil {
-       log.Error("unexpected failure",
-           "error", err,
-           "request_id", requestID,
-       )
-       http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-       return
-   }
-   ```
+## レベルの使い分け
 
-   **This is NOT the same as logging mid-stack**—this is the terminal handler where errors are finally consumed, not propagated.
+アプリケーションが自分で出すログは、次の二つを基本にします。
 
-## Review Checklist
+| レベル | 読者 | 記録するもの |
+|---|---|---|
+| info | 運用者・利用者 | 通常の運用中に知る必要がある出来事と状態 |
+| debug | 開発者 | 開発・調査に必要な詳細。パッケージやモジュールごとに出力を切り替えられるようにします |
 
-When reviewing or writing logging code:
+ほかのレベルは次のように扱います。
 
-- [ ] Is this log statement for users (info) or developers (debug)?
-- [ ] Am I logging an error AND returning it? (Remove the log)
-- [ ] Is this a terminal handler (5xx boundary)? (Error level is appropriate here)
-- [ ] Is this a warning? (Convert to info or error, or remove)
-- [ ] Is this `Fatal`/`panic` in library code? (Return error instead)
-- [ ] Does this log message help the operator understand system state?
+- warning: 読んで対処する人がいないまま埋もれるため、自分のコードでは出しません。対処が要るなら error、想定内の状態なら info にします。たとえば「接続プールが残り少ない」という警告ではなく、「接続プールの使用率 80%」を info で記録します。ただし、ランタイムや外部ライブラリが出す警告は warning のまま記録します。出し方を自分では変えられず、非推奨や互換性のない変更の予告であることが多いため、運用者が追う必要があります。
+- fatal: 使いません。Go の `log.Fatal` は `defer` を実行せずにプロセスを終えるため、後片付けが走りません。エラーを `main` まで返し、終了はそこで決めます。
+- error: 上の境界で使います。ほかの箇所で使いたくなったら、処理したなら info、処理しないなら記録せずに返す、のどちらかにします。
 
-## Anti-Patterns to Avoid
+## 書き方
 
-```go
-// BAD: Log and return (duplicate logs)
-if err != nil {
-    log.Error("failed to connect", err)
-    return err
-}
+- 各ログが、運用者がシステムの状態を理解する助けになるかを確かめます。助けにならないものは debug にするか削ります。
+- 値はメッセージの文字列に埋め込まず、構造化したフィールドで渡します。検索と集計がしやすくなります。例: `log.Info("request completed", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))`
 
-// GOOD: Just return (let caller decide)
-if err != nil {
-    return fmt.Errorf("connect: %w", err)
-}
+## 参考
 
-// BAD: Warning that nobody will act on
-log.Warn("connection pool running low")
-
-// GOOD: Either info (if expected) or error (if action needed)
-log.Info("connection pool at 80% capacity")
-```
-
-## Structured Logging
-
-When logging is appropriate, prefer structured formats:
-
-```go
-// Prefer structured fields over string interpolation
-log.Info("request completed",
-    "method", r.Method,
-    "path", r.URL.Path,
-    "duration", time.Since(start),
-)
-```
-
-## Reference
-
-Based on: [Let's talk about logging](https://dave.cheney.net/2015/11/05/lets-talk-about-logging) by Dave Cheney (2015)
+考え方は Dave Cheney の [Let's talk about logging](https://dave.cheney.net/2015/11/05/lets-talk-about-logging) (2015) を参考にしています。

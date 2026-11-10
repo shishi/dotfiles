@@ -1,13 +1,26 @@
 ---
 name: writing-prose
-description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread. Not for code identifiers.
+description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread, or when an explanation is unnatural, abstract, or too short to understand. Not for code identifiers.
 ---
 
 # 人間向け文章の執筆規約
 
 ## 概要
 
-読者が一度で読める文を書く。共通原則と文書種別ごとの方針は日本語・英語の両方に適用する。表記規約は日本語固有。
+読者が一度で読める文を書く。共通原則と文書種別ごとの方針は全言語に適用する。言語ごとの規約は、その言語の文章に適用する。
+
+## 併用する skill
+
+文章を書く・直すときは、書き始める前に、この skill と一緒に次の表で該当する skill をすべて開く。一つで済ませない。草稿を書き終えたら、レビュー・commit・投稿の前に、下の「推敲」を適用する。文書・README・skill・コメント・commit の本文も対象で、言語を問わない。
+
+| 書くもの | 併用する skill |
+|---|---|
+| コードコメント | code-comments |
+| commit メッセージ | git-commit |
+| issue | writing-issues |
+| GitHub の PR・コメント・レビューの投稿 | github-writing |
+| ADR | adr |
+| 用語集 (GLOSSARY.md)・ドメインの ADR | domain-modeling |
 
 ## 共通原則(全言語)
 
@@ -64,6 +77,9 @@ description: Use when writing or revising prose for human readers in any languag
 その文書の読者がその場で必要とする情報だけを残す。依頼範囲の将来計画は issue、
 変更理由は commit log に記す場合も同じ公開基準で選別し、私的メモの移動先にしない。
 正本ファイルにある値は複製せず参照にする。
+仕組みの説明文書は作業メモにせず、読者が使う・判断する・直すときに必要なこと (何をするか、なぜか、
+利用者の操作) だけを書く。内部の状態ファイル・退避先・環境変数・分岐ごとの挙動・検討の経緯など、
+コードとコメントで分かる実装の詳細は並べない。
 
 - **意思決定文書**: WHY(なぜ選んだか)と WHY NOT(なぜ他案を退けたか)を書く。現在形の要件と事実で書き、「本改訂では」のような経緯は書かない(経緯は commit log へ)
 - **運用手順**: 回避策を足す前に構造で解消できるかを確認する。経緯を省いても動作前提・既知の制限・事実と推定の区別は残す
@@ -92,9 +108,32 @@ description: Use when writing or revising prose for human readers in any languag
 | 〜というもの | (削除) |
 | 注意が必要です | 何をすべきかを具体的に書く |
 
+## 英語の規約
+
+| 項目 | 規約 |
+|---|---|
+| 態 | 能動態で書き、動作の主体を主語にする |
+| 語 | 平易な語を選ぶ (utilize → use、facilitate → help) |
+| 名詞化 | 動詞に戻す (make a decision → decide、perform an update → update) |
+| 冗長表現 | 削る (in order to → to、due to the fact that → because、it is possible to → can、at this point in time → now) |
+| 文 | 一文一義。長い文は分割し、修飾節を重ねない |
+
+## 推敲
+
+説明の意味を明らかにしてから、読者に必要な内容へ短くする。言語を問わず適用する。
+
+1. 依頼と草稿、その前後と表・図・注記を読み、読者に何を理解してほしいかを定める。概念の説明に、不要な行動指示や採用判断を加えない。
+2. 長さを気にせず説明を組み立てる。何がどう動き、なぜそうなり、どの条件で成り立つのかを具体的にする。抽象語や唐突な否定で済ませない。比較や誤解の訂正が目的なら、その対比を残す。技術的な事実は一次資料と実物で確かめ、推測で補わない。
+3. 仕組み・条件・例外を分け、その場所で必要な内容を選ぶ。条件は対応する文や表の項目に添え、重要な制約を注記に追いやらない。
+4. 重複と回りくどい言い方を削る。主体・動作・因果・比較対象・適用条件と正式な用語は残し、必要な用語は初出で説明する。独自の略語や短い標語に置き換えない。
+5. 完成文だけを続けて読み、元の長い説明なしで理解できるか確かめる。意味が欠けたら言葉を戻す。指定の長さで条件を保てなければ、必要な長さや構成を示す。
+6. 編集した正本を読み直し、本文・表・図・注記の意味と既存の変更が保たれていることを確かめる。
+
+誤字だけの修正や原文の表示・書き出しだけの依頼には適用しない。構成の大きな変更が要る場合は依頼範囲と照合し、無関係な文書・設定へ広げない。引用・逐語訳・識別子は書き換えない。相談には書き換え案を、編集の依頼には正本への反映で答え、長い下書きや検討過程は並べない。手順は [「AI の謎な説明文を直すスキル」](https://zenn.dev/microsoft/articles/explain-before-shorten) を参考にしている。
+
 ## チェック
 
-- 日本語の説明文は、草稿が揃ったら [explain-before-shorten](../explain-before-shorten/SKILL.md) を適用し、その後に以下の最終確認を行う。同じ本文を既に推敲済みで変更がなければ繰り返さない
+- 草稿が揃ったら「推敲」を適用し、その後に以下の最終確認を行う。同じ本文を既に推敲済みで変更がなければ繰り返さない
 - 元の依頼・訂正・参照資料を完成した文書と照合する。要求された全項目、比較の各対象と
   条件、結論を支える根拠が反映されているか確認する。自作の見出し一覧だけで充足を判定しない
 - 必須の内容を「補足」「別の観点」として落とさない。構成を変えた場合も移動元の必要な
@@ -103,4 +142,4 @@ description: Use when writing or revising prose for human readers in any languag
 - 日本語: 見出し、定型欄、ラベル、本文に英語だけの文章や不要な英単語が残っていないか確認する。製品名、識別子、コマンド、引用は維持する
 - 日本語: 表記ゆれを grep で確認する(長音なしの「ユーザ」「サーバ」、「行なう」)。音読して詰まる文は書き直す
 - 独立レビューを依頼する場合は、主言語の統一を明示的な確認項目に含める
-- 英語: 共通原則に加えて、不要語を削る(omit needless words)
+- 英語: 英語の規約で見直し、不要語を削る(omit needless words)

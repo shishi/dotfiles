@@ -1,95 +1,43 @@
-# MADR Template
+# ADR の既定の書式
 
-Use this structure for project ADRs. Include only fields relevant to the decision's readers;
-use roles for participants and omit private identities, private consultation links, and session notes.
+repo に既存の ADR が無いときに使います。見出し・状態・本文は文書の主言語にそろえ、英語の文書なら見出しも英語にします。(任意) の節は、読み手に必要なときだけ残します。決定者は役割で書き、個人名・私的な相談先・作業の経緯は書きません。
 
 ```markdown
-# [Short Title of Solved Problem and Solution]
+# 決定を表す短い題名
 
-| | |
+- 状態: 提案 | 採用 | 廃止 | [置き換え先の ADR](リンク) で置き換え
+- 日付: YYYY-MM-DD
+- 決定者: 役割 (任意)
+
+## 背景
+
+なぜ今この決定が必要か。課題と前提を 2〜3 文で書きます。
+
+## 判断の基準
+
+- 決定を左右する制約や要件 (性能・互換性・保守の負担など)
+
+## 検討した案
+
+| 案 | 得るものと失うもの |
 |---|---|
-| **Status** | [proposed \| accepted \| deprecated \| superseded by [ADR-XXXX](link)] |
-| **Date** | YYYY-MM-DD |
-| **Decision-makers** | [list names or roles] |
-| **Consulted** | [list or link to consultation] |
-| **Informed** | [list stakeholders to inform] |
+| 案 A | |
+| 案 B | |
 
-## Context and Problem Statement
+## 決定
 
-[Describe the context and problem in 2-3 sentences. What is the issue motivating this decision?]
+選んだ案と、判断の基準に照らした理由を書きます。
 
-## Decision Drivers
+## 影響
 
-* [Driver 1: e.g., scalability requirements]
-* [Driver 2: e.g., team expertise]
-* [Driver 3: e.g., maintenance burden]
+- 良い面:
+- 悪い面:
 
-## Considered Options
+## 確認
 
-1. [Option 1]
-2. [Option 2]
-3. [Option 3]
+決定が守られていることを確かめるテスト・レビュー・計測を書きます。
 
-## Decision Outcome
+## 関連 (任意)
 
-**Chosen option**: "[Option N]", because [justification linking back to decision drivers].
-
-### Consequences
-
-**Positive:**
-* [Benefit 1]
-* [Benefit 2]
-
-**Negative:**
-* [Trade-off 1]
-* [Trade-off 2]
-
-**Neutral:**
-* [Side effect that is neither clearly positive nor negative]
-
-### Confirmation
-
-[How will we verify this decision is implemented correctly? What tests, reviews, or metrics?]
-
-## Pros and Cons of the Options
-
-### [Option 1]
-
-[Brief description]
-
-* Good, because [argument]
-* Good, because [argument]
-* Neutral, because [argument]
-* Bad, because [argument]
-
-### [Option 2]
-
-[Brief description]
-
-* Good, because [argument]
-* Bad, because [argument]
-
-### [Option 3]
-
-[Brief description]
-
-* Good, because [argument]
-* Bad, because [argument]
-
-## More Information
-
-[Links to related ADRs, documentation, or external resources. Implementation timeline if relevant.]
+関連する ADR や文書へのリンクを書きます。
 ```
-
-## Section Guidance
-
-| Section | Purpose | Tips |
-|---------|---------|------|
-| **Status** | Track lifecycle | Start as proposed; accept only under the project's decision process |
-| **Context** | Explain the situation | Focus on WHY this decision is needed NOW |
-| **Decision Drivers** | List constraints | These justify the final choice |
-| **Considered Options** | Show alternatives | At least 2 genuine options |
-| **Decision Outcome** | State the choice | Link back to drivers |
-| **Consequences** | Document trade-offs | Include negatives honestly |
-| **Confirmation** | Define success | How will you know it worked? |
-| **Pros/Cons** | Detailed analysis | Compare options fairly |
