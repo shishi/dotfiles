@@ -32,8 +32,10 @@ CLI が読む共通指示・関連記憶・対象ファイル・コマンド出�
   更新・レビューゲートは渡しません。独立した設計調査は explore として渡せます。
 - 対象の repo / タスク用 worktree を cwd にします。並列 writer は worktree を分けます。
   同じ範囲の未コミット変更がある場合は、その成果を保全するか範囲を分けてから渡します。
-- 外側の実行環境は Claude 自身の認証通信とセッション保存を許可する必要があります。
-  受託側の Bash が使うネットワーク・書込範囲とは別です。既存の sandbox・hook・deny を
+- 外側の実行環境は Claude 自身の認証通信とセッション保存を許可する必要があります。Codex の
+  workspace-write sandbox は作業場所の外への書込みと通信を制限し、sandbox 内の起動はセッション状態の作成が
+  `EROFS` で失敗するため、最初から sandbox 外の実行 (`sandbox_permissions` を `require_escalated` にし、理由を添える) で起動します。
+  このとき受託側の Bash も Codex の sandbox の外で動くため、その範囲は下の権限規則と hook で絞ります。既存の sandbox・hook・deny を
   維持し、必要な許可は司令塔が扱います。`--bare` や権限 bypass は使いません。
 - `--allowedTools` は既存許可への追加です。既存の広い許可を狭める OS の隔離境界とは
   扱いません。書込時は下の `--disallowedTools` で通常の Git 書込・push コマンドも拒否し、
