@@ -56,9 +56,36 @@ Claude Code では `~/.claude/memory` を指定します。同期できない場
 
 ## 作業ワークフロー
 
-変更作業は [kata](../codex/skills/kata/SKILL.md) の工程表に沿って進めます。kata は工程 1〜7 と各工程の通過条件をまとめた索引です。工程 1 の設計は [kata-design](../codex/skills/kata-design/SKILL.md)、工程 3 の計画は [kata-plan](../codex/skills/kata-plan/SKILL.md)、工程 4 の実装は [kata-build](../codex/skills/kata-build/SKILL.md) が手順を持ちます。各工程 skill は対応する superpowers の skill を詳しい進め方として読み込みます。superpowers が入っていない環境でも、工程 skill の手順だけで工程を終えられます。
+変更作業は [kata](../codex/skills/kata/SKILL.md) の工程表に沿って進めます。kata は工程 1〜7 と各工程の通過条件をまとめた索引です。各工程は工程ごとの skill が手順を持ち、工程 5 の独立レビューは review-gate が担います。工程 1 の設計は [kata-design](../codex/skills/kata-design/SKILL.md)、工程 2 の作業場所は [kata-workspace](../codex/skills/kata-workspace/SKILL.md)、工程 3 の計画は [kata-plan](../codex/skills/kata-plan/SKILL.md)、工程 4 の実装は [kata-build](../codex/skills/kata-build/SKILL.md)、工程 6 の完了前の確認は [kata-verify](../codex/skills/kata-verify/SKILL.md)、工程 7 の終え方と後片付けは [kata-finish](../codex/skills/kata-finish/SKILL.md) です。テストの手順は test-red-first、不具合の調査は investigation-discipline が持ちます。これらの skill は superpowers の対応する skill の手順を取り込んでおり、superpowers plugin を使わずに工程を終えられます (下の「superpowers の取り込み」)。
 
-`kata-entry.sh` は両 CLI の SessionStart hook で、変更作業の入口が kata であることと、superpowers の手順より kata と共通指示を優先することを伝えます。Claude Code では superpowers plugin が毎回自身の入口の skill を差し込みます。そのため、曖昧な依頼では kata を経ずに上流の設計手順へ進んだり、質問だけで止まったりすることがあります。skill が選ばれるかは description にモデルが気づくかに左右されるため、入口は hook で確定的に伝えます。kata を開いても工程 1 を飛ばして実装へ進むことがあるため、hook は工程 1 の kata-design を開くことと、不要と判断した場合は省く前に利用者に質問することも伝えます。
+`kata-entry.sh` は両 CLI の SessionStart hook で、変更作業の入口が kata であることと、工程ごとに開く skill を伝えます。skill が選ばれるかは description にモデルが気づくかに左右され、曖昧な依頼では kata を経ずに作業を始めたり、kata を開いても工程 1 を飛ばしたり、工程の途中で工程 skill を開かずに進めたりします。そのため入口と工程ごとの skill は hook で確定的に伝えます。kata-design を不要と判断した場合は、省く前に利用者に質問することも伝えます。
+
+### superpowers の取り込み
+
+kata の工程 skill は、[superpowers](https://github.com/obra/superpowers) (MIT License) の設計・作業場所・計画・実装・テスト・調査・レビュー・完了確認・終了の skill の手順を、共通指示に合わせて日本語で取り込んだものです。superpowers plugin は Claude Code・Codex の両方で無効にしています。Claude Code では plugin が毎回自身の入口の skill を差し込み、kata の入口とぶつかります。どちらの CLI でも、有効なままだと上流と自前の同じ工程の手順を二重に読むことになります。アンインストールはしていないので、比べたいときは設定で有効に戻せます。取り込んだ部分の著作権表示と許諾文は `claude/skills/superpowers.LICENSE` (Codex 側も同じ) にあります。
+
+取り込み済みの上流の版は `agent-shared/superpowers-imported-version` に 1 行で書きます。`kata-entry.sh` は 30 日に一度、上流の repo のタグから最新の版を確かめ、取り込み済みより新しければ、セッションの開始時にエージェントへ伝え、エージェントが最初の応答で利用者に知らせます。委譲・レビューの子セッション (`AGENT_DELEGATED_SESSION` が設定されたもの) には伝えません。確認の結果は `${XDG_STATE_HOME:-~/.local/state}/agent-shared/superpowers-upstream` (書けなければ `${TMPDIR:-/tmp}/claude-<uid>/kata/`) に残し、毎回の起動では通信しません。通信できなかったときは次の起動で再び確かめます。
+
+取り込みは、知らせを受けた利用者が頼んだときに、次の順に進めます。
+
+1. 上流の repo を Git 管理外の場所へ clone し、`git diff v<取り込み済みの版> v<新しい版> -- skills/` で、下の表の skill (同梱の参照・prompt・スクリプトを含む) の差分を読みます。
+2. 作業の結果を変える変更 (手順・判断基準・避ける失敗) を、対応する自前の skill へ日本語で移します。共通指示と衝突する手順、共通指示や他の自前 skill が既に担う内容は移しません。
+3. Claude 側と Codex 側の skill をそろえ、`tests/skills-sync.sh` で確かめます。
+4. 独立レビューを通してから、`agent-shared/superpowers-imported-version` を新しい版に更新して commit します。差分を読んで移すものが無かった版や、取り込まないと決めた版も、この値を更新して知らせを止めます。
+
+| 上流の skill | 取り込み先 |
+|---|---|
+| brainstorming | kata-design |
+| using-git-worktrees | kata-workspace |
+| writing-plans | kata-plan |
+| executing-plans・subagent-driven-development | kata-build |
+| test-driven-development | test-red-first |
+| systematic-debugging | investigation-discipline |
+| requesting-code-review・receiving-code-review | review-gate |
+| verification-before-completion | kata-verify |
+| finishing-a-development-branch | kata-finish |
+
+上流の using-superpowers (plugin の入口) と diagnosing-superpowers (plugin 自身の診断) は、plugin を使わないため取り込みません。dispatching-parallel-agents と writing-skills は工程で使わず、それぞれ agent-delegation と create-rule・empirical-prompt-tuning が同じ場面を担います。
 
 計画の実装を途中で止めないよう、`kata-completion.sh` が両 CLI の Stop hook として動きます。kata-plan の最後に `kata-active <claude|codex> start <計画ファイル>` で実装中を記録したセッションでだけ判定し、記録がなければ何もしません。ターンを終えようとするたびに、判定役の Sonnet へ計画・進捗・直近の利用者の発言・会話記録の末尾の操作と結果・最後の応答を渡し、次の 3 つのどれかを返させます。
 
