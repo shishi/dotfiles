@@ -1,5 +1,5 @@
 ---
-name: superpowers-local
+name: shishi-workflow
 description: 変更作業の着手時・工程の切替時と、superpowers の設計・計画・実行・調査・テスト・レビュー・終了手順を使う際に適用する。
 ---
 
