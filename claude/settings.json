@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
-    "BASH_MAX_TIMEOUT_MS": "1200000",
+    "BASH_MAX_TIMEOUT_MS": "300000",
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
     "CLAUDE_CODE_AUTO_CONNECT_IDE": "0",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -152,16 +152,6 @@
             "command": "bash ~/.claude/hooks/gh-sandbox-form-notice.sh",
             "timeout": 10,
             "statusMessage": "gh の呼び出し形を確認中..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.agent-shared/hooks/task-monitor-claude.sh pre-bash",
-            "timeout": 10
           }
         ]
       }
