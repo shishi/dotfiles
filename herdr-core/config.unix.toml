@@ -1,0 +1,7 @@
+# herdr-core (hc) settings. See `hc --help` and `hc --skill`.
+
+# Type notes about child terminals into their parent and tag hc messages.
+notes = true
+
+# A login shell keeps the login environment (macOS PATH and the like).
+shell = ["fish", "--login"]
