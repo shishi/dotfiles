@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# superpowers の上流の新しい版を、kata の工程 skill へ無人で取り込む。kata-entry.sh が起動する。
+# 使い方: superpowers-import <新しい版> [状態ディレクトリ]
+#
+# 共有の checkout は別のセッションも使い、無人の commit がその作業とぶつかるため、別の clone の
+# master で作業させる。結果を取り込む手順は docs/agents.md にある。
+set -u
+
+ver=${1:?使い方: superpowers-import <新しい版> [状態ディレクトリ]}
+state_dir=${2:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-shared}
+repo=$(cd -P "$(dirname "$0")/../.." && pwd) || exit 2
+url=${KATA_UPSTREAM_URL:-https://github.com/obra/superpowers}
+codex=${SUPERPOWERS_IMPORT_CODEX:-codex}
+work=$state_dir/import-$ver
+
+# status があれば実行中か終了済み。失敗後は status だけを消すと、clone の成果を引き継いでやり直す。
+mkdir -p "$work" || exit 2
+status() { printf '%s %s %s\n' "$1" "$(date +%s)" "$$" > "$work/status"; }
+( set -C; status running ) 2>/dev/null || exit 0
+fail() { echo "$1" >> "$work/codex.log"; status failed; exit 1; }
+
+[ -d "$work/repo" ] || git clone -q "$repo" "$work/repo" || fail "dotfiles を clone できない"
+git -C "$work/repo" checkout -q master || fail "clone の master へ切り替えられない"
+# 比較元は clone した時点の版に固定する。共有 checkout には別セッションの未コミット変更があり得て、
+# 再実行では clone の master に前回の commit が残っている。
+base=$(git -C "$work/repo" rev-parse refs/remotes/origin/master) || fail "clone の基準版を読めない"
+imported=$(git -C "$work/repo" show "$base:agent-shared/superpowers-imported-version" | head -n 1) || fail "取り込み済みの版を読めない"
+[ -d "$work/upstream" ] || GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
+  git clone -q "$url" "$work/upstream" || fail "上流を clone できない"
+for v in "$imported" "$ver"; do
+  git -C "$work/upstream" rev-parse -q --verify "refs/tags/v$v" >/dev/null ||
+    git -C "$work/upstream" rev-parse -q --verify "refs/tags/$v" >/dev/null ||
+    fail "上流にタグ $v が無い"
+done
+command -v "$codex" >/dev/null || fail "codex CLI が無い"
+
+cat > "$work/prompt.md" <<EOF
+dotfiles の superpowers 取り込みタスク。作業場所はこの repo (dotfiles の clone) の master。
+
+- 上流の clone: $work/upstream (タグ取得済み)
+- 取り込み済みの版: $imported
+- 新しい版: $ver
+- 基準の commit: $base (これより後の commit は、前回の実行が途中まで進めたもの。内容を確かめて続ける)
+
+docs/agents.md の「superpowers の取り込み」の手順 1〜4 に従って進める。差分は上流の clone で読み、
+作業の結果を変える変更を対応する自前 skill へ移す。移すものが無ければ、その判断と根拠を残して
+版の値だけ更新する。独立レビューは review-gate に従う。commit はこの repo の master に作る。
+push、ほかのブランチや作業中の checkout への統合はしない。利用者はこの場にいないので、質問で止まらず、
+本人の判断が要る点は最後の報告に書く。最後の報告には、移した変更と移さなかった変更 (理由つき)、
+検証とレビューの結果、commit を書く。
+EOF
+
+cd "$work/repo" || fail "clone へ移れない"
+# 起動元の CLI の変数を引き継ぐと、取り込みの中で Claude のレビューが入れ子の起動として拒まれる。
+env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID AGENT_DELEGATED_SESSION= SUPERPOWERS_IMPORT_RUNNING=1 \
+  "$codex" exec -c 'openai_base_url=""' -s workspace-write --json \
+  -o "$work/report.md" - < "$work/prompt.md" > "$work/codex.jsonl" 2>> "$work/codex.log" ||
+  fail "codex exec が失敗した (終了コード $?)"
+[ -s "$work/report.md" ] || fail "Codex の最後の報告が無い"
+# 報告があっても、版を更新した commit ができていなければ完了ではない。
+[ "$(git -C "$work/repo" rev-parse HEAD)" != "$base" ] &&
+  [ "$(head -n 1 "$work/repo/agent-shared/superpowers-imported-version")" = "$ver" ] &&
+  [ -z "$(git -C "$work/repo" status --porcelain)" ] ||
+  fail "版を更新した commit が無いか、未コミットの変更が残っている (報告: $work/report.md)"
+status done
