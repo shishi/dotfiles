@@ -11,7 +11,7 @@ description: 仕様・実装・設定・文書の独立レビューと、受け�
 
 担当の割当・起動前に `agent-delegation` を使い、該当する参照本文で認証・送信先・モデル選択・実行記録を確認します。
 
-この skill が独立レビューの対象組成・担当編成・結果の回収と通過判定を運営します。利用者としての受入は [user-acceptance](../user-acceptance/SKILL.md) が担い、その記録をこの skill の入力にします。[shishi-workflow](../shishi-workflow/SKILL.md) と、現在の段階に必要な上流本文を読んで使います。同じ版の既読本文は再読しません。
+この skill が独立レビューの対象組成・担当編成・結果の回収と通過判定を運営します。利用者としての受入は [user-acceptance](../user-acceptance/SKILL.md) が担い、その記録をこの skill の入力にします。[kata](../kata/SKILL.md) と、現在の段階に必要な上流本文を読んで使います。同じ版の既読本文は再読しません。
 
 - 司令塔がレビューを依頼するときは `superpowers:requesting-code-review` を使い、対象と担当をこの skill で組成します。
 - 指摘を受け取った実装者・司令塔は、その指摘への対応に `superpowers:receiving-code-review` を使います。対象を検査する reviewer の手順には割り当てません。
