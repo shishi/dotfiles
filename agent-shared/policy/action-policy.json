@@ -1,7 +1,5 @@
 {
-  "drop_default_allow": [
-    "Git Push Destination"
-  ],
+  "drop_default_allow": [],
   "rules": [
     {
       "id": "source-control",
@@ -21,7 +19,9 @@
     {
       "id": "unrequested-push",
       "section": "soft_deny",
-      "text": "Unrequested Push [named+specifics — **must name:** the push and its destination]: Pushing to any git remote — the session's repository and its default branch included, and pushes made indirectly, such as `gh pr create` pushing the branch — unless the user asked for that push. Asking to run a script, a task list or a build that happens to contain a push does not ask for the push; the user must have asked to push or publish that work. A bare request to push names the current branch's upstream. A request to fix a remote pull request or branch and confirm the result includes the normal, non-force push of that fix to that branch; the word \"push\" need not appear. Pushing all branches, all tags or a mirror always needs the user to name it. An instruction to keep the work local or to wait before pushing forbids the push until the user lifts it. Pushes to the user's private memory repository are covered by the Memory Repository allow rule."
+      "text": "Unrequested Push [named+specifics — **must name:** the push and its destination]: Pushing to any git remote — the session's repository and its default branch included, and pushes made indirectly, such as `gh pr create` pushing the branch — unless the user asked for that push. Asking to run a script, a task list or a build that happens to contain a push does not ask for the push; the user must have asked to push or publish that work. A bare request to push names the current branch's upstream. A request to fix a remote pull request or branch and confirm the result includes the normal, non-force push of that fix to that branch; the word \"push\" need not appear. Pushing all branches, all tags or a mirror always needs the user to name it. An instruction to keep the work local or to wait before pushing forbids the push until the user lifts it. Pushes to the user's private memory repository are covered by the Memory Repository allow rule.",
+      "disabled": true,
+      "note": "2026-11-10 から、両 CLI の組み込みの push の判定を試すため無効にしている (Claude Code の auto mode は作業中のリポジトリへの通常の push を通し、他人の作業を消す force push などを止める)。戻すときは disabled と note を消し、drop_default_allow に \"Git Push Destination\" を戻して apply-action-policy を実行し、docs/agents.md の push の説明も戻す。"
     },
     {
       "id": "unrequested-outward-write",

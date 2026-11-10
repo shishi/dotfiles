@@ -5,10 +5,10 @@
     apply-action-policy --check   書き出す内容と設定ファイルが食い違えば差分を示して 1 で終える
 
 判定そのものは Claude Code の auto mode の分類器と Codex の auto-review が行う。ここは両者に同じルールを渡すだけ。
-Claude の allow は "$defaults" を使わず、標準の一覧から drop_default_allow を除いた全文を書く。標準の
-"Git Push Destination" は session の repository への push を通し、soft_deny に足した "Unrequested Push" より
-allow が優先されるため、その 1 件だけを外すにはこの書き方しかない。標準の一覧は `claude auto-mode defaults` から
-取るので、Claude Code の更新で標準が変われば --check が食い違いとして知らせる。
+Claude の allow は、drop_default_allow が空なら "$defaults" で標準の一覧を取り込む。空でなければ、標準の一覧から
+そのラベルを除いた全文を書く。soft_deny に足した規則より標準の allow が優先されるため、標準の allow を 1 件だけ外す
+にはこの書き方しかない。その場合の標準の一覧は `claude auto-mode defaults` から取るので、Claude Code の更新で標準が
+変われば --check が食い違いとして知らせる。
 
 TOML と JSON を壊さずに書き換えるため python で書く (sh では TOML の表の置き換えを安全に書けない)。
 """
@@ -33,8 +33,10 @@ def claude_defaults():
 
 def rule_texts(policy, section, target):
     # targets を省いたルールは両 CLI に渡す。片方の組み込みルールで足りるものだけ targets で絞る。
+    # disabled のルールは書き出さない。試しに外したルールを、戻し方の note と一緒に正本へ残すため。
     return [rule["text"] for rule in policy["rules"]
-            if rule["section"] == section and target in rule.get("targets", ["claude", "codex"])]
+            if rule["section"] == section and not rule.get("disabled")
+            and target in rule.get("targets", ["claude", "codex"])]
 
 
 def claude_auto_mode(policy, defaults):
@@ -45,7 +47,8 @@ def claude_auto_mode(policy, defaults):
         sys.exit(f"apply-action-policy: 標準の allow に見つからない: {', '.join(missing)}")
     return {
         "environment": ["$defaults", *rule_texts(policy, "environment", "claude")],
-        "allow": kept + rule_texts(policy, "allow", "claude"),
+        # 外す組み込みルールが無ければ "$defaults" で取り込み、Claude Code の更新に追従させる
+        "allow": (kept if dropped else ["$defaults"]) + rule_texts(policy, "allow", "claude"),
         "soft_deny": ["$defaults", *rule_texts(policy, "soft_deny", "claude")],
         # 狭い Bash の allow 規則 (例: "Bash(gh pr:*)") が分類器を通さずに許可しないよう、auto mode の間は止める。
         "classifyAllShell": True,
