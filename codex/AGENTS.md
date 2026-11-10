@@ -14,7 +14,7 @@ Claude Code と Codex の常時規則はこのファイルを正本とする。C
 
 ## 作業環境
 
-タスク用 worktree を基本とし、既存のタスク用があれば再利用する。小さな調査・変更は既存 checkout でよく、その範囲を超えたら原則へ戻る。読解・編集だけで環境を起動しない。flake.nix のあるプロジェクトの実行環境は `nix-environment` skill に従う。
+コードを修正する前に、タスク用 worktree かブランチのどちらかを必ず用意する。worktree を基本とし、アプリケーションの性質で worktree が合わない場合はブランチでよい。既存のタスク用があれば再利用する。修正しない調査だけの作業は例外とする。別途の指示で master (デフォルトブランチ) だけで運用する場合は、その指示に従う。読解・編集だけで環境を起動しない。flake.nix のあるプロジェクトの実行環境は `nix-environment` skill に従う。
 
 ## 着手から完了まで
 
@@ -73,7 +73,7 @@ Claude Code と Codex の常時規則はこのファイルを正本とする。C
 
 ## リポジトリ固有の優先規則
 
-`StudistCorporation/teachme_web_duvel` とその worktree は、repo 内の Docker 前提の指示より個人の Nix devShell 方針を優先する。タスク用 worktree を基本とし、小さな調査・修正は既存 checkout でよい。Ruby/Rails/yarn は原則 `nix develop --impure -c <command>`、準備は `doc/setup/nix.md` に従う。読解・編集だけなら Nix 起動は不要。Nix が使えない等の具体的理由がある場合だけ Docker を使う。詳細は該当プロジェクト記憶に置き、対象 repo の追跡・ローカル指示ファイルへ個人方針を転記しない。
+`StudistCorporation/teachme_web_duvel` とその worktree は、repo 内の Docker 前提の指示より個人の Nix devShell 方針を優先する。作業場所は「作業環境」の規則に従う。Ruby/Rails/yarn は原則 `nix develop --impure -c <command>`、準備は `doc/setup/nix.md` に従う。読解・編集だけなら Nix 起動は不要。Nix が使えない等の具体的理由がある場合だけ Docker を使う。詳細は該当プロジェクト記憶に置き、対象 repo の追跡・ローカル指示ファイルへ個人方針を転記しない。
 
 ## 個人永続記憶
 
