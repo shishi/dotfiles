@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# kata の計画を実装中であることを、このセッションに記録する。kata-completion.sh (Stop hook) は、
+# 記録があるセッションでだけ、計画を終えずに止まろうとしたターン終了を差し戻す。
+#   kata-active <claude|codex> start <計画ファイル>   実装を始める (kata-plan の最後)
+#   kata-active <claude|codex> done                   計画を終えた・中止した
+#   kata-active <claude|codex> status                 記録している計画ファイルを表示する
+# 最初の引数は呼び出したエージェントの CLI。セッションは Claude Code の CLAUDE_CODE_SESSION_ID、
+# Codex の CODEX_THREAD_ID で識別する (hook が受け取る session_id と同じ値)。一方の CLI から
+# もう一方を起動すると子の環境には親の変数も残るため、変数の有無ではなく CLI の指定で選ぶ。
+set -u
+
+usage() { echo "usage: kata-active <claude|codex> start <計画ファイル> | done | status" >&2; exit 2; }
+case ${1:-} in
+  claude) sid=${CLAUDE_CODE_SESSION_ID:-} var=CLAUDE_CODE_SESSION_ID ;;
+  codex) sid=${CODEX_THREAD_ID:-} var=CODEX_THREAD_ID ;;
+  *) usage ;;
+esac
+cli=$1
+shift
+if [ -z "$sid" ]; then
+  echo "kata-active: セッション ID ($var) がありません" >&2
+  exit 1
+fi
+# 記録は Claude Code の sandbox (作業場所と /tmp/claude-<uid> に書ける) と Codex の sandbox (作業場所と /tmp に書ける)
+# の両方から書ける場所に置く。kata-completion.sh と同じ場所を使う
+dir="${KATA_STATE_DIR:-/tmp/claude-$(id -u)/kata}/$cli/$sid"
+
+case ${1:-} in
+  start)
+    plan=${2:-}
+    if [ -z "$plan" ] || [ ! -f "$plan" ]; then
+      echo "kata-active: 計画ファイルがありません: $plan" >&2
+      exit 1
+    fi
+    mkdir -p "$dir" && realpath "$plan" > "$dir/plan" && rm -f "$dir/blocks" &&
+      echo "kata-active: 計画 $(cat "$dir/plan") の実装を記録しました" ;;
+  done)
+    rm -rf "$dir" && echo "kata-active: 記録を消しました" ;;
+  status)
+    if [ -f "$dir/plan" ]; then cat "$dir/plan"; else echo "kata-active: 記録はありません"; fi ;;
+  *) usage ;;
+esac

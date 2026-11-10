@@ -221,6 +221,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "^(startup|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-entry.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -277,6 +287,16 @@
             "command": "bash ~/.agent-shared/hooks/task-monitor-claude.sh",
             "asyncRewake": true,
             "timeout": 86400
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-completion.sh claude",
+            "timeout": 120,
+            "statusMessage": "計画の完了を確認中..."
           }
         ]
       }
