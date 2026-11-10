@@ -1,5 +1,5 @@
 ---
-name: safe-git-integration
+name: git-lossless-integrate
 description: merge・pull・rebase・cherry-pick で履歴や作業ツリーを統合する前、統合済みブランチ・worktree を整理するときに使います。稼働中の設定と他者の未コミット変更を保全し、競合を解消して反映するときが対象です。
 ---
 

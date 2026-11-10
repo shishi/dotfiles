@@ -30,7 +30,7 @@ description: 変更作業の着手時・工程の切替時と、superpowers の�
 | 4. task を実装・検証する | 選んだ担当が [kata-build](../kata-build/SKILL.md) で進めます。 | task の要求結果を実物で確認し、必要な既存検証を通しています。追加・変更するテストは赤から緑を確認し、通常の入口による独立受入の結果も該当範囲で揃っています。失敗は原因調査へ戻します。 |
 | 5. 独立レビューと指摘対応 | 司令塔が `superpowers:requesting-code-review` と `review-gate` で編成します。指摘受領者が `superpowers:receiving-code-review` で採否・修正を進めます。 | 全対象・必要な観点のレビュー結果があり、採用した blocker / should を修正・再検証し、影響する観点の再確認を終えています。受領手順を reviewer 自身の検査方法に割り当てません。 |
 | 6. 証拠を確認して確定する | 完了を主張する担当が `superpowers:verification-before-completion` で証拠を取得します。司令塔が親として、共通 AGENTS.md の手順 6 で照合します。 | その照合で未確認・未達が残っていません。親がレビュー後に承認範囲内の変更だけを commit し、その後に helper の完了記録を確定し、実装中の記録が残っていれば `kata-active claude done` で消します。 |
-| 7. 統合・保全・後片付け | 司令塔が `superpowers:finishing-a-development-branch` で統合方法を選び、push・PR 作成もこの skill で行います。merge・pull・rebase・cherry-pick と、統合済みの branch・worktree の整理は `safe-git-integration` で実行します。 | 承認済みの統合・反映を実施して利用先を確認しています。未統合の成果を保全し、自分の不要な作業場所だけを片付けます。push・破壊操作の承認範囲は広げません。 |
+| 7. 統合・保全・後片付け | 司令塔が `superpowers:finishing-a-development-branch` で統合方法を選び、push・PR 作成もこの skill で行います。merge・pull・rebase・cherry-pick と、統合済みの branch・worktree の整理は `git-lossless-integrate` で実行します。 | 承認済みの統合・反映を実施して利用先を確認しています。未統合の成果を保全し、自分の不要な作業場所だけを片付けます。push・破壊操作の承認範囲は広げません。 |
 
 工程は作業の規模に合わせます。工程 1 は kata-design を開いて進めます。kata-design を不要と判断した場合は、省く前に、その判断と根拠を示して利用者に省いてよいかを質問します。小さく明確な変更は、工程 3 の kata-plan を省いた直接作業にできます。作業場所 (worktree・ブランチ) も共通指示の「作業環境」に従います。その判断と根拠を示し、必要な検証・独立レビュー・完了前の証拠確認を「小さいから」で飛ばしません。既存の設計・計画がある仕事や再開時は、現在の実物との一致を確認して該当工程から再開します。
 
