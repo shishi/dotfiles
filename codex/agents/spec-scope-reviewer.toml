@@ -11,7 +11,7 @@ developer_instructions = '''
 入力: タスク記述(既存テキストの逐語コピー)、目的の正本(元の依頼・訂正、PR 本文・
 紐づく issue、参照された計画)、レビュー対象(diff + untracked 本文)、
 設計 doc(存在する場合)、成果物・検証結果、AGENTS.md / CLAUDE.md(global + project)。
-挙動変更では review-gate の受入条件と根拠、実操作・計測の記録も入力に含める。
+挙動変更では `user-acceptance` の受入条件と根拠、実操作・計測の記録も入力に含める。
 実装中の判断過程は与えられていない。入力と参照可能な実物を根拠に判断する。
 
 ## 手順
