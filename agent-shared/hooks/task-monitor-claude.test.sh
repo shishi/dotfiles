@@ -92,3 +92,17 @@ kill -0 $first 2>/dev/null && fail "古い監視が 1 分 (代役では 1 秒) �
 set +e; wait $first; rc=$?; set -e
 [ $rc = 0 ] && [ ! -s "$work/first.out" ] || fail "古い監視: rc=$rc out=$(cat "$work/first.out")"
 ok "新しい Stop が来たら古い監視は黙って終わる"
+
+# 前面のコマンドは監視できないため、既定の上限 (BASH_DEFAULT_TIMEOUT_MS) を超える待ちを指定した前面の起動は、
+# バックグラウンドでの起動へ差し戻す
+pre() { jq -cn "{session_id:\"s1\", hook_event_name:\"PreToolUse\", tool_name:\"Bash\", tool_input:$1} + ${2:-{\}}" | BASH_DEFAULT_TIMEOUT_MS=300000 bash "$HOOK" pre-bash; }
+out=$(pre '{command:"make test", timeout:600000}')
+[ "$(jq -r .hookSpecificOutput.permissionDecision <<<"$out")" = deny ] || fail "長い前面の起動を止めない: $out"
+has "$out" "run_in_background" "差し戻しの理由"; has "$out" "5 分" "差し戻しの理由の上限"
+[ -z "$(pre '{command:"make test", timeout:600000, run_in_background:true}')" ] || fail "バックグラウンドの起動を止めた"
+[ -z "$(pre '{command:"ls", timeout:300000}')" ] && [ -z "$(pre '{command:"ls", timeout:180000}')" ] && [ -z "$(pre '{command:"ls"}')" ] ||
+  fail "既定の上限以内の前面の起動を止めた"
+[ -z "$(pre '{command:"make test", timeout:600000}' '{agent_id:"a1"}')" ] || fail "子エージェントの起動を止めた"
+[ -n "$(jq -cn '{tool_input:{command:"ls", timeout:180000}}' | env -u BASH_DEFAULT_TIMEOUT_MS bash "$HOOK" pre-bash)" ] ||
+  fail "BASH_DEFAULT_TIMEOUT_MS が無いとき 2 分を上限にしない"
+ok "既定の上限を超える待ちを指定した前面のコマンドは、バックグラウンドで起動し直させる (子エージェントは除く)"

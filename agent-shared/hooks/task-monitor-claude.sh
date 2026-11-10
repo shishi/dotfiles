@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code の Stop hook (asyncRewake)。ターン終了時に実行中のバックグラウンドのタスク (シェル・子エージェント) を、
+# Claude Code の Stop hook (asyncRewake)。引数 pre-bash では PreToolUse (Bash) の前面起動のガード (下記)。
+# ターン終了時に実行中のバックグラウンドのタスク (シェル・子エージェント) を、
 # 10・20・40 分、以後 40 分ごとに判定役へ見せ、進んでいなければ終了コード 2 でエージェントを起こす。
 # 進んでいる間は起こさないので、エージェントのトークンを使わない。タスクが終われば Claude Code 自身が起こす。
 set -u
@@ -7,6 +8,20 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 . "$HOOK_DIR/lib/task-monitor-common.sh"
 
 in=$(cat)
+
+# PreToolUse (Bash) で "pre-bash" を付けて呼ぶ。前面で動くコマンドの間はエージェントもこの監視も動けず、
+# 止まったコマンドを見つけられない。前面で待つのは既定の上限 (BASH_DEFAULT_TIMEOUT_MS、未設定なら 2 分) までにし、
+# それより長い待ちを指定した起動はバックグラウンドで起動し直させ、ターン終了後の監視の対象にする。
+# 既定の上限そのものは下げない。下げると、今その時間内に終わっている前面のコマンドが打ち切られるため。
+# 子エージェント (agent_id がある) の呼出しは除く。子は自分のバックグラウンドの完了を待たずに終わりうるため。
+if [ "${1:-}" = pre-bash ]; then
+  jq -c --argjson d "${BASH_DEFAULT_TIMEOUT_MS:-120000}" '
+    select((.agent_id // "") == "" and (.tool_input.run_in_background // false) != true and (.tool_input.timeout // 0) > $d)
+    | {hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason:
+        ("監視: 前面で待てるのは既定の上限 (" + ($d / 60000 | tostring) + " 分) までです。それより長い見込みのコマンドは、止まっても誰も気づけません。同じコマンドを run_in_background: true で起動し直してください。進み具合を標準出力にも出すと、監視が止まっているかを判断できます。")}}' <<<"$in"
+  exit 0
+fi
+
 sid=$(jq -r '.session_id // empty' <<<"$in")
 cwd=$(jq -r '.cwd // empty' <<<"$in")
 [ -n "$sid" ] || exit 0
