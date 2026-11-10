@@ -27,6 +27,8 @@
     "ctrl-; x": "pane.close",
     "ctrl-; z": "pane.zoom",
     "ctrl-; t": "tab.new",
+    "ctrl-tab": "tab.next",
+    "ctrl-shift-tab": "tab.prev",
     "ctrl-; [": "tab.prev",
     "ctrl-; ]": "tab.next",
     "ctrl-; w": "tab.close",
@@ -54,7 +56,13 @@
     "ctrl-; s n": "space.new",
     "ctrl-; s r": "space.rename",
     "ctrl-; a [": "agent.prev",
-    "ctrl-; a ]": "agent.next"
+    "ctrl-; a ]": "agent.next",
+    "cmd-alt-[": "space.prev",
+    "cmd-alt-]": "space.next",
+    "cmd-shift-[": "agent.prev",
+    "cmd-shift-{": "agent.prev",
+    "cmd-shift-]": "agent.next",
+    "cmd-shift-}": "agent.next"
   },
   "terminal": {
     "cmd-c": "terminal.copy",
