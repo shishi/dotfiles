@@ -25,6 +25,36 @@ if ! mkdir -p "$state_dir" 2>/dev/null || [ ! -w "$state_dir" ]; then
   mkdir -p "$state_dir" 2>/dev/null || exit 0
 fi
 state=$state_dir/superpowers-upstream
+
+# 版を数値で比べて最新を出す。macOS の sort には -V が無い版があるため awk で比べる。
+newest_version() {
+  awk -F. '
+    { split($0, v, "."); better = 0
+      for (i = 1; i <= 4; i++) { a = v[i] + 0; b = best[i] + 0
+        if (a != b) { better = (a > b); break } }
+      if (NR == 1 || better) { for (i = 1; i <= 4; i++) best[i] = v[i]; out = $0 } }
+    END { if (NR) print out }'
+}
+# 通信が止まっても 5 秒で git を止める。macOS には timeout が無いことがあり、git の速度下限は
+# 名前解決や接続の待ちには効かないため、自前で時間を切る。
+ls_remote_tags() {
+  out=$(mktemp "${TMPDIR:-/tmp}/kata-entry.XXXXXX") || return 1
+  # git を独立したプロセスグループで動かし、止めるときは子の git-remote-https ごと止める。
+  # グループが作られないシェルでも、git 本体を止めれば hook は先へ進む。
+  set -m
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
+    git ls-remote --tags --refs "$1" > "$out" 2>/dev/null &
+  git_pid=$!
+  # 見張りの出力をコマンド置換から外さないと、残った sleep が置換の終わりを 5 秒待たせる。
+  ( sleep 5; kill -TERM -- "-$git_pid" 2>/dev/null || kill -TERM "$git_pid" 2>/dev/null ) > /dev/null 2>&1 &
+  watch_pid=$!
+  set +m
+  wait "$git_pid"; rc=$?
+  kill -- "-$watch_pid" 2>/dev/null
+  [ "$rc" -eq 0 ] && cat "$out"
+  rm -f "$out"
+}
+
 url=${KATA_UPSTREAM_URL:-https://github.com/obra/superpowers}
 interval=$((30 * 24 * 60 * 60))
 now=$(date +%s)
@@ -39,8 +69,8 @@ case $checked in '' | *[!0-9]*) checked=0 ;; esac
 if [ $((now - checked)) -ge "$interval" ]; then
   # 通信できなければ、次の起動で再び確かめるよう時刻を更新しない。利用者の Git 設定が github.com を
   # SSH へ書き換えていると鍵の確認で端末の入力を奪うため、設定を読まずに匿名の HTTPS で取得する。
-  found=$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 timeout 5 git ls-remote --tags --refs "$url" 2>/dev/null |
-    sed -n 's|.*refs/tags/v\{0,1\}\([0-9][0-9.]*\)$|\1|p' | sort -V | tail -n 1)
+  found=$(ls_remote_tags "$url" 2>/dev/null |
+    sed -n 's|.*refs/tags/v\{0,1\}\([0-9][0-9.]*\)$|\1|p' | newest_version)
   if [ -n "$found" ]; then
     latest=$found
     printf '%s %s\n' "$now" "$latest" > "$state" 2>/dev/null || true
@@ -50,7 +80,7 @@ fi
 # 委譲・レビューの子セッションには利用者がいないため、通知は司令塔のセッションにだけ出す。
 [ -z "${AGENT_DELEGATED_SESSION:-}" ] && [ -z "${SUPERPOWERS_IMPORT_RUNNING:-}" ] || exit 0
 [ -n "$latest" ] || exit 0
-newest=$(printf '%s\n%s\n' "$imported" "$latest" | sort -V | tail -n 1)
+newest=$(printf '%s\n%s\n' "$imported" "$latest" | newest_version)
 [ "$newest" != "$imported" ] || exit 0
 
 work=$state_dir/import-$latest

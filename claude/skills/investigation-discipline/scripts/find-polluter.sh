@@ -24,11 +24,11 @@ if [ -e "$pollution" ]; then
   exit 2
 fi
 
-# find -path の '**/' は 0 階層に一致しないため、'**/' を除いたパターンでも探す。
+# find -path の '**/' は 0 階層に一致しないため、'**/' を除いたパターンでも探す。-o で結ぶので同じファイルは一度だけ出る。
 files=()
 while IFS= read -r -d '' f; do
   files+=("$f")
-done < <(find . \( -path "./$pattern" -o -path "./${pattern//\*\*\//}" \) -type f -print0 | sort -z -u)
+done < <(find . \( -path "./$pattern" -o -path "./${pattern//\*\*\//}" \) -type f -print0)
 
 total=${#files[@]}
 if [ "$total" -eq 0 ]; then
