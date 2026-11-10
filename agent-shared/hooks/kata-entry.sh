@@ -8,11 +8,21 @@
 # 通信しないよう、確認結果を状態ファイルに残して使い回す。
 set -u
 
-cat <<'MSG'
+# 委譲された子 (AGENT_DELEGATED_SESSION=1) には利用者がおらず、設計・作業場所・統合は司令塔が担う。
+# 工程 1 から始める入口を渡すと受託範囲を越えて質問や設計を始めるため、担当の範囲で進める案内に替える。
+if [ "${AGENT_DELEGATED_SESSION:-}" = 1 ]; then
+  cat <<'MSG'
+<kata-entry>
+このセッションは委譲された担当。受け取った依頼の範囲と受入条件だけを進め、設計・作業場所・統合・利用者への質問は司令塔へ返す。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first、文章を書く・直す前は writing-prose を開く。完了を報告する前に kata-verify で証拠を確かめ、成果と検証結果を司令塔へ返す。
+</kata-entry>
+MSG
+else
+  cat <<'MSG'
 <kata-entry>
 変更作業の入口は kata skill。作業の最初に kata を開き、続けて工程 1 の kata-design を開いて目的と方式を固める。kata-design を不要と判断した場合は、省く前に根拠を示して利用者に質問する。既存の設計・計画がある仕事や圧縮後の再開では、kata の該当工程から進める。工程に入るたびに kata の工程表を確かめ、その工程の skill (kata-workspace・kata-plan・kata-build・review-gate・kata-verify・kata-finish) を開いてから進める。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first を開く。文書・skill・コードコメント・commit・issue・PR・投稿などの文章を書く・直す前は writing-prose を開き、その「併用する skill」に挙げた該当 skill をすべて同時に使う。commit の前は git-commit を開く。
 </kata-entry>
 MSG
+fi
 
 agent_shared=$(cd -P "$(dirname "$0")/.." 2>/dev/null && pwd) || exit 0
 imported=$(head -n 1 "$agent_shared/superpowers-imported-version" 2>/dev/null) || exit 0

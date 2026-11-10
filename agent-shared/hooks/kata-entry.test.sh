@@ -38,6 +38,9 @@ tag v7.0.1; tag v7.0.2
 out=$(run)
 check "入口の案内を出す" "<kata-entry>" "$out"
 check "同じ版なら通知しない" "!<superpowers-import>" "$out"
+out=$(AGENT_DELEGATED_SESSION=1 run)
+check "委譲された子には工程 1 から始める入口を出さない" "!工程 1 の kata-design" "$out"
+check "委譲された子には依頼の範囲で進めることを伝える" "委譲された担当" "$out"
 
 tag v7.0.10
 out=$(run)
