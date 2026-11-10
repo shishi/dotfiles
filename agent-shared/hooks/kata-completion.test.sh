@@ -102,3 +102,12 @@ ok "長い計画も末尾の task まで判定役へ渡す"
 mv "$work/plan.md" "$work/plan.gone"
 [ -z "$(stop continue)" ] && [ ! -e "$JUDGE_INPUT" ] && ! marked || fail "計画ファイルが消えた記録で判定した"
 ok "計画ファイルが消えていたら記録を消して止める"
+
+# 1 つのコマンドで変更前と変更後を確かめると、後半に結果が来る。長い出力でも末尾まで判定役へ渡す
+mv "$work/plan.gone" "$work/plan.md"
+bash "$ACTIVE" claude start "$work/plan.md" >/dev/null
+long="変更前: usage $(head -c 3000 /dev/zero | tr '\0' y) 変更後: 0. [x] a"
+jq -cn --arg o "$long" '{type:"user",message:{content:[{type:"tool_result",content:$o}]}}' >> "$T"
+stop continue >/dev/null
+grep -qF "変更後: 0. [x] a" "$JUDGE_INPUT" || fail "長い結果の末尾を判定役へ渡さない"
+ok "長いツール結果は先頭と末尾を判定役へ渡す"

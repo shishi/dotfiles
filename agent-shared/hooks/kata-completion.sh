@@ -53,7 +53,9 @@ transcript=$(jq -r '.transcript_path // empty' <<<"$in")
 final=$(jq -r '.last_assistant_message // empty' <<<"$in")
 activity= last_user=
 if [ -f "$transcript" ]; then
-  activity=$(tm_excerpt "$transcript" 6000)
+  # 検証の結果は 1 つのコマンドの出力の後半にあることが多いため、結果は先頭と末尾を長めに残す。
+  # 1 行が長くなる分、直近の操作が残るよう全体の上限も広げる
+  activity=$(tm_excerpt "$transcript" 12000 1500)
   # Claude の会話記録は利用者の入力を type=user・本文が文字列の行に残す。Codex の rollout (0.167.0) は
   # role=user の message に残し、AGENTS.md・環境・hook の差し戻しと同じ形になるため、各要素の
   # provenance が user のものだけを取る。ツール結果や注入された指示は含めない

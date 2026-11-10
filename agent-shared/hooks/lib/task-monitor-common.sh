@@ -19,18 +19,24 @@ tm_state_dir() {
 }
 
 # 子エージェントの会話記録 (Claude の会話記録・Codex の rollout の JSONL) の末尾を、
-# 操作・結果・本文を 1 行ずつにして返す: tm_excerpt <file> [bytes]
+# 操作・結果・本文を 1 行ずつにして返す: tm_excerpt <file> [bytes] [result]
+# 操作は 200 文字、本文は 300 文字、結果は先頭 200 文字に縮める。result を指定すると、それより長い結果は
+# 先頭と末尾を半分ずつ残して間を「 … 」にする (検証の結果は出力の後半にあることが多いため)。
 # シェルの出力は形式を問わずそのまま末尾を読む。出力の中身から会話記録かどうかを推測しない。
 tm_excerpt() {
-  local file=$1 bytes=${2:-3000}
-  jq -R -r '
+  local file=$1 bytes=${2:-3000} result=${3:-0}
+  jq -R -r --argjson r "$result" '
     def clip($n): tostring | gsub("\\s+"; " ") | .[0:$n];
+    def result_clip: tostring | gsub("\\s+"; " ") |
+      if $r == 0 then .[0:200]
+      elif length > $r then .[0:($r / 2 | floor)] + " … " + .[length - ($r / 2 | floor):]
+      else . end;
     def text_of: if type == "array" then map(.text? // empty) | join(" ") else . end;
     fromjson? |
     if .type == "assistant" or .type == "user" then
       .message.content | if type == "array" then .[] else {type: "text", text: .} end |
       if .type == "tool_use" then "[tool] \(.name) \(.input | clip(200))"
-      elif .type == "tool_result" then "[result] \(.content | text_of | clip(200))"
+      elif .type == "tool_result" then "[result] \(.content | text_of | result_clip)"
       elif .type == "text" and (.text | length) > 0 then "[text] \(.text | clip(300))"
       else empty end
     elif .type == "response_item" then
@@ -38,7 +44,7 @@ tm_excerpt() {
       if .type == "function_call" or .type == "custom_tool_call" or .type == "local_shell_call" then
         "[tool] \(.name // .type) \((.arguments // .input // .action // "") | clip(200))"
       elif .type == "function_call_output" or .type == "custom_tool_call_output" then
-        "[result] \(.output | text_of | clip(200))"
+        "[result] \(.output | text_of | result_clip)"
       elif .type == "message" and .role == "assistant" then
         "[text] \(.content | text_of | clip(300))"
       else empty end
