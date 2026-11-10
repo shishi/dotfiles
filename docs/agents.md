@@ -44,6 +44,14 @@ bash ~/.agent-shared/bin/managed-skills.sh fork NAME
 
 片方だけに導入するときは `add` の末尾に `claude` または `codex` を指定します。外部 skill を変更するときは、`fork NAME` で Git 管理に移してから編集します。`setup.sh` は登録済みの skill を同期します。
 
+次の外部 skill は、既存の skill や既定の動作で足りるため導入しません。`add` で入れ直さず、同じ用途は右の列の skill を使います。
+
+| 導入しない skill | 出所 | 代わりに使うもの |
+|---|---|---|
+| grill-me | mattpocock/skills | grilling |
+| grill-with-docs | mattpocock/skills | grilling と domain-modeling |
+| show-me | humanlayer/skills | 指定なし (図や要約は skill なしで書ける) |
+
 ## 記憶
 
 個人の記憶は非公開リポジトリで管理し、各エージェントの `memory/` から参照します。セッション開始時に同期を試み、利用者の入力時には索引と検索候補を渡します。本文は索引から選んで取得します。
@@ -68,7 +76,7 @@ Claude Code では `~/.claude/memory` を指定します。同期できない場
 | 6. 完了前の確認 | [kata-verify](../codex/skills/kata-verify/SKILL.md) |
 | 7. 統合と後片付け | [kata-finish](../codex/skills/kata-finish/SKILL.md) |
 
-skill が選ばれるかはモデルが description に気づくかに左右されるため、SessionStart hook の `kata-entry.sh` が入口の kata と工程ごとの skill を毎回伝えます。
+skill が選ばれるかはモデルが description に気づくかに左右されるため、SessionStart hook の `kata-entry.sh` が入口の kata と工程ごとの skill を毎回伝えます。委譲された子のセッションには、受けた範囲だけを進めて設計・統合・利用者への質問は司令塔へ返す案内を伝えます。
 
 ### superpowers の取り込み
 
@@ -85,11 +93,17 @@ skill が選ばれるかはモデルが description に気づくかに左右さ�
 | requesting-code-review・receiving-code-review | review-gate |
 | verification-before-completion | kata-verify |
 | finishing-a-development-branch | kata-finish |
+| using-superpowers | kata・`kata-entry.sh` |
+| dispatching-parallel-agents | agent-delegation |
+| writing-skills | create-rule・empirical-prompt-tuning |
+| diagnosing-superpowers | 取り込まない (superpowers 自体の不具合を報告するための skill) |
+
+brainstorming のうち、ブラウザで図を見せる visual companion は取り込まず、kata-design ではテキストの図を使います。
 
 取り込み済みの版は `agent-shared/superpowers-imported-version` にあります。`kata-entry.sh` は 30 日に一度上流のタグを確かめ、新しい版があれば `agent-shared/bin/superpowers-import` をバックグラウンドで起動します。この script は状態ディレクトリ (既定は `~/.local/state/agent-shared`) の `import-<版>/repo` に dotfiles を clone し、その master で Codex に次の手順を進めさせます。作業中の checkout には触れず、push もしません。
 
 1. 上流の `git diff v<取り込み済みの版> v<新しい版> -- skills/` を読みます。
-2. 作業の結果を変える変更を、表の取り込み先へ移します。共通指示と衝突するものや、共通指示・自前 skill が既に担う内容は移しません。
+2. 作業の結果を変える変更を、表の取り込み先へ移します。共通指示と衝突するものや、共通指示・自前 skill が既に担う内容は移しません。上流で表に無い skill が増えた場合、無人の取り込みでは自前の skill を新設しません。表の既存の取り込み先へ移すか、取り込まない判断と理由、新設が要ると考える理由を報告に書き、利用者の判断に回します。表の skill を統合・削除した場合も、この表の取り込み先を書き換えて、上流の取り込みで元の skill が作り直されないようにします。
 3. `tests/skills-sync.sh` で Claude 側と Codex 側をそろえます。
 4. 独立レビューを通し、`superpowers-imported-version` を更新して commit します。移すものが無い版も値を更新します。
 

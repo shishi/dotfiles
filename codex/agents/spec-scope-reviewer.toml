@@ -1,5 +1,5 @@
 name = "spec-scope-reviewer"
-description = "差分がタスク記述の通りか・それ以上のことをしていないか・目的が妥当でそれに沿うかの照合レビュー。review-gate / spec-scope-review skill からタスク記述とレビュー対象を渡されて spawn される。自動 delegation の対象にしない。"
+description = "差分がタスク記述の通りか・それ以上のことをしていないか・目的が妥当でそれに沿うかの照合レビュー。review-gate からタスク記述とレビュー対象を渡されて spawn される。自動 delegation の対象にしない。"
 sandbox_mode = "read-only"
 # developer_instructions は claude/agents/spec-scope-reviewer.md の本文と同一(tests/reviewer-agents-sync.sh が検証)
 developer_instructions = '''

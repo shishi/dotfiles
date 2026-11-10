@@ -7,10 +7,24 @@
 - 進捗は元の依頼の未達が減ったかで判断します。前提や理解が変わらない反復は止め、取得済みの証拠から次の手段を選び直します。必要な結果を妨げない小さな問題を完了条件へ足しません。確認時点と締切は [investigation-discipline](../../investigation-discipline/SKILL.md) の「観測経路と介入を検証する」に従って決め、review-gate のレビュー lane の上限は同 skill に従います。
 - 新しい委譲の前に、未完了仕事の必須レビューへ使う枠を残します。取得できる枠は `python3 ~/.agent-shared/bin/codex-usage.py` の観測時刻・各ウィンドウ・リセット日時を使います。Claude は取得できた公式制限イベントや使用状況だけを用い、Team の残量を status line や呼出回数から断定しません。取得不能は不明とし、保留レビューを先に処理して任意の追加委譲を絞ります。実績が無い段階で固定比率や成功率ルーターを作りません。
 - 枠取得 helper は認証通信が必要で、Claude の `codex:*` 除外は Python 内の子に適用されません。Claude の Bash sandbox が妨げる場合は、その helper 呼出しに限り `dangerouslyDisableSandbox: true` を通常の承認経路で要求します。Codex では当該コマンドに `require_escalated` を使います。拒否された操作は迂回せず、恒久的な Python 全体の除外は追加しません。枠取得をモデルへの委譲と混同しません。
-- CLI の実行結果は各 adapter から `agent-run-record.sh` で `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` に記録します。司令塔がこの場所へ書ける経路を使い、Claude では当該記録呼出しだけ上記の Bash 承認経路、Codex では当該コマンドの昇格を使います。prompt・応答本文は履歴へコピーしません。検証成否・採用指摘数・手戻り回数と、割当前後に取得した枠の観測を review-gate の手順で追記します。観測時刻と provider を保持し、未取得値は null のままにします。トークン数・API 換算額・契約の残量を同一視せず、他セッションでも変わる枠の差分を一仕事の消費と断定しません。
+- CLI の実行結果は各 adapter から `agent-run-record.sh` で `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runs` に記録します。司令塔がこの場所へ書ける経路を使い、Claude では当該記録呼出しだけ上記の Bash 承認経路、Codex では当該コマンドの昇格を使います。prompt・応答本文は履歴へコピーしません。検証成否・採用指摘数・手戻り回数と、割当前後に取得した枠の観測を、下の「実行記録への追記」の手順で追記します。観測時刻と provider を保持し、未取得値は null のままにします。トークン数・API 換算額・契約の残量を同一視せず、他セッションでも変わる枠の差分を一仕事の消費と断定しません。
 - 同種の仕事を両系統レビュー込みで比較し、受入条件の達成、後から見つかった欠陥、修正込みの時間・使用量から配分を更新します。比較のための重複実行は、対象と時間・使用枠の予算を決めた検証に限ります。自動的な追加課金や API 認証への切替はしません。
 
 - Claude Code と Codex の間の委譲は、ユーザーの依頼を受けた最上位の司令塔だけが判断・起動します。同じツール内の子エージェントは引き続き使えます。
 - 呼び出し側は依頼文に、委譲元、受託した担当範囲、別 CLI への再委譲禁止を明示します。受託側は担当作業と検証を実行して返し、Claude Code → Codex → Claude Code、またはその逆に仕事を送り返しません。
 - 受託側が同じツール内で子を使う場合も、受託中であることと別 CLI への再委譲禁止を引き継ぎます。モデル・担当範囲の変更や別 CLI が必要なら、取得済みの根拠と必要な変更を司令塔へ返します。
 - 受託側の成果物の独立レビューと統合は司令塔が編成します。レビューそのものを担当として受けた場合は、その観点のレビューを実施して返します。この境界は `codex-delegate`・`claude-delegate`・`codex-review`・`claude-review`・CLI の直接起動にも適用します。
+
+## 実行記録への追記
+
+各 adapter が返した `RUN_RECORD` は、司令塔が採否と実検証の結果で更新します。`verification` は実検証の `passed` / `failed` か、未確認なら null です。`adopted_findings` は採用した指摘数、`rework_count` はその担当の受入・レビュー後に修正を戻した回数です。未確認の件数を 0 と書きません。追加の修正・再レビューの実行も、各 adapter で別の記録を残します。
+
+割当前後に取得した枠は、`QUOTA_OBSERVATIONS` という一時 JSON ファイルへ組成します。形は `{"codex":{"before":null,"after":null},"claude":null}` とし、取得できた箇所だけ、helper の観測時刻・status・ウィンドウ・リセット日時を含む結果で置き換えます。Claude は、正式に受領した値と観測時刻がある場合だけ同じ before / after 構造へ入れます。観測が一方だけなら、もう一方は null のままにし、追加取得のためだけにモデルを呼びません。これを `rate_limits` に保存し、単一の仕事の正確な消費へ換算しません。
+
+次は、数値と判定を確認済みの場合の追記例です。変数を実結果で設定し、記録と同じ許可経路で実行します。未確認の値には JSON の null を渡します。元の数値 metadata は保持します。
+
+```sh
+RECORD_UPDATE=$(mktemp "${RUN_RECORD}.XXXXXX") || exit 1
+jq -c --slurpfile quota "$QUOTA_OBSERVATIONS" --argjson verification "$VERIFICATION_JSON" --argjson adopted "$ADOPTED_FINDINGS" --argjson rework "$REWORK_COUNT" '.verification = $verification | .adopted_findings = $adopted | .rework_count = $rework | .rate_limits = $quota[0]' "$RUN_RECORD" > "$RECORD_UPDATE" || { rm -f "$RECORD_UPDATE"; exit 1; }
+mv "$RECORD_UPDATE" "$RUN_RECORD"
+```

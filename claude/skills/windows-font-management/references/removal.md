@@ -9,6 +9,13 @@
 `RemoveFontResource` 後も使用中の device context や他 session があればロードが残ります。
 公式の置換例は成功した Remove 数と同じ回数だけ再追加しています。既存 installer の
 参照所有を確認せず、第三者の参照を drain する loop を独自に足しません。
+
+Windows 11 では次の挙動を観測しています。
+
+- 参照カウントは session 全体で共有され、Add したプロセスの終了後も残ります。
+- `RemoveFontResourceW` は 0 で飽和して `false` を返し、`AddFontResourceW` は飽和しません。成功数を控えずに `while` で外すと、第三者の参照まで奪います。
+- `RemoveFontResourceW` はパスを解決できないと外せません。ファイルを消した後の登録は、同じパスにファイルを作り直すと解放できます。
+- ログオン時に Windows がロードしたフォントは、installer が足した参照とは別の参照を持ちます。uninstall の Remove 1 回では 0 にならず、再ログオンまで見えたままです。この状態で global フォントの撤去を同じ session 内で検証することはできません。
 [RemoveFontResourceW](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-removefontresourcew)
 
 ## 使用中ファイル
@@ -29,8 +36,7 @@ uninstall 試験では最終状態を確認できないことがあります。�
 [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
 
 - `PendingFileRenameOperations` の MULTI_SZ を手書きで置換せず API を使います。
-- PowerShell の P/Invoke では NULL が空文字へ変換されない signature を使います。
-  `IntPtr` の `[IntPtr]::Zero` 等で native NULL を表し、戻り値と last error を確認します。
+- PowerShell の P/Invoke で新パスに NULL を渡すときは、[windows-script-diagnostics の状態観測](../../windows-script-diagnostics/references/state-observation.md) の NULL の渡し方と切り分けに従います。
 - 同じ仮想 registry view の readback だけで実機への予約を証明しません。
 - 再起動後は予約の消費と実ファイル不在を照合します。予約値が消えたことだけでは
   実削除成功としません。user/global の不要な登録も別に確認します。

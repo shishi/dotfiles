@@ -34,10 +34,10 @@ user-scope が再ログオン後に使えないという実測がある場合は
 待ち続けないようにします。既存 installer と異なる登録名を推測で追加せず、フォントの
 name table と既存登録との対応を確認します。
 
-列挙 object の cache が疑われたら、新しい object だけでなく別 process でも読みます。
+`InstalledFontCollection` は同じ process 内で cache され、`AddFontResourceW` の直後に作り直しても反映されない観測があります (戻り値は成功)。列挙 object の cache が疑われたら、新しい object だけでなく別 process でも読みます。
 `PrivateFontCollection` 等の disposable resource は finally 等で解放します。
 例外を握りつぶして件数の減少をフォントの不在と報告しません。
 
-カラーフォントはテーブル形式と描画 API/OS の対応を照合します。設定画面の tofu は
+カラーフォントはテーブル形式と描画 API/OS の対応を照合します。`CBDT`/`CBLC` はビットマップ型、`COLR`/`CPAL` はベクター型 (v0/v1) です。DirectWrite は両方を描き、GDI/GDI+ はどちらも描きません。OS 標準の DirectWrite が COLRv1 を描くのは Windows 11 22H2 以降です。独自の描画エンジンを持つアプリ (Chrome など) は、OS の版とは別に対応を確かめます。設定画面の tofu は
 対象文字や fallback の不足でも起こるため、別の対応アプリでも対象 glyph を描きます。
 [DirectWrite のカラーフォント](https://learn.microsoft.com/en-us/windows/win32/directwrite/color-fonts)

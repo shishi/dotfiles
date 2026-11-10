@@ -1,6 +1,6 @@
 ---
 name: writing-prose
-description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread, or when an explanation is unnatural, abstract, or too short to understand. Not for code identifiers.
+description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread, or when an explanation is unnatural, abstract, or too short to understand. Also use when deciding what may be written in public or shared documents and where content belongs (README, docs, private memory, untracked notes). Not for code identifiers.
 ---
 
 # 人間向け文章の執筆規約
@@ -17,10 +17,9 @@ description: Use when writing or revising prose for human readers in any languag
 |---|---|
 | コードコメント | code-comments |
 | commit メッセージ | git-commit |
-| issue | writing-issues |
-| GitHub の PR・コメント・レビューの投稿 | github-writing |
+| issue、GitHub の PR・コメント・レビューの投稿 | github-writing |
 | ADR | adr |
-| 用語集 (GLOSSARY.md)・ドメインの ADR | domain-modeling |
+| 用語集 (GLOSSARY.md) | domain-modeling |
 
 ## 共通原則(全言語)
 

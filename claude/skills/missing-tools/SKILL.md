@@ -6,7 +6,7 @@ description: command not found や実行ツール・言語サーバーの不足�
 # 実行ツールの不足を解決する
 
 PATH にないことと、プロジェクトに用意されていないことを分けます。
-flake.nix があれば `nix-environment` skill に従い、用意された環境を先に使います。
+flake.nix などプロジェクトが用意する環境があれば、それを先に使います。
 
 ## プロジェクトの環境
 

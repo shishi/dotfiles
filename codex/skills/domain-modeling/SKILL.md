@@ -1,10 +1,10 @@
 ---
-description: Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR.
+description: Build and sharpen a project's domain model. Use when discussing codebase terminology or writing or editing a GLOSSARY.md. For ADRs, use the `adr` skill.
 name: domain-modeling
 ---
 # Domain Modeling
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary down the moment terms crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
 ## File structure
 
@@ -62,12 +62,6 @@ When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up:
 
 `GLOSSARY.md` should be totally devoid of implementation details. Do not treat `GLOSSARY.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 
-### Offer ADRs sparingly
+### Hand decisions to the adr skill
 
-Only offer to create an ADR when all three are true:
-
-1. **Hard to reverse**: the cost of changing your mind later is meaningful
-2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
-
-If any of the three is missing, skip the ADR. These criteria help decide whether to offer a record; they do not authorize creating one for a conversational choice or an agent execution plan. For an authorized project record, use `adr` and [ADR-FORMAT.md](./ADR-FORMAT.md).
+When a resolved decision (not a term) might be worth recording, use the `adr` skill. It decides whether to offer an ADR and how to write it. Never record decisions in `GLOSSARY.md`.

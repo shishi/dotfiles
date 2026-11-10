@@ -18,7 +18,7 @@ description: Codex の最上位司令塔から Claude CLI へ correctness・adve
    `developer_instructions` を使う。別の観点を新しく書き起こさない。
 2. `review-gate` が組成した全差分・untracked 本文・Git 外の成果物・必要な周辺文脈を用意する。
    元の依頼、目的の正本(PR 本文・紐づく issue を含む)、文書の適用規約と設計、検証結果も含める。spec-scope は
-   `spec-scope-review` の入力組成に従い、逐語のタスク記述を省かない。
+   `review-gate` の「対象と入力を組成する」に従い、逐語のタスク記述を省かない。
    Claude に Bash は与えないので、Git 差分の取得を委譲しない。
    分割する場合は担当するファイル・論点を `Focus` に指定し、未指定なら全対象を渡す。
 3. リポジトリ外の一時ファイルへ、以下の前置き・観点本文・組成済み入力をこの順で書く。
