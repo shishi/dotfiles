@@ -27,9 +27,10 @@ mkdir -p \
   "$DOTFILES/agent-shared/bin" "$DOTFILES/agent-shared/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
-  "$DOTFILES/nushell" "$DOTFILES/herdr" "$DOTFILES/hunk" \
+  "$DOTFILES/nushell" "$DOTFILES/herdr" "$DOTFILES/herdr-core" \
+  "$DOTFILES/herdr-app" "$DOTFILES/hunk" \
   "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agent-shared/skills" \
-  "$CONFIG_DIR/hunk" "$TMP/appdata" "$MEMORY_DIR" "$TMP/bin"
+  "$CONFIG_DIR/hunk" "$TMP/appdata" "$TMP/herdr-app-home" "$MEMORY_DIR" "$TMP/bin"
 
 cp "$SETUP" "$DOTFILES/setup.sh"
 cp "$REPO/agent-shared/bin/resolve-memory-dir.sh" "$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
@@ -48,6 +49,11 @@ printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
 printf '' >"$DOTFILES/herdr/config.windows.toml"
+printf '' >"$DOTFILES/herdr-core/config.unix.toml"
+printf '' >"$DOTFILES/herdr-core/config.windows.toml"
+printf '{}\n' >"$DOTFILES/herdr-app/keys.json"
+printf '{}\n' >"$DOTFILES/herdr-app/keys.macos.json"
+printf '{"old": true}\n' >"$TMP/herdr-app-home/keys.json"
 printf 'theme = "github-dark-default"\n' >"$DOTFILES/hunk/config.toml"
 printf 'theme = "old-theme"\n' >"$CONFIG_DIR/hunk/config.toml"
 printf '{"local":true}\n' >"$CONFIG_DIR/hunk/state.json"
@@ -73,8 +79,24 @@ EOF
 chmod +x "$TMP/bin/gh"
 export FAKE_GH_CALLS="$TMP/gh-calls"
 
+case "$(uname -s)" in
+  MINGW* | MSYS*)
+    HERDR_CORE_CONFIG="$TMP/appdata/herdr-core/config.toml"
+    HERDR_CORE_SOURCE="$DOTFILES/herdr-core/config.windows.toml"
+    ;;
+  *)
+    HERDR_CORE_CONFIG="$CONFIG_DIR/herdr-core/config.toml"
+    HERDR_CORE_SOURCE="$DOTFILES/herdr-core/config.unix.toml"
+    ;;
+esac
+case "$(uname -s)" in
+  Darwin) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.macos.json" ;;
+  *) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.json" ;;
+esac
+
 run_setup() {
   HOME="$HOME_DIR" CODEX_HOME="$TMP/other-codex" PATH="$TMP/bin:$PATH" XDG_CONFIG_HOME="$CONFIG_DIR" XDG_STATE_HOME="$TMP/state" APPDATA="$TMP/appdata" \
+    HERDR_APP_HOME="$TMP/herdr-app-home" \
     REMOTE_CONTAINERS=true AGENT_MEMORY_DIR="$MEMORY_DIR" \
     BASH_ENV="$TMP/hide-optional.sh" bash "$DOTFILES/setup.sh" \
     >"$TMP/setup.log" 2>&1
@@ -92,6 +114,8 @@ run_setup
 assert "first setup enables the Codex output gate" grep -q '"enabled": true' "$TMP/state/output-gate/codex.json"
 assert "Hunk config is linked" resolves_to "$CONFIG_DIR/hunk/config.toml" "$DOTFILES/hunk/config.toml"
 assert "Hunk runtime stays local" grep -qx '{"local":true}' "$CONFIG_DIR/hunk/state.json"
+assert "herdr-core config is linked" resolves_to "$HERDR_CORE_CONFIG" "$HERDR_CORE_SOURCE"
+assert "Herdr app keymap is linked in HERDR_APP_HOME" resolves_to "$TMP/herdr-app-home/keys.json" "$HERDR_APP_KEYS_SOURCE"
 assert "Claude home is linked" resolves_to "$HOME_DIR/.claude" "$DOTFILES/claude"
 assert "Codex home is linked" resolves_to "$HOME_DIR/.codex" "$DOTFILES/codex"
 assert "personal skills are linked" resolves_to "$HOME_DIR/.agent-shared/skills" "$DOTFILES/codex/skills"

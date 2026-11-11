@@ -22,7 +22,9 @@ printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr/config.unix.toml"
 printf '#!/usr/bin/env bash\nexit 1\n' >"$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
 
+# Keep the per-user app folders inside the fixture too, so the run never relinks real settings.
 HOME="$HOME_DIR" XDG_CONFIG_HOME="$CONFIG_DIR" REMOTE_CONTAINERS=false \
+  APPDATA="$TMP/appdata" LOCALAPPDATA="$TMP/localappdata" HERDR_APP_HOME="$TMP/herdr-app-home" \
   GIT_SSH_COMMAND=false bash "$DOTFILES/setup.sh" >/dev/null 2>&1
 
 if [ -f "$HOME_DIR/.emacs.d/init.el" ] && [ ! -L "$HOME_DIR/.emacs.d" ]; then

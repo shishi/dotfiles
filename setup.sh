@@ -114,28 +114,40 @@ if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   esac
 fi
 
+# herdr and herdr-core read %APPDATA% on Windows and $XDG_CONFIG_HOME elsewhere.
 case "$(uname -s)" in
 MINGW* | MSYS*)
-  herdr_config_dir="$(cygpath -u "$APPDATA")/herdr"
-  herdr_config_source="$DOTDIR/herdr/config.windows.toml"
+  herdr_config_root="$(cygpath -u "$APPDATA")"
+  herdr_config_os=windows
   ;;
 *)
-  herdr_config_dir="$XDG_CONFIG_HOME/herdr"
-  herdr_config_source="$DOTDIR/herdr/config.unix.toml"
+  herdr_config_root="$XDG_CONFIG_HOME"
+  herdr_config_os=unix
   ;;
 esac
-mkdir -p "$herdr_config_dir"
-ln -sfn "$herdr_config_source" "$herdr_config_dir/config.toml"
+for herdr_tool in herdr herdr-core; do
+  mkdir -p "$herdr_config_root/$herdr_tool"
+  ln -sfn "$DOTDIR/$herdr_tool/config.$herdr_config_os.toml" "$herdr_config_root/$herdr_tool/config.toml"
+done
 
 # Herdr app keeps its own state in the same folder, so link only the keymap.
 # Each OS starts from the app's own defaults (Cmd-based on macOS); the Ctrl+;
 # chords for panes, tabs, spaces and agents are the same on every OS.
+# Package managers may move the app home with HERDR_APP_HOME (Scoop does).
 case "$(uname -s)" in
 Darwin) herdr_app_keys="$DOTDIR/herdr-app/keys.macos.json" ;;
 *) herdr_app_keys="$DOTDIR/herdr-app/keys.json" ;;
 esac
-mkdir -p "$XDG_CONFIG_HOME/herdr-app"
-ln -sfn "$herdr_app_keys" "$XDG_CONFIG_HOME/herdr-app/keys.json"
+if [ -n "${HERDR_APP_HOME:-}" ]; then
+  case "$(uname -s)" in
+  MINGW* | MSYS*) herdr_app_home="$(cygpath -u "$HERDR_APP_HOME")" ;;
+  *) herdr_app_home="$HERDR_APP_HOME" ;;
+  esac
+else
+  herdr_app_home="$XDG_CONFIG_HOME/herdr-app"
+fi
+mkdir -p "$herdr_app_home"
+ln -sfn "$herdr_app_keys" "$herdr_app_home/keys.json"
 
 mkdir -p "$XDG_CONFIG_HOME/hunk"
 ln -sfn "$DOTDIR/hunk/config.toml" "$XDG_CONFIG_HOME/hunk/config.toml"
