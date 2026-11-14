@@ -78,7 +78,8 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    [ "${ps[1]}" -eq 0 ] || rc=1
    FINISHED_AT=$(date +%s)
    RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
-   printf 'Run record: %s\n' "$RUN_RECORD" >&2
+   # このブロックが終わるとシェル変数は消える。採否を追記する後の Bash 呼び出しが読めるよう、記録のパスをファイルに残す
+   printf '%s\n' "$RUN_RECORD" > "$REVIEW_OUTPUT.run-record" || exit 95
    [ "$rc" -eq 0 ] && [ -s "$REVIEW_OUTPUT" ] || { tail -c 4000 "$REVIEW_LOG"; tail -c 4000 "$REVIEW_EVENTS"; exit 97; }
    cat "$REVIEW_OUTPUT"
    ```
@@ -89,8 +90,10 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    hook 拒否・入力不足の返答は clean と扱いません。取得できる実モデルの metadata と指定値を
    照合し、取得できなければ実モデル未確認とします。CLI 成功はレビュー合格ではなく、本文と
    全対象の確認結果を gate が判定します。
-4. 本文と実績記録を保全してから、自分が作った一時ファイルを削除する。
-   `RUN_RECORD` は採否と実検証の結果を追記するまで保持する。
+4. 指摘の採否と実検証の結果が決まったら、review-gate の「実績への追記」で実行記録へ追記する。
+   追記は別の Bash 呼び出しになり、手順 3 の変数は残っていない。`REVIEW_OUTPUT` に手順 3 と同じ実パスを
+   設定し直し、追記と同じ Bash 呼び出しの中で `RUN_RECORD=$(cat "$REVIEW_OUTPUT.run-record") || exit 1` を実行して記録のパスを読む。本文を保全し、追記を終えてから、
+   自分が作った一時ファイルを削除する。
 
 ### codex 前置き(観点コアの前に置く)
 
