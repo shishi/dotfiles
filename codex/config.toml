@@ -4,6 +4,7 @@ model_reasoning_effort = "medium"
 # gpt-6-astra の実験的な拡張枠。圧縮後の処理と出力に余裕を残す。
 model_context_window = 872000
 model_auto_compact_token_limit = 750000
+project_doc_max_bytes = 65536
 default_permissions = ":workspace"
 approval_policy = "on-request"
 approvals_reviewer = "auto_review"
