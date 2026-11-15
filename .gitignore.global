@@ -318,7 +318,8 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
-# agent 作業ドキュメント (superpowers spec/plan/brainstorm, handoff)
+# agent 作業ドキュメント (kata の作業メモ、superpowers spec/plan/brainstorm, handoff)
+docs/kata/
 .worktrees/
 .handoff.md
 doc/superpowers/
