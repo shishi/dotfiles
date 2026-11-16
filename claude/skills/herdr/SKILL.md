@@ -1,6 +1,6 @@
 ---
 name: herdr
-description: "Control the older Herdr terminal multiplexer (the `herdr` CLI), which runs coding agents in workspaces, tabs and panes. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent, and HERDR_ENV=1 is set. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Inside herdr-core (HC_TERMINAL_ID is set) use herdr-core for terminals and agents and herdr-app for the desktop window instead."
+description: "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
 ---
 
 # Herdr
@@ -212,7 +212,3 @@ If a larger recent read still does not reveal the completed response, ask the ag
 - Never run `herdr server stop` from an active session unless the user explicitly intends to stop the server and its pane processes.
 - Never kill the main Herdr process. Use named test sessions for experiments that need an isolated server.
 - CLI server errors are JSON on stderr with exit status 1. CLI syntax errors exit with status 2.
-
-## Diagnose graphical display
-
-When a browser process or DOM responds but the human cannot see pixels, read [terminal graphics diagnostics](references/terminal-graphics.md). Distinguish the server and pane environment from the connected display client and the terminal graphics transport.

@@ -109,9 +109,9 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bash ~/.codex/herdr-agent-state.sh session",
-            "timeout": 10
+            "timeout": 10,
+            "type": "command"
           }
         ]
       },
@@ -125,6 +125,15 @@
           }
         ],
         "matcher": "startup|clear|compact"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash '/Users/shigenobu.407/.codex/herdr-agent-state.sh' session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
       }
     ],
     "Stop": [
