@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart hook: 変更作業の入口を kata に向ける。skill の選択は description に気づくかに依存し、
-# ざっくりした依頼では kata を経ずに作業を始めたり、工程の途中で工程 skill を開かずに進めたりするため、
-# 入口と工程ごとの skill を確定的に差し込む。Codex にも同じ内容を渡し、両 CLI の入口をそろえる。
+# 必要な工程を選ぶ前に詳細工程の読込を強制すると、直接進められる作業も準備で止まる。
+# 両 CLI に同じ入口を渡し、工程の選択は kata が担う。
 #
 # あわせて、kata の工程 skill へ取り込んだ superpowers の上流に新しい版が出ていないかを月に一度だけ
 # 確かめ、出ていれば superpowers-import で無人の取り込みを始めて、その状況を伝える。毎回の起動で
@@ -19,7 +19,7 @@ MSG
 else
   cat <<'MSG'
 <kata-entry>
-変更作業の入口は kata skill。作業の最初に kata を開き、続けて工程 1 の kata-design を開いて目的と方式を固める。kata-design を不要と判断した場合は、省く前に根拠を示して利用者に質問する。既存の設計・計画がある仕事や圧縮後の再開では、kata の該当工程から進める。工程に入るたびに kata の工程表を確かめ、その工程の skill (kata-workspace・kata-plan・kata-build・review-gate・kata-verify・kata-finish) を開いてから進める。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first を開く。文書・skill・コードコメント・commit・issue・PR・投稿などの文章を書く・直す前は writing-prose を開き、その「併用する skill」に挙げた該当 skill をすべて同時に使う。commit の前は git-commit を開く。
+変更作業の入口は kata skill。最初に kata を開き、依頼全体の結果・操作範囲・未決事項・確認方法から必要な準備を選ぶ。詳細工程を読むかどうかも kata の入口で判断し、工程を省く許可や一律の設計・計画を求めない。必要になった工程の skill は、その工程へ入る時点で読む。既存の設計・計画がある仕事や圧縮後の再開では、現在の実物に対応する位置から続ける。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first を開く。文章を書く・直す前は writing-prose と該当する併用 skill、commit の前は git-commit を開く。既存の安全・承認・検証・独立レビューの条件は維持する。
 </kata-entry>
 MSG
 fi
