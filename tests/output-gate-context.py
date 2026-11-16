@@ -1375,6 +1375,10 @@ class ContextTests(unittest.TestCase):
             catalog_coverage=[], unresolved=[], focus_refs=[], item_coverage=['req'], claims=claims,
             findings=[], replacements=[], focus_candidates=[]))
         self.assertIn('unverified claim cannot close', self.packet(rejected)['validation_feedback'])
+        self.assertIn('requirement req', self.packet(rejected)['validation_feedback'])
+        self.assertIn('claim=unverified', self.packet(rejected)['validation_feedback'])
+        self.assertEqual(rejected['transaction']['validation_failures'],
+                         {'unverified claim cannot close its requirement': 1})
         self.assertEqual(self.packet(rejected)['stage'], 'judge')
         result = self.judgment(rejected, claims=claims)
         self.assertEqual(result['status'], 'checked', result.get('reason'))

@@ -1420,8 +1420,11 @@ def accept_judgment(tx, answer):
             item = next(i for i in unit['items'] if i['id'] == d['item_id'])
             answered_question = item['kind'] == 'question' and d['basis'] == 'answered'
             blocked_verdicts = ('unverified', 'contradicted') if answered_question else ('unverified', 'contradicted', 'qualified')
-            if any(c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids'] for c in claims):
-                raise ValueError('unverified claim cannot close its requirement')
+            blocking = [c for c in claims if c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids']]
+            if blocking:
+                error = ValueError('unverified claim cannot close its requirement')
+                error.add_note(f"requirement {d['item_id']}: " + ', '.join(f"{c['id']}={c['verdict']}" for c in blocking))
+                raise error
     tx['judge_decisions'].extend(decisions)
     tx['claims'].extend(claims)
     tx['findings'].extend(answer.get('findings', []))

@@ -1601,7 +1601,7 @@ def receive(request):
             failures[reason] = failures.get(reason, 0) + 1
             baseline_tx['validation_failures'] = failures
             if failures[reason] < 3:
-                baseline_tx['validation_feedback'] = reason
+                baseline_tx['validation_feedback'] = '\n'.join([reason, *getattr(error, '__notes__', [])])
                 previous_step = baseline_tx.get('step', 0)
                 baseline_tx['step'] = previous_step + 1
                 try:
