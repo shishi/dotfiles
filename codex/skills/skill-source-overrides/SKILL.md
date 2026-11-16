@@ -7,6 +7,8 @@ description: 外部 plugin・system skill の本文や同梱 helper を使う前
 
 元 plugin の接続先・権限・承認境界を維持したまま、検証済みの自前 source を使います。vendor cache は編集しません。
 
+cache や修復版の存在は plugin が有効である根拠になりません。解決処理は配布元の設定にある明示的な無効化も確認します。無効化で失敗した source は読み込まず、修復版や元版へ直接戻って適用しません。現在の作業は、有効な既存手順で続けます。
+
 1. 現在の skill catalog・plugin metadata から、元の SKILL.md または plugin root の実パスを取得します。古い版のパスを推測しません。
 2. `SKILL_PATH` にそのパスを設定し、次を実行します。
 

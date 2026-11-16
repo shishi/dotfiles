@@ -31,10 +31,10 @@ class SkillSourceTest(unittest.TestCase):
         }]}
         (self.state / "registry.json").write_text(json.dumps(registry))
 
-    def resolve(self, path):
+    def resolve(self, path, **environment):
         return subprocess.run(
             [sys.executable, str(SCRIPT), str(path)],
-            env={**os.environ, "AGENT_SKILL_OVERRIDES_DIR": str(self.state)},
+            env={**os.environ, **environment, "AGENT_SKILL_OVERRIDES_DIR": str(self.state)},
             capture_output=True, text=True,
         )
 
@@ -80,6 +80,56 @@ class SkillSourceTest(unittest.TestCase):
         (self.effective / "SKILL.md").unlink()
         result = self.resolve(self.upstream / "SKILL.md")
         self.assertNotEqual(result.returncode, 0)
+
+    def cached_skill(self, product):
+        agent_home = self.root / product
+        self.upstream = agent_home / 'plugins/cache/example-market/example-plugin/1.0'
+        self.upstream.mkdir(parents=True)
+        (self.upstream / 'SKILL.md').write_text('original\n')
+        return agent_home
+
+    def test_disabled_codex_plugin_cannot_resolve_a_retained_override(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = false\n')
+        self.register()
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('disabled', result.stderr)
+        self.assertEqual(result.stdout, '')
+
+    def test_disabled_claude_plugin_cannot_resolve_without_a_registry(self):
+        agent_home = self.cached_skill('claude')
+        (agent_home / 'settings.json').write_text(json.dumps({
+            'enabledPlugins': {'example-plugin@example-market': False},
+        }))
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('disabled', result.stderr)
+
+    def test_disabled_plugin_root_cannot_resolve_a_retained_override(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = false\n')
+        self.register()
+        result = self.resolve(self.upstream)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('disabled', result.stderr)
+
+    def test_enabled_cached_plugin_still_resolves_its_override(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = true\n')
+        self.register()
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['path'], str(self.effective / 'SKILL.md'))
+
+    def test_utf8_plugin_config_resolves_in_a_non_utf8_locale(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text(
+            '# 日本語の設定\n[plugins."example-plugin@example-market"]\nenabled = true\n', encoding='utf-8')
+        self.register()
+        result = self.resolve(self.upstream / 'SKILL.md', LC_ALL='C', PYTHONUTF8='0', PYTHONCOERCECLOCALE='0')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['path'], str(self.effective / 'SKILL.md'))
 
 
 if __name__ == "__main__":

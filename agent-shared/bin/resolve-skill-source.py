@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tomllib
 
 
 VOLATILE_PARTS = {".git", "__pycache__", ".in_use", ".orphaned_at"}
@@ -23,11 +24,36 @@ def fingerprints(root):
     return result
 
 
+def check_plugin_enabled(source):
+    for cache in source.parents:
+        if cache.name != 'cache' or cache.parent.name != 'plugins':
+            continue
+        parts = source.relative_to(cache).parts
+        if len(parts) < 3:
+            continue
+        marketplace, plugin = parts[:2]
+        identity = f'{plugin}@{marketplace}'
+        home = cache.parent.parent
+        codex_config = home / 'config.toml'
+        claude_settings = home / 'settings.json'
+        if codex_config.is_file():
+            config = tomllib.loads(codex_config.read_text(encoding='utf-8'))
+            enabled = config.get('plugins', {}).get(identity, {}).get('enabled')
+        elif claude_settings.is_file():
+            config = json.loads(claude_settings.read_text(encoding='utf-8'))
+            enabled = config.get('enabledPlugins', {}).get(identity)
+        else:
+            continue
+        if enabled is False:
+            raise ValueError(f'Plugin is explicitly disabled: {identity}')
+
+
 def resolve(source, registry):
+    check_plugin_enabled(source)
     result = {"path": str(source), "overridden": False, "reason": "unregistered"}
     if not registry.is_file():
         return {**result, "reason": "no-registry"}
-    data = json.loads(registry.read_text())
+    data = json.loads(registry.read_text(encoding='utf-8'))
     matches = []
     for package in data["packages"]:
         original = Path(package["original_root"]).expanduser().resolve()
