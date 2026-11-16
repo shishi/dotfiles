@@ -5,7 +5,7 @@ description: 変更作業の着手時と工程の切替時に適用する。設�
 
 # kata の作業ワークフロー
 
-変更作業は、以下の順序と通過条件に従って進めます。共通 AGENTS.md とこの skill を入口に、各工程は表の担当と工程 skill (kata-design・kata-workspace・kata-plan・kata-build・review-gate・kata-verify・kata-finish) で進めます。工程 skill は、この工程表と共通指示の条件の下で、工程内の詳しい実施方法を持ちます。
+実装・設定・文書などの成果物を作成・変更する作業は、以下の順序と通過条件に従って進めます。既存機能で状態を確認したり、セッションを起動・終了したりする操作だけなら、この変更工程を開始しません。その操作に必要な対象確認・権限・安全条件・結果確認は維持し、仕事を委譲する場合は `agent-delegation` に従います。共通 AGENTS.md とこの skill を入口に、各工程は表の担当と工程 skill (kata-design・kata-workspace・kata-plan・kata-build・review-gate・kata-verify・kata-finish) で進めます。工程 skill は、この工程表と共通指示の条件の下で、工程内の詳しい実施方法を持ちます。
 
 ## 読込と担当範囲
 
