@@ -122,9 +122,7 @@ description: Use when writing or revising prose for human readers in any languag
 ## 図による説明
 
 図での説明を求められたら、指定された形式と表示先で描画結果を先に渡します。
-Leaf CLI で Mermaid を表示する場合は、Mermaid コードブロックを含む Markdown を
-`leaf --inline plain:<幅> <ファイル>` に渡し、標準出力の図を加工せず、そのまま提示します。
-通常の TUI を起動して待たせたり、ブラウザーや別の可視化アプリを挟んだりしません。
+Leaf を使う場合は、[leaf-preview](../leaf-preview/SKILL.md) の手順に従います。
 表示先が指定されていない場合は、利用可能な描画ツールやインライン可視化の skill を選びます。
 
 図が分からないと指摘されたら、同じ構図に説明を足すだけで済ませず、読み取りに必要な
