@@ -176,7 +176,10 @@ Unmet points (findings). This is the final answer of the turn. Judge the draft t
 already shown in this turn) against the evidence, and report:
 The request: the user often writes one request over several messages, sent in a row or while the agent was working.
 Treat the latest user message together with the earlier user messages it continues (in "recent" and "turn_start") as
-one request, and judge every item of it.
+one request, and judge every item of it, except outcomes the user explicitly cancelled or replaced. Preserve every
+condition of the active request. Distinguish a request to verify whether an improvement
+worked from a request to achieve that improvement: an evidence-backed negative verification result can fulfil the
+former while proving the latter remains unmet, if the latter is still active.
 1. Unverified claims (kind "unverified_claim"): the draft or shown_text says something was checked, run, fixed or
    passed, but the evidence has no matching call and result, or the result failed (non-zero exit code, error) while the
    text says it succeeded, or the claim depends on a part the CLI truncated before the model saw it. It is also
@@ -213,7 +216,12 @@ Each finding has only: "kind"; "rule", the "id" of the broken rule for rule viol
 "source", the id of the message the excerpt comes from; "excerpt", a string copied exactly from that message; and
 "evidence", a list of {"id", "state"} pairs (rule violations may give an empty list). "state" is "absent" (no matching item;
 "id" is null), "failed", "truncated" or "unrecovered" (the item with that id failed, was truncated, or failed and was
-not recovered). Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
+not recovered). Establish the state of the referenced operation from its own execution result, keeping the operation
+that retrieves evidence distinct from the operation described in that evidence. A retrieved report of a failed check
+does not establish that retrieving it failed, and an absent exit-code field does not establish failure. Conversely,
+successful retrieval does not establish success of the reported check. Ground each failure reference in the result
+of the operation it actually identifies; do not transfer failure between operations.
+Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
 user). Unverified claims, concealment and rule violations cite "draft" or "shown". Never cite an assistant message as a request.
 Report each unmet point once. Treat "previous_findings" as earlier judgements, not as evidence that something remains
 unmet. Assess them afresh against the current answer and all evidence; discard an earlier finding if its premise is

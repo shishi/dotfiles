@@ -12,6 +12,13 @@ spec.loader.exec_module(live)
 
 
 class LiveResultsTest(unittest.TestCase):
+    def test_evidence_scope_good_case_rejects_a_false_failure_finding(self):
+        result = subprocess.CompletedProcess([], 0, json.dumps({
+            'status': 'checked', 'findings': [{'kind': 'missing_request', 'rule': '',
+                'evidence': [{'id': 'read-report', 'state': 'failed'}]}]}).encode(), b'')
+        with patch.object(live.subprocess, 'run', return_value=result):
+            self.assertFalse(live.run(('evidence_scope', 'good', {'draft': '例'}))['ok'])
+
     def test_unchecked_result_is_not_a_pass(self):
         result = subprocess.CompletedProcess([], 0, json.dumps({'status': 'unchecked', 'findings': []}).encode(), b'')
         with patch.object(live.subprocess, 'run', return_value=result):
