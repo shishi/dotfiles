@@ -1,6 +1,6 @@
 ---
 name: writing-prose
-description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread, or when an explanation is unnatural, abstract, or too short to understand. Also use when deciding what may be written in public or shared documents and where content belongs (README, docs, private memory, untracked notes). Not for code identifiers.
+description: Use when writing or revising prose for human readers in any language — README, design docs, PR descriptions, commit message bodies, error messages, Slack/Notion posts — or when asked to 添削, 推敲, 校正, リライト, わかりやすくして, proofread, or when a diagram is requested or an explanation is unclear, abstract, or too short to understand. Also use when deciding what may be written in public or shared documents and where content belongs (README, docs, private memory, untracked notes). Not for code identifiers.
 ---
 
 # 人間向け文章の執筆規約
@@ -118,6 +118,20 @@ description: Use when writing or revising prose for human readers in any languag
 | 名詞化 | 動詞に戻す (make a decision → decide、perform an update → update) |
 | 冗長表現 | 削る (in order to → to、due to the fact that → because、it is possible to → can、at this point in time → now) |
 | 文 | 一文一義。長い文は分割し、修飾節を重ねない |
+
+## 図による説明
+
+図での説明を求められたら、指定された形式と表示先で描画結果を先に渡します。
+Leaf CLI で Mermaid を表示する場合は、Mermaid コードブロックを含む Markdown を
+`leaf --inline plain:<幅> <ファイル>` に渡し、標準出力の図を加工せず、そのまま提示します。
+通常の TUI を起動して待たせたり、ブラウザーや別の可視化アプリを挟んだりしません。
+表示先が指定されていない場合は、利用可能な描画ツールやインライン可視化の skill を選びます。
+
+図が分からないと指摘されたら、同じ構図に説明を足すだけで済ませず、読み取りに必要な
+区別を具体的な値で示し直します。時間による変化なら、同じ対象の配置を保って順に追える
+構図を選び、比較する条件と結果を対応させます。配信先の描画機能を使って提示し、
+表示だけの依頼にブラウザー起動やアプリケーションの検証工程を加えません。
+表示できたことと、利用者に理解されたことは区別します。
 
 ## 推敲
 
