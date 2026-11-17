@@ -115,6 +115,23 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(checker.context.expand_wire(packet),data)
         self.assertLess(len(checker.context.encoded(packet)),len(checker.context.encoded(data))//2)
 
+    def test_unique_reference_encoding_stays_within_the_original_size(self):
+        data = {'retrieved': [dict(ref=dict(id='source-' + str(n), rev='a' * 64,
+                    field='output', start=0, end=1), text='x') for n in range(100)]}
+        packet, handles = checker.context.compact_references(data)
+        self.assertLessEqual(len(checker.context.encoded(packet)), len(checker.context.encoded(data)))
+        self.assertEqual(checker.context.expand_wire(packet), data)
+        self.assertEqual(checker.context.expand_references(packet['retrieved'][0]['ref'], handles),
+                         data['retrieved'][0]['ref'])
+
+    def test_repeated_reference_encoding_still_shrinks_losslessly(self):
+        original = dict(id='source', rev='a' * 64, field='output', start=0, end=1)
+        data = {'refs': [original] * 100}
+        packet, handles = checker.context.compact_references(data)
+        self.assertLess(len(checker.context.encoded(packet)), len(checker.context.encoded(data)))
+        self.assertEqual(checker.context.expand_wire(packet), data)
+        self.assertEqual(checker.context.expand_references(packet['refs'][0], handles), original)
+
     def test_nonfinal_rule_input_does_not_grow_with_execution_evidence(self):
         payload=dict(origin='codex',final=False,draft='その表現を整えるよ。',latest_user='文体を続けて',
             recent_messages=[dict(role='user',text='文書の文体を維持して')],shown_text='先ほどの説明')

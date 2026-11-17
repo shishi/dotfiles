@@ -180,7 +180,7 @@ def compact_references(packet):
         return node
     result=compact(packet)
     result['_reference_handles']=handles
-    return result,handles
+    return (result, handles) if len(encoded(result)) < len(encoded(packet)) else (packet, {})
 
 
 def expand_references(value, handles):
