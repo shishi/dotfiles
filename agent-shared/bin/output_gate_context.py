@@ -1250,6 +1250,23 @@ def searched_claim_originals(tx, answer_ref):
     return False
 
 
+def finding_matches_claim(tx, finding, claim):
+    if not isinstance(finding, dict) or finding.get('kind') not in ('unverified_claim', 'concealment'):
+        return False
+    if not isinstance(finding.get('source'), str) or not isinstance(finding.get('excerpt'), str):
+        return False
+    answer_ref = claim['answer_ref']
+    source = tx['aliases'].get(finding['source'])
+    if source is None:
+        source = tx['sources'].get(finding['source'] + ':' + answer_ref['rev'])
+    if not source or any(source[k] != answer_ref[k] for k in ('id', 'rev')):
+        return False
+    normalize = lambda value: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value)).strip()
+    original = normalize(resolve_refs(tx, [answer_ref], True)[0]['text'])
+    excerpt = normalize(finding['excerpt'])
+    return bool(original and excerpt and (excerpt in original or original in excerpt))
+
+
 def accept_judgment(tx, answer):
     unit = tx['pending_units'][0]
     coverage = [c['answer_ref'] for c in answer.get('claims', [])]
@@ -1358,7 +1375,6 @@ def accept_judgment(tx, answer):
     missing = [a for a in unit['answers'] if not covered(a['ref'], [c['answer_ref'] for c in claims])]
     if missing:
         raise ValueError('claim coverage incomplete: ' + encoded([{'answer_role': a.get('answer_role'), 'ref': a['ref']} for a in missing]).decode())
-    normalize_excerpt = lambda value: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value)).strip()
     valid_findings = [f for n, f in enumerate(answer.get('findings', [])) if n in answer.get('_valid_findings', [])]
     assessments = answer.get('rule_assessments', [])
     if {a.get('rule') for a in assessments} != {r['id'] for r in tx['checked_rules']} or len(assessments) != len(tx['checked_rules']):
@@ -1372,15 +1388,7 @@ def accept_judgment(tx, answer):
     for claim in claims:
         if claim['verdict'] not in ('contradicted', 'unverified'):
             continue
-        original = normalize_excerpt(resolve_refs(tx, [claim['answer_ref']], True)[0]['text'])
-        matching = False
-        for finding in valid_findings:
-            source = tx['aliases'].get(finding['source'])
-            excerpt = normalize_excerpt(finding['excerpt'])
-            if source and all(source[k] == claim['answer_ref'][k] for k in ('id', 'rev')) and original and excerpt and (excerpt in original or original in excerpt):
-                matching = True
-                break
-        if not matching:
+        if not any(finding_matches_claim(tx, finding, claim) for finding in valid_findings):
             raise ValueError(claim['verdict'] + ' claim needs a matching valid finding')
     for obligation in tx['evidence_obligations']:
         if obligation['result'] == 'pending':

@@ -112,7 +112,7 @@ KINDS = {'unverified_claim': '確認していない主張',
          'missing_request': '依頼の抜け・確認できるのに確認していないこと',
          'concealment': 'ごまかし',
          'rule_violation': '規則違反'}
-STATES = ('absent', 'failed', 'truncated', 'unrecovered')
+STATES = ('absent', 'failed', 'truncated', 'unrecovered', 'contradicts')
 # 出力ゲートの mod が登録する指摘のツールの名前。モデルと tool.call には MCP の名前 (mcp__output-gate__…) で見える。
 GATE_TOOLS = frozenset({'gate_findings', 'mcp__output-gate__gate_findings'})
 CHECKER_SCHEMA = {
@@ -216,7 +216,8 @@ Each finding has only: "kind"; "rule", the "id" of the broken rule for rule viol
 "source", the id of the message the excerpt comes from; "excerpt", a string copied exactly from that message; and
 "evidence", a list of {"id", "state"} pairs (rule violations may give an empty list). "state" is "absent" (no matching item;
 "id" is null), "failed", "truncated" or "unrecovered" (the item with that id failed, was truncated, or failed and was
-not recovered). Establish the state of the referenced operation from its own execution result, keeping the operation
+not recovered), or "contradicts" (the item's content contradicts the answer, without asserting that retrieving it failed).
+Establish the state of the referenced operation from its own execution result, keeping the operation
 that retrieves evidence distinct from the operation described in that evidence. A retrieved report of a failed check
 does not establish that retrieving it failed, and an absent exit-code field does not establish failure. Conversely,
 successful retrieval does not establish success of the reported check. Ground each failure reference in the result
@@ -248,7 +249,7 @@ Reply with JSON only, no prose:
 {"replacements": [{"find": "<exact substring of the draft>", "replace": "<replacement>",
                    "rule": "<the rule it breaks, quoted briefly>", "meaning_changed": <true|false>}],
  "findings": [{"kind": "...", "rule": "<rule id or empty>", "source": "<message id>", "excerpt": "<exact substring>",
-               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered"}]}],
+               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered|contradicts"}]}],
  "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}}
 When nothing is wrong, reply with empty replacements and findings and the progress assessment.
 """
@@ -1171,6 +1172,9 @@ def finding_problem(item, sources, evidence, rules):
             continue
         if not isinstance(ref_id, str) or ref_id not in evidence:
             return '証拠の参照の ID が証拠に無い'
+        operation = evidence[ref_id]
+        if ref['state'] in ('failed', 'unrecovered') and operation.get('failed') is False and operation.get('exit_code') == 0:
+            return '証拠の失敗指定が同じ操作の実行結果 (exit_code=0, failed=false) と矛盾する'
     return None
 
 
@@ -1193,7 +1197,8 @@ def describe_evidence(ref, evidence):
     return record + {'absent': ' には対応する結果がありません',
                      'failed': ' は失敗しています',
                      'truncated': ' の出力はモデルに渡る前に切り詰められています',
-                     'unrecovered': ' の失敗は、その後に同じ確認で回復していません'}[ref['state']]
+                     'unrecovered': ' の失敗は、その後に同じ確認で回復していません',
+                     'contradicts': ' の内容がこの主張と矛盾しています'}[ref['state']]
 
 
 FINDING_SENTENCE = {
@@ -1527,6 +1532,8 @@ def receive(request):
         tx.setdefault('metrics',{}).setdefault('model_attempts',[]).extend(deepcopy(attempts))
     baseline_tx = deepcopy(tx)
     validation_entered = False
+    rejected_findings = []
+    finding_problems = {}
     try:
         if context.digest([response_rules(), checked_rules()]) != tx.get('rules_source_rev'):
             raise ValueError('context rules snapshot changed')
@@ -1548,12 +1555,14 @@ def receive(request):
                 if isinstance(evidence,dict) and isinstance(evidence.get('id'),str) and evidence['id'] in tx.get('reference_handles', {}):
                     evidence['id']=tx['reference_handles'][evidence['id']]['id']
         if answer.get('kind') == 'judgment':
+            reported_findings = list(answer.get('findings', []))
             for claim in answer.get('claims', []):
                 if claim.get('verdict') != 'unverified':
                     continue
                 original = context.resolve_refs(tx, [claim['answer_ref']], True)[0]
                 alias = next((name for name in ('draft','shown') if all(tx['aliases'][name][k] == claim['answer_ref'][k] for k in ('id','rev'))), None)
-                if alias and original['text'].strip():
+                reported = any(context.finding_matches_claim(tx, f, claim) for f in reported_findings)
+                if alias and original['text'].strip() and not reported:
                     finding = {'kind':'unverified_claim','source':alias,'excerpt':original['text'].strip(),
                                'evidence':[{'id':None,'state':'absent'}]}
                     if finding not in answer.setdefault('findings', []):
@@ -1563,8 +1572,15 @@ def receive(request):
             source_messages.update({s['id']: {'role': 'user', 'origin': 'recent', 'text': s['fields']['text']}
                                     for s in tx['sources'].values() if s['kind'] == 'user'})
             rules = {r['id']: r['text'] for r in checked_rules()}
-            answer['_valid_findings'] = [n for n, f in enumerate(answer.get('findings', []))
-                if finding_problem(f, source_messages, evidence_index(validation_payload), rules) is None]
+            evidence = evidence_index(validation_payload)
+            problems = {n: problem for n, f in enumerate(answer.get('findings', []))
+                        if (problem := finding_problem(f, source_messages, evidence, rules)) is not None}
+            finding_problems = problems
+            answer['_valid_findings'] = [n for n in range(len(answer.get('findings', []))) if n not in problems]
+            if problems and not answer['_valid_findings']:
+                rejected_findings = [{'finding': answer['findings'][n], 'reason': reason} for n, reason in problems.items()]
+                error = ValueError('checker findings lack valid grounding')
+                raise error
         previous_step = tx.get('step', 0)
         def checkpoint(validated):
             nonlocal baseline_tx
@@ -1595,6 +1611,8 @@ def receive(request):
                 result['display_receipt'] = tx['id']
         return result
     except Exception as error:
+        if finding_problems:
+            error.add_note('invalid_findings: ' + json.dumps(finding_problems, ensure_ascii=False))
         reason = str(error) or type(error).__name__
         fatal = any(word in reason for word in ('CAS', 'deadline', 'input limit', 'snapshot', 'archive', 'mask', 'source/state'))
         if validation_entered and isinstance(error, (ValueError, KeyError, TypeError, EngineFailure)) and not fatal:
@@ -1609,7 +1627,7 @@ def receive(request):
                     return context_ready(baseline_tx, previous_step)
                 except Exception:
                     pass
-        return unchecked(payload, reason, source_cursor=tx.get('source_end'))
+        return unchecked(payload, reason, source_cursor=tx.get('source_end'), dropped=rejected_findings)
 
 
 def raw_judge(request, cancel=None):

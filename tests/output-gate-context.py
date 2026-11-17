@@ -680,6 +680,80 @@ class ContextTests(unittest.TestCase):
         result = self.judgment(ready, claims=[claim])
         self.assertEqual(result['status'], 'checked', result.get('reason'))
 
+    def test_finding_cannot_mark_a_successful_operation_as_failed(self):
+        self.payload['evidence'] = [{'id': 'verify', 'tool': 'CommandExecution',
+            'command': 'run tests', 'output': 'tests OK', 'exit_code': 0, 'failed': False}]
+        for state in ['failed', 'unrecovered']:
+            with self.subTest(state=state):
+                ready = self.update(self.ready())
+                source = next(s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence')
+                output = checker.context.ref(source, 'output')
+                ready = self.reply(ready, dict(kind='need_refs', refs=[checker.context.ref(source, 'call'), output]))
+                claim = dict(id='tests', answer_ref=self.packet(ready)['answers'][0]['ref'], text='Done.',
+                    requirement_ids=[], evidence=[dict(ref=output, relation='unresolved')], verdict='unverified')
+                result = self.judgment(ready, claims=[claim], findings=[dict(kind='unverified_claim', source='draft',
+                    excerpt='Done.', evidence=[dict(id='verify', state=state)])])
+                self.assertEqual(result['status'], 'ready', result.get('reason'))
+                self.assertIn('実行結果', self.packet(result)['validation_feedback'])
+                claim.update(verdict='supported', temporal_scope='historical', evidence=[dict(ref=output, relation='supports')])
+                repaired = self.judgment(result, claims=[claim])
+                self.assertEqual(repaired['status'], 'checked', repaired.get('reason'))
+
+    def test_failure_findings_use_the_failed_operation_not_successful_retrieval(self):
+        self.payload['evidence'] = [
+            {'id': 'tests', 'command': 'run tests', 'output': 'tests failed', 'exit_code': 1, 'failed': True},
+            {'id': 'read-report', 'command': 'read test report', 'output': 'report: tests failed',
+             'exit_code': 0, 'failed': False}]
+        ready = self.update(self.ready())
+        result = self.judgment(ready, findings=[dict(kind='unverified_claim', source='draft',
+            excerpt='Done.', evidence=[dict(id='tests', state='failed')]),
+            dict(kind='unverified_claim', source='draft', excerpt='Done.',
+                 evidence=[dict(id='read-report', state='failed')])])
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual(len(result['findings']), 1)
+        self.assertEqual(result['findings'][0]['evidence'], [dict(id='tests', state='failed')])
+        self.assertEqual(len(result['dropped']), 1)
+
+    def test_successful_retrieval_can_supply_content_that_contradicts_the_answer(self):
+        self.payload['evidence'] = [{'id': 'report', 'command': 'read test report',
+            'output': 'report: tests failed', 'exit_code': 0, 'failed': False}]
+        ready = self.update(self.ready())
+        result = self.judgment(ready, findings=[dict(kind='unverified_claim', source='draft',
+            excerpt='Done.', evidence=[dict(id='report', state='contradicts')])])
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual(result['findings'][0]['evidence'], [dict(id='report', state='contradicts')])
+        self.assertIn('内容がこの主張と矛盾', result['agent_message'])
+
+    def test_explicit_finding_does_not_suppress_another_claims_grounding(self):
+        self.payload['draft'] = 'First result. Second result.'
+        ready = self.update(self.ready())
+        answer = self.packet(ready)['answers'][0]['ref']
+        claims = [dict(id='first', answer_ref=dict(answer, end=14), text='First result.', requirement_ids=[], evidence=[], verdict='unverified'),
+                  dict(id='second', answer_ref=dict(answer, start=14), text='Second result.', requirement_ids=[], evidence=[], verdict='unverified')]
+        result = self.judgment(ready, claims=claims, findings=[dict(kind='unverified_claim', source='draft',
+            excerpt='First result.', evidence=[dict(id=None, state='absent')])])
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual({f['excerpt'] for f in result['findings']}, {'First result.', 'Second result.'})
+
+    def test_unrelated_request_finding_does_not_suppress_claim_grounding(self):
+        ready = self.update(self.ready())
+        claim = dict(id='claim', answer_ref=self.packet(ready)['answers'][0]['ref'], text='Done.',
+                     requirement_ids=[], evidence=[], verdict='unverified')
+        result = self.judgment(ready, claims=[claim], findings=[dict(kind='missing_request', source='request',
+            excerpt='Use UTF-8.', evidence=[dict(id=None, state='absent')])])
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+        self.assertEqual({f['source'] for f in result['findings']}, {'request', 'draft'})
+
+    def test_style_finding_does_not_replace_unverified_claim_grounding(self):
+        with patch.object(checker, 'checked_rules', return_value=[dict(id='W1', text='fixture style rule')]):
+            ready = self.update(self.ready())
+            claim = dict(id='claim', answer_ref=self.packet(ready)['answers'][0]['ref'], text='Done.',
+                         requirement_ids=[], evidence=[], verdict='unverified')
+            result = self.judgment(ready, claims=[claim], findings=[dict(kind='rule_violation', rule='W1', source='draft',
+                excerpt='Done.', evidence=[])], rule_assessments=[dict(rule='W1', result='violation', reason='fixture violation')])
+            self.assertEqual(result['status'], 'checked', result.get('reason'))
+            self.assertEqual({f['kind'] for f in result['findings']}, {'rule_violation', 'unverified_claim'})
+
     def test_reviewed_truncated_operation_cannot_close_current_state(self):
         self.payload['evidence'] = [{'id':'old', 'command':'verify', 'output':'passed'},
             {'id':'change', 'command':'opaque', 'output':'partial', 'truncated':True}]
