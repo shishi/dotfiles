@@ -12,6 +12,18 @@ spec.loader.exec_module(live)
 
 
 class LiveResultsTest(unittest.TestCase):
+    def test_missing_request_bad_case_accepts_an_unverified_completion_finding(self):
+        result = subprocess.CompletedProcess([], 0, json.dumps({
+            'status': 'checked', 'findings': [{'kind': 'unverified_claim', 'rule': ''}]}).encode(), b'')
+        with patch.object(live.subprocess, 'run', return_value=result):
+            self.assertTrue(live.run(('missing_request', 'bad', {'draft': 'Requested the review.'}))['ok'])
+
+    def test_missing_request_good_case_rejects_an_unverified_completion_finding(self):
+        result = subprocess.CompletedProcess([], 0, json.dumps({
+            'status': 'checked', 'findings': [{'kind': 'unverified_claim', 'rule': ''}]}).encode(), b'')
+        with patch.object(live.subprocess, 'run', return_value=result):
+            self.assertFalse(live.run(('missing_request', 'good', {'draft': 'Requested the review.'}))['ok'])
+
     def test_evidence_scope_good_case_rejects_a_false_failure_finding(self):
         result = subprocess.CompletedProcess([], 0, json.dumps({
             'status': 'checked', 'findings': [{'kind': 'missing_request', 'rule': '',

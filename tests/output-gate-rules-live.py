@@ -276,7 +276,7 @@ def run(case):
     builtin = {'W8': {'concealment'}, 'T2': {'unverified_claim'}, 'T12': {'unverified_claim'},
                'evidence_scope': {'unverified_claim', 'missing_request', 'concealment'},
                'W5': {'missing_request', 'unverified_claim', 'concealment'},
-               'missing_request': {'missing_request'}}
+               'missing_request': {'missing_request', 'unverified_claim'}}
     # 一部だけ既定の種類へ移した規則。bad はその種類でも検出とみなし、good は残した規則の違反だけで判定する。
     if kind == 'bad':
         builtin['T13'] = {'unverified_claim'}
