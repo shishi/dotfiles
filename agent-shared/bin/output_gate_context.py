@@ -180,7 +180,7 @@ def compact_references(packet):
         return node
     result=compact(packet)
     result['_reference_handles']=handles
-    return result,handles
+    return (result, handles) if len(encoded(result)) < len(encoded(packet)) else (packet, {})
 
 
 def expand_references(value, handles):
@@ -982,6 +982,9 @@ def plan_unit(tx, instructions, schema):
             'catalog_summary': {kind: sum(s['kind'] == kind for s in tx['sources'].values()) for kind in ('user', 'assistant', 'evidence', 'gap')},
             'previous_findings': tx.get('previous_findings', []), 'progress_state': tx.get('progress_state'),
             'validation_feedback': tx.get('validation_feedback')}
+    if tx['stage'] == 'judge':
+        data['claim_requirement_ids'] = sorted(i['id'] for i in tx['obligation_items'])
+        schema = judgment_schema(schema, data)
     observation_bytes = 0
     for observation in reversed(tx.get('retrieval_observations', [])):
         size = len(wire_encoded(observation))
@@ -1251,8 +1254,13 @@ def accept_judgment(tx, answer):
     unit = tx['pending_units'][0]
     coverage = [c['answer_ref'] for c in answer.get('claims', [])]
     decisions = answer.get('decisions', [])
-    if {d.get('item_id') for d in decisions} != {i['id'] for i in unit['items']}:
-        raise ValueError('judgment item decisions coverage incomplete')
+    expected = {i['id'] for i in unit['items']}
+    received = {d.get('item_id') for d in decisions}
+    if received != expected:
+        error = ValueError('judgment item decisions coverage incomplete')
+        error.add_note('missing decisions: ' + (', '.join(sorted(map(str, expected - received))) or 'none'))
+        error.add_note('unexpected decisions: ' + (', '.join(sorted(map(str, received - expected))) or 'none'))
+        raise error
     for d in decisions:
         if d.get('action') not in ('keep', 'retire', 'replace') or not d.get('reason'):
             raise ValueError('invalid judgment item decision')
@@ -1420,8 +1428,11 @@ def accept_judgment(tx, answer):
             item = next(i for i in unit['items'] if i['id'] == d['item_id'])
             answered_question = item['kind'] == 'question' and d['basis'] == 'answered'
             blocked_verdicts = ('unverified', 'contradicted') if answered_question else ('unverified', 'contradicted', 'qualified')
-            if any(c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids'] for c in claims):
-                raise ValueError('unverified claim cannot close its requirement')
+            blocking = [c for c in claims if c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids']]
+            if blocking:
+                error = ValueError('unverified claim cannot close its requirement')
+                error.add_note(f"requirement {d['item_id']}: " + ', '.join(f"{c['id']}={c['verdict']}" for c in blocking))
+                raise error
     tx['judge_decisions'].extend(decisions)
     tx['claims'].extend(claims)
     tx['findings'].extend(answer.get('findings', []))
@@ -1671,7 +1682,27 @@ facts/requirements, not tool counts or prose changes. Never return bare old repl
 '''
 
 
-def protocol_schema(legacy):
+def judgment_schema(schema, packet):
+    packet = expand_wire(packet)
+    if packet.get('stage') != 'judge':
+        return schema
+    schema = deepcopy(schema)
+    properties = schema['properties']
+    decision_ids = sorted(i['id'] for i in packet['items'])
+    if decision_ids:
+        properties['decisions']['items']['properties']['item_id'] = {'type': 'string', 'enum': decision_ids}
+    else:
+        properties['decisions']['maxItems'] = 0
+    requirements = properties['claims']['items']['properties']['requirement_ids']
+    requirement_ids = packet['claim_requirement_ids']
+    if requirement_ids:
+        requirements['items'] = {'type': 'string', 'enum': requirement_ids}
+    else:
+        requirements['maxItems'] = 0
+    return schema
+
+
+def protocol_schema(legacy, packet=None):
     string = {'type': 'string'}
     enum = lambda *values: {'type': 'string', 'enum': list(values)}
     arr = lambda item: {'type': 'array', 'items': item}
@@ -1705,4 +1736,5 @@ def protocol_schema(legacy):
     locator = obj({'id': string, 'rev': string, 'field': string, 'literal': {'type': 'string', 'pattern': r'[\s\S]+'}, 'after': {'type': 'integer'}})
     archive_locator = obj({'scope': enum('archive'), 'field': enum('text', 'call', 'output', 'metadata'), 'literal': string, 'before_seq': {'type': 'integer'}})
     properties['refs'] = arr({'anyOf': [r, locator, archive_locator]})
-    return obj(properties)
+    schema = obj(properties)
+    return judgment_schema(schema, packet) if packet is not None else schema

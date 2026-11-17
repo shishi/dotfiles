@@ -115,6 +115,23 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(checker.context.expand_wire(packet),data)
         self.assertLess(len(checker.context.encoded(packet)),len(checker.context.encoded(data))//2)
 
+    def test_unique_reference_encoding_stays_within_the_original_size(self):
+        data = {'retrieved': [dict(ref=dict(id='source-' + str(n), rev='a' * 64,
+                    field='output', start=0, end=1), text='x') for n in range(100)]}
+        packet, handles = checker.context.compact_references(data)
+        self.assertLessEqual(len(checker.context.encoded(packet)), len(checker.context.encoded(data)))
+        self.assertEqual(checker.context.expand_wire(packet), data)
+        self.assertEqual(checker.context.expand_references(packet['retrieved'][0]['ref'], handles),
+                         data['retrieved'][0]['ref'])
+
+    def test_repeated_reference_encoding_still_shrinks_losslessly(self):
+        original = dict(id='source', rev='a' * 64, field='output', start=0, end=1)
+        data = {'refs': [original] * 100}
+        packet, handles = checker.context.compact_references(data)
+        self.assertLess(len(checker.context.encoded(packet)), len(checker.context.encoded(data)))
+        self.assertEqual(checker.context.expand_wire(packet), data)
+        self.assertEqual(checker.context.expand_references(packet['refs'][0], handles), original)
+
     def test_nonfinal_rule_input_does_not_grow_with_execution_evidence(self):
         payload=dict(origin='codex',final=False,draft='その表現を整えるよ。',latest_user='文体を続けて',
             recent_messages=[dict(role='user',text='文書の文体を維持して')],shown_text='先ほどの説明')
@@ -468,9 +485,39 @@ class ContextTests(unittest.TestCase):
         missing_decisions = self.reply(ready, dict(answer, decisions=[]))
         self.assertEqual(missing_decisions['status'], 'ready')
         self.assertIn('judgment item decisions coverage incomplete', self.packet(missing_decisions)['validation_feedback'])
+        self.assertIn('missing decisions: encoding', self.packet(missing_decisions)['validation_feedback'])
+        self.assertIn('unexpected decisions: none', self.packet(missing_decisions)['validation_feedback'])
         result = self.reply(missing_decisions, answer)
         self.assertEqual(result['status'], 'checked', result.get('reason') or result.get('transaction', {}).get('validation_feedback'))
         self.assertEqual([item['id'] for item in result['context_state']['items']], ['encoding'])
+
+    def test_judgment_feedback_identifies_decisions_outside_the_current_unit(self):
+        ready = self.update(self.ready(), [])
+        self.assertEqual(self.packet(ready)['items'], [])
+        rejected = self.judgment(ready, decisions=[dict(item_id='retired-request', action='keep',
+            basis='current', refs=[], reason='Incorrectly reused an earlier requirement')])
+        self.assertEqual(rejected['status'], 'ready')
+        feedback = self.packet(rejected)['validation_feedback']
+        self.assertIn('missing decisions: none', feedback)
+        self.assertIn('unexpected decisions: retired-request', feedback)
+        self.assertEqual(rejected['transaction']['validation_failures'],
+                         {'judgment item decisions coverage incomplete': 1})
+        self.assertEqual(self.judgment(rejected)['status'], 'checked')
+
+    def test_judgment_schema_excludes_decisions_and_requirement_ids_when_none_exist(self):
+        ready = self.update(self.ready(), [])
+        properties = ready['schema']['properties']
+        self.assertEqual(properties['decisions'].get('maxItems'), 0)
+        self.assertEqual(properties['claims']['items']['properties']['requirement_ids'].get('maxItems'), 0)
+        self.assertEqual(self.packet(ready)['claim_requirement_ids'], [])
+
+    def test_judgment_schema_limits_ids_to_the_current_unit_and_obligations(self):
+        self.live_state()
+        ready = self.ready()
+        properties = ready['schema']['properties']
+        self.assertEqual(properties['decisions']['items']['properties']['item_id'].get('enum'), ['encoding'])
+        self.assertEqual(properties['claims']['items']['properties']['requirement_ids']['items'].get('enum'), ['encoding'])
+        self.assertEqual(self.packet(ready)['claim_requirement_ids'], ['encoding'])
 
     def test_warm_state_retains_old_constraint_without_resending_user(self):
         first = self.live_state()
@@ -1375,6 +1422,10 @@ class ContextTests(unittest.TestCase):
             catalog_coverage=[], unresolved=[], focus_refs=[], item_coverage=['req'], claims=claims,
             findings=[], replacements=[], focus_candidates=[]))
         self.assertIn('unverified claim cannot close', self.packet(rejected)['validation_feedback'])
+        self.assertIn('requirement req', self.packet(rejected)['validation_feedback'])
+        self.assertIn('claim=unverified', self.packet(rejected)['validation_feedback'])
+        self.assertEqual(rejected['transaction']['validation_failures'],
+                         {'unverified claim cannot close its requirement': 1})
         self.assertEqual(self.packet(rejected)['stage'], 'judge')
         result = self.judgment(rejected, claims=claims)
         self.assertEqual(result['status'], 'checked', result.get('reason'))
