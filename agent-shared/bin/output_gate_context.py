@@ -1325,21 +1325,32 @@ def accept_judgment(tx, answer):
                 later = [s for s in tx['sources'].values() if s['kind'] in ('evidence', 'gap') and support_seq < s['seq'] <= tx['source_end']['seq']]
                 if later:
                     fresh = c.get('freshness') or {}
-                    grounds = resolve_refs(tx, fresh.get('refs', []), True)
                     frontier = max(s['seq'] for s in later)
-                    if fresh.get('through_seq') != frontier or not fresh.get('reason'):
-                        raise ValueError('current-state freshness does not reach the evidence frontier')
-                    if fresh.get('basis') == 'changes_reviewed':
-                        if any(not s['available'] or s['producer_truncated'] for s in later):
-                            raise ValueError('current-state freshness cannot review unavailable or truncated operations')
-                        required = [ref(s, f) for s in later for f in ('call', 'output') if f in s['fields']]
-                        if any(not covered(r, tx['served_refs']) for r in required) or any(not any(g['ref']['id'] == s['id'] and g['ref']['rev'] == s['rev'] for g in grounds) for s in later):
-                            raise ValueError('current-state freshness leaves later operations unreviewed')
-                    elif fresh.get('basis') == 'reverified':
-                        if not any(g['kind'] == 'evidence' and g['ref']['field'] == 'output' and tx['sources'][g['ref']['id'] + ':' + g['ref']['rev']]['seq'] == frontier and g['available'] and not g['producer_truncated'] for g in grounds):
-                            raise ValueError('current-state freshness needs a new actual verification result')
-                    else:
-                        raise ValueError('current-state freshness is unresolved')
+                    try:
+                        grounds = resolve_refs(tx, fresh.get('refs', []), True)
+                        if fresh.get('through_seq') != frontier or not fresh.get('reason'):
+                            raise ValueError('current-state freshness does not reach the evidence frontier')
+                        if fresh.get('basis') == 'changes_reviewed':
+                            if any(not s['available'] or s['producer_truncated'] for s in later):
+                                raise ValueError('current-state freshness cannot review unavailable or truncated operations')
+                            required = [ref(s, f) for s in later for f in ('call', 'output') if f in s['fields']]
+                            if any(not covered(r, tx['served_refs']) for r in required) or any(not any(g['ref']['id'] == s['id'] and g['ref']['rev'] == s['rev'] for g in grounds) for s in later):
+                                raise ValueError('current-state freshness leaves later operations unreviewed')
+                        elif fresh.get('basis') == 'reverified':
+                            if not any(g['kind'] == 'evidence' and g['ref']['field'] == 'output' and tx['sources'][g['ref']['id'] + ':' + g['ref']['rev']]['seq'] == frontier and g['available'] and not g['producer_truncated'] for g in grounds):
+                                raise ValueError('current-state freshness needs a new actual verification result')
+                        else:
+                            raise ValueError('current-state freshness is unresolved')
+                    except ValueError as error:
+                        error.add_note('freshness_context: ' + encoded(dict(claim_id=c['id'],
+                            frontier_seq=frontier, received_refs=fresh.get('refs', []),
+                            frontier_sources=[dict(output_ref=ref(s, 'output') if 'output' in s['fields'] else None,
+                                available=s['available'], producer_truncated=s['producer_truncated'])
+                                for s in later if s['seq'] == frontier])).decode())
+                        error.add_note('Frontier refs locate originals, not proof of this claim. Retrieve relevant unread originals; '
+                            'use reverified only for the same target/version and every claimed fact, or changes_reviewed '
+                            'after grounding every later operation. Otherwise return an unverified claim with its finding.')
+                        raise
         if c['verdict'] == 'outside_scope' and not c.get('reason'):
             raise ValueError('outside-scope claim needs reason')
         if c['verdict'] == 'supported' and not any(e.get('relation') == 'supports' for e in evidence):

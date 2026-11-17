@@ -654,6 +654,32 @@ class ContextTests(unittest.TestCase):
         result = self.judgment(ready, claims=[claim])
         self.assertIn('freshness', self.packet(result)['validation_feedback'])
 
+    def test_reverification_feedback_identifies_the_claim_and_frontier_for_repair(self):
+        self.payload['evidence'] = [{'id': 'old', 'command': 'verify release', 'output': 'release passed'},
+                                    {'id': 'latest', 'command': 'verify release again', 'output': 'release still passed'}]
+        ready = self.update(self.ready())
+        sources = sorted((s for s in ready['transaction']['sources'].values() if s['kind'] == 'evidence'), key=lambda s: s['seq'])
+        old, latest = [checker.context.ref(s, 'output') for s in sources]
+        ready = self.reply(ready, dict(kind='need_refs', refs=[old]))
+        claim = dict(id='release-current', answer_ref=self.packet(ready)['answers'][0]['ref'],
+            text='release passed', requirement_ids=[], evidence=[dict(ref=old, relation='supports')],
+            verdict='supported', temporal_scope='current',
+            freshness=dict(basis='reverified', through_seq=sources[1]['seq'], refs=[old], reason='checked release'))
+        result = self.judgment(ready, claims=[claim])
+        self.assertEqual(result['status'], 'ready')
+        feedback = self.packet(result)['validation_feedback']
+        self.assertIn('freshness_context: ', feedback)
+        detail = json.loads(next(line.removeprefix('freshness_context: ') for line in feedback.splitlines()
+                                 if line.startswith('freshness_context: ')))
+        self.assertEqual(detail['claim_id'], 'release-current')
+        self.assertEqual(detail['frontier_seq'], sources[1]['seq'])
+        self.assertEqual(detail['frontier_sources'][0]['output_ref'], latest)
+        self.assertEqual(detail['received_refs'], [old])
+        ready = self.reply(result, dict(kind='need_refs', refs=[latest]))
+        claim['freshness']['refs'] = [latest]
+        result = self.judgment(ready, claims=[claim])
+        self.assertEqual(result['status'], 'checked', result.get('reason'))
+
     def test_reviewed_truncated_operation_cannot_close_current_state(self):
         self.payload['evidence'] = [{'id':'old', 'command':'verify', 'output':'passed'},
             {'id':'change', 'command':'opaque', 'output':'partial', 'truncated':True}]
