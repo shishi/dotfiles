@@ -200,6 +200,12 @@ if [ -n "$memory_dir" ]; then
 fi
 
 configure_codex_config_filter
+if git -C "$DOTDIR" rev-parse --git-dir >/dev/null 2>&1; then
+  (cd "$DOTDIR" && bash agent-shared/bin/install-dotfiles-hooks.sh) || {
+    echo "setup.sh: dotfiles commit hook installation failed" >&2
+    exit 1
+  }
+fi
 link_agent_home "$DOTDIR/codex" "$HOME/.codex"
 mkdir -p "$HOME/.agent-shared"
 link_agent_home "$DOTDIR/codex/skills" "$HOME/.agent-shared/skills"

@@ -125,15 +125,6 @@
           }
         ],
         "matcher": "startup|clear|compact"
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash '/Users/shigenobu.407/.codex/herdr-agent-state.sh' session",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
       }
     ],
     "Stop": [

@@ -21,6 +21,12 @@ for dir in "$REPO"/codex/skills/*/; do
   other="$REPO/claude/skills/$name"
   [ -d "$other" ] || continue
 
+  if [ ! -r "$dir/SKILL.md" ] || [ ! -r "$other/SKILL.md" ]; then
+    echo "NG: $name (SKILL.md is missing or unreadable)"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+
   # ファイル構成の一致
   files_codex=$(cd "$dir" && find . -type f | sort)
   files_claude=$(cd "$other" && find . -type f | sort)

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+[ "$(git config --local --get dotfiles.portabilityCheck || :)" = true ] || exit 0
+repo_root=$(git rev-parse --show-toplevel)
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c '' >/dev/null 2>&1; then
+    exec "$candidate" "$repo_root/agent-shared/bin/check-dotfiles-portability.py"
+  fi
+done
+echo 'dotfiles portability: Python is not available. Install Python 3 to validate the commit.' >&2
+exit 1
