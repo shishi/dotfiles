@@ -324,6 +324,101 @@ class SkillSourceTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(registry.read_bytes(), before)
 
+    def test_reprepare_rejects_dropped_repair_inside_an_edited_file(self):
+        middle = 'unchanged\n' * 20
+        (self.upstream / 'SKILL.md').write_text('original heading\n' + middle + 'original ending\n')
+        (self.effective / 'SKILL.md').write_text('repaired heading\n' + middle + 'repaired ending\n')
+        self.prepare()
+        (self.upstream / 'SKILL.md').write_text('new upstream heading\n' + middle + 'original ending\n')
+        (self.effective / 'SKILL.md').write_text('new heading with repair\n' + middle + 'original ending\n')
+        registry = self.state / 'registry.json'
+        before = registry.read_bytes()
+        command = [sys.executable, str(SCRIPT), str(self.upstream), '--prepare']
+        environment = {**os.environ, 'AGENT_SKILL_OVERRIDES_DIR': str(self.state)}
+        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('SKILL.md', result.stderr)
+        self.assertEqual(registry.read_bytes(), before)
+        expected = 'new heading with repair\n' + middle + 'repaired ending\n'
+        (self.effective / 'SKILL.md').write_text(expected)
+        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(json.loads(result.stdout)['path']).read_text(), expected)
+
+    def test_reprepare_rejects_dropped_upstream_change_inside_an_edited_file(self):
+        middle = 'unchanged\n' * 20
+        (self.upstream / 'SKILL.md').write_text('original heading\n' + middle + 'original ending\n')
+        (self.effective / 'SKILL.md').write_text('repaired heading\n' + middle + 'original ending\n')
+        self.prepare()
+        (self.upstream / 'SKILL.md').write_text('original heading\n' + middle + 'new upstream ending\n')
+        (self.effective / 'SKILL.md').write_text('updated repaired heading\n' + middle + 'original ending\n')
+        registry = self.state / 'registry.json'
+        before = registry.read_bytes()
+        command = [sys.executable, str(SCRIPT), str(self.upstream), '--prepare']
+        environment = {**os.environ, 'AGENT_SKILL_OVERRIDES_DIR': str(self.state)}
+        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('SKILL.md', result.stderr)
+        self.assertEqual(registry.read_bytes(), before)
+        expected = 'updated repaired heading\n' + middle + 'new upstream ending\n'
+        (self.effective / 'SKILL.md').write_text(expected)
+        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(json.loads(result.stdout)['path']).read_text(), expected)
+
+    def test_reprepare_requires_explicit_removal_of_a_conflicting_repair(self):
+        self.prepare()
+        (self.upstream / 'SKILL.md').write_text('new upstream behavior\n')
+        (self.effective / 'SKILL.md').write_text('new upstream behavior\n')
+        registry = self.state / 'registry.json'
+        before = registry.read_bytes()
+        command = [sys.executable, str(SCRIPT), str(self.upstream), '--prepare']
+        environment = {**os.environ, 'AGENT_SKILL_OVERRIDES_DIR': str(self.state)}
+        result = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(registry.read_bytes(), before)
+        result = subprocess.run([*command, '--drop-repair', 'SKILL.md'],
+            env=environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(json.loads(result.stdout)['path']).read_text(), 'new upstream behavior\n')
+
+    def test_reprepare_allows_binary_repair_edits_without_weakening_refresh(self):
+        (self.upstream / 'asset.bin').write_bytes(b'\x00original asset')
+        (self.effective / 'asset.bin').write_bytes(b'\x00repaired asset')
+        self.prepare()
+        expected = b'\x00improved repaired asset'
+        (self.effective / 'asset.bin').write_bytes(expected)
+        result = subprocess.run([sys.executable, str(SCRIPT), str(self.upstream), '--prepare'],
+            env={**os.environ, 'AGENT_SKILL_OVERRIDES_DIR': str(self.state)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.resolve(self.upstream / 'asset.bin')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(json.loads(result.stdout)['path']).read_bytes(), expected)
+        (self.upstream / 'asset.bin').write_bytes(b'\x00new upstream asset')
+        result = self.resolve(self.upstream / 'asset.bin')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('asset.bin', result.stderr)
+
+    def test_reprepare_preserves_mixed_newlines_when_editing_a_repair(self):
+        (self.upstream / 'SKILL.md').write_bytes(b'original\r\nunchanged\n')
+        (self.effective / 'SKILL.md').write_bytes(b'repaired\r\nunchanged\n')
+        self.prepare()
+        expected = b'improved repair\r\nunchanged\n'
+        (self.effective / 'SKILL.md').write_bytes(expected)
+        result = subprocess.run([sys.executable, str(SCRIPT), str(self.upstream), '--prepare'],
+            env={**os.environ, 'AGENT_SKILL_OVERRIDES_DIR': str(self.state)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(json.loads(result.stdout)['path']).read_bytes(), expected)
+        self.assertEqual((self.effective / 'SKILL.md').read_bytes(), expected)
+
     def test_concurrent_preparations_preserve_both_registrations(self):
         self.register()
         registry = self.state / 'registry.json'
