@@ -610,10 +610,10 @@ def codex_command(model, effort, cyber_program, workdir):
     return command_from_env('OUTPUT_GATE_CODEX_CMD', ['codex']) + command + ['-']
 
 
-def claude_command(model, effort, instructions):
+def claude_command(model, effort, instructions, schema=None):
     command = ['-p', '--model', model, '--effort', effort, '--tools', '', '--setting-sources', '',
                '--strict-mcp-config', '--no-session-persistence', '--system-prompt', instructions,
-               '--output-format', 'json', '--json-schema', context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if context.INSTRUCTIONS in instructions else json.dumps(CHECKER_SCHEMA)]
+               '--output-format', 'json', '--json-schema', context.encoded(schema or (context.protocol_schema(CHECKER_SCHEMA) if context.INSTRUCTIONS in instructions else CHECKER_SCHEMA)).decode()]
     return command_from_env('OUTPUT_GATE_CLAUDE_CMD', ['claude']) + command
 
 
@@ -668,7 +668,7 @@ def judge_failure(family, code, timeout):
 def run_codex(prompt, config, cyber_program, workdir, timeout, final, cancel=None):
     model = checker_model(cyber_program, config['model'])
     (workdir / INSTRUCTIONS_FILE).write_text((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), encoding='utf-8')
-    (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
+    (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA, json.loads(prompt))).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
     env = {k: v for k, v in os.environ.items() if k not in CODEX_DROPPED_ENV}
     env['AGENT_DELEGATED_SESSION'] = '1'
     code, out = run_judge(codex_command(model, config['effort'], cyber_program, workdir), prompt, workdir, timeout, env, cancel)
@@ -685,7 +685,8 @@ def run_claude(prompt, config, workdir, timeout, final, cancel=None):
     env = {k: v for k, v in os.environ.items() if k not in CLAUDE_DROPPED_ENV}
     # 検査役のセッションで出力ゲートの mod が動き、検査役の回答をまた検査しないようにする。
     env['AGENT_DELEGATED_SESSION'] = '1'
-    code, out = run_judge(claude_command(config['model'], config['effort'], (INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final)),
+    schema = context.protocol_schema(CHECKER_SCHEMA, json.loads(prompt)) if final else None
+    code, out = run_judge(claude_command(config['model'], config['effort'], (INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), schema),
                           prompt, workdir, timeout, env, cancel)
     engine = {'family': 'claude', 'model': config['model'], 'effort': config['effort']}
     try:
@@ -1626,7 +1627,7 @@ def raw_judge(request, cancel=None):
             canonical=context.read(Path(tx['directory'])/'transaction.json') if tx.get('directory') else tx
             if not isinstance(canonical,dict) or any(canonical.get(k)!=tx.get(k) for k in ('id','step','payload_rev')):
                 raise ValueError('stale context transaction CAS')
-            expected=context.digest([INSTRUCTIONS_COMMON+INSTRUCTIONS_FINAL+context.INSTRUCTIONS,prompt,context.protocol_schema(CHECKER_SCHEMA)])
+            expected=context.digest([INSTRUCTIONS_COMMON+INSTRUCTIONS_FINAL+context.INSTRUCTIONS,prompt,context.protocol_schema(CHECKER_SCHEMA,json.loads(prompt))])
             if canonical.get('packet_rev')!=expected or context.digest([response_rules(),checked_rules()])!=tx.get('rules_source_rev'):
                 raise ValueError('prepared packet snapshot changed')
         else:
