@@ -4,6 +4,8 @@
 
 ## 利用方法
 
+現在、出力ゲートは Claude Code と Codex のどちらでも自動では動きません。`claude/settings.json` と `codex/hooks.json` は出力ゲートの hook を登録しておらず、`setup.sh` も有効にしません。状態ファイル (`claude-enabled`、`codex.json`) が残っていても検査は行われません。検査の実装は手動で使うために残しています。以下は、hook を登録して自動検査を使う場合の説明です。
+
 状態ファイル `${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json` がない場合、Codex の hook が出力ゲートを有効にします。状態ファイルがある場合は、有効・無効の設定を維持します。`setup.sh` を先に実行した環境では、最初のセッションから検査します。検査に伴う[外部サービスへの送信](#検査役のモデル)を確認してください。
 
 `enable` が設定を変更し、共有 daemon の稼働を確認できた場合は、daemon を再起動します。接続中のセッションは中断されます。再起動後の daemon は、`enable` を実行した環境変数を引き継ぎます。
