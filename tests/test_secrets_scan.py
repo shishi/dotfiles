@@ -7,6 +7,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Windows では、コマンド名だけを渡すと PATH より先に System32 が探され、WSL の bash が選ばれる。
+# WSL の bash では Windows 側の git・gitleaks や一時ディレクトリを使えないので、PATH の順で見つかる bash (Git Bash) を使う。
+# PATH でも System32 が Git Bash より前にあると、ここでも WSL の bash になる
+BASH = shutil.which("bash") or "bash"
 
 
 class SecretsScanTest(unittest.TestCase):
@@ -26,11 +30,11 @@ class SecretsScanTest(unittest.TestCase):
                 "[[rules]]\nid = 'fixture'\ndescription = 'synthetic fixture'\n"
                 "regex = '''audit-secret-[0-9]{6}'''\n")
             (repo / "clean.txt").write_text("ordinary text\n")
-            clean = subprocess.run(["bash", "-c", steps], cwd=repo / "sub", capture_output=True)
+            clean = subprocess.run([BASH, "-c", steps], cwd=repo / "sub", capture_output=True)
             self.assertEqual(clean.returncode, 0, clean.stderr.decode())
             (repo / "secret.txt").write_text("audit-secret-123456\n")
-            root_result = subprocess.run(["bash", "-c", steps], cwd=repo, capture_output=True)
-            nested_result = subprocess.run(["bash", "-c", steps], cwd=repo / "sub", capture_output=True)
+            root_result = subprocess.run([BASH, "-c", steps], cwd=repo, capture_output=True)
+            nested_result = subprocess.run([BASH, "-c", steps], cwd=repo / "sub", capture_output=True)
             self.assertNotEqual(root_result.returncode, 0)
             self.assertNotEqual(nested_result.returncode, 0)
 

@@ -250,7 +250,10 @@ def validate(root, files, checks):
             except ValueError as error:
                 raise ValueError(f'Syntax validation failed: {relative}: {error}') from error
         elif file.suffix in {'.js', '.mjs', '.cjs', '.sh'}:
-            command = ['bash', '-n'] if file.suffix == '.sh' else ['node', '--check']
+            # Windows では名前だけの 'bash' が PATH より先に System32 の WSL bash を選び、
+            # Windows のパスを読めずに正しいスクリプトも失敗させるので、PATH の順で探した bash を使う
+            # (PATH でも System32 が Git Bash より前にあると WSL の bash になる)
+            command = [shutil.which('bash') or 'bash', '-n'] if file.suffix == '.sh' else ['node', '--check']
             result = subprocess.run([*command, str(file)], capture_output=True)
             if result.returncode != 0:
                 raise ValueError(f'Syntax validation failed: {relative}: {result.stderr.decode(errors="replace")[:2000]}')
