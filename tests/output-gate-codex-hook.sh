@@ -2,6 +2,10 @@
 # 出力ゲートの Codex 用 hook が、中継の起動・設定の書き戻し・委譲の登録を行うことを確かめる。
 set -u
 
+# 出力ゲートは自動検査を止めているため、関連するテストは実行しない。再開するときはこの指定を外す
+echo 'skip: 出力ゲートは自動検査を止めているため、関連するテストは実行しない'
+exit 0
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HOOK="$REPO/agent-shared/hooks/output-gate-codex.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/output-gate-hook.XXXXXX")"

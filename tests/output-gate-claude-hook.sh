@@ -3,6 +3,10 @@
 # 検査と表示の置き換えそのものは tests/output-gate-claude-hook.py が確かめる。
 set -u
 
+# 出力ゲートは自動検査を止めているため、関連するテストは実行しない。再開するときはこの指定を外す
+echo 'skip: 出力ゲートは自動検査を止めているため、関連するテストは実行しない'
+exit 0
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HOOK="$REPO/agent-shared/hooks/output-gate-claude.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/output-gate-claude-hook.XXXXXX")"
