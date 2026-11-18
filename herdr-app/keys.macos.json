@@ -68,6 +68,7 @@
     "cmd-c": "terminal.copy",
     "cmd-v": "terminal.paste",
     "ctrl-v": "terminal.paste_image",
+    "ctrl-j": "skk-kana.hiragana",
     "alt-left": "send:\u001bb",
     "alt-right": "send:\u001bf",
     "alt-backspace": "send:\u0017",
