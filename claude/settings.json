@@ -152,6 +152,16 @@
             "statusMessage": "gh の呼び出し形を確認中..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-first.sh pre",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -246,6 +256,15 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory lookup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-first.sh prompt",
             "timeout": 10
           }
         ]
