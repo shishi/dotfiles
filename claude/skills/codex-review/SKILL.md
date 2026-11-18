@@ -73,9 +73,11 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    export AGENT_DELEGATED_SESSION=1
    codex exec -s read-only -c 'openai_base_url=""' --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" 2> "$REVIEW_LOG" |
      tee "$REVIEW_EVENTS" | jq -Rrc --unbuffered 'fromjson? | select(.type == "item.completed") | .item | "\(.type) \(.command // .text // "" | tostring | .[0:80])"'
-   ps=("${PIPESTATUS[@]}"); rc=${ps[0]}
+   # 各段の終了コードは bash では PIPESTATUS、zsh では pipestatus に入り、添字の始まりも違う。
+   # 定義されている側だけを位置引数で受けると、どちらのシェルでも $1 が codex、$2 が tee になる。取れなければ失敗として扱う
+   set -- ${PIPESTATUS[@]+"${PIPESTATUS[@]}"} ${pipestatus[@]+"${pipestatus[@]}"}; rc=${1:-1}
    # events の保存 (tee) に失敗したら、その内容で失敗・拒否を確かめられないため失敗として扱う
-   [ "${ps[1]}" -eq 0 ] || rc=1
+   [ "${2:-1}" -eq 0 ] || rc=1
    FINISHED_AT=$(date +%s)
    RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
    # このブロックが終わるとシェル変数は消える。採否を追記する後の Bash 呼び出しが読めるよう、記録のパスをファイルに残す

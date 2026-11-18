@@ -256,7 +256,7 @@ exit "$rc"
 長い委譲は起動元の timeout と background 実行の仕様を確認し、必要なら最初から background
 で始める。background では、監視 hook がタスクの出力で進み具合を判定する。出力をすべてファイルへ向けたままだと
 進んでいても確認のたびに起こされるため、上の `codex exec` の行を codex-review と同じ形
-(`2> "$WORK/run.log" | tee "$WORK/events.jsonl" | jq` で完了した項目を 1 行ずつ出し、`PIPESTATUS` で
+(`2> "$WORK/run.log" | tee "$WORK/events.jsonl" | jq` で完了した項目を 1 行ずつ出し、codex-review と同じ受け方で
 codex と tee の終了コードを確かめる) に替える。前景では文脈が増えるだけなので替えない。
 実行 handle と `WORK` を保持し、同じ実行を追跡する。観測の timeout だけでは
 CLI の終了・最終 JSON の欠落・子プロセスの停止を断定しない。
