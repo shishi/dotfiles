@@ -13,13 +13,19 @@ OpenWhispr の文字起こし履歴から繰り返す聞き間違いを拾い、
 
 辞書・置換・整形の指示はアプリの中に保存されます。保存ファイルを直接書き換えず、アプリ自身の処理を通して変更します。
 
-1. OpenWhispr を終了し、開発者用の接続口を付けて起動します。Scoop で導入した場合のパスです。GUI アプリなので末尾の `&` で切り離します。
+1. OpenWhispr を終了し、開発者用の接続口を付けて次のコマンドで起動します。パスは winget (`OpenWhispr.OpenWhispr`) で導入した場合のものです。
 
    ```bash
-   "$USERPROFILE/scoop/apps/openwhispr/current/OpenWhispr.exe" --remote-debugging-port=9333 --remote-debugging-address=127.0.0.1 >/dev/null 2>&1 &
+   powershell.exe -NoProfile -Command '$exe = Join-Path $env:LOCALAPPDATA "Programs\OpenWhispr\OpenWhispr.exe"; (Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "`"$exe`" --remote-debugging-port=9333 --remote-debugging-address=127.0.0.1" }).ReturnValue'
    ```
 
-   起動して十数秒待ってから、同じ exe を引数なしで `&` 付きでもう一度起動します。起動中のアプリに設定画面が開きます。
+   表示される `0` は、起動の要求が成功したことを示します。シェルから exe を直接起動しません。MSIX パッケージで配布された Claude Desktop の中でコマンドを実行していると、直接起動した OpenWhispr もそのパッケージの中で動きます。すると OpenWhispr が新しく作るファイルやレジストリの値がパッケージ専用の場所 (ファイルは `%LOCALAPPDATA%\Packages\<パッケージ名>\LocalCache\Roaming\open-whispr`) に入り、普段使っている OpenWhispr と設定・履歴・ログイン状態・自動起動の登録が分かれることがあります。WMI の `Win32_Process.Create` で起動したプロセスはパッケージの外で動くので、上のコマンドではこの分裂が起きません。
+
+   起動して十数秒待ってから、接続口を付けない次のコマンドでもう一度起動します。起動中のアプリに設定画面が開きます。あとで接続口なしで起動し直すときも、このコマンドを使います。
+
+   ```bash
+   powershell.exe -NoProfile -Command '$exe = Join-Path $env:LOCALAPPDATA "Programs\OpenWhispr\OpenWhispr.exe"; (Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "`"$exe`"" }).ReturnValue'
+   ```
 2. `node scripts/ow-eval.mjs <file.js>` で、設定画面の中で JavaScript を評価できます。ファイルの中身は async 関数の本体として評価されるので、値は `return` で返します。`await ow.store()` で設定のストア、`await ow.reasoning()` で整形処理を取り出せます。設定はストアの setter で変更します。`localStorage` を直接書き換えると、画面の状態と食い違います。
 3. 作業が終わったら「6. 保存して元に戻す」で、接続口なしの通常の起動に戻します。接続口を開いたままにしません。
 
@@ -79,9 +85,9 @@ node scripts/ow-cleanup-check.mjs inputs.json pairs.tsv --save after.json
 
 ## 6. 保存して元に戻す
 
-1. 設定画面で `window.electronAPI.relaunchApp()` を呼びます。アプリが正常に終了するときに、設定がディスクへ書き込まれます。強制終了すると、直前の変更が失われることがあります。再起動したアプリは接続口を引き継ぎます。この呼び出しで接続が切れるので、`ow-eval.mjs` は「接続が切れました」と表示して終わります。設定画面が開かなければ、exe を引数なしでもう一度起動します。アプリが起き直らないこともあります。OpenWhispr のプロセスが無ければ、「1. アプリを操作できる状態にする」と同じ手順で起動します。設定は終了時に書き込まれているので失われません。
+1. 設定画面で `window.electronAPI.relaunchApp()` を呼びます。アプリが正常に終了するときに、設定がディスクへ書き込まれます。強制終了すると、直前の変更が失われることがあります。再起動したアプリは接続口を引き継ぎます。この呼び出しで接続が切れるので、`ow-eval.mjs` は「接続が切れました」と表示して終わります。設定画面が開かなければ、「1. アプリを操作できる状態にする」の接続口を付けないコマンドで起動します。アプリが起き直らないこともあります。OpenWhispr のプロセスが無ければ、「1. アプリを操作できる状態にする」と同じ手順で起動します。設定は終了時に書き込まれているので失われません。
 2. 再起動したアプリの中で、ストアの値と `getDictionary()`・`getSnippets()` を読み、変更が残っていることを確かめます。保存ファイルは圧縮されることがあるので、ファイルを直接読むだけでは判断しません。
-3. OpenWhispr を終了し、接続口なしで `&` 付きで起動し直します。`curl -s -m 2 http://127.0.0.1:9333/json/list` が接続できないことを確かめます。
+3. OpenWhispr を終了し、「1. アプリを操作できる状態にする」の接続口を付けないコマンドで起動し直します。`curl -s -m 2 http://127.0.0.1:9333/json/list` が接続できないことを確かめます。
 
 ## アプリの仕様で知っておくこと
 

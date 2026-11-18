@@ -18,7 +18,7 @@ export async function openPanel() {
   const port = process.env.OW_CDP_PORT || "9333";
   const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
   const target = list.find((t) => t.url.includes("panel=true"));
-  if (!target) throw new Error("設定画面のページが見つかりません。引数なしで OpenWhispr をもう一度起動して設定画面を開いてください。");
+  if (!target) throw new Error("設定画面のページが見つかりません。SKILL.md の「1. アプリを操作できる状態にする」にある、接続口を付けないコマンドで OpenWhispr を起動して設定画面を開いてください。");
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
   let id = 0;
