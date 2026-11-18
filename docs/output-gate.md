@@ -4,7 +4,22 @@
 
 ## 利用方法
 
-現在、出力ゲートは Claude Code と Codex のどちらでも自動では動きません。`claude/settings.json` と `codex/hooks.json` は出力ゲートの hook を登録しておらず、`setup.sh` も有効にしません。状態ファイル (`claude-enabled`、`codex.json`) が残っていても検査は行われません。検査の実装は手動で使うために残しています。以下は、hook を登録して自動検査を使う場合の説明です。
+現在、出力ゲートは Claude Code と Codex のどちらでも自動では動きません。`claude/settings.json` と `codex/hooks.json` は出力ゲートの hook を登録しておらず、`setup.sh` も有効にしません。ただし、以前に有効にしたマシンでは `config.toml` の `openai_base_url` が中継を指したまま残り、起動済みの中継が Codex の回答を検査し続けます。そのようなマシンでは、次の順に止めてください。`disable` は状態ファイルと `config.toml` の行を戻すだけで、起動済みの中継はそのまま動き続けるためです。
+
+```sh
+bash ~/.agent-shared/hooks/output-gate-codex.sh disable
+bash ~/.agent-shared/hooks/output-gate-claude.sh disable
+codex app-server daemon restart
+port=$(sed -n 's/.*"port": *\([0-9]*\).*/\1/p' "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json")
+curl -s -X POST "http://127.0.0.1:$port/__gate/shutdown"
+curl -s "http://127.0.0.1:$port/__gate/version"
+```
+
+`codex app-server daemon restart` は共有 app-server を使っている場合だけ必要です。開いている Codex のセッションも起動し直し、中継へ新しい要求が届かない状態にしてから中継を止めます。中継のポートは状態ファイル `codex.json` の `port` から読みます (既定は 18765、WSL は 18766)。
+
+中継は検査中の要求がなければ `bye` を返して終了します。検査中は `busy` を返して終了しないので、検査が終わってから同じコマンドを実行してください。中継は要求の処理中だけ検査処理と検査役を動かし、Codex が切断した要求の検査処理は子孫ごと止めます。そのため、検査中の要求がない時点で止めれば、それらも残りません。最後のコマンドが何も表示しなければ (接続できなければ) 停止は完了です。
+
+検査の実装は手動で使うために残しています。以下は、hook を登録して自動検査を使う場合の説明です。
 
 状態ファイル `${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json` がない場合、Codex の hook が出力ゲートを有効にします。状態ファイルがある場合は、有効・無効の設定を維持します。`setup.sh` を先に実行した環境では、最初のセッションから検査します。検査に伴う[外部サービスへの送信](#検査役のモデル)を確認してください。
 
