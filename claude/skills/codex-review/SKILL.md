@@ -54,8 +54,8 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
    失敗しうるため使わない)。モデルは呼び出し側が `agent-delegation` と `review-gate` の許容候補から選ぶ。
-   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` を
-   `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
+   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` の
+   系統を `sol` へ変更し、推論量は `high` を維持する。
    `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
    この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
    以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
@@ -64,7 +64,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    監視 hook が前回の確認から 10 分、20 分、40 分、以後 40 分ごとにその進み具合を判定して、止まっていればエージェントを起こす。
    **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
-   REVIEW_MODEL=gpt-6-astra
+   REVIEW_MODEL=$("$HOME/.agent-shared/bin/codex-model" astra) || exit 1  # 系統の最新を解決する
    REVIEW_EFFORT=high
    PERSPECTIVE=correctness
    STARTED_AT=$(date +%s)

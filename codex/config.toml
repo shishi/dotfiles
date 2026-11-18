@@ -1,7 +1,7 @@
 personality = "friendly"
-model = "gpt-6.1-sol"
+# model は書かない。版を固定すると新しい世代が出ても古いモデルを使い続けるため、CLI の既定 (最新の推奨モデル) に任せる。
 model_reasoning_effort = "high"
-# gpt-6-astra の実験的な拡張枠。圧縮後の処理と出力に余裕を残す。
+# モデル一覧の max_context_window にある実験的な拡張枠。圧縮後の処理と出力に余裕を残す。
 model_context_window = 872000
 model_auto_compact_token_limit = 750000
 project_doc_max_bytes = 65536
@@ -43,8 +43,7 @@ extra_policy = '''
 
 [agents]
 enabled = true
-# 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。以下は未指定時の既定値。
-default_subagent_model = "gpt-6.1-sol"
+# 起動ごとのモデル・推論量は AGENTS.md に従って選ぶ。モデルは版を固定しないため既定値を置かない。
 default_subagent_reasoning_effort = "medium"
 
 [browser_use.default_origin_policy]

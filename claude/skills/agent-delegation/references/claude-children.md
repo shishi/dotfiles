@@ -11,7 +11,7 @@
 - `codex-delegate` の対象外: 設計判断とユーザーとの対話が要る作業、レビュー(review-gate / codex-review skill の責務)、記憶 repo への書き込み。`~/.codex` が dotfiles の `codex/` を指していないマシンでは chore と implement を委譲しません。
 - タスクごとの選択: ネットワークを開けるか(既定は遮断)、`workspace-write` を今の worktree に流してよいか(codex の上書きは差分に現れないため、未コミット変更と範囲が重なるなら先に commit します)。
 - 委譲で入った変更は自分が書いた変更と同じ扱いです。委譲専用の検査は持たず、差分確認と`review-gate` による独立レビューで見ます。
-- Codex へは定型作業なら `gpt-6-luna` / `high`、通常の実装・調査なら `gpt-6.1-sol` / `medium`(複雑なら `high`)、広い影響を伴う難しい作業なら `gpt-6-astra` / `high` を初期値にし、CLI のモデルと推論量を明示します。Codex の子の既定値は、委譲先の CLI 本体のモデルを変えません。
+- Codex へは定型作業なら Luna / `high`、通常の実装・調査なら Sol / `medium`(複雑なら `high`)、広い影響を伴う難しい作業なら Astra / `high` を初期値にし、各系統の最新を `~/.agent-shared/bin/codex-model <系統>` で解決して渡し、CLI のモデルと推論量を明示します。Codex の子の既定値は、委譲先の CLI 本体のモデルを変えません。
 
 ## Claude 内の子の選択
 

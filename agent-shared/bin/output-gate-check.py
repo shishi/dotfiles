@@ -94,12 +94,14 @@ INPUT_LIMIT = 400_000
 TRIM_KEEP = 1_000          # 省くときに出力の先頭と末尾に残す最小のバイト数 (それぞれ)
 # 確認していない主張とごまかしの抜粋の最小の長さ (正規化後の文字数)。出どころの発言の全体と等しい抜粋には適用しない。
 MIN_EXCERPT = 8
-CODEX_MODELS = ('gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra')   # cyber のプログラムに合うモデルを探す順
+# cyber のプログラムに合うモデルを探す系統の順。Codex のモデルは系統名で持ち、起動時にその系統の最新へ解決する
+# (版番号を書くと、新しい世代が出ても古いモデルで検査し続けるため)。
+CODEX_FAMILIES = ('sol', 'luna', 'astra')
 CYBER_PROGRAMS = {'standard', 'daybreak_blue', 'daybreak_red'}
 FAMILIES = ('codex', 'claude')
 # どちらの CLI の回答も、精度の基準を満たし最も速い Claude の系統 (Opus / low) で先に検査する。
 DEFAULT_FIRST = 'claude'
-DEFAULT_ENGINES = {'codex': {'model': 'gpt-6.1-terra', 'effort': 'low'},
+DEFAULT_ENGINES = {'codex': {'model': 'terra', 'effort': 'low'},
                    'claude': {'model': 'opus', 'effort': 'low'}}
 # 検査役の claude を起動する環境から外す変数。出力ゲートの mod を読ませず、接続先の上書きを外す。
 CLAUDE_DROPPED_ENV = ('CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_BEDROCK_BASE_URL',
@@ -578,21 +580,60 @@ def masked_input(payload, workdir):
     return render(packet)
 
 
-def checker_model(cyber_program, preferred):
-    """cyber のアクセスプログラムを使えるモデルを、Codex が保存したモデル一覧から選ぶ。設定のモデルを先に試す。
-    違うプログラムで検査すると、検査役がセキュリティ作業の会話を断るおそれがあるため。"""
-    if cyber_program is None:
-        return preferred
+def family_models(models, family):
+    """名前が「-系統名」で終わるモデルを、新しく推奨される順 (priority の小さい順) に並べる。
+    系統名の大文字・小文字は区別しない (指示は Sol・Astra のように書く)。"""
+    suffix = '-' + family.lower()
+    return [slug for _, slug in sorted((m.get('priority', 10**9), m['slug']) for m in models
+                                       if isinstance(m, dict) and isinstance(m.get('slug'), str)
+                                       and m['slug'].endswith(suffix))]
+
+
+def newest_model(models, name):
+    """系統名 (sol など) を、一覧で表示対象 (visibility が list) のうちその系統の最新モデルへ解決する。
+    一覧は新しく推奨されるモデルほど priority が小さい。該当がなければ name をそのまま返す (具体名の指定を含む)。"""
+    listed = [m for m in models if isinstance(m, dict) and m.get('visibility') == 'list']
+    found = family_models(listed, name)
+    return found[0] if found else name
+
+
+def codex_catalog():
+    """Codex が保存したモデル一覧を読む。読めなければ CLI に一覧を出させる。どちらも得られなければ None。
+    CLI の出力は UTF-8 の JSON なので、環境の既定の文字コード (Windows の ANSI コードページなど) で
+    読まないようバイト列のまま渡す。"""
     home = Path(os.environ.get('CODEX_HOME') or Path.home() / '.codex')
     try:
-        models = json.loads((home / 'models_cache.json').read_text(encoding='utf-8')).get('models') or []
+        return json.loads((home / 'models_cache.json').read_text(encoding='utf-8')).get('models') or []
     except (OSError, ValueError, AttributeError):
-        return preferred   # 一覧が読めなければ試し、使えなければ Codex の系統の失敗として扱う
-    usable = {m.get('slug') for m in models if isinstance(m, dict)
-              and cyber_program in ((m.get('available_access_programs') or {}).get('cyber') or [])}
-    for model in (preferred, *CODEX_MODELS):
-        if model in usable:
-            return model
+        pass
+    try:
+        done = subprocess.run(command_from_env('OUTPUT_GATE_CODEX_CMD', ['codex']) + ['debug', 'models'],
+                              capture_output=True, timeout=60, check=True)
+        return json.loads(done.stdout).get('models') or []
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return None
+
+
+def checker_model(cyber_program, preferred):
+    """検査役の Codex のモデルを、Codex のモデル一覧から選ぶ。系統名はその系統の最新へ解決する。
+    cyber のアクセスプログラムを使う場合は、そのプログラムを使えるモデルだけを候補にし、設定のモデル、
+    CODEX_FAMILIES の系統順、系統内の新しい順に選ぶ。違うプログラムで検査すると、検査役が
+    セキュリティ作業の会話を断るおそれがあるため。"""
+    models = codex_catalog()
+    if models is None:
+        return preferred   # 一覧が得られなければ試し、使えなければ Codex の系統の失敗として扱う
+    preferred = newest_model(models, preferred)
+    if cyber_program is None:
+        return preferred
+    usable = [m for m in models if isinstance(m, dict)
+              and cyber_program in ((m.get('available_access_programs') or {}).get('cyber') or [])]
+    slugs = {m.get('slug') for m in usable}
+    if preferred in slugs:
+        return preferred
+    for family in CODEX_FAMILIES:
+        found = family_models(usable, family)
+        if found:
+            return found[0]
     raise EngineFailure(f'codex の検査役のモデルが cyber のアクセスプログラム ({cyber_program}) に対応していない')
 
 
@@ -1368,7 +1409,7 @@ def legacy_check(payload, deadline=None):
         settings = load_settings()
         if payload.get('independent_recheck'):
             settings['first'] = 'codex'
-            settings['codex'] = {'model': 'gpt-6-astra', 'effort': 'high'}
+            settings['codex'] = {'model': 'astra', 'effort': 'high'}
             settings['claude'] = {'model': 'fable', 'effort': 'high'}
         engines = None if payload.get('independent_recheck') else payload.get('engines')
         order = engine_order(payload['origin'], engines, settings)
@@ -1658,7 +1699,7 @@ def raw_judge(request, cancel=None):
         if timeout<=0:
             raise EngineFailure('context deadline exhausted')
         with tempfile.TemporaryDirectory(prefix='output-gate-raw-',ignore_cleanup_errors=True) as tmp:
-            config={'model':'gpt-6-astra','effort':'high'} if payload.get('independent_recheck') else load_settings()['codex']
+            config={'model':'astra','effort':'high'} if payload.get('independent_recheck') else load_settings()['codex']
             reply,engine=run_codex(prompt,config,payload.get('cyber_program'),Path(tmp),timeout,bool(payload.get('final')),cancel)
         return {'status':'answered','reply':reply,'engine':engine,'engine_failures':[],
                 'model_attempts':[{'family':'codex','outcome':'answered','elapsed_ms':round((time.monotonic()-started)*1000),'usage':engine.get('usage')}]}
@@ -1753,7 +1794,7 @@ def check(payload, deadline=None):
     try:
         settings = load_settings()
         if payload.get('independent_recheck'):
-            settings.update(first='codex', codex={'model': 'gpt-6-astra', 'effort': 'high'},
+            settings.update(first='codex', codex={'model': 'astra', 'effort': 'high'},
                             claude={'model': 'fable', 'effort': 'high'})
         order = engine_order(payload['origin'], None if payload.get('independent_recheck') else payload.get('engines'), settings)
         if not order:

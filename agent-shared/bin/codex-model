@@ -1,0 +1,48 @@
+#!/bin/sh
+# Codex のモデルの系統名 (sol・astra・luna・terra など) を受け取り、現在の CLI のモデル一覧で
+# その系統の最新モデルの名前を出す。
+# 手順や設定に版番号を書くと、新しい世代が出ても古いモデルを使い続けるため、起動のたびにここで解決する。
+# 一覧は新しく推奨されるモデルほど priority が小さいので、表示対象 (visibility が list) のうち
+# 名前が「-系統名」で終わる最小の priority を選ぶ。系統名の大文字・小文字は区別しない。
+set -eu
+
+if [ $# -ne 1 ] || [ -z "$1" ]; then
+  echo 'usage: codex-model FAMILY' >&2
+  exit 2
+fi
+
+# Windows では Microsoft Store の別名のように、見つかっても起動できない python がある。
+py_bin=
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c '' >/dev/null 2>&1; then
+    py_bin=$candidate
+    break
+  fi
+done
+if [ -z "$py_bin" ]; then
+  echo 'codex-model: 起動できる Python が見つかりません。' >&2
+  exit 1
+fi
+
+models=$(codex debug models) || {
+  echo 'codex-model: codex debug models を実行できませんでした。' >&2
+  exit 1
+}
+
+# 一覧は UTF-8 の JSON。-I では PYTHONUTF8 が効かず、Windows では標準入力が ANSI コードページで
+# 読まれるため、バイト列のまま渡す。
+printf '%s' "$models" | "$py_bin" -I -c '
+import json, sys
+family = sys.argv[1].lower()
+catalog = json.load(sys.stdin.buffer)
+models = catalog.get("models", catalog) if isinstance(catalog, dict) else catalog
+found = sorted(
+    (m.get("priority", 10**9), m["slug"])
+    for m in models
+    if isinstance(m, dict) and m.get("visibility") == "list"
+    and isinstance(m.get("slug"), str) and m["slug"].endswith("-" + family)
+)
+if not found:
+    sys.exit("codex-model: 系統 %s のモデルが一覧にありません。" % family)
+print(found[0][1])
+' "$1"
