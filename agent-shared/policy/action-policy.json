@@ -21,7 +21,7 @@
       "section": "soft_deny",
       "text": "Unrequested Push [named+specifics — **must name:** the push and its destination]: Pushing to any git remote — the session's repository and its default branch included, and pushes made indirectly, such as `gh pr create` pushing the branch — unless the user asked for that push. Asking to run a script, a task list or a build that happens to contain a push does not ask for the push; the user must have asked to push or publish that work. A bare request to push names the current branch's upstream. A request to fix a remote pull request or branch and confirm the result includes the normal, non-force push of that fix to that branch; the word \"push\" need not appear. Pushing all branches, all tags or a mirror always needs the user to name it. An instruction to keep the work local or to wait before pushing forbids the push until the user lifts it. Pushes to the user's private memory repository are covered by the Memory Repository allow rule.",
       "disabled": true,
-      "note": "2026-11-10 から、両 CLI の組み込みの push の判定を試すため無効にしている (Claude Code の auto mode は作業中のリポジトリへの通常の push を通し、他人の作業を消す force push などを止める)。戻すときは disabled と note を消し、drop_default_allow に \"Git Push Destination\" を戻して apply-action-policy を実行し、docs/agents.md の push の説明も戻す。own-repository-push は依頼のない push も許可するので、あわせて disabled を付けるか、利用者が求めた push に限る文へ直す。"
+      "note": "2026-11-10 から、両 CLI の組み込みの push の判定を試すため無効にしている (Claude Code の auto mode は作業中のリポジトリへの通常の push を通し、他人の作業を消す force push などを止める)。戻すときは disabled と note を消し、drop_default_allow に \"Git Push Destination\" を戻して apply-action-policy を実行する。Codex の生成物は docs/agents.md の配備手順に従って適用し、同じ文書の push の説明も戻す。own-repository-push は依頼のない push も許可するので、あわせて disabled を付けるか、利用者が求めた push に限る文へ直す。"
     },
     {
       "id": "unrequested-outward-write",
@@ -34,7 +34,7 @@
     {
       "id": "memory-repository",
       "section": "allow",
-      "text": "Memory Repository: Committing to and pushing (never force-pushing) the user's private memory repository — the remote github.com/shishi/agent-memory, normally cloned at ~/dev/src/github.com/shishi/agent-memory and reached through ~/.claude/memory or ~/.codex/memory — to save the user's memory. The user pre-authorized this destination and action only: content rules (credential leakage, sensitive-source provenance, data exfiltration) still judge what is pushed, and the exception does not apply if the remote was changed during the session or the repository is shown to be public."
+      "text": "Memory Repository: Committing to and pushing (never force-pushing) the user's private memory repository — the remote github.com/shishi/agent-memory, reached through ~/.claude/memory or ~/.codex/memory — to save the user's memory. The user pre-authorized this destination and action only: content rules (credential leakage, sensitive-source provenance, data exfiltration) still judge what is pushed, and the exception does not apply if the remote was changed during the session or the repository is shown to be public."
     },
     {
       "id": "own-repository-push",
