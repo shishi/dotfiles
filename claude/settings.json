@@ -12,11 +12,9 @@
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "1",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "1",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "1",
     "FORCE_AUTOUPDATE_PLUGINS": "1",
     "DISABLE_ERROR_REPORTING": "1",
-    "DISABLE_INTERLEAVED_THINKING": "1",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "DISABLE_TELEMETRY": "1",
     "MAX_MCP_OUTPUT_TOKENS": "50000",
@@ -154,6 +152,16 @@
             "statusMessage": "gh の呼び出し形を確認中..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-first.sh pre",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -248,6 +256,15 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/inject-memory.sh ~/.claude/memory lookup",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-shared/hooks/kata-first.sh prompt",
             "timeout": 10
           }
         ]

@@ -165,14 +165,22 @@ def prepare_locked(source, registry, baseline, drop):
             raise ValueError(f'Maintained repair is based on an older distribution: {", ".join(sorted(stale))}; rebuild it from the current package')
         with tempfile.TemporaryDirectory(dir=registry.parent) as directory:
             for relative, repair in package['repairs'].items():
-                if relative in drop or local.get(relative) != upstream.get(relative):
+                if relative in drop:
                     continue
                 file = safe_file(base, relative)
                 current = file.read_bytes() if file.is_file() else None
-                retained = merge_repair(current, read_object(registry.parent, repair['base']),
-                                        read_object(registry.parent, repair['local']), relative, Path(directory))
-                if retained != current:
+                file = safe_file(effective, relative)
+                candidate = file.read_bytes() if file.is_file() else None
+                previous_base = read_object(registry.parent, repair['base'])
+                previous_repair = read_object(registry.parent, repair['local'])
+                retained = merge_repair(candidate, previous_base, previous_repair,
+                                        relative, Path(directory), favor_current=candidate != current)
+                if retained != candidate:
                     raise ValueError(f'Maintained copy lost a repair: {relative}; port every repair or explicitly use --drop-repair for an intentional removal')
+                retained = merge_repair(candidate, previous_base, current,
+                                        relative, Path(directory), favor_current=True)
+                if retained != candidate:
+                    raise ValueError(f'Maintained copy lost an upstream change: {relative}; rebuild it from the current package')
     repairs = {}
     for relative in sorted(upstream.keys() | local.keys()):
         old, new = upstream.get(relative), local.get(relative)
@@ -199,19 +207,30 @@ def prepare_locked(source, registry, baseline, drop):
     return {'prepared': True, 'repairs': len(repairs), 'path': str(source)}
 
 
-def merge_repair(current, base, local, relative, scratch):
+def merge_repair(current, base, local, relative, scratch, *, favor_current=False):
     if current == base or current == local:
         return local
     if base == local:
         return current
     if None in (current, base, local):
-        raise ValueError(f'Repair conflict (file added/deleted): {relative}')
-    crlf = b'\r\n' in current and b'\n' not in current.replace(b'\r\n', b'')
+        if not favor_current:
+            raise ValueError(f'Repair conflict (file added/deleted): {relative}')
+    # Git cannot compare binary hunks; repreparation still permits explicit edits.
+    if favor_current and any(b'\0' in (content or b'') for content in (current, base, local)):
+        return current
+    crlf = current is not None and b'\r\n' in current and b'\n' not in current.replace(b'\r\n', b'')
     for name, content in [('current', current), ('base', base), ('local', local)]:
-        (scratch / name).write_bytes(content.replace(b'\r\n', b'\n'))
-    result = subprocess.run(['git', 'merge-file', '-p', str(scratch / 'current'), str(scratch / 'base'), str(scratch / 'local')], capture_output=True)
+        (scratch / name).write_bytes((content or b'').replace(b'\r\n', b'\n'))
+    # Repreparation may edit conflicting repairs, but must retain disjoint changes.
+    options = ['--ours'] if favor_current else []
+    result = subprocess.run(['git', 'merge-file', '-p', *options, str(scratch / 'current'), str(scratch / 'base'), str(scratch / 'local')], capture_output=True)
     if result.returncode != 0:
         raise ValueError(f'Repair conflict: {relative}; update the maintained repair against the current distribution and prepare it again')
+    # Normalization is for comparison, not for rewriting the maintained bytes.
+    if favor_current and result.stdout == (current or b'').replace(b'\r\n', b'\n'):
+        return current
+    if current is None and not result.stdout:
+        return None
     return result.stdout.replace(b'\n', b'\r\n') if crlf else result.stdout
 
 
@@ -231,7 +250,10 @@ def validate(root, files, checks):
             except ValueError as error:
                 raise ValueError(f'Syntax validation failed: {relative}: {error}') from error
         elif file.suffix in {'.js', '.mjs', '.cjs', '.sh'}:
-            command = ['bash', '-n'] if file.suffix == '.sh' else ['node', '--check']
+            # Windows では名前だけの 'bash' が PATH より先に System32 の WSL bash を選び、
+            # Windows のパスを読めずに正しいスクリプトも失敗させるので、PATH の順で探した bash を使う
+            # (PATH でも System32 が Git Bash より前にあると WSL の bash になる)
+            command = [shutil.which('bash') or 'bash', '-n'] if file.suffix == '.sh' else ['node', '--check']
             result = subprocess.run([*command, str(file)], capture_output=True)
             if result.returncode != 0:
                 raise ValueError(f'Syntax validation failed: {relative}: {result.stderr.decode(errors="replace")[:2000]}')

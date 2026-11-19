@@ -12,11 +12,16 @@ description: winget・Scoop の導入、一括更新、自己更新ロック、�
 
 1. 対象の package ID、source、user/global scope、実バイナリと版、更新前の状態を確認します。
    既存の一覧や wrapper を複製せず使います。
-2. winget は [導入と結果確認](references/winget.md)、Scoop は
-   [一括更新とロック](references/scoop.md) を読みます。併用時も両者の scope と exit code を混同しません。
-3. 非対話・初期セットアップでは利用可能な runtime を確認します。
+2. 導入・更新・検索のどれでも、実行前に winget は [導入と結果確認](references/winget.md)、
+   Scoop は [導入・一括更新とロック](references/scoop.md) を読みます。
+   併用時も両者の scope と exit code を混同しません。
+3. 実行する command が依頼の対象以外に起こす処理 (本体・source・bucket の自動更新、
+   それに伴う git の通信や認証) を help と実装で確認します。依頼に不要なら、その処理を
+   止める option を付けて実行します。止める option が無い場合は、起きる処理と通信先を
+   先に伝えてから実行し、設定の書き換えで回避しません。
+4. 非対話・初期セットアップでは利用可能な runtime を確認します。
    まだ存在しない pwsh/gsudo を bootstrap の前提にしません。
-4. 更新中の自己ロック、UAC、installer の UI 待ちを確認し、必要な人間の操作は表示前に予告します。
+5. 更新中の自己ロック、UAC、installer の UI 待ちを確認し、必要な人間の操作は表示前に予告します。
 
 ## 実行と照合
 

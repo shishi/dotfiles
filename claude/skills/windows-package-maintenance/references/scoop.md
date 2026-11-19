@@ -1,6 +1,32 @@
-# Scoop の一括更新とロック
+# Scoop の導入・一括更新とロック
 
-## 対象を確定する
+## 導入時の自動更新
+
+`scoop install` は、前回の更新から 3 時間以上たっている場合 (前回の記録が無い場合を含む)、
+導入の前に Scoop 本体と全 bucket を `git pull` で更新します。git に
+`url.<base>.insteadOf` の設定があれば、この通信は SSH などの別経路と認証を使います。
+導入する manifest が手元の bucket にあり、その版で足りる場合は、`scoop install -u`
+(`--no-update-scoop`) で導入し、依頼にない更新と通信を起こしません。
+
+manifest の有無と版は、通信しない command で確かめます。
+
+- `scoop cat <bucket>/<app>` は手元の bucket の manifest を読みます。URL や、URL から
+  導入したアプリを渡した場合だけ取得の通信をします。
+- `scoop search` は手元に一致があれば手元だけで終わりますが、一致が無いと GitHub API で
+  未追加の bucket を検索します。有無が分からない名前の確認には `scoop cat` を使います。
+- 導入後の照合は `scoop list <app>`、`current` の実リンク先、実行ファイルの版で行います。
+  `scoop status` は本体と各 bucket に `git fetch` を実行します。`-l` (`--local`) は
+  この fetch だけを止め、URL から導入したアプリがあればその manifest を取得します。
+
+manifest が見つからない場合は、更新の前に原因を分けます。名前の誤りなら正しい名前で
+確かめ直します。bucket が未追加なら、`scoop bucket known` で追加先を確かめ、追加することを
+伝えてから `scoop bucket add` を実行します。既存 bucket の更新では未追加の bucket の
+manifest は得られません。既存 bucket が古く新しい版が要る場合だけ、更新することと
+通信先を先に伝えてから `scoop update` を実行します。`scoop update <app>` も
+同じ条件で本体と全 bucket を同期し、止める option はありません。
+[導入処理の一次資料](https://github.com/ScoopInstaller/Scoop/blob/master/libexec/scoop-install.ps1)
+
+## 一括更新の対象を確定する
 
 per-user の Scoop 本体/bucket と global app root を分け、対象環境の help と実装で確認します。
 既存の更新 wrapper があるなら、その入口、除外、失敗時の継続方法を読みます。

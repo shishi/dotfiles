@@ -10,6 +10,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Windows では、コマンド名だけを渡すと PATH より先に System32 が探され、WSL の bash が選ばれる。
+# WSL の bash は Windows のパスを読めないので、PATH の順で見つかる bash (Git Bash) を使う。
+# PATH でも System32 が Git Bash より前にあると、ここでも WSL の bash になる
+BASH = shutil.which('bash') or 'bash'
 
 
 class PortabilityTest(unittest.TestCase):
@@ -45,7 +49,7 @@ class PortabilityTest(unittest.TestCase):
     def install(self):
         script = self.root / 'agent-shared/bin/install-dotfiles-hooks.sh'
         if script.exists():
-            subprocess.run(['bash', str(script)], cwd=self.root, env=self.env,
+            subprocess.run([BASH, str(script)], cwd=self.root, env=self.env,
                            capture_output=True, text=True, check=True)
 
     def commit(self):

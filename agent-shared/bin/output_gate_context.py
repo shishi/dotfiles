@@ -180,7 +180,7 @@ def compact_references(packet):
         return node
     result=compact(packet)
     result['_reference_handles']=handles
-    return result,handles
+    return (result, handles) if len(encoded(result)) < len(encoded(packet)) else (packet, {})
 
 
 def expand_references(value, handles):
@@ -982,6 +982,9 @@ def plan_unit(tx, instructions, schema):
             'catalog_summary': {kind: sum(s['kind'] == kind for s in tx['sources'].values()) for kind in ('user', 'assistant', 'evidence', 'gap')},
             'previous_findings': tx.get('previous_findings', []), 'progress_state': tx.get('progress_state'),
             'validation_feedback': tx.get('validation_feedback')}
+    if tx['stage'] == 'judge':
+        data['claim_requirement_ids'] = sorted(i['id'] for i in tx['obligation_items'])
+        schema = judgment_schema(schema, data)
     observation_bytes = 0
     for observation in reversed(tx.get('retrieval_observations', [])):
         size = len(wire_encoded(observation))
@@ -1247,12 +1250,34 @@ def searched_claim_originals(tx, answer_ref):
     return False
 
 
+def finding_matches_claim(tx, finding, claim):
+    if not isinstance(finding, dict) or finding.get('kind') not in ('unverified_claim', 'concealment'):
+        return False
+    if not isinstance(finding.get('source'), str) or not isinstance(finding.get('excerpt'), str):
+        return False
+    answer_ref = claim['answer_ref']
+    source = tx['aliases'].get(finding['source'])
+    if source is None:
+        source = tx['sources'].get(finding['source'] + ':' + answer_ref['rev'])
+    if not source or any(source[k] != answer_ref[k] for k in ('id', 'rev')):
+        return False
+    normalize = lambda value: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value)).strip()
+    original = normalize(resolve_refs(tx, [answer_ref], True)[0]['text'])
+    excerpt = normalize(finding['excerpt'])
+    return bool(original and excerpt and (excerpt in original or original in excerpt))
+
+
 def accept_judgment(tx, answer):
     unit = tx['pending_units'][0]
     coverage = [c['answer_ref'] for c in answer.get('claims', [])]
     decisions = answer.get('decisions', [])
-    if {d.get('item_id') for d in decisions} != {i['id'] for i in unit['items']}:
-        raise ValueError('judgment item decisions coverage incomplete')
+    expected = {i['id'] for i in unit['items']}
+    received = {d.get('item_id') for d in decisions}
+    if received != expected:
+        error = ValueError('judgment item decisions coverage incomplete')
+        error.add_note('missing decisions: ' + (', '.join(sorted(map(str, expected - received))) or 'none'))
+        error.add_note('unexpected decisions: ' + (', '.join(sorted(map(str, received - expected))) or 'none'))
+        raise error
     for d in decisions:
         if d.get('action') not in ('keep', 'retire', 'replace') or not d.get('reason'):
             raise ValueError('invalid judgment item decision')
@@ -1317,21 +1342,32 @@ def accept_judgment(tx, answer):
                 later = [s for s in tx['sources'].values() if s['kind'] in ('evidence', 'gap') and support_seq < s['seq'] <= tx['source_end']['seq']]
                 if later:
                     fresh = c.get('freshness') or {}
-                    grounds = resolve_refs(tx, fresh.get('refs', []), True)
                     frontier = max(s['seq'] for s in later)
-                    if fresh.get('through_seq') != frontier or not fresh.get('reason'):
-                        raise ValueError('current-state freshness does not reach the evidence frontier')
-                    if fresh.get('basis') == 'changes_reviewed':
-                        if any(not s['available'] or s['producer_truncated'] for s in later):
-                            raise ValueError('current-state freshness cannot review unavailable or truncated operations')
-                        required = [ref(s, f) for s in later for f in ('call', 'output') if f in s['fields']]
-                        if any(not covered(r, tx['served_refs']) for r in required) or any(not any(g['ref']['id'] == s['id'] and g['ref']['rev'] == s['rev'] for g in grounds) for s in later):
-                            raise ValueError('current-state freshness leaves later operations unreviewed')
-                    elif fresh.get('basis') == 'reverified':
-                        if not any(g['kind'] == 'evidence' and g['ref']['field'] == 'output' and tx['sources'][g['ref']['id'] + ':' + g['ref']['rev']]['seq'] == frontier and g['available'] and not g['producer_truncated'] for g in grounds):
-                            raise ValueError('current-state freshness needs a new actual verification result')
-                    else:
-                        raise ValueError('current-state freshness is unresolved')
+                    try:
+                        grounds = resolve_refs(tx, fresh.get('refs', []), True)
+                        if fresh.get('through_seq') != frontier or not fresh.get('reason'):
+                            raise ValueError('current-state freshness does not reach the evidence frontier')
+                        if fresh.get('basis') == 'changes_reviewed':
+                            if any(not s['available'] or s['producer_truncated'] for s in later):
+                                raise ValueError('current-state freshness cannot review unavailable or truncated operations')
+                            required = [ref(s, f) for s in later for f in ('call', 'output') if f in s['fields']]
+                            if any(not covered(r, tx['served_refs']) for r in required) or any(not any(g['ref']['id'] == s['id'] and g['ref']['rev'] == s['rev'] for g in grounds) for s in later):
+                                raise ValueError('current-state freshness leaves later operations unreviewed')
+                        elif fresh.get('basis') == 'reverified':
+                            if not any(g['kind'] == 'evidence' and g['ref']['field'] == 'output' and tx['sources'][g['ref']['id'] + ':' + g['ref']['rev']]['seq'] == frontier and g['available'] and not g['producer_truncated'] for g in grounds):
+                                raise ValueError('current-state freshness needs a new actual verification result')
+                        else:
+                            raise ValueError('current-state freshness is unresolved')
+                    except ValueError as error:
+                        error.add_note('freshness_context: ' + encoded(dict(claim_id=c['id'],
+                            frontier_seq=frontier, received_refs=fresh.get('refs', []),
+                            frontier_sources=[dict(output_ref=ref(s, 'output') if 'output' in s['fields'] else None,
+                                available=s['available'], producer_truncated=s['producer_truncated'])
+                                for s in later if s['seq'] == frontier])).decode())
+                        error.add_note('Frontier refs locate originals, not proof of this claim. Retrieve relevant unread originals; '
+                            'use reverified only for the same target/version and every claimed fact, or changes_reviewed '
+                            'after grounding every later operation. Otherwise return an unverified claim with its finding.')
+                        raise
         if c['verdict'] == 'outside_scope' and not c.get('reason'):
             raise ValueError('outside-scope claim needs reason')
         if c['verdict'] == 'supported' and not any(e.get('relation') == 'supports' for e in evidence):
@@ -1339,7 +1375,6 @@ def accept_judgment(tx, answer):
     missing = [a for a in unit['answers'] if not covered(a['ref'], [c['answer_ref'] for c in claims])]
     if missing:
         raise ValueError('claim coverage incomplete: ' + encoded([{'answer_role': a.get('answer_role'), 'ref': a['ref']} for a in missing]).decode())
-    normalize_excerpt = lambda value: re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value)).strip()
     valid_findings = [f for n, f in enumerate(answer.get('findings', [])) if n in answer.get('_valid_findings', [])]
     assessments = answer.get('rule_assessments', [])
     if {a.get('rule') for a in assessments} != {r['id'] for r in tx['checked_rules']} or len(assessments) != len(tx['checked_rules']):
@@ -1353,15 +1388,7 @@ def accept_judgment(tx, answer):
     for claim in claims:
         if claim['verdict'] not in ('contradicted', 'unverified'):
             continue
-        original = normalize_excerpt(resolve_refs(tx, [claim['answer_ref']], True)[0]['text'])
-        matching = False
-        for finding in valid_findings:
-            source = tx['aliases'].get(finding['source'])
-            excerpt = normalize_excerpt(finding['excerpt'])
-            if source and all(source[k] == claim['answer_ref'][k] for k in ('id', 'rev')) and original and excerpt and (excerpt in original or original in excerpt):
-                matching = True
-                break
-        if not matching:
+        if not any(finding_matches_claim(tx, finding, claim) for finding in valid_findings):
             raise ValueError(claim['verdict'] + ' claim needs a matching valid finding')
     for obligation in tx['evidence_obligations']:
         if obligation['result'] == 'pending':
@@ -1420,8 +1447,11 @@ def accept_judgment(tx, answer):
             item = next(i for i in unit['items'] if i['id'] == d['item_id'])
             answered_question = item['kind'] == 'question' and d['basis'] == 'answered'
             blocked_verdicts = ('unverified', 'contradicted') if answered_question else ('unverified', 'contradicted', 'qualified')
-            if any(c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids'] for c in claims):
-                raise ValueError('unverified claim cannot close its requirement')
+            blocking = [c for c in claims if c['verdict'] in blocked_verdicts and d['item_id'] in c['requirement_ids']]
+            if blocking:
+                error = ValueError('unverified claim cannot close its requirement')
+                error.add_note(f"requirement {d['item_id']}: " + ', '.join(f"{c['id']}={c['verdict']}" for c in blocking))
+                raise error
     tx['judge_decisions'].extend(decisions)
     tx['claims'].extend(claims)
     tx['findings'].extend(answer.get('findings', []))
@@ -1671,7 +1701,27 @@ facts/requirements, not tool counts or prose changes. Never return bare old repl
 '''
 
 
-def protocol_schema(legacy):
+def judgment_schema(schema, packet):
+    packet = expand_wire(packet)
+    if packet.get('stage') != 'judge':
+        return schema
+    schema = deepcopy(schema)
+    properties = schema['properties']
+    decision_ids = sorted(i['id'] for i in packet['items'])
+    if decision_ids:
+        properties['decisions']['items']['properties']['item_id'] = {'type': 'string', 'enum': decision_ids}
+    else:
+        properties['decisions']['maxItems'] = 0
+    requirements = properties['claims']['items']['properties']['requirement_ids']
+    requirement_ids = packet['claim_requirement_ids']
+    if requirement_ids:
+        requirements['items'] = {'type': 'string', 'enum': requirement_ids}
+    else:
+        requirements['maxItems'] = 0
+    return schema
+
+
+def protocol_schema(legacy, packet=None):
     string = {'type': 'string'}
     enum = lambda *values: {'type': 'string', 'enum': list(values)}
     arr = lambda item: {'type': 'array', 'items': item}
@@ -1705,4 +1755,5 @@ def protocol_schema(legacy):
     locator = obj({'id': string, 'rev': string, 'field': string, 'literal': {'type': 'string', 'pattern': r'[\s\S]+'}, 'after': {'type': 'integer'}})
     archive_locator = obj({'scope': enum('archive'), 'field': enum('text', 'call', 'output', 'metadata'), 'literal': string, 'before_seq': {'type': 'integer'}})
     properties['refs'] = arr({'anyOf': [r, locator, archive_locator]})
-    return obj(properties)
+    schema = obj(properties)
+    return judgment_schema(schema, packet) if packet is not None else schema

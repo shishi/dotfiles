@@ -149,6 +149,26 @@ fi
 mkdir -p "$herdr_app_home"
 ln -sfn "$herdr_app_keys" "$herdr_app_home/keys.json"
 
+# Herdr's terminal takes Ctrl+J before macSKK sees it, so the skk-kana mod
+# selects the hiragana mode instead (docs/herdr-app.md). Herdr writes its own
+# files into the mod folder, so link the sources one by one.
+if [ "$(uname -s)" = Darwin ]; then
+  herdr_skk_kana_src="$DOTDIR/herdr-app/mods/skk-kana"
+  herdr_skk_kana="$herdr_app_home/mods/skk-kana"
+  mkdir -p "$herdr_skk_kana"
+  ln -sfn "$herdr_skk_kana_src/main.js" "$herdr_skk_kana/main.js"
+  ln -sfn "$herdr_skk_kana_src/mod.json" "$herdr_skk_kana/mod.json"
+  if [ ! -x "$herdr_skk_kana/select-input-source" ] ||
+    [ "$herdr_skk_kana_src/select-input-source.swift" -nt "$herdr_skk_kana/select-input-source" ]; then
+    if command -v swiftc >/dev/null 2>&1; then
+      swiftc -O -o "$herdr_skk_kana/select-input-source" "$herdr_skk_kana_src/select-input-source.swift" ||
+        echo "setup.sh: skk-kana helper build failed"
+    else
+      echo "setup.sh: swiftc not found, skk-kana helper not built"
+    fi
+  fi
+fi
+
 mkdir -p "$XDG_CONFIG_HOME/hunk"
 ln -sfn "$DOTDIR/hunk/config.toml" "$XDG_CONFIG_HOME/hunk/config.toml"
 

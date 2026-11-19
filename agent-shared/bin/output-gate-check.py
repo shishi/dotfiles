@@ -94,12 +94,14 @@ INPUT_LIMIT = 400_000
 TRIM_KEEP = 1_000          # 省くときに出力の先頭と末尾に残す最小のバイト数 (それぞれ)
 # 確認していない主張とごまかしの抜粋の最小の長さ (正規化後の文字数)。出どころの発言の全体と等しい抜粋には適用しない。
 MIN_EXCERPT = 8
-CODEX_MODELS = ('gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra')   # cyber のプログラムに合うモデルを探す順
+# cyber のプログラムに合うモデルを探す系統の順。Codex のモデルは系統名で持ち、起動時にその系統の最新へ解決する
+# (版番号を書くと、新しい世代が出ても古いモデルで検査し続けるため)。
+CODEX_FAMILIES = ('sol', 'luna', 'astra')
 CYBER_PROGRAMS = {'standard', 'daybreak_blue', 'daybreak_red'}
 FAMILIES = ('codex', 'claude')
 # どちらの CLI の回答も、精度の基準を満たし最も速い Claude の系統 (Opus / low) で先に検査する。
 DEFAULT_FIRST = 'claude'
-DEFAULT_ENGINES = {'codex': {'model': 'gpt-6.1-terra', 'effort': 'low'},
+DEFAULT_ENGINES = {'codex': {'model': 'terra', 'effort': 'low'},
                    'claude': {'model': 'opus', 'effort': 'low'}}
 # 検査役の claude を起動する環境から外す変数。出力ゲートの mod を読ませず、接続先の上書きを外す。
 CLAUDE_DROPPED_ENV = ('CLAUDE_CODE_PLUGIN_DIRS', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_BEDROCK_BASE_URL',
@@ -112,7 +114,7 @@ KINDS = {'unverified_claim': '確認していない主張',
          'missing_request': '依頼の抜け・確認できるのに確認していないこと',
          'concealment': 'ごまかし',
          'rule_violation': '規則違反'}
-STATES = ('absent', 'failed', 'truncated', 'unrecovered')
+STATES = ('absent', 'failed', 'truncated', 'unrecovered', 'contradicts')
 # 出力ゲートの mod が登録する指摘のツールの名前。モデルと tool.call には MCP の名前 (mcp__output-gate__…) で見える。
 GATE_TOOLS = frozenset({'gate_findings', 'mcp__output-gate__gate_findings'})
 CHECKER_SCHEMA = {
@@ -176,7 +178,10 @@ Unmet points (findings). This is the final answer of the turn. Judge the draft t
 already shown in this turn) against the evidence, and report:
 The request: the user often writes one request over several messages, sent in a row or while the agent was working.
 Treat the latest user message together with the earlier user messages it continues (in "recent" and "turn_start") as
-one request, and judge every item of it.
+one request, and judge every item of it, except outcomes the user explicitly cancelled or replaced. Preserve every
+condition of the active request. Distinguish a request to verify whether an improvement
+worked from a request to achieve that improvement: an evidence-backed negative verification result can fulfil the
+former while proving the latter remains unmet, if the latter is still active.
 1. Unverified claims (kind "unverified_claim"): the draft or shown_text says something was checked, run, fixed or
    passed, but the evidence has no matching call and result, or the result failed (non-zero exit code, error) while the
    text says it succeeded, or the claim depends on a part the CLI truncated before the model saw it. It is also
@@ -213,7 +218,13 @@ Each finding has only: "kind"; "rule", the "id" of the broken rule for rule viol
 "source", the id of the message the excerpt comes from; "excerpt", a string copied exactly from that message; and
 "evidence", a list of {"id", "state"} pairs (rule violations may give an empty list). "state" is "absent" (no matching item;
 "id" is null), "failed", "truncated" or "unrecovered" (the item with that id failed, was truncated, or failed and was
-not recovered). Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
+not recovered), or "contradicts" (the item's content contradicts the answer, without asserting that retrieving it failed).
+Establish the state of the referenced operation from its own execution result, keeping the operation
+that retrieves evidence distinct from the operation described in that evidence. A retrieved report of a failed check
+does not establish that retrieving it failed, and an absent exit-code field does not establish failure. Conversely,
+successful retrieval does not establish success of the reported check. Ground each failure reference in the result
+of the operation it actually identifies; do not transfer failure between operations.
+Missing requests cite a user message ("request", or a "recent"/"turn_start" message whose role is
 user). Unverified claims, concealment and rule violations cite "draft" or "shown". Never cite an assistant message as a request.
 Report each unmet point once. Treat "previous_findings" as earlier judgements, not as evidence that something remains
 unmet. Assess them afresh against the current answer and all evidence; discard an earlier finding if its premise is
@@ -240,7 +251,7 @@ Reply with JSON only, no prose:
 {"replacements": [{"find": "<exact substring of the draft>", "replace": "<replacement>",
                    "rule": "<the rule it breaks, quoted briefly>", "meaning_changed": <true|false>}],
  "findings": [{"kind": "...", "rule": "<rule id or empty>", "source": "<message id>", "excerpt": "<exact substring>",
-               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered"}]}],
+               "evidence": [{"id": "<evidence id or null>", "state": "absent|failed|truncated|unrecovered|contradicts"}]}],
  "progress": {"state": "advanced|stalled|unknown", "reason": "<brief grounds>"}}
 When nothing is wrong, reply with empty replacements and findings and the progress assessment.
 """
@@ -569,21 +580,60 @@ def masked_input(payload, workdir):
     return render(packet)
 
 
-def checker_model(cyber_program, preferred):
-    """cyber のアクセスプログラムを使えるモデルを、Codex が保存したモデル一覧から選ぶ。設定のモデルを先に試す。
-    違うプログラムで検査すると、検査役がセキュリティ作業の会話を断るおそれがあるため。"""
-    if cyber_program is None:
-        return preferred
+def family_models(models, family):
+    """名前が「-系統名」で終わるモデルを、新しく推奨される順 (priority の小さい順) に並べる。
+    系統名の大文字・小文字は区別しない (指示は Sol・Astra のように書く)。"""
+    suffix = '-' + family.lower()
+    return [slug for _, slug in sorted((m.get('priority', 10**9), m['slug']) for m in models
+                                       if isinstance(m, dict) and isinstance(m.get('slug'), str)
+                                       and m['slug'].endswith(suffix))]
+
+
+def newest_model(models, name):
+    """系統名 (sol など) を、一覧で表示対象 (visibility が list) のうちその系統の最新モデルへ解決する。
+    一覧は新しく推奨されるモデルほど priority が小さい。該当がなければ name をそのまま返す (具体名の指定を含む)。"""
+    listed = [m for m in models if isinstance(m, dict) and m.get('visibility') == 'list']
+    found = family_models(listed, name)
+    return found[0] if found else name
+
+
+def codex_catalog():
+    """Codex が保存したモデル一覧を読む。読めなければ CLI に一覧を出させる。どちらも得られなければ None。
+    CLI の出力は UTF-8 の JSON なので、環境の既定の文字コード (Windows の ANSI コードページなど) で
+    読まないようバイト列のまま渡す。"""
     home = Path(os.environ.get('CODEX_HOME') or Path.home() / '.codex')
     try:
-        models = json.loads((home / 'models_cache.json').read_text(encoding='utf-8')).get('models') or []
+        return json.loads((home / 'models_cache.json').read_text(encoding='utf-8')).get('models') or []
     except (OSError, ValueError, AttributeError):
-        return preferred   # 一覧が読めなければ試し、使えなければ Codex の系統の失敗として扱う
-    usable = {m.get('slug') for m in models if isinstance(m, dict)
-              and cyber_program in ((m.get('available_access_programs') or {}).get('cyber') or [])}
-    for model in (preferred, *CODEX_MODELS):
-        if model in usable:
-            return model
+        pass
+    try:
+        done = subprocess.run(command_from_env('OUTPUT_GATE_CODEX_CMD', ['codex']) + ['debug', 'models'],
+                              capture_output=True, timeout=60, check=True)
+        return json.loads(done.stdout).get('models') or []
+    except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+        return None
+
+
+def checker_model(cyber_program, preferred):
+    """検査役の Codex のモデルを、Codex のモデル一覧から選ぶ。系統名はその系統の最新へ解決する。
+    cyber のアクセスプログラムを使う場合は、そのプログラムを使えるモデルだけを候補にし、設定のモデル、
+    CODEX_FAMILIES の系統順、系統内の新しい順に選ぶ。違うプログラムで検査すると、検査役が
+    セキュリティ作業の会話を断るおそれがあるため。"""
+    models = codex_catalog()
+    if models is None:
+        return preferred   # 一覧が得られなければ試し、使えなければ Codex の系統の失敗として扱う
+    preferred = newest_model(models, preferred)
+    if cyber_program is None:
+        return preferred
+    usable = [m for m in models if isinstance(m, dict)
+              and cyber_program in ((m.get('available_access_programs') or {}).get('cyber') or [])]
+    slugs = {m.get('slug') for m in usable}
+    if preferred in slugs:
+        return preferred
+    for family in CODEX_FAMILIES:
+        found = family_models(usable, family)
+        if found:
+            return found[0]
     raise EngineFailure(f'codex の検査役のモデルが cyber のアクセスプログラム ({cyber_program}) に対応していない')
 
 
@@ -602,10 +652,10 @@ def codex_command(model, effort, cyber_program, workdir):
     return command_from_env('OUTPUT_GATE_CODEX_CMD', ['codex']) + command + ['-']
 
 
-def claude_command(model, effort, instructions):
+def claude_command(model, effort, instructions, schema=None):
     command = ['-p', '--model', model, '--effort', effort, '--tools', '', '--setting-sources', '',
                '--strict-mcp-config', '--no-session-persistence', '--system-prompt', instructions,
-               '--output-format', 'json', '--json-schema', context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if context.INSTRUCTIONS in instructions else json.dumps(CHECKER_SCHEMA)]
+               '--output-format', 'json', '--json-schema', context.encoded(schema or (context.protocol_schema(CHECKER_SCHEMA) if context.INSTRUCTIONS in instructions else CHECKER_SCHEMA)).decode()]
     return command_from_env('OUTPUT_GATE_CLAUDE_CMD', ['claude']) + command
 
 
@@ -660,7 +710,7 @@ def judge_failure(family, code, timeout):
 def run_codex(prompt, config, cyber_program, workdir, timeout, final, cancel=None):
     model = checker_model(cyber_program, config['model'])
     (workdir / INSTRUCTIONS_FILE).write_text((INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), encoding='utf-8')
-    (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA)).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
+    (workdir / SCHEMA_FILE).write_text(context.encoded(context.protocol_schema(CHECKER_SCHEMA, json.loads(prompt))).decode() if final else json.dumps(CHECKER_SCHEMA), encoding='utf-8')
     env = {k: v for k, v in os.environ.items() if k not in CODEX_DROPPED_ENV}
     env['AGENT_DELEGATED_SESSION'] = '1'
     code, out = run_judge(codex_command(model, config['effort'], cyber_program, workdir), prompt, workdir, timeout, env, cancel)
@@ -677,7 +727,8 @@ def run_claude(prompt, config, workdir, timeout, final, cancel=None):
     env = {k: v for k, v in os.environ.items() if k not in CLAUDE_DROPPED_ENV}
     # 検査役のセッションで出力ゲートの mod が動き、検査役の回答をまた検査しないようにする。
     env['AGENT_DELEGATED_SESSION'] = '1'
-    code, out = run_judge(claude_command(config['model'], config['effort'], (INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final)),
+    schema = context.protocol_schema(CHECKER_SCHEMA, json.loads(prompt)) if final else None
+    code, out = run_judge(claude_command(config['model'], config['effort'], (INSTRUCTIONS_COMMON + INSTRUCTIONS_FINAL + context.INSTRUCTIONS) if final else checker_instructions(final), schema),
                           prompt, workdir, timeout, env, cancel)
     engine = {'family': 'claude', 'model': config['model'], 'effort': config['effort']}
     try:
@@ -1162,6 +1213,9 @@ def finding_problem(item, sources, evidence, rules):
             continue
         if not isinstance(ref_id, str) or ref_id not in evidence:
             return '証拠の参照の ID が証拠に無い'
+        operation = evidence[ref_id]
+        if ref['state'] in ('failed', 'unrecovered') and operation.get('failed') is False and operation.get('exit_code') == 0:
+            return '証拠の失敗指定が同じ操作の実行結果 (exit_code=0, failed=false) と矛盾する'
     return None
 
 
@@ -1184,7 +1238,8 @@ def describe_evidence(ref, evidence):
     return record + {'absent': ' には対応する結果がありません',
                      'failed': ' は失敗しています',
                      'truncated': ' の出力はモデルに渡る前に切り詰められています',
-                     'unrecovered': ' の失敗は、その後に同じ確認で回復していません'}[ref['state']]
+                     'unrecovered': ' の失敗は、その後に同じ確認で回復していません',
+                     'contradicts': ' の内容がこの主張と矛盾しています'}[ref['state']]
 
 
 FINDING_SENTENCE = {
@@ -1354,7 +1409,7 @@ def legacy_check(payload, deadline=None):
         settings = load_settings()
         if payload.get('independent_recheck'):
             settings['first'] = 'codex'
-            settings['codex'] = {'model': 'gpt-6-astra', 'effort': 'high'}
+            settings['codex'] = {'model': 'astra', 'effort': 'high'}
             settings['claude'] = {'model': 'fable', 'effort': 'high'}
         engines = None if payload.get('independent_recheck') else payload.get('engines')
         order = engine_order(payload['origin'], engines, settings)
@@ -1518,6 +1573,8 @@ def receive(request):
         tx.setdefault('metrics',{}).setdefault('model_attempts',[]).extend(deepcopy(attempts))
     baseline_tx = deepcopy(tx)
     validation_entered = False
+    rejected_findings = []
+    finding_problems = {}
     try:
         if context.digest([response_rules(), checked_rules()]) != tx.get('rules_source_rev'):
             raise ValueError('context rules snapshot changed')
@@ -1539,12 +1596,14 @@ def receive(request):
                 if isinstance(evidence,dict) and isinstance(evidence.get('id'),str) and evidence['id'] in tx.get('reference_handles', {}):
                     evidence['id']=tx['reference_handles'][evidence['id']]['id']
         if answer.get('kind') == 'judgment':
+            reported_findings = list(answer.get('findings', []))
             for claim in answer.get('claims', []):
                 if claim.get('verdict') != 'unverified':
                     continue
                 original = context.resolve_refs(tx, [claim['answer_ref']], True)[0]
                 alias = next((name for name in ('draft','shown') if all(tx['aliases'][name][k] == claim['answer_ref'][k] for k in ('id','rev'))), None)
-                if alias and original['text'].strip():
+                reported = any(context.finding_matches_claim(tx, f, claim) for f in reported_findings)
+                if alias and original['text'].strip() and not reported:
                     finding = {'kind':'unverified_claim','source':alias,'excerpt':original['text'].strip(),
                                'evidence':[{'id':None,'state':'absent'}]}
                     if finding not in answer.setdefault('findings', []):
@@ -1554,8 +1613,15 @@ def receive(request):
             source_messages.update({s['id']: {'role': 'user', 'origin': 'recent', 'text': s['fields']['text']}
                                     for s in tx['sources'].values() if s['kind'] == 'user'})
             rules = {r['id']: r['text'] for r in checked_rules()}
-            answer['_valid_findings'] = [n for n, f in enumerate(answer.get('findings', []))
-                if finding_problem(f, source_messages, evidence_index(validation_payload), rules) is None]
+            evidence = evidence_index(validation_payload)
+            problems = {n: problem for n, f in enumerate(answer.get('findings', []))
+                        if (problem := finding_problem(f, source_messages, evidence, rules)) is not None}
+            finding_problems = problems
+            answer['_valid_findings'] = [n for n in range(len(answer.get('findings', []))) if n not in problems]
+            if problems and not answer['_valid_findings']:
+                rejected_findings = [{'finding': answer['findings'][n], 'reason': reason} for n, reason in problems.items()]
+                error = ValueError('checker findings lack valid grounding')
+                raise error
         previous_step = tx.get('step', 0)
         def checkpoint(validated):
             nonlocal baseline_tx
@@ -1586,6 +1652,8 @@ def receive(request):
                 result['display_receipt'] = tx['id']
         return result
     except Exception as error:
+        if finding_problems:
+            error.add_note('invalid_findings: ' + json.dumps(finding_problems, ensure_ascii=False))
         reason = str(error) or type(error).__name__
         fatal = any(word in reason for word in ('CAS', 'deadline', 'input limit', 'snapshot', 'archive', 'mask', 'source/state'))
         if validation_entered and isinstance(error, (ValueError, KeyError, TypeError, EngineFailure)) and not fatal:
@@ -1593,14 +1661,14 @@ def receive(request):
             failures[reason] = failures.get(reason, 0) + 1
             baseline_tx['validation_failures'] = failures
             if failures[reason] < 3:
-                baseline_tx['validation_feedback'] = reason
+                baseline_tx['validation_feedback'] = '\n'.join([reason, *getattr(error, '__notes__', [])])
                 previous_step = baseline_tx.get('step', 0)
                 baseline_tx['step'] = previous_step + 1
                 try:
                     return context_ready(baseline_tx, previous_step)
                 except Exception:
                     pass
-        return unchecked(payload, reason, source_cursor=tx.get('source_end'))
+        return unchecked(payload, reason, source_cursor=tx.get('source_end'), dropped=rejected_findings)
 
 
 def raw_judge(request, cancel=None):
@@ -1618,7 +1686,7 @@ def raw_judge(request, cancel=None):
             canonical=context.read(Path(tx['directory'])/'transaction.json') if tx.get('directory') else tx
             if not isinstance(canonical,dict) or any(canonical.get(k)!=tx.get(k) for k in ('id','step','payload_rev')):
                 raise ValueError('stale context transaction CAS')
-            expected=context.digest([INSTRUCTIONS_COMMON+INSTRUCTIONS_FINAL+context.INSTRUCTIONS,prompt,context.protocol_schema(CHECKER_SCHEMA)])
+            expected=context.digest([INSTRUCTIONS_COMMON+INSTRUCTIONS_FINAL+context.INSTRUCTIONS,prompt,context.protocol_schema(CHECKER_SCHEMA,json.loads(prompt))])
             if canonical.get('packet_rev')!=expected or context.digest([response_rules(),checked_rules()])!=tx.get('rules_source_rev'):
                 raise ValueError('prepared packet snapshot changed')
         else:
@@ -1631,7 +1699,7 @@ def raw_judge(request, cancel=None):
         if timeout<=0:
             raise EngineFailure('context deadline exhausted')
         with tempfile.TemporaryDirectory(prefix='output-gate-raw-',ignore_cleanup_errors=True) as tmp:
-            config={'model':'gpt-6-astra','effort':'high'} if payload.get('independent_recheck') else load_settings()['codex']
+            config={'model':'astra','effort':'high'} if payload.get('independent_recheck') else load_settings()['codex']
             reply,engine=run_codex(prompt,config,payload.get('cyber_program'),Path(tmp),timeout,bool(payload.get('final')),cancel)
         return {'status':'answered','reply':reply,'engine':engine,'engine_failures':[],
                 'model_attempts':[{'family':'codex','outcome':'answered','elapsed_ms':round((time.monotonic()-started)*1000),'usage':engine.get('usage')}]}
@@ -1726,7 +1794,7 @@ def check(payload, deadline=None):
     try:
         settings = load_settings()
         if payload.get('independent_recheck'):
-            settings.update(first='codex', codex={'model': 'gpt-6-astra', 'effort': 'high'},
+            settings.update(first='codex', codex={'model': 'astra', 'effort': 'high'},
                             claude={'model': 'fable', 'effort': 'high'})
         order = engine_order(payload['origin'], None if payload.get('independent_recheck') else payload.get('engines'), settings)
         if not order:

@@ -54,8 +54,8 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    混入する)に Write ツールで書く
 3. 実行(stdin 渡し。`$(cat ...)` のコマンド置換形は permission の prefix マッチに
    失敗しうるため使わない)。モデルは呼び出し側が `agent-delegation` と `review-gate` の許容候補から選ぶ。
-   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` を
-   `gpt-6.1-sol` へ変更し、推論量は `high` を維持する。
+   以下の Astra / high は初期値であり、Astra がモデル単位で利用不能なら `REVIEW_MODEL` の
+   系統を `sol` へ変更し、推論量は `high` を維持する。
    `REVIEW_INPUT` は手順2のファイル、`REVIEW_OUTPUT`・`REVIEW_EVENTS`・`REVIEW_LOG` は
    この実行だけの一時ファイルの実パスに設定する。`PERSPECTIVE` は選んだ観点にする。
    以下の実行と結果処理は同じ Bash 呼出し内で行い、終了コードを別シェルで取り直さない。
@@ -64,7 +64,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    監視 hook が前回の確認から 10 分、20 分、40 分、以後 40 分ごとにその進み具合を判定して、止まっていればエージェントを起こす。
    **既定はこの形** — レビューは読むだけなので `read-only` で足りる:
    ```bash
-   REVIEW_MODEL=gpt-6-astra
+   REVIEW_MODEL=$("$HOME/.agent-shared/bin/codex-model" astra) || exit 1  # 系統の最新を解決する
    REVIEW_EFFORT=high
    PERSPECTIVE=correctness
    STARTED_AT=$(date +%s)
@@ -73,9 +73,11 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    export AGENT_DELEGATED_SESSION=1
    codex exec -s read-only -c 'openai_base_url=""' --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" 2> "$REVIEW_LOG" |
      tee "$REVIEW_EVENTS" | jq -Rrc --unbuffered 'fromjson? | select(.type == "item.completed") | .item | "\(.type) \(.command // .text // "" | tostring | .[0:80])"'
-   ps=("${PIPESTATUS[@]}"); rc=${ps[0]}
+   # 各段の終了コードは bash では PIPESTATUS、zsh では pipestatus に入り、添字の始まりも違う。
+   # 定義されている側だけを位置引数で受けると、どちらのシェルでも $1 が codex、$2 が tee になる。取れなければ失敗として扱う
+   set -- ${PIPESTATUS[@]+"${PIPESTATUS[@]}"} ${pipestatus[@]+"${pipestatus[@]}"}; rc=${1:-1}
    # events の保存 (tee) に失敗したら、その内容で失敗・拒否を確かめられないため失敗として扱う
-   [ "${ps[1]}" -eq 0 ] || rc=1
+   [ "${2:-1}" -eq 0 ] || rc=1
    FINISHED_AT=$(date +%s)
    RUN_RECORD=$(bash "$HOME/.agent-shared/bin/agent-run-record.sh" codex "$REVIEW_MODEL" "$REVIEW_EFFORT" "$PERSPECTIVE" "$STARTED_AT" "$rc" "$REVIEW_EVENTS" unknown "$FINISHED_AT") || exit 95
    # このブロックが終わるとシェル変数は消える。採否を追記する後の Bash 呼び出しが読めるよう、記録のパスをファイルに残す

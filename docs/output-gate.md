@@ -4,6 +4,23 @@
 
 ## 利用方法
 
+現在、出力ゲートは Claude Code と Codex のどちらでも自動では動きません。`claude/settings.json` と `codex/hooks.json` は出力ゲートの hook を登録しておらず、`setup.sh` も有効にしません。ただし、以前に有効にしたマシンでは `config.toml` の `openai_base_url` が中継を指したまま残り、起動済みの中継が Codex の回答を検査し続けます。そのようなマシンでは、次の順に止めてください。`disable` は状態ファイルと `config.toml` の行を戻すだけで、起動済みの中継はそのまま動き続けるためです。
+
+```sh
+bash ~/.agent-shared/hooks/output-gate-codex.sh disable
+bash ~/.agent-shared/hooks/output-gate-claude.sh disable
+codex app-server daemon restart
+port=$(sed -n 's/.*"port": *\([0-9]*\).*/\1/p' "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json")
+curl -s -X POST "http://127.0.0.1:$port/__gate/shutdown"
+curl -s "http://127.0.0.1:$port/__gate/version"
+```
+
+`codex app-server daemon restart` は共有 app-server を使っている場合だけ必要です。開いている Codex のセッションも起動し直し、中継へ新しい要求が届かない状態にしてから中継を止めます。中継のポートは状態ファイル `codex.json` の `port` から読みます (既定は 18765、WSL は 18766)。
+
+中継は検査中の要求がなければ `bye` を返して終了します。検査中は `busy` を返して終了しないので、検査が終わってから同じコマンドを実行してください。中継は要求の処理中だけ検査処理と検査役を動かし、Codex が切断した要求の検査処理は子孫ごと止めます。そのため、検査中の要求がない時点で止めれば、それらも残りません。最後のコマンドが何も表示しなければ (接続できなければ) 停止は完了です。
+
+検査の実装は手動で使うために残しています。以下は、hook を登録して自動検査を使う場合の説明です。
+
 状態ファイル `${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json` がない場合、Codex の hook が出力ゲートを有効にします。状態ファイルがある場合は、有効・無効の設定を維持します。`setup.sh` を先に実行した環境では、最初のセッションから検査します。検査に伴う[外部サービスへの送信](#検査役のモデル)を確認してください。
 
 `enable` が設定を変更し、共有 daemon の稼働を確認できた場合は、daemon を再起動します。接続中のセッションは中断されます。再起動後の daemon は、`enable` を実行した環境変数を引き継ぎます。
@@ -75,16 +92,16 @@ bash ~/.agent-shared/hooks/output-gate-codex.sh held [session_id]
 
 ## 検査役のモデル
 
-共通の検査処理は、既定で Claude の `opus` / low を試し、使えなければ Codex の `gpt-6.1-terra` / low を使います。そのため Codex と Claude Code の会話やツール出力は、通常は Anthropic に、代替時は OpenAI に送られます。gitleaks が検出した秘密情報以外は伏せません。Claude Code の mod の Claude 検査は、セッションの接続先を使います。
+共通の検査処理は、既定で Claude の `opus` / low を試し、使えなければ Codex の Terra の最新 / low を使います。Codex のモデルは系統名 (`terra`・`astra` など) で持ち、検査のたびに Codex が保存したモデル一覧からその系統の最新へ解決します。版番号を書いた名前を設定した場合は、その名前をそのまま使います。そのため Codex と Claude Code の会話やツール出力は、通常は Anthropic に、代替時は OpenAI に送られます。gitleaks が検出した秘密情報以外は伏せません。Claude Code の mod の Claude 検査は、セッションの接続先を使います。
 
 検査順序とモデルは `${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/checker.json` で変更できます。`OUTPUT_GATE_SETTINGS` に別の設定ファイルを指定することもできます。各項目は省略可能です。
 
-停滞時の再判定は通常の設定とは別に Codex の `gpt-6-astra` / high を試し、失敗時は Claude の `fable` / high を試します。Cyber のアクセスプログラムを使うターンでは、対応する Codex モデルを選びます。通常検査とそこからの再判定は、既定 1 時間の非常用上限を共有します。これは正常な応答時間の目標ではありません。処理中は原文の取得と解釈の更新を検証し、同じ解釈状態で既に供給した原文だけを繰り返し要求した場合は、内容が進んでいないことを検査役へ返します。要求の組み合わせを変えただけでも進捗には数えません。追加取得で入力中の証拠を入れ替える前には、その証拠の根拠付きの解釈か未解決点を保持させ、取得だけを繰り返して判断内容が失われることを防ぎます。不変の原文は工程の移動や回答更新後も保存し、新しい回答の判定結果は取り直します。
+停滞時の再判定は通常の設定とは別に Codex の Astra の最新 / high を試し、失敗時は Claude の `fable` / high を試します。Cyber のアクセスプログラムを使うターンでは、対応する Codex モデルを選びます。通常検査とそこからの再判定は、既定 1 時間の非常用上限を共有します。これは正常な応答時間の目標ではありません。処理中は原文の取得と解釈の更新を検証し、同じ解釈状態で既に供給した原文だけを繰り返し要求した場合は、内容が進んでいないことを検査役へ返します。要求の組み合わせを変えただけでも進捗には数えません。追加取得で入力中の証拠を入れ替える前には、その証拠の根拠付きの解釈か未解決点を保持させ、取得だけを繰り返して判断内容が失われることを防ぎます。不変の原文は工程の移動や回答更新後も保存し、新しい回答の判定結果は取り直します。
 
 代替の検査役は、既定 40 秒または残時間の半分のうち早い方で開始します。非常用上限を長くしても代替開始は遅らせず、先行の検査役も打ち切りません。先に得た返答を共通の原文・coverage 検証へ渡し、不要になった処理は終了します。この場合は両サービスへ入力を送り、モデルの利用枠も両方で消費します。`OUTPUT_GATE_TIMEOUT` を指定した場合はその値を使います。外側の中継・mod・表示 hook も共通の上限と後始末の時間を使います。ただし Claude の display・Stop hook 自体の登録上限は 7200 秒なので、それを超える検査時間には登録上限の変更も必要です。モデルが返答する前の意味上の進捗は観測できず、すべての停滞を検出する保証ではありません。
 
 ```json
-{"first":"claude","claude":{"model":"opus","effort":"low"},"codex":{"model":"gpt-6.1-terra","effort":"low"}}
+{"first":"claude","claude":{"model":"opus","effort":"low"},"codex":{"model":"terra","effort":"low"}}
 ```
 
 `first` は `claude`、`codex`、`same`、`opposite` を指定できます。先に使う提供元を変更しても、失敗時にはもう一方を試します。mod の Claude 検査以外は、モデル提供元の公式サービスを接続先にします。管理者設定による接続先の上書きは除去できない場合があります。

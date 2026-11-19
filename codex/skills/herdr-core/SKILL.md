@@ -45,7 +45,8 @@ hc run --bg --name fix --cwd /path/to/repo claude "Fix the failing test in x.rs;
 A plain launch also works, but wait for readiness before sending its task:
 
 ```sh
-hc run --bg --name helper pi --provider openai-codex --model gpt-6.1-sol --thinking medium
+MODEL=$("$HOME/.agent-shared/bin/codex-model" sol) || exit 1
+hc run --bg --name helper pi --provider openai-codex --model "$MODEL" --thinking medium
 hc wait helper
 hc send helper "Inspect x.rs only. No subagents. Report with hc send $HC_TERMINAL_ID when done or stuck."
 ```

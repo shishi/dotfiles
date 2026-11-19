@@ -92,7 +92,7 @@ Claude Code では `~/.claude/memory` を指定します。同期できない場
 | 6. 完了前の確認 | [kata-verify](../codex/skills/kata-verify/SKILL.md) |
 | 7. 統合と後片付け | [kata-finish](../codex/skills/kata-finish/SKILL.md) |
 
-skill が選ばれるかはモデルが description に気づくかに左右されるため、SessionStart hook の `kata-entry.sh` が入口の kata と工程ごとの skill を毎回伝えます。委譲された子のセッションには、受けた範囲だけを進めて設計・統合・利用者への質問は司令塔へ返す案内を伝えます。
+skill が選ばれるかはモデルが description に気づくかに左右されるため、SessionStart hook の `kata-entry.sh` が入口の kata と工程ごとの skill を毎回伝えます。それでも、すぐ答えられそうな質問では kata を飛ばすことがあるため、`kata-first.sh` が利用者の入力ごとに kata を最初に開くよう伝え (UserPromptSubmit)、kata を開くまで他のツールを止めます (PreToolUse)。子エージェントのツール呼出しと委譲された子のセッションは止めません。Codex では hook を追加・変更したら `/hooks` で信頼し直すまで動きません。委譲された子のセッションには、受けた範囲だけを進めて設計・統合・利用者への質問は司令塔へ返す案内を伝えます。
 
 ### superpowers の取り込み
 

@@ -87,12 +87,12 @@ Bash 呼び出しに対しても実行前に走り、拒否されたコマンド
 
 ### モデルと推論量を選ぶ
 
-`agent-delegation` の仕事内容による選択基準を使う。定型作業は `gpt-6-luna` / `high`、通常の
-実装・調査は `gpt-6.1-sol` / `medium`(複雑なら `high`)、広い影響を伴う難しい作業は
-`gpt-6-astra` / `high` を初期値にする。委譲種別だけで固定せず、検証対象のモデルが
+`agent-delegation` の仕事内容による選択基準を使う。定型作業は Luna / `high`、通常の
+実装・調査は Sol / `medium`(複雑なら `high`)、広い影響を伴う難しい作業は
+Astra / `high` を初期値にし、選んだ系統の最新を `~/.agent-shared/bin/codex-model <系統>` で解決する。委譲種別だけで固定せず、検証対象のモデルが
 指定されている場合はそのモデルを維持する。選んだ値を手順 3 の `DELEGATE_MODEL` と
-`DELEGATE_EFFORT` に入れる。`agents.default_subagent_model` は子の既定値なので、
-新しく起動する `codex exec` 本体のモデル指定の代わりにはならない。
+`DELEGATE_EFFORT` に入れる。`config.toml` は子の既定モデルを持たないので、
+新しく起動する `codex exec` 本体には毎回モデルを指定する。
 
 選んだモデルが利用不能なら、司令塔が `agent-delegation` の許容候補を試す。サービス全体の
 認証・権限・利用枠の問題ではモデルを巡回しない。Codex の許容候補を使えなければ
@@ -155,10 +155,11 @@ WORK=/tmp/xxxxxxxx   # 1 回目が返したパス
 case "${WORK##*/}" in (codex-delegate-??????) ;; (*) exit 96 ;; esac  # 1 回目が作った形でなければ触らない
 [ -s "$WORK/prompt.md" ] || exit 96   # パスの貼り間違い、または Write がまだ
 gitleaks dir "$WORK/prompt.md" --no-banner || exit 98   # 検出あり・実行不能とも委譲しない
+# 起動済みの目印を作る前に解決する。失敗後に再実行しても「起動済み」(96) と誤らないため
+DELEGATE_MODEL=$("$HOME/.agent-shared/bin/codex-model" sol) || exit 1  # 仕事内容に応じて選んだ系統
 mkdir "$WORK/run.claim" || exit 96    # 既に委譲を起動している、または目印を作れない
 cp "$HOME/.claude/skills/codex-delegate/schema.json" "$WORK/schema.json" || exit 1
 NET=false               # ネットワークが要るタスクだけ true(workspace-write でのみ読まれる)
-DELEGATE_MODEL=gpt-6.1-sol # 仕事内容に応じて選んだモデル
 DELEGATE_EFFORT=medium    # 仕事内容に応じて選んだ推論量
 ROLE=explore             # explore / chore / implement
 STARTED_AT=$(date +%s)
@@ -255,7 +256,7 @@ exit "$rc"
 長い委譲は起動元の timeout と background 実行の仕様を確認し、必要なら最初から background
 で始める。background では、監視 hook がタスクの出力で進み具合を判定する。出力をすべてファイルへ向けたままだと
 進んでいても確認のたびに起こされるため、上の `codex exec` の行を codex-review と同じ形
-(`2> "$WORK/run.log" | tee "$WORK/events.jsonl" | jq` で完了した項目を 1 行ずつ出し、`PIPESTATUS` で
+(`2> "$WORK/run.log" | tee "$WORK/events.jsonl" | jq` で完了した項目を 1 行ずつ出し、codex-review と同じ受け方で
 codex と tee の終了コードを確かめる) に替える。前景では文脈が増えるだけなので替えない。
 実行 handle と `WORK` を保持し、同じ実行を追跡する。観測の timeout だけでは
 CLI の終了・最終 JSON の欠落・子プロセスの停止を断定しない。
