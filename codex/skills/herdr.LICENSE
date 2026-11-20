@@ -1,5 +1,5 @@
 Source: https://github.com/herdrdev/herdr, https://github.com/herdrdev/herdr-core, https://github.com/herdrdev/herdr-app
-Upstream documentation: herdr, herdr-core, herdr-app (manuals are read from each CLI with --skill at runtime; the official herdr-core skill is installed separately.)
+Used in: herdr, herdr-core, herdr-app (SKILL.md is based on the manual each CLI prints with --skill; the description and parts of the body were modified for this repository.)
 
                                  Apache License
                            Version 2.0, January 2004

@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
-# SessionStart hook: Herdr の内側と外側で、対応する skill の選択条件を伝える。
+# SessionStart hook: herdr-core の端末 (HC_TERMINAL_ID) や旧 herdr (HERDR_ENV=1) の中の各 agent に、対応する skill の使用を促す。
 # skill の発動はモデルが description に気づくかに依存するため、確定的に注入する。
+# fail-open: どちらの外でも何も出力せず正常終了する。
 set -u
-
-if [ -z "${HC_TERMINAL_ID:-}" ]; then
-  cat <<'EOF'
-<herdr-context>
-このセッションは herdr-core の端末の外で動いています。Herdr Core を利用する明示的な依頼がある場合に herdr-core skill を選んでください。通常の長いコマンドやバックグラウンド作業は既存の実行ツールで進めます。公式 skill の用途に該当することだけを理由に、hc の利用確認を挟みません。
-</herdr-context>
-EOF
-fi
 
 if [ -n "${HC_TERMINAL_ID:-}" ]; then
   cat <<'EOF'
