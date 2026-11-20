@@ -5,7 +5,8 @@ set -eu
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 HOOK="$HOOK_DIR/task-monitor-codex.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/task-monitor-codex-test.XXXXXX")
-trap 'rm -rf "$work"' EXIT
+pids=()
+trap 'kill ${pids[@]+"${pids[@]}"} 2>/dev/null || :; rm -rf "$work"' EXIT
 export TASK_MONITOR_STATE_DIR="$work/state" TASK_MONITOR_CODEX_SESSIONS="$work/sessions"
 R="$work/rollout.jsonl"
 : > "$R"
@@ -17,12 +18,37 @@ run() { local mode=$1; shift; jq -cn --arg r "$R" "{session_id:\"s1\", transcrip
 stop() { run stop '{}'; }
 toolcall() { echo '{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"x"}}' >> "$R"; }
 running() { ls "$work/state/codex/s1/running" 2>/dev/null | wc -l; }
+# Codex が実行中のコマンドのプロセスへ渡すのと同じ CODEX_TOOL_CALL_ID を持つプロセスを動かす
+live() { CODEX_TOOL_CALL_ID=$1 sleep 600 & pids+=($!); }
 
 run pre-bash '{tool_use_id:"t1", tool_input:{command:"ls"}}'
 run post-bash '{tool_use_id:"t1", tool_response:"ok"}'
 [ -z "$(stop)" ] || fail "終わったコマンドで止めた"
 ok "組が閉じたコマンドでは止めない"
 
+# PreToolUse の別の hook や承認で止められたコマンドは実行されず、PostToolUse も来ない。
+# 動いているかを確かめられない OS では記録を残すため、Linux でだけ確かめる
+if [ "$(uname -s)" = Linux ]; then
+  run pre-bash '{tool_use_id:"blocked", tool_input:{command:"cat SKILL.md"}}'
+  [ -z "$(stop)" ] || fail "実行されなかったコマンドで止めた"
+  [ "$(running)" = 0 ] || fail "実行されなかったコマンドの記録が残る"
+  ok "実行されなかったコマンドでは止めず、記録を消す"
+
+  # 起動を拒否されたコマンドは、プロセスを持たない失敗の完了だけが rollout に残る
+  printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","turn_id":"u1","item":{"type":"CommandExecution","id":"rejected","command":["bash","-lc","git push"],"cwd":"file:///repo","source":"unified_exec_startup","status":"failed","aggregated_output":"Rejected"}}}' >> "$R"
+  run pre-bash '{tool_use_id:"rejected", tool_input:{command:"git push"}}'
+  [ -z "$(stop)" ] || fail "起動を拒否されたコマンドで止めた"
+  ok "起動を拒否されたコマンドでは止めない"
+
+  # rollout が無いと、終わって結果を読んでいないコマンドと実行されなかったコマンドを区別できない
+  run pre-bash '{tool_use_id:"unknown", tool_input:{command:"npm test"}}'
+  out=$(run stop '{transcript_path:null}')
+  has "$out" "npm test" "rollout が無いセッション"
+  rm -f "$work/state/codex/s1/running/cmd-unknown"; run prompt '{prompt:"x"}'
+  ok "rollout が無いセッションでは記録を残す"
+fi
+
+live t2
 run pre-bash '{tool_use_id:"t2", tool_input:{command:"make build"}}'
 out=$(stop)
 [ "$(jq -r .decision <<<"$out")" = block ] || fail "実行中で止めない: $out"
@@ -87,6 +113,7 @@ has "$o3" "報告" "解放"; [ "$(running)" = 0 ] || fail "解放後に記録が
 ok "見に行かないまま 3 回終えたら解放し、残った記録を消す"
 
 w >/dev/null; w >/dev/null
+live t3
 run pre-bash '{tool_use_id:"t3", tool_input:{command:"sleep 1"}}'
 out=$(stop); has "$out" "yield_time_ms は 600000" "待った後に起動したコマンド"
 ok "待った後に新しいコマンドを起動しても 10 分から数え直す"
@@ -94,3 +121,8 @@ toolcall; out=$(stop); has "$out" "1200000" "数え直し前"
 run prompt '{prompt:"x"}'
 out=$(stop); has "$out" "yield_time_ms は 600000" "利用者の入力"
 ok "利用者の入力で 10 分から数え直す"
+
+printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","turn_id":"u1","item":{"type":"CommandExecution","id":"finished","process_id":"4242","command":["bash","-lc","npm test"],"cwd":"file:///repo","source":"unified_exec_startup","status":"completed","exit_code":0,"aggregated_output":"ok"}}}' >> "$R"
+run pre-bash '{tool_use_id:"finished", tool_input:{command:"npm test"}}'
+out=$(stop); has "$out" "npm test" "終わって結果を読んでいないコマンド"
+ok "終わったまま結果を読んでいないコマンドは待たせる"

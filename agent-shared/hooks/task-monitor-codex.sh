@@ -35,6 +35,23 @@ resolve_agent() {
       [ -n "$id" ] && { printf '%s\n' "$id"; break; }
     done
 }
+# 実行された証拠のないコマンドの記録を消す。PostToolUse が来ないことだけでは、バックグラウンドで動いているのか、
+# 別の PreToolUse hook や承認で止められて実行されなかったのかを区別できないため。
+# 証拠は、Codex がコマンドのプロセスへ渡す CODEX_TOOL_CALL_ID が記録の id と同じ生きたプロセス (実行中) と、
+# rollout にあるその id のプロセスを持った CommandExecution の完了 (終わったが、結果をまだ write_stdin で
+# 読んでいない) の二つ。どちらかを観測できない環境 (/proc の無い OS、rollout の無いセッション) では記録を残す。
+# sandbox を通らないコマンドが自分の環境変数を消す・上書きすると、動いていても見落とす
+prune_commands() {
+  [ "$(uname -s)" = Linux ] && [ -f "$1" ] || return 0
+  local ids f
+  ids=$(cat /proc/[0-9]*/environ 2>/dev/null | tr '\0' '\n' | sed -n 's/^CODEX_TOOL_CALL_ID=//p'
+    grep -F '"CommandExecution"' "$1" | jq -R -r 'fromjson? | .payload.item? // empty
+      | select(.type == "CommandExecution" and .process_id != null) | .id')
+  for f in "$run"/cmd-*; do
+    [ -e "$f" ] || continue
+    grep -qxF -- "${f##*/cmd-}" <<<"$ids" || rm -f "$f"
+  done
+}
 num() { cat "$state/$1" 2>/dev/null || echo 0; }
 reset() { rm -f "$state/round" "$state/idle" "$state/mark" "$state/seen" "$state/waited"; }
 
@@ -88,9 +105,10 @@ case $mode in
     [ -n "$ctx" ] && jq -cn --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext:
       ("監視: 待機中の子の最新の内容です。目的の結果へ進んでいるかを判断し、止まっていれば close_agent か interrupt_agent で止めて、原因を調べ、直すか別の方法で元の目的をやり直してください。\n" + $c)}}' ;;
   stop)
+    transcript=$(field .transcript_path)
+    prune_commands "$transcript"
     items=$(ls "$run")
     if [ -z "$items" ]; then reset; exit 0; fi
-    transcript=$(field .transcript_path)
     lines=0; [ -f "$transcript" ] && lines=$(wc -l < "$transcript")
     [ -f "$state/seen" ] || : > "$state/seen"
     new=$(comm -23 <(printf '%s\n' "$items") "$state/seen")
