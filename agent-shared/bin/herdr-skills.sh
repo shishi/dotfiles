@@ -27,7 +27,8 @@ generate() { # $1=skill name, $2=CLI that prints the manual
     dir="$REPO_ROOT/$agent/skills/$name"
     mkdir -p "$dir" || { rm -f "$manual"; return 1; }
     tmp="$(mktemp "$dir/.SKILL.md.XXXXXX")" || { rm -f "$manual"; return 1; }
-    if ! { cat "$overlay" && printf '\n' && cat "$manual"; } >"$tmp" || ! mv "$tmp" "$dir/SKILL.md"; then
+    # 生成物を直しても次の生成で消えるため、読んだエージェントが編集先を取り違えないよう本文に示す。
+    if ! { cat "$overlay" && printf '\n<!-- この SKILL.md は herdr-skills.sh が生成します。直接編集せず、agent-shared/skill-overlays/%s.md を編集します。 -->\n\n' "$name" && cat "$manual"; } >"$tmp" || ! mv "$tmp" "$dir/SKILL.md"; then
       rm -f "$tmp" "$manual"
       return 1
     fi

@@ -22,6 +22,7 @@
 - `codex/config.toml` は Codex 自身も書き換えます。Git の clean フィルター (`setup.sh` が設定) が端末ごとの値を除くので、commit 前に差分に余計な行が混ざっていないか確認します。
 - 操作の判定ルールは `agent-shared/policy/action-policy.json` を直し、`python3 agent-shared/bin/apply-action-policy` で生成します。`--check` で生成物とのずれを確かめます。Codex を更新したときの再生成も [docs/agents.md](docs/agents.md#操作の判定ルール) を参照してください。
 - `codex/hooks.json` の hook を追加・変更すると、利用者が Codex の `/hooks` で信頼し直すまで動きません。
+- skill を追加・編集・更新する前に、`agent-shared/skill-sources.tsv` で由来の種類を確かめます。種類ごとの編集先と導入の手順は [docs/agents.md](docs/agents.md#skill-の由来と編集先) に従います。skill を新設・fork・廃止したら台帳も直します (`tests/skill-sources.sh` で確認)。
 - `claude/skills/` と `codex/skills/` の両方にある skill は、エージェント名を除いて同じ内容に保ちます (`tests/skills-sync.sh` で確認)。review-gate の観点 agent も `claude/agents/*.md` と `codex/agents/*.toml` で同じ本文に保ちます。
 
 ## テスト

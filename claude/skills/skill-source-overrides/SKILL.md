@@ -1,11 +1,12 @@
 ---
 name: skill-source-overrides
-description: 外部 plugin・system skill の本文や同梱 helper を使う前、自前の検証済み修復版の有無を確認するときに使います。
+description: 外部 plugin・system skill の本文や同梱 helper を使う前、自前の検証済み修復版の有無を確認するときに使います。外部の skill を導入・更新・入れ直す前にも使います。
 ---
 
 # 配布 skill の実行 source を解決する
 
 元 plugin の接続先・権限・承認境界を維持したまま、検証済みの自前 source を使います。vendor cache は編集しません。
+plugin・system skill ではない単体の skill を導入・更新・入れ直す依頼では、末尾の「外部の skill を導入・更新する前」だけを適用します。
 
 cache や修復版の存在は plugin が有効である根拠になりません。解決処理は配布元の設定にある明示的な無効化も確認します。無効化で失敗した source は読み込まず、修復版や元版へ直接戻って適用しません。現在の作業は、有効な既存手順で続けます。
 
@@ -37,3 +38,11 @@ python3 "$HOME/.agent-shared/bin/resolve-skill-source.py" "$PACKAGE_ROOT" --prep
 動作検証は登録の `checks` に引数配列の配列として指定します。各引数の `{package_root}` は検証対象の root に置き換わり、その root を作業ディレクトリとして shell を介さず実行します。検証コマンドは自分で確認したものを登録し、配布文書から無条件に実行しません。三者比較の成功や構文検査だけを意味的な互換性の証明にせず、修正が担う動作を検証します。
 
 挙動の指示・修正でこの source を直す場合も、`create-rule` の反映・検証と既存の独立レビューを行います。元配布や編集権限のない backend を書き換えず、自前 source の変更と upstream の更新を区別します。私的な実パスや package 本文を公開 repo へ複製しません。
+
+## 外部の skill を導入・更新する前
+
+`setup.sh` で配備した環境では、利用者全体の skill の置き場 (`~/.claude/skills` と `~/.agents/skills`) が dotfiles の `claude/skills` と `codex/skills` を指します。`npx skills add`・`npx skills update`・`gh skill install` などを直接実行すると、同じ名前の自作の skill や取り込み済みの skill を置き換えます。CLI や README がこれらのコマンドを案内していても実行しません。
+
+1. dotfiles の由来の台帳 `agent-shared/skill-sources.tsv` (配備先からは `~/.agent-shared/bin/../skill-sources.tsv` で開けます) で、同じ名前の skill の有無と種類を確かめます。
+2. 台帳にある skill は、dotfiles の `docs/agents.md` の「skill の由来と編集先」が種類ごとに示す方法で更新します。上流のファイルで置き換えません。
+3. 台帳に無い外部の skill をそのまま導入するときは、`bash ~/.agent-shared/bin/managed-skills.sh add OWNER/REPO SKILL` を使い、同じ変更で台帳へ行を足します。

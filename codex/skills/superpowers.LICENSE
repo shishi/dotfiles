@@ -1,4 +1,5 @@
 Source: https://github.com/obra/superpowers (7.0.2)
+Used in: the skills marked adapted from this source in agent-shared/skill-sources.tsv (docs/agents.md lists which upstream skill each one takes in)
 
 MIT License
 

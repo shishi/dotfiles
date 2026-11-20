@@ -59,9 +59,9 @@ has_content() { # $1=file, $2=expected content
   [ -f "$1" ] && [ "$(cat "$1"; printf x)" = "$2"x ]
 }
 
-core_v1=$'---\nname: herdr-core\ndescription: "local core policy"\n---\n\n## Local\n\nlocal core note\n\n# hc manual\n\nUse hc v1.\n'
-core_v2=$'---\nname: herdr-core\ndescription: "local core policy"\n---\n\n## Local\n\nlocal core note\n\n# hc manual\n\nUse hc v2.\n'
-app_v1=$'---\nname: herdr-app\ndescription: "local app policy"\n---\n\n# herdr-app manual\n\nUse herdr-app v1.\n'
+core_v1=$'---\nname: herdr-core\ndescription: "local core policy"\n---\n\n## Local\n\nlocal core note\n\n<!-- この SKILL.md は herdr-skills.sh が生成します。直接編集せず、agent-shared/skill-overlays/herdr-core.md を編集します。 -->\n\n# hc manual\n\nUse hc v1.\n'
+core_v2=$'---\nname: herdr-core\ndescription: "local core policy"\n---\n\n## Local\n\nlocal core note\n\n<!-- この SKILL.md は herdr-skills.sh が生成します。直接編集せず、agent-shared/skill-overlays/herdr-core.md を編集します。 -->\n\n# hc manual\n\nUse hc v2.\n'
+app_v1=$'---\nname: herdr-app\ndescription: "local app policy"\n---\n\n<!-- この SKILL.md は herdr-skills.sh が生成します。直接編集せず、agent-shared/skill-overlays/herdr-app.md を編集します。 -->\n\n# herdr-app manual\n\nUse herdr-app v1.\n'
 
 assert "sync succeeds when both CLIs print their manuals" run_sync "$TMP/bin:$PATH"
 assert "Claude herdr-core skill puts the local overlay before the hc manual" \

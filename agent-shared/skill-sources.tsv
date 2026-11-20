@@ -1,0 +1,62 @@
+# skill の由来の台帳。列はタブ区切りで、名前・種類・出所 (無ければ -)。
+# 種類ごとの編集先と更新の手順は docs/agents.md の「skill の由来と編集先」にある。tests/skill-sources.sh で実物と照合する。
+#   own        この repo で書いた skill
+#   adapted    外部の本文を取り込んで書き直し、Git で管理する skill
+#   managed    managed-skills.sh が取得し、Git で管理しない skill
+#   generated  端末の CLI が出力する手引きから生成し、Git で管理しない skill
+#   entry      本文を実行時に CLI から取得する、この repo で書いた入口
+ad-filter-investigation	own	-
+adr	adapted	https://github.com/mattpocock/skills
+agent-delegation	adapted	https://github.com/obra/superpowers
+capturing-memory	own	-
+claude-delegate	own	-
+claude-review	own	-
+code-comments	own	-
+codex-delegate	own	-
+codex-review	own	-
+compact-prep	own	-
+create-rule	adapted	https://github.com/obra/superpowers
+domain-modeling	adapted	https://github.com/mattpocock/skills
+empirical-prompt-tuning	adapted	https://github.com/obra/superpowers
+git-commit	own	-
+git-lossless-integrate	own	-
+github-review-followup	own	-
+github-writing	own	-
+grilling	managed	https://github.com/mattpocock/skills
+herdr-core	generated	https://github.com/herdrdev/herdr-core
+herdr-app	generated	https://github.com/herdrdev/herdr-app
+hunk-review	entry	https://github.com/modem-dev/hunk
+investigation-discipline	adapted	https://github.com/obra/superpowers
+kata	adapted	https://github.com/obra/superpowers
+kata-build	adapted	https://github.com/obra/superpowers,https://github.com/atusy/dotfiles
+kata-design	adapted	https://github.com/obra/superpowers
+kata-finish	adapted	https://github.com/obra/superpowers
+kata-plan	adapted	https://github.com/obra/superpowers
+kata-verify	adapted	https://github.com/obra/superpowers
+kata-workspace	adapted	https://github.com/obra/superpowers
+lan-diagnostics	own	-
+leaf-preview	own	-
+logging	own	-
+memory-consolidate	own	-
+memory-retrieval	own	-
+missing-tools	own	-
+modern-web-guidance	own	-
+nix-binary-cache	own	-
+nixos-binary-runtime	own	-
+openwhispr-dictionary-tuning	own	-
+relational-data-modeling	own	-
+review-gate	adapted	https://github.com/obra/superpowers
+scoop-manifest	own	-
+secrets-scan	own	-
+skill-source-overrides	own	-
+synology-script-execution	own	-
+test-red-first	adapted	https://github.com/obra/superpowers
+user-acceptance	own	-
+windows-backup-validation	own	-
+windows-font-management	own	-
+windows-gpu-diagnostics	own	-
+windows-package-maintenance	own	-
+windows-script-diagnostics	own	-
+windows-vm-testbed	own	-
+writing-prose	own	-
+writing-rspec	own	-
