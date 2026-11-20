@@ -240,6 +240,8 @@ fi
 
 bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync ||
   echo "setup.sh: managed skill sync failed"
+bash "$DOTDIR/agent-shared/bin/herdr-skills.sh" sync ||
+  echo "setup.sh: Herdr skill generation failed"
 
 # Plugins and integrations (after agent homes and shared skills)
 if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then

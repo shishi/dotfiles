@@ -72,6 +72,16 @@ bash ~/.agent-shared/bin/managed-skills.sh fork NAME
 | grill-with-docs | mattpocock/skills | grilling と domain-modeling |
 | show-me | humanlayer/skills | 指定なし (図や要約は skill なしで書ける) |
 
+### Herdr の skill
+
+herdr-core と herdr-app の skill は、各 CLI が `--skill` で出力する手引きを本文にして、`setup.sh` が生成します。手引きは端末に入っている CLI の版で変わるため、生成した SKILL.md は Git で管理しません。いつ使うかを決める description と、この repo の補足は `agent-shared/skill-overlays/<skill 名>.md` に書き、手引きの前に置きます。上流の手引きを取り込み直しても、この上書きは毎回重なります。CLI を更新したら、次のコマンドで手引きを取り込みます。
+
+```sh
+bash ~/.agent-shared/bin/herdr-skills.sh sync
+```
+
+CLI が入っていない端末では何もしません。手引きを取得できなかったときは、既存の skill を残して失敗を報告します。生成した skill は Git に含まれないため、clone した直後の端末や、この仕組みを取り込んだ直後の端末では、`setup.sh` か上のコマンドを実行するまで herdr-core と herdr-app の skill がありません。
+
 ## 記憶
 
 個人の記憶は非公開リポジトリで管理し、各エージェントの `memory/` から参照します。セッション開始時に同期を試み、利用者の入力時には索引と検索候補を渡します。本文は索引から選んで取得します。

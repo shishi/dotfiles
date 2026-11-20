@@ -42,6 +42,12 @@
 /claude/skills/terminal-browser
 /codex/skills/terminal-browser
 
+# herdr-skills.sh が端末の Herdr の CLI から生成する skill
+/claude/skills/herdr-core/
+/claude/skills/herdr-app/
+/codex/skills/herdr-core/
+/codex/skills/herdr-app/
+
 # 言語処理系が生成する一時ファイル
 __pycache__/
 *.py[co]
