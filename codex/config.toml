@@ -1,6 +1,11 @@
 personality = "friendly"
 # model は書かない。版を固定すると新しい世代が出ても古いモデルを使い続けるため、CLI の既定 (最新の推奨モデル) に任せる。
 model_reasoning_effort = "high"
+# Codex は skill 一覧の上限を context window の 2% で決め、超えると説明文を後ろから切る。各モデルの既定の窓
+# では「いつ使うか」の条件が切れて skill を選べなくなるため、モデル一覧の max_context_window まで広げる。
+# [skills].max_context_tokens は 10000 で頭打ちになり、全文が収まらない。
+model_context_window = 872000
+model_auto_compact_token_limit = 750000
 project_doc_max_bytes = 65536
 default_permissions = ":workspace"
 approval_policy = "on-request"
