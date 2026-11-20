@@ -1,6 +1,6 @@
 ---
 name: herdr-core
-description: "Run, read, message, wait on and clean up programs and coding agents in herdr-core's persistent terminals through the `hc` CLI. Use only when the user explicitly mentions hc, herdr-core or Herdr's terminals/agents, or asks to use them to start, watch or talk to another agent or program, and `HC_TERMINAL_ID` is set. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. For changing what the person sees in the desktop window, use herdr-app. For the legacy `herdr` terminal multiplexer, use herdr."
+description: "Use when HC_TERMINAL_ID is set and the task involves an existing herdr-core terminal or benefits from keeping a program or coding agent running while you inspect its output, interact, or wait for a result. Choose it from the task context, even if the user leaves the tool choice to you. Use herdr-app to change the desktop window and herdr for the legacy terminal multiplexer."
 ---
 
 # hc manual (herdr-core)
@@ -9,6 +9,12 @@ The current manual for herdr-core's CLI, `hc`. It is not `herdr`, the older
 terminal multiplexer.
 
 # hc: programs and agents that stay alive
+
+Choose `hc` for work in an existing Herdr Core terminal and for authorized work
+that benefits from a persistent terminal, such as a long test run you need to
+stay reachable during or an interactive child you need to steer. Run short
+local commands directly when that meets the task. Use the existing delegation
+rules to decide whether to start a child agent.
 
 `hc` runs programs in persistent terminals. People can attach and take over.
 It does not arrange windows; use `herdr-app --skill` for that.
@@ -141,12 +147,10 @@ hc wait web --output ready         # match output printed AFTER this wait starts
 hc read web --lines 100
 ```
 
-### Slow commands: don't block yourself
+### Long-running commands
 
-Your own shell tool holds you until its command ends: no messages, no
-children's reports, no other work. Run anything slow (builds, test suites,
-CI, deploys, installs) in an hc terminal instead and wait with hc. You stay
-reachable, and you can keep working or start more.
+When a build, test suite, or similar command needs ongoing observation, use an
+`hc` terminal so you can stay reachable, check output, and wait for results.
 
 ```sh
 hc run --bg --rm --no-notify --name build cargo build --release
@@ -205,9 +209,15 @@ paths start at your current folder. Prefer explicit paths for remote work.
 - State is `live` or `finished`. Status comes from the program's OSC 7501
   reports: `idle`, `working`, `done`, `blocked`, `error`; plain programs
   report none. Do not guess status from screen text.
-- `blocked` means a person is needed (permission or a question): read the
-  screen and ask your user. `send` refuses unless `--force`; don't use it to
-  bypass a permission decision. `error`: read why, then send or kill.
+- For `blocked`, read the screen to identify the question or approval. For a
+  task question within your delegated scope, verify the selected option and
+  use `hc keys` to answer on the child's screen. For a tool or sandbox
+  permission prompt, confirm the exact action and obtain any required approval
+  that is still missing before answering. Ask the user for decisions only they
+  can make.
+  `send` refuses a blocked terminal by default to protect the open dialog.
+  For `error`, read the cause before sending another message or ending the
+  program.
 - `hc run` without a command starts this machine's own shell. On macOS,
   this is a login shell so it loads the login environment; explicit commands
   are unchanged. Recovery shells use the same rule.
