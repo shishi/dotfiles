@@ -8,6 +8,10 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/kata-entry-test.XXXXXX") || exit 1
 tmp=$(cd -P "$tmp" && pwd) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 unset AGENT_DELEGATED_SESSION T3CODE_THREAD_ID
+# 手元の T3 Code の記録を読まないよう、T3 の保存先をテスト用の場所に向ける。
+export T3CODE_HOME=$tmp/t3
+# T3 が起動した Codex の本体には、この目印が付く。
+export CODEX_INTERNAL_ORIGINATOR_OVERRIDE="T3 Code"
 fail=0
 
 check() { # name expected-substring-or-! output
@@ -19,8 +23,9 @@ check() { # name expected-substring-or-! output
   fi
 }
 
-mkdir -p "$tmp/agent-shared/hooks" "$tmp/state"
+mkdir -p "$tmp/agent-shared/hooks/lib" "$tmp/state"
 cp "$hook" "$tmp/agent-shared/hooks/kata-entry.sh"
+cp "$(dirname "$hook")/lib/delegated-session.sh" "$tmp/agent-shared/hooks/lib/"
 echo 7.0.2 > "$tmp/agent-shared/superpowers-imported-version"
 git init -q --bare "$tmp/upstream.git"
 git init -q "$tmp/work"
@@ -33,7 +38,38 @@ echo "$1" >> "$(dirname "$0")/import-calls"
 mkdir -p "$2/import-$1"; echo "running 0" > "$2/import-$1/status"
 STUB
 chmod +x "$tmp/import-stub"
-run() { KATA_UPSTREAM_URL=$tmp/upstream.git KATA_UPSTREAM_STATE_DIR=$tmp/state KATA_IMPORT_CMD=$tmp/import-stub bash "$tmp/agent-shared/hooks/kata-entry.sh"; sleep 0.3; }
+# hook の入力の session_id は変数 session で変えられる。
+run() {
+  printf '{"session_id":"%s","hook_event_name":"SessionStart","source":"startup"}\n' "${session:-s1}" |
+    KATA_UPSTREAM_URL=$tmp/upstream.git KATA_UPSTREAM_STATE_DIR=$tmp/state KATA_IMPORT_CMD=$tmp/import-stub bash "$tmp/agent-shared/hooks/kata-entry.sh"
+  sleep 0.3
+}
+# T3 Code の状態 DB の偽物を作る。表は T3 0.1.11 の実物と同じ定義で、Codex の会話 (nativeId) が属する
+# T3 のスレッドを 1 行ずつ記録する。
+t3_db() { # dir thread_id native_id [thread_id native_id ...]
+  local db=$1/userdata/statev2.sqlite sql
+  mkdir -p "$1/userdata"
+  sql="CREATE TABLE orchestration_v2_projection_provider_threads (
+      provider_thread_id TEXT PRIMARY KEY, thread_id TEXT, owner_node_id TEXT, provider TEXT NOT NULL,
+      provider_session_id TEXT, status TEXT NOT NULL, first_run_ordinal INTEGER, last_run_ordinal INTEGER,
+      updated_at TEXT NOT NULL, payload_json TEXT NOT NULL, driver TEXT, provider_instance_id TEXT);
+    CREATE TABLE orchestration_v2_projection_threads (thread_id TEXT PRIMARY KEY, deleted_at TEXT, updated_at TEXT NOT NULL);"
+  shift
+  while [ $# -ge 2 ]; do
+    sql="$sql INSERT INTO orchestration_v2_projection_provider_threads VALUES ('provider-thread:$1', '$1', NULL, 'codex',
+      'provider-session:provider-instance:codex:shared', 'idle', 1, 1, '2026-11-20T17:06:32.711Z',
+      '{\"id\":\"provider-thread:$1\",\"driver\":\"codex\",\"providerInstanceId\":\"codex\",\"appThreadId\":\"$1\",\"ownerNodeId\":null,\"nativeThreadRef\":{\"driver\":\"codex\",\"nativeId\":\"$2\",\"strength\":\"strong\"},\"status\":\"idle\"}',
+      'codex', 'codex');"
+    sql="$sql INSERT OR IGNORE INTO orchestration_v2_projection_threads VALUES ('$1', NULL, '2026-11-20T17:06:32.711Z');"
+    shift 2
+  done
+  sqlite3 "$db" "$sql"
+}
+codex_child=01a1f9ea-0000-7000-8000-00000000c0de
+codex_parent=01a1f9ea-0000-7000-8000-0000000000ff
+t3_db "$T3CODE_HOME" \
+  thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Az $codex_child \
+  00000000-0000-4000-8000-0000000000aa $codex_parent
 
 tag v7.0.1; tag v7.0.2
 out=$(run)
@@ -46,8 +82,17 @@ check "委譲された子には依頼の範囲で進めることを伝える" "�
 out=$(T3CODE_THREAD_ID=thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Ay run)
 check "T3 の委譲の子には利用者への応答の案内を出さない" "!利用者への最初の応答" "$out"
 check "T3 の委譲の子には依頼の範囲で進めることを伝える" "委譲された担当" "$out"
-out=$(T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 run)
+out=$(T3CODE_THREAD_ID=00000000-0000-4000-8000-0000000000aa run)
 check "T3 の利用者と話すスレッドには入口の案内を出す" "利用者への最初の応答" "$out"
+# T3 は Codex の子にスレッド ID を hook の環境で渡さないため、T3 の記録で会話の属するスレッドを引く。
+out=$(session=$codex_child run)
+check "T3 の記録で委譲の子と分かる Codex の会話には利用者への応答の案内を出さない" "!利用者への最初の応答" "$out"
+check "T3 の記録で委譲の子と分かる Codex の会話には依頼の範囲で進めることを伝える" "委譲された担当" "$out"
+out=$(session=$codex_parent run)
+check "T3 の利用者と話すスレッドの Codex の会話には入口の案内を出す" "利用者への最初の応答" "$out"
+mkdir -p "$tmp/t3-broken/userdata"; echo 'not a database' > "$tmp/t3-broken/userdata/statev2.sqlite"
+out=$(T3CODE_HOME=$tmp/t3-broken session=$codex_child run)
+check "T3 の記録を読めなければ入口の案内を出す" "利用者への最初の応答" "$out"
 
 tag v7.0.10
 out=$(run)
@@ -82,6 +127,8 @@ out=$(T3CODE_THREAD_ID=thread:delegated-task:x run)
 check "T3 の委譲の子には通知しない" "!<superpowers-import>" "$out"
 out=$(AGENT_DELEGATED_SESSION=1 run)
 check "委譲の子セッションには通知しない" "!<superpowers-import>" "$out"
+out=$(session=$codex_child run)
+check "T3 の記録で委譲の子と分かる Codex の会話には通知しない" "!<superpowers-import>" "$out"
 out=$(run)
 check "終わったら報告と作業場所を伝える" "作業場所: $tmp/state/import-7.0.10/repo" "$out"
 check "取り込み手順の文書の場所を示す" "$tmp/docs/agents.md" "$out"

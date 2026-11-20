@@ -7,7 +7,36 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/kata-first-test.XXXXXX") || exit 1
 trap 'rm -rf "$tmp"' EXIT
 export KATA_FIRST_STATE_DIR=$tmp/state
 unset AGENT_DELEGATED_SESSION T3CODE_THREAD_ID
+# 手元の T3 Code の記録を読まないよう、T3 の保存先をテスト用の場所に向ける。
+export T3CODE_HOME=$tmp/t3
+# T3 が起動した Codex の本体には、この目印が付く。
+export CODEX_INTERNAL_ORIGINATOR_OVERRIDE="T3 Code"
 fail=0
+
+# T3 Code の状態 DB の偽物を作る。表は T3 0.1.11 の実物と同じ定義で、Codex の会話 (nativeId) が属する
+# T3 のスレッドを 1 行ずつ記録する。
+t3_db() { # dir thread_id native_id [thread_id native_id ...]
+  local db=$1/userdata/statev2.sqlite sql
+  mkdir -p "$1/userdata"
+  sql="CREATE TABLE orchestration_v2_projection_provider_threads (
+      provider_thread_id TEXT PRIMARY KEY, thread_id TEXT, owner_node_id TEXT, provider TEXT NOT NULL,
+      provider_session_id TEXT, status TEXT NOT NULL, first_run_ordinal INTEGER, last_run_ordinal INTEGER,
+      updated_at TEXT NOT NULL, payload_json TEXT NOT NULL, driver TEXT, provider_instance_id TEXT);
+    CREATE TABLE orchestration_v2_projection_threads (thread_id TEXT PRIMARY KEY, deleted_at TEXT, updated_at TEXT NOT NULL);"
+  shift
+  while [ $# -ge 2 ]; do
+    sql="$sql INSERT INTO orchestration_v2_projection_provider_threads VALUES ('provider-thread:$1', '$1', NULL, 'codex',
+      'provider-session:provider-instance:codex:shared', 'idle', 1, 1, '2026-11-20T17:06:32.711Z',
+      '{\"id\":\"provider-thread:$1\",\"driver\":\"codex\",\"providerInstanceId\":\"codex\",\"appThreadId\":\"$1\",\"ownerNodeId\":null,\"nativeThreadRef\":{\"driver\":\"codex\",\"nativeId\":\"$2\",\"strength\":\"strong\"},\"status\":\"idle\"}',
+      'codex', 'codex');"
+    sql="$sql INSERT OR IGNORE INTO orchestration_v2_projection_threads VALUES ('$1', NULL, '2026-11-20T17:06:32.711Z');"
+    shift 2
+  done
+  sqlite3 "$db" "$sql"
+}
+t3_db "$T3CODE_HOME" \
+  thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Az 01a1f9ea-0000-7000-8000-00000000c0de \
+  00000000-0000-4000-8000-0000000000aa 01a1f9ea-0000-7000-8000-0000000000ff
 
 prompt() { # session
   jq -nc --arg s "$1" '{session_id:$s, hook_event_name:"UserPromptSubmit", prompt:"x"}' | bash "$hook" prompt
@@ -65,8 +94,41 @@ out=$(T3CODE_THREAD_ID=$t3_child prompt s15)
 check "T3 の委譲の子には入力の案内を出さない" "" "$out"
 prompt s15 > /dev/null
 check "印があっても T3 の委譲の子のツールは止めない" 0 "$(T3CODE_THREAD_ID=$t3_child tool s15 Bash '{"command":"ls"}')"
-T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 prompt s16 > /dev/null
-check "T3 の利用者と話すスレッドは kata を開く前のツールを止める" 2 "$(T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 tool s16 Bash '{"command":"ls"}')"
+T3CODE_THREAD_ID=00000000-0000-4000-8000-0000000000aa prompt s16 > /dev/null
+check "T3 の利用者と話すスレッドは kata を開く前のツールを止める" 2 "$(T3CODE_THREAD_ID=00000000-0000-4000-8000-0000000000aa tool s16 Bash '{"command":"ls"}')"
+
+# T3 は Codex の子にスレッド ID を hook の環境で渡さないため、T3 の記録で会話の属するスレッドを引く。
+codex_child=01a1f9ea-0000-7000-8000-00000000c0de
+codex_parent=01a1f9ea-0000-7000-8000-0000000000ff
+out=$(prompt $codex_child)
+check "T3 の記録で委譲の子と分かる Codex の会話には入力の案内を出さない" "" "$out"
+check "T3 の記録で委譲の子と分かる Codex の会話はツールを止めない" 0 "$(tool $codex_child Bash '{"command":"ls"}')"
+# 入力の時点で T3 の記録がまだ無く印が付いた場合も、ツールを使う時点の判定で止めない
+mkdir -p "$KATA_FIRST_STATE_DIR"; : > "$KATA_FIRST_STATE_DIR/$codex_child"
+check "印が残っていても T3 の記録で委譲の子と分かる Codex の会話はツールを止めない" 0 "$(tool $codex_child Bash '{"command":"ls"}')"
+# T3 の外で委譲済みの会話を codex resume すると、同じ session_id でも T3 が起動した Codex ではない。
+CODEX_INTERNAL_ORIGINATOR_OVERRIDE= prompt $codex_child > /dev/null
+check "T3 の外で再開した Codex の会話は委譲の子とみなさない" 2 "$(CODEX_INTERNAL_ORIGINATOR_OVERRIDE= tool $codex_child Bash '{"command":"ls"}')"
+# 同じ会話が通常のスレッドと委譲のスレッドの両方に対応するときは、どちらか決められないので子とみなさない。
+ambiguous=01a1f9ea-0000-7000-8000-0000000000ab
+t3_db "$tmp/t3-ambiguous" thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Aamb $ambiguous \
+  00000000-0000-4000-8000-0000000000bb $ambiguous
+T3CODE_HOME=$tmp/t3-ambiguous prompt $ambiguous > /dev/null
+check "通常と委譲の両方に対応する Codex の会話は委譲の子とみなさない" 2 "$(T3CODE_HOME=$tmp/t3-ambiguous tool $ambiguous Bash '{"command":"ls"}')"
+# 削除されたスレッドの記録は使わない。
+deleted=01a1f9ea-0000-7000-8000-0000000000dd
+t3_db "$tmp/t3-deleted" thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Adel $deleted
+sqlite3 "$tmp/t3-deleted/userdata/statev2.sqlite" "UPDATE orchestration_v2_projection_threads SET deleted_at = '2026-11-20T18:00:00Z'"
+T3CODE_HOME=$tmp/t3-deleted prompt $deleted > /dev/null
+check "削除されたスレッドの記録では委譲の子とみなさない" 2 "$(T3CODE_HOME=$tmp/t3-deleted tool $deleted Bash '{"command":"ls"}')"
+prompt $codex_parent > /dev/null
+check "T3 の利用者と話すスレッドの Codex の会話は kata を開く前のツールを止める" 2 "$(tool $codex_parent Bash '{"command":"ls"}')"
+mkdir -p "$tmp/t3-broken/userdata"; echo 'not a database' > "$tmp/t3-broken/userdata/statev2.sqlite"
+T3CODE_HOME=$tmp/t3-broken prompt c1 > /dev/null
+check "T3 の記録を読めなければ通常どおり kata を開く前のツールを止める" 2 "$(T3CODE_HOME=$tmp/t3-broken tool c1 Bash '{"command":"ls"}')"
+mkdir -p "$tmp/t3-other/userdata"; sqlite3 "$tmp/t3-other/userdata/statev2.sqlite" 'CREATE TABLE x (y TEXT);'
+T3CODE_HOME=$tmp/t3-other prompt c2 > /dev/null
+check "T3 の記録の形が変わっていたら通常どおり kata を開く前のツールを止める" 2 "$(T3CODE_HOME=$tmp/t3-other tool c2 Bash '{"command":"ls"}')"
 
 prompt s9 > /dev/null
 check "Claude の Read で kata の SKILL.md を開くと通す" 0 "$(tool s9 Read '{"file_path":"/home/u/.claude/skills/kata/SKILL.md"}')"

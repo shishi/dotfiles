@@ -5,14 +5,11 @@
 #   prompt (UserPromptSubmit): そのセッションに「kata をまだ開いていない」印を付け、案内を出す。
 #   pre    (PreToolUse):       印がある間は、kata を開く操作 (Skill・Read・Codex のコマンド) とタスク表示用のツールだけを通し、ほかは止める。
 #
-# 子エージェントのツール呼出し (agent_id がある) と、委譲された子のセッションは受け取った担当の範囲で進めるので
-# 対象外にする。委譲された子は AGENT_DELEGATED_SESSION=1 で示すが、T3 Code の delegate_task が起動した子には
-# この変数が付かないため、T3 がその子のスレッドに付ける ID の接頭辞でも見分ける。T3 はこの ID を Claude Code には
-# プロセスの環境で渡すが、Codex にはシェルコマンドの環境でしか渡さず hook に届かないため、Codex の子は見分けられない。
+# 子エージェントのツール呼出し (agent_id がある) と、委譲された子のセッション (lib/delegated-session.sh) は
+# 受け取った担当の範囲で進めるので対象外にする。
 set -u
 
-[ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && exit 0
-case ${T3CODE_THREAD_ID:-} in thread:delegated-task:*) exit 0 ;; esac
+. "$(dirname "$0")/lib/delegated-session.sh"
 in=$(cat)
 sid=$(jq -r '.session_id // empty' <<<"$in" 2>/dev/null)
 [ -n "$sid" ] || exit 0
@@ -37,6 +34,7 @@ names_kata() { [[ $1 =~ skills[/\\]kata([/\\[:space:]]|$) && $1 == *SKILL.md* ]]
 
 case ${1:-} in
   prompt)
+    delegated_session "$sid" && exit 0
     # 案内は状態の保存に失敗しても出す。
     [ -n "$pending" ] && : > "$pending" 2>/dev/null
     jq -nc '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext:
@@ -44,6 +42,8 @@ case ${1:-} in
     ;;
   pre)
     [ -n "$pending" ] && [ -e "$pending" ] || exit 0
+    # 判定は印があるときだけ行い、ツールを呼ぶたびに T3 の記録を引かない。
+    delegated_session "$sid" && exit 0
     [ -n "$(jq -r '.agent_id // empty' <<<"$in")" ] && exit 0
     tool=$(jq -r '.tool_name // empty' <<<"$in")
     case $tool in

@@ -10,15 +10,11 @@ set -u
 
 # 委譲された子には利用者がおらず、設計・作業場所・統合は司令塔が担う。工程 1 から始める入口を渡すと
 # 受託範囲を越えて質問や設計を始めるため、担当の範囲で進める案内に替える。
-# T3 Code の delegate_task が起動した子には AGENT_DELEGATED_SESSION が付かないため、T3 がその子の
-# スレッドに付ける ID の接頭辞でも見分ける。T3 はこの ID を Claude Code にはプロセスの環境で渡すが、Codex には
-# シェルコマンドの環境でしか渡さず hook に届かないため、Codex の子は見分けられない。
-delegated() {
-  [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && return 0
-  case ${T3CODE_THREAD_ID:-} in thread:delegated-task:*) return 0 ;; esac
-  return 1
-}
-if delegated; then
+. "$(dirname "$0")/lib/delegated-session.sh"
+sid=$(jq -r '.session_id // empty' 2>/dev/null)
+delegated=
+delegated_session "$sid" && delegated=1
+if [ -n "$delegated" ]; then
   cat <<'MSG'
 <kata-entry>
 このセッションは委譲された担当。受け取った依頼の範囲と受入条件だけを進め、設計・作業場所・統合・利用者への質問は司令塔へ返す。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first、文章を書く・直す前は writing-prose を開く。完了を報告する前に kata-verify で証拠を確かめ、成果と検証結果を司令塔へ返す。
@@ -97,7 +93,7 @@ if [ $((now - checked)) -ge "$interval" ]; then
 fi
 
 # 委譲・レビューの子セッションには利用者がいないため、通知は司令塔のセッションにだけ出す。
-! delegated && [ -z "${SUPERPOWERS_IMPORT_RUNNING:-}" ] || exit 0
+[ -z "$delegated" ] && [ -z "${SUPERPOWERS_IMPORT_RUNNING:-}" ] || exit 0
 [ -n "$latest" ] || exit 0
 newest=$(printf '%s\n%s\n' "$imported" "$latest" | newest_version)
 [ "$newest" != "$imported" ] || exit 0
