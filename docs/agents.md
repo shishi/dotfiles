@@ -26,18 +26,9 @@ bash setup.sh
 
 止める操作と事前に許可する操作は `agent-shared/policy/action-policy.json` にまとめます。このファイルで両 CLI について止めるのは、エージェント自身の作業を続けられなくする操作です。push を止める判定は両 CLI の組み込みに任せています。Claude Code の auto mode では、作業中のリポジトリへの通常の push は通り、他人の作業を消す force push などは止まります。Codex では Auto-review の組み込みの方針が判定します。依頼のない push を止める規則は、`disabled` を付けて戻し方と一緒にこのファイルに残しています。依頼のない投稿は、Claude Code では auto mode に組み込まれたルールが止め、Codex では同じファイルの Codex 向けの規則が止めます。片方の CLI にだけ渡す規則は `targets` で絞ります。破壊的な Git 操作や認証情報の露出は、Claude Code では auto mode に組み込まれたルールが止めます。Codex の Auto-review も、組み込みの方針で取り返しのつかない破壊や認証情報の不正な取得を止めます。記憶リポジトリへの push と、Claude と Codex への委譲・レビューは許可します。利用者のアカウント配下のリポジトリへの通常の push も、作業中のリポジトリ以外やデフォルトブランチを含めて許可します。組織や他人のアカウントのリポジトリは対象外で、force push と push する内容の判定は変わりません。同じ会話で承認済みの操作も、同じ対象と範囲なら許可します。ただし削除、履歴の書き換え、公開先への公開は、承認を持ち越しません。
 
-ルールを変更したら `python3 agent-shared/bin/apply-action-policy` を実行します。Claude Code 向けの `claude/settings.json` と Codex 向けの `agent-shared/policy/codex-requirements.toml` を生成します。`--check` で両方の生成物と正本のずれを確認できます。
+ルールを変更したら `python3 agent-shared/bin/apply-action-policy` を実行します。`claude/settings.json` の `autoMode` と `codex/config.toml` の `auto_review.policy` を書き出します。`--check` で生成する内容と設定ファイルの差分を確認できます。
 
-Codex は管理設定の `guardian_extra_policy` を組み込みの審査ポリシーに追加します。このリポジトリの追加規則は単一ユーザーのマシン向けです。配備すると、そのマシン上の Codex ユーザー全員に適用されます。Unix では `/etc/codex/requirements.toml`、Windows では既定で `%ProgramData%\OpenAI\Codex\requirements.toml` が配備先です。
-
-Unix で配備先のファイルがまだない場合は、管理者が生成物を配置します。
-
-```sh
-sudo mkdir -p /etc/codex
-sudo install -m 0644 agent-shared/policy/codex-requirements.toml /etc/codex/requirements.toml
-```
-
-既存の管理設定がある場合は、ほかのキーと管理者が独自に追加した規則を保持してください。同じ正本から生成した規則を更新し、`guardian_extra_policy` は一つの文字列にまとめます。再生成したら配備先も更新し、ファイルを読み戻して生成した規則が入っていることを確かめます。配備後に起動した Codex が管理設定を読み込みます。
+Codex の `auto_review.policy` は既定の審査ポリシー本文を置き換えます。生成スクリプトはインストール済みの Codex に同梱されている既定本文を取得し、リポジトリの追加ルールを末尾に加えます。書き出した本文を Codex が使うため、Codex の更新後もスクリプトを再実行して同梱ポリシーの変更を取り込んでください。同梱ポリシーのライセンスは [Apache License 2.0](../agent-shared/policy/codex-policy.LICENSE) です。
 
 Claude Code の allow は、組み込みの一覧を `$defaults` で取り込みます。組み込みの allow は soft_deny に足した規則より優先されるため、組み込みの allow を外したいときは `drop_default_allow` にそのラベルを書きます。その場合は組み込みの一覧から除いた全文を書き出し、Claude Code の更新で組み込みの一覧が変わると `--check` が差分を示します。`classifyAllShell` も有効にし、`permissions.allow` の Bash 規則が auto mode の判定を飛ばさないようにします。
 

@@ -20,7 +20,7 @@
 - スクリプトは原則 sh / bash で書きます。それで難しい理由がある場合だけ python など普及した言語を使います。
 - 改行コードは、既存のファイルでは今の改行を保ちます (CRLF のファイルも混在しています)。新しいファイルは同じ種類の既存ファイルに合わせ、特に理由がなければ LF にします。
 - `codex/config.toml` は Codex 自身も書き換えます。Git の clean フィルター (`setup.sh` が設定) が端末ごとの値を除くので、commit 前に差分に余計な行が混ざっていないか確認します。
-- 操作の判定ルールは `agent-shared/policy/action-policy.json` を直し、`python3 agent-shared/bin/apply-action-policy` で生成します。`--check` で生成物とのずれを確かめます。Codex の管理設定の配備先は [docs/agents.md](docs/agents.md#操作の判定ルール) を参照してください。
+- 操作の判定ルールは `agent-shared/policy/action-policy.json` を直し、`python3 agent-shared/bin/apply-action-policy` で生成します。`--check` で生成物とのずれを確かめます。Codex を更新したときの再生成も [docs/agents.md](docs/agents.md#操作の判定ルール) を参照してください。
 - `codex/hooks.json` の hook を追加・変更すると、利用者が Codex の `/hooks` で信頼し直すまで動きません。
 - `claude/skills/` と `codex/skills/` の両方にある skill は、エージェント名を除いて同じ内容に保ちます (`tests/skills-sync.sh` で確認)。review-gate の観点 agent も `claude/agents/*.md` と `codex/agents/*.toml` で同じ本文に保ちます。
 
