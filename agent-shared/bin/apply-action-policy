@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """エージェントの操作の判定ルールを、正本 (agent-shared/policy/action-policy.json) から各 CLI の設定へ書き出す。
 
-    apply-action-policy           claude/settings.json の autoMode と codex/config.toml の [auto_review] を書き換える
+    apply-action-policy           claude/settings.json の autoMode と codex/config.toml の [auto_review].policy を書き換える
     apply-action-policy --check   書き出す内容と設定ファイルが食い違えば差分を示して 1 で終える
+    apply-action-policy --codex   codex/config.toml の [auto_review].policy だけを、食い違うときに書き換える (Codex の SessionStart hook が使う)
 
 判定そのものは Claude Code の auto mode の分類器と Codex の auto-review が行う。ここは両者に同じルールを渡すだけ。
 Claude の allow は、drop_default_allow が空なら "$defaults" で標準の一覧を取り込む。空でなければ、標準の一覧から
@@ -10,14 +11,21 @@ Claude の allow は、drop_default_allow が空なら "$defaults" で標準の�
 にはこの書き方しかない。その場合の標準の一覧は `claude auto-mode defaults` から取るので、Claude Code の更新で標準が
 変われば --check が食い違いとして知らせる。
 
+Codex は config.toml の追加の規則 (extra_policy) を読まない。読むのは組み込みの方針を丸ごと置き換える policy だけなので、
+`codex debug models` から組み込みの方針を取り、その後ろに規則を足して書く。Codex の SessionStart hook が
+起動のたびに --codex で確かめ、組み込みの方針が Codex の更新で変わっていれば書き直す。
+
 TOML と JSON を壊さずに書き換えるため python で書く (sh では TOML の表の置き換えを安全に書けない)。
 """
 import difflib
 import json
+import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -55,15 +63,30 @@ def claude_auto_mode(policy, defaults):
     }
 
 
+def codex_builtin_policy():
+    # 一覧は UTF-8。Windows の既定のコードページで文字列にすると読めないので、バイト列のまま JSON として読む。
+    out = subprocess.run(["codex", "debug", "models"], check=True, capture_output=True).stdout
+    reviews = ((m.get("model_messages") or {}).get("auto_review") or {} for m in json.loads(out)["models"])
+    found = {review["policy"] for review in reviews if review.get("policy")}
+    if len(found) != 1:
+        sys.exit(f"apply-action-policy: Codex の組み込みの方針が {len(found)} 種類ある (1 種類を前提にしている)")
+    return found.pop()
+
+
+def codex_policy(policy):
+    return codex_builtin_policy().rstrip("\n") + "\n\n" + codex_extra_policy(policy)
+
+
 def codex_extra_policy(policy):
     sections = [
         ("Environment", "environment"),
         ("Block unless the user authorized this exact action", "soft_deny"),
         ("Allow", "allow"),
     ]
-    lines = ["# User-specific rules", ""]
+    # 組み込みの方針の節 (##) と同じ階層に置き、テンプレートの "# Security Policy" の一部として読ませる。
+    lines = ["## User-specific rules", ""]
     for title, section in sections:
-        lines += [f"## {title}", ""]
+        lines += [f"### {title}", ""]
         # 必須記述の注記 "[named+specifics — ...]" は Claude の分類器の書式なので、Codex には渡さない。
         for text in rule_texts(policy, section, "codex"):
             plain = re.sub(r" \[named\+specifics[^\]]*\]", "", text)
@@ -78,15 +101,16 @@ def render_settings(text, auto_mode):
     return json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
 
 
-def render_codex(text, extra_policy):
-    if "'''" in extra_policy:
-        sys.exit("apply-action-policy: extra_policy に ''' を含められない (TOML のリテラル文字列の終端になる)")
-    block = ["[auto_review]", f"extra_policy = '''\n{extra_policy}'''", ""]
+def render_codex(text, review_policy):
+    if "'''" in review_policy:
+        sys.exit("apply-action-policy: policy に ''' を含められない (TOML のリテラル文字列の終端になる)")
+    entry = f"policy = '''\n{review_policy}'''"
     lines = text.split("\n")
     start = next((i for i, line in enumerate(lines) if line.strip() == "[auto_review]"), None)
     if start is None:
         # 最初の表の前に置く。表より前は最上位のキーだけなので、ここなら他の表の中身を分断しない。
-        start = end = next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
+        at = next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
+        lines[at:at] = ["[auto_review]", entry, ""]
     else:
         end = start + 1
         in_literal = False
@@ -96,35 +120,79 @@ def render_codex(text, extra_policy):
             elif not in_literal and lines[end].lstrip().startswith("["):
                 break
             end += 1
-    rendered = "\n".join(lines[:start] + block + lines[end:])
-    parsed = tomllib.loads(rendered)
-    if parsed.get("auto_review", {}).get("extra_policy") != extra_policy:
+        # 利用者が [auto_review] に置いたほかのキー (timeout_ms など) は残し、policy と、Codex が読まなくなった
+        # extra_policy だけを入れ替える。
+        kept, i = [], start + 1
+        while i < end:
+            # キーは引用符で囲んでも同じ名前になる ("policy" = ...)。
+            key = re.match(r"""\s*(["']?)(policy|extra_policy)\1\s*=\s*(.*)$""", lines[i])
+            if key:
+                quote = next((q for q in ("'''", '"""') if key.group(3).startswith(q)), None)
+                if quote and key.group(3).count(quote) == 1:
+                    i += 1
+                    while i < end and quote not in lines[i]:
+                        i += 1
+            else:
+                kept.append(lines[i])
+            i += 1
+        lines[start + 1:end] = [entry, *kept]
+    rendered = "\n".join(lines)
+    before, after = tomllib.loads(text), tomllib.loads(rendered)
+    old_review = {k: v for k, v in before.pop("auto_review", {}).items() if k not in ("policy", "extra_policy")}
+    new_review = after.pop("auto_review", {})
+    if new_review.pop("policy", None) != review_policy or new_review != old_review or after != before:
         sys.exit("apply-action-policy: codex/config.toml の書き換え結果を読み直せなかった")
     return rendered
 
 
-def main():
-    check = sys.argv[1:] == ["--check"]
-    if sys.argv[1:] not in ([], ["--check"]):
-        sys.exit(__doc__)
-    policy = json.loads(POLICY.read_text(encoding="utf-8"))
-    targets = [
-        (CLAUDE_SETTINGS, lambda text: render_settings(text, claude_auto_mode(policy, claude_defaults()))),
-        (CODEX_CONFIG, lambda text: render_codex(text, codex_extra_policy(policy))),
-    ]
-    drift = False
-    for path, render in targets:
+def replace_file(path, current, wanted, render):
+    # 同時に起動したほかのセッションや Codex も同じ設定を書く。書きかけを読ませないよう実行ごとの一時ファイルから
+    # 置き換え、読んだ後に別の書き手が変えていれば、その内容から作り直して上書きを避ける。
+    for _ in range(3):
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+                f.write(wanted)
+            shutil.copymode(path, tmp)
+            if path.read_text(encoding="utf-8") == current:
+                os.replace(tmp, path)
+                return
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
         current = path.read_text(encoding="utf-8")
         wanted = render(current)
         if current == wanted:
-            continue
-        if check:
-            drift = True
+            return
+    sys.exit(f"apply-action-policy: {path.name} がほかの書き手に書き換えられ続けたため、更新を見送った")
+
+
+def main():
+    mode = sys.argv[1:]
+    if mode not in ([], ["--check"], ["--codex"]):
+        sys.exit(__doc__)
+    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    # 外部の CLI から取る値は先に揃える。設定ファイルを読んでから書くまでの間を短くし、その間に別の書き手が
+    # 入れた変更を古い内容で上書きしにくくするため。
+    review_policy = codex_policy(policy)
+    targets = [(CODEX_CONFIG, lambda text: render_codex(text, review_policy))]
+    if mode != ["--codex"]:
+        auto_mode = claude_auto_mode(policy, claude_defaults())
+        targets.insert(0, (CLAUDE_SETTINGS, lambda text: render_settings(text, auto_mode)))
+    # 片方の生成に失敗したとき、もう片方だけが新しい規則になるのを防ぐため、全部生成してから書く。
+    changes = []
+    for path, render in targets:
+        current = path.read_text(encoding="utf-8")
+        wanted = render(current)
+        if current != wanted:
+            changes.append((path, current, wanted, render))
+    if mode == ["--check"]:
+        for path, current, wanted, _ in changes:
             rel = str(path.relative_to(ROOT))
             sys.stdout.writelines(difflib.unified_diff(current.splitlines(True), wanted.splitlines(True), rel, rel))
-        else:
-            path.write_text(wanted, encoding="utf-8")
-    sys.exit(1 if drift else 0)
+        sys.exit(1 if changes else 0)
+    for path, current, wanted, render in changes:
+        replace_file(path, current, wanted, render)
 
 
 if __name__ == "__main__":

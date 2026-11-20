@@ -135,6 +135,17 @@
           }
         ],
         "matcher": "startup|clear|compact"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.agent-shared/hooks/codex-review-policy.sh",
+            "commandWindows": "& (Join-Path $HOME '.agent-shared/bin/invoke-git-bash-hook.ps1') '~/.agent-shared/hooks/codex-review-policy.sh'",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume"
       }
     ],
     "Stop": [
