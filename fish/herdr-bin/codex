@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# Codex forwards clipboard writes with HERDR_ENV; legacy Herdr also uses it to block nesting.
+if [[ -n ${HC_TERMINAL_ID:-} && -z ${HERDR_ENV+x} ]]; then
+  export HERDR_ENV=1
+fi
+
+codex_paths=()
+while IFS= read -r codex_path; do
+  codex_paths+=("$codex_path")
+done < <(type -aP codex)
+
+for codex_path in "${codex_paths[@]}"; do
+  [[ "$codex_path" -ef "$0" ]] && continue
+  exec "$codex_path" "$@"
+done
+
+printf '%s\n' 'codex: executable not found' >&2
+exit 127

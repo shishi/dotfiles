@@ -1,6 +1,6 @@
 ---
 name: herdr
-description: "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
+description: "Control the legacy Herdr terminal multiplexer. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1 and HERDR_SOCKET_PATH."
 ---
 
 # Herdr
@@ -10,7 +10,7 @@ Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding ag
 Before issuing any control command, verify that this agent is running inside a Herdr-managed pane:
 
 ```bash
-test "${HERDR_ENV:-}" = 1
+test "${HERDR_ENV:-}" = 1 && test -n "${HERDR_SOCKET_PATH:-}"
 ```
 
 If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr.

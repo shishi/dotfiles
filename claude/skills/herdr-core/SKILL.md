@@ -1,6 +1,6 @@
 ---
 name: herdr-core
-description: "Run, read, message, wait on and clean up programs and coding agents in herdr-core's persistent terminals through the `hc` CLI. Use only when the user explicitly mentions hc, herdr-core or Herdr's terminals/agents, or asks to use them to start, watch or talk to another agent or program, and `HC_TERMINAL_ID` is set. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. For changing what the person sees in the desktop window, use herdr-app; for the older `herdr` terminal multiplexer (HERDR_ENV=1), use herdr."
+description: "Run, read, message, wait on and clean up programs and coding agents in herdr-core's persistent terminals through the `hc` CLI. Use only when the user explicitly mentions hc, herdr-core or Herdr's terminals/agents, or asks to use them to start, watch or talk to another agent or program, and `HC_TERMINAL_ID` is set. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. For changing what the person sees in the desktop window, use herdr-app. For the legacy `herdr` terminal multiplexer, use herdr."
 ---
 
 # hc manual (herdr-core)

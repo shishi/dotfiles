@@ -443,6 +443,11 @@ if not set -q __dotfiles_fish_initialized; and type nix &>/dev/null
     set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin $PATH
 end
 
+# Herdr App launches agents with `command`, which bypasses the fish function.
+if test -n "$HC_TERMINAL_ID"; and command -sq codex
+    fish_add_path --path --move "$__fish_config_dir/herdr-bin"
+end
+
 # Global, not exported: a newly started fish must initialize independently.
 set -gu __dotfiles_fish_initialized 1
 
