@@ -2,7 +2,7 @@
 name: secrets-scan
 description: |
   gitleaks で uncommitted の変更(worktree vs HEAD の全変更 + untracked)から
-  設定済みパターンに一致する secrets を検出する。review-gate のレーン0 として呼ばれる、
+  設定済みパターンに一致する secrets を検出する。review-gate の実行手順から呼ばれる、
   または /secrets-scan で明示発動。検出ゼロが通過条件。
 ---
 
@@ -65,7 +65,7 @@ regexes = ['''EXAMPLE_[A-Z_]+''']
 
 allowlist へ追加する前に、本当に secret でないことを人が確認する(追加はユーザー承認事項)。
 
-注意: per-file 実行では `-c` で明示指定しないと allowlist が適用されない(上の手順 2 はこれを行っている)。
+注意: per-file 実行では `-c` で明示指定しないと allowlist が適用されない(上の手順 1 はこれを行っている)。
 
 ## 制約
 
