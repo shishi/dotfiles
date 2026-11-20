@@ -5,7 +5,9 @@ description: コードや具体的な差分を提示するとき、Hunk で差�
 
 # Hunk でコードや差分を表示する
 
-対象を表示中の Hunk があれば、そのセッションを使います。利用者が提示を求め、対象を表示できるセッションがなければ、利用者が見られる端末の操作手段で Hunk を開きます。
+表示先の指定がなければ、現在のタブを左右に分割 (vsplit) し、Hunk を右側に表示します。その配置で対象を表示中の Hunk があれば、同じペインを使います。
+
+Herdr App では `pane.split` の `right` を使います。表示側の App を端末から操作できず、Core 経由で現在のタブの右端に追加する場合は、作業端末の `herdr.space` と `herdr.tab` を両方引き継いで Hunk を起動します。
 
 ファイルは `hunk open`、作業ツリーの差分は `hunk diff`、コミットは `hunk show` で開きます。パッチファイルには `hunk patch`、GitHub の PR には `hunk gh pr` を使います。
 
