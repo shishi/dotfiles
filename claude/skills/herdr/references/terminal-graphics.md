@@ -4,7 +4,7 @@ Herdr 内のブラウザーが動いていても、人間へピクセルが届�
 
 ## 表示 client と経路
 
-1. 実行版の `herdr status` のヘルプを確認し、クライアントの接続状態を人が見ているターミナルと照合します。
+1. `HERDR_ENV=1` は管理 pane 内の証拠であり、表示 client の接続証明ではありません。実行版の `herdr status` の help を確認し、client/server の状態と人間が見ている terminal を対応づけます。
 2. DOM の取得とピクセル描画を別々に確認します。同じ terminal で、使用する Kitty graphics 等の protocol に対応した小さな既知の画像を表示し、browser 以外でも経路を切り分けます。
 3. SSH、multiplexer、terminal の各境界を確認します。一つの版で転送できなかった観測を現行版の非対応とせず、対象版の対応情報と実表示を照合します。
 

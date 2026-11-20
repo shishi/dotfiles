@@ -54,5 +54,7 @@ __pycache__/
 
 # BEGIN managed external skills
 /claude/skills/grilling/
+/claude/skills/herdr-core/
 /codex/skills/grilling/
+/codex/skills/herdr-core/
 # END managed external skills

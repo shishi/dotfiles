@@ -13,9 +13,11 @@ description: 変更・調査・レビュー・説明など依頼の種類を問�
 
 回答は依頼と取得した実物を照合し、結論とその根拠を伝えます。変更する前に変更前の状態と他者変更を確かめます。変更の完了確認には [kata-verify](../kata-verify/SKILL.md) を使い、変更後の diff/status も確かめます。不具合・失敗・想定外の結果が出たら、[investigation-discipline](../investigation-discipline/SKILL.md) で原因と必要な次の操作を判断します。
 
-コードや具体的な差分の提示を求められたら、[hunk-review](../hunk-review/SKILL.md) を開いて Hunk で表示します。利用者が別の表示先を指定したときは、その指定に従います。
-
 対象に該当する規約の skill は、その対象を読む・書く・レビューする前に開きます (例: RSpec の spec なら writing-rspec と repo が指定する spec-policy、人が読む文章なら writing-prose)。規約は工程の手順ではなく、結果を判断する基準なので、上の「手順を読むことを判断の前提にしない」の対象外です。
+
+skill の出所や編集先を説明するときと変更する前に、[skill-source-overrides](../skill-source-overrides/SKILL.md) で本文の作成元と導入・更新経路を確認します。
+
+コードや具体的な差分の提示を求められたら、[hunk-review](../hunk-review/SKILL.md) で Hunk に表示します。
 
 不明な点があれば、その点を判定する資料・skill・観測だけを追加します。作業名、文の短さ、変更行数では手順を決めません。小さく見える操作でも、重要な前提・権限・既存保証が未確認なら、その確認を先に行います。
 

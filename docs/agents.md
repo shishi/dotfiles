@@ -64,6 +64,8 @@ bash ~/.agent-shared/bin/managed-skills.sh fork NAME
 
 片方だけに導入するときは `add` の末尾に `claude` または `codex` を指定します。外部 skill を変更するときは、`fork NAME` で Git 管理に移してから編集します。`setup.sh` は登録済みの skill を同期します。
 
+Herdr Core は公式の skill を外部 skill として更新します。旧 Herdr と Herdr App、Hunk は dotfiles で保守する短い入口を持ちます。操作手順は各入口から実行版の CLI に問い合わせるため、バイナリを更新した次の利用から同じ版の手順を読みます。個人用の操作方針は自前の入口や共有 hook に置きます。
+
 次の外部 skill は、既存の skill や既定の動作で足りるため導入しません。`add` で入れ直さず、同じ用途は右の列の skill を使います。
 
 | 導入しない skill | 出所 | 代わりに使うもの |
