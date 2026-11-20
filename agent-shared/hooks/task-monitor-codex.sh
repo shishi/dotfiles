@@ -10,6 +10,7 @@
 #   post-wait                   PostToolUse (wait_agent): 待機中の子の rollout の最新の内容を渡す
 #   prompt                      UserPromptSubmit: 待ち時間を 10 分から数え直す
 #   stop                        Stop: 実行中のものがあればターン終了を止める
+#   prune                       動いていないコマンドの記録だけを消す (同時に動く Stop hook が記録を読む前に使う)
 set -u
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 . "$HOOK_DIR/lib/task-monitor-common.sh"
@@ -69,22 +70,17 @@ live_command_ids() {
   done
   [ -z "$unknown" ]
 }
-# 実行された証拠のないコマンドの記録を消す。PostToolUse が来ないことだけでは、バックグラウンドで動いているのか、
-# 別の PreToolUse hook や承認で止められて実行されなかったのかを区別できないため。
-# 証拠は、動いているプロセス (live_command_ids) と、rollout にあるその id のプロセスを持った
-# CommandExecution の完了 (終わったが、結果をまだ write_stdin で読んでいない) の二つ。
-# どちらかを観測できない環境 (Linux・macOS 以外、rollout の無いセッション) では記録を残す
+# 動いていないコマンドの記録を消す。PostToolUse が来ないことだけでは、バックグラウンドで動いているのか、
+# 別の PreToolUse hook や承認で止められて実行されなかったのか、終わったが結果を write_stdin で読んでいないのかを
+# 区別できないため。動いているかを確かめられない環境 (Linux・macOS 以外) では記録を残す
 prune_commands() {
   os=$(uname -s)
-  case $os in Linux | Darwin) [ -f "$1" ] || return 0 ;; *) return 0 ;; esac
-  local ids live f
+  case $os in Linux | Darwin) ;; *) return 0 ;; esac
+  local live f
   live=$(live_command_ids) || return 0
-  ids=$(printf '%s\n' "$live"
-    grep -F '"CommandExecution"' "$1" | jq -R -r 'fromjson? | .payload.item? // empty
-      | select(.type == "CommandExecution" and .process_id != null) | .id')
   for f in "$run"/cmd-*; do
     [ -e "$f" ] || continue
-    grep -qxF -- "${f##*/cmd-}" <<<"$ids" || rm -f "$f"
+    grep -qxF -- "${f##*/cmd-}" <<<"$live" || rm -f "$f"
   done
 }
 num() { cat "$state/$1" 2>/dev/null || echo 0; }
@@ -122,6 +118,8 @@ case $mode in
     id=$(field .agent_id); [ -n "$id" ] && rm -f "$run/agent-$id" ;;
   prompt)
     reset ;;
+  prune)
+    prune_commands ;;
   pre-wait)
     # 待つたびに 10・20・40 分と進める。Stop を挟まずに待ち続けても間隔が進み、新しいタスクの起動で 0 に戻る。
     round=$(num round)
@@ -140,8 +138,8 @@ case $mode in
     [ -n "$ctx" ] && jq -cn --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext:
       ("監視: 待機中の子の最新の内容です。目的の結果へ進んでいるかを判断し、止まっていれば close_agent か interrupt_agent で止めて、原因を調べ、直すか別の方法で元の目的をやり直してください。\n" + $c)}}' ;;
   stop)
+    prune_commands
     transcript=$(field .transcript_path)
-    prune_commands "$transcript"
     items=$(ls "$run")
     if [ -z "$items" ]; then reset; exit 0; fi
     lines=0; [ -f "$transcript" ] && lines=$(wc -l < "$transcript")

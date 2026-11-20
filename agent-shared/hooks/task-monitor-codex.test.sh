@@ -40,18 +40,12 @@ case $(uname -s) in Linux | Darwin)
   stop_pids
   ok "実行されなかったコマンドでは止めず、記録を消す"
 
-  # 起動を拒否されたコマンドは、プロセスを持たない失敗の完了だけが rollout に残る
-  printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","turn_id":"u1","item":{"type":"CommandExecution","id":"rejected","command":["bash","-lc","git push"],"cwd":"file:///repo","source":"unified_exec_startup","status":"failed","aggregated_output":"Rejected"}}}' >> "$R"
-  run pre-bash '{tool_use_id:"rejected", tool_input:{command:"git push"}}'
-  [ -z "$(stop)" ] || fail "起動を拒否されたコマンドで止めた"
-  ok "起動を拒否されたコマンドでは止めない"
-
-  # rollout が無いと、終わって結果を読んでいないコマンドと実行されなかったコマンドを区別できない
-  run pre-bash '{tool_use_id:"unknown", tool_input:{command:"npm test"}}'
-  out=$(run stop '{transcript_path:null}')
-  has "$out" "npm test" "rollout が無いセッション"
-  rm -f "$work/state/codex/s1/running/cmd-unknown"; run prompt '{prompt:"x"}'
-  ok "rollout が無いセッションでは記録を残す"
+  # バックグラウンドに回ったテストが終わったあと、エージェントが write_stdin で結果を読まずに実行し直すことがある。
+  # 終わったコマンドを待たせると、終わったものを「まだ終わっていない」と指示することになる
+  printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","turn_id":"u1","item":{"type":"CommandExecution","id":"finished","process_id":"4242","command":["bash","-lc","npm test"],"cwd":"file:///repo","source":"unified_exec_startup","status":"completed","exit_code":0,"aggregated_output":"ok"}}}' >> "$R"
+  run pre-bash '{tool_use_id:"finished", tool_input:{command:"npm test"}}'
+  [ -z "$(stop)" ] || fail "終わったコマンドを待たせた"
+  ok "終わったコマンドは、結果を読んでいなくても待たせない"
 
   live running
   run pre-bash '{tool_use_id:"running", tool_input:{command:"make all"}}'
@@ -145,8 +139,3 @@ toolcall; out=$(stop); has "$out" "1200000" "数え直し前"
 run prompt '{prompt:"x"}'
 out=$(stop); has "$out" "yield_time_ms は 600000" "利用者の入力"
 ok "利用者の入力で 10 分から数え直す"
-
-printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","turn_id":"u1","item":{"type":"CommandExecution","id":"finished","process_id":"4242","command":["bash","-lc","npm test"],"cwd":"file:///repo","source":"unified_exec_startup","status":"completed","exit_code":0,"aggregated_output":"ok"}}}' >> "$R"
-run pre-bash '{tool_use_id:"finished", tool_input:{command:"npm test"}}'
-out=$(stop); has "$out" "npm test" "終わって結果を読んでいないコマンド"
-ok "終わったまま結果を読んでいないコマンドは待たせる"

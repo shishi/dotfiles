@@ -30,7 +30,10 @@ plan=$(cat "$dir/plan")
 if [ "$cli" = claude ]; then
   [ "$(jq '[.background_tasks[]? | select(.type == "shell" or .type == "subagent")] | length' <<<"$in")" -gt 0 ] && exit 0
 else
-  # task-monitor-codex.sh が実行中のコマンド・子エージェントを記録する場所 (tm_state_dir と同じ)
+  # task-monitor-codex.sh が実行中のコマンド・子エージェントを記録する場所 (tm_state_dir と同じ)。
+  # 同時に動く task-monitor-codex.sh の Stop より先に読むと、動いていないコマンドの記録を待つものと数えてしまうため、
+  # 読む前に同じ判定で消す
+  bash "$HOOK_DIR/task-monitor-codex.sh" prune <<<"$in"
   running="${TASK_MONITOR_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/task-monitor}/codex/$sid/running"
   [ -n "$(ls -A "$running" 2>/dev/null)" ] && exit 0
 fi

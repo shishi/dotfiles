@@ -82,6 +82,10 @@ mkdir -p "$work/state/codex/s1" && cp "$work/state/claude/s1/plan" "$work/state/
 [ -z "$(stop continue '{}' codex)" ] && [ ! -e "$JUDGE_INPUT" ] || fail "Codex のバックグラウンド待ちを差し戻した"
 rm -rf "$TASK_MONITOR_STATE_DIR/codex/s1/running"/*
 [ -n "$(stop continue '{}' codex)" ] || fail "Codex で待つものが無いのに差し戻さない"
+# 止められて実行されなかったコマンドの記録は、監視 hook が消す前でも待つものに数えない
+printf '{"command":"cat SKILL.md"}\n' > "$TASK_MONITOR_STATE_DIR/codex/s1/running/cmd-blocked"
+[ -n "$(TASK_MONITOR_CODEX_PID=$$ stop continue '{}' codex)" ] || fail "動いていないコマンドの記録だけで判定をやめた"
+rm -rf "$TASK_MONITOR_STATE_DIR/codex/s1/running"/*
 rm -rf "$work/state/codex"
 ok "バックグラウンドのタスクを待つターン終了は判定しない"
 
