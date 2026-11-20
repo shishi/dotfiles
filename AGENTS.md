@@ -13,7 +13,7 @@
 - `claude/`・`codex/`: Claude Code と Codex のホーム (`~/.claude`・`~/.codex`) の Git 管理部分です。共通の指示は `codex/AGENTS.md` が正本で、`claude/CLAUDE.md` から読み込みます。
 - `agent-shared/`: 両エージェントが共有する hook (`hooks/`) と補助スクリプト (`bin/`)、操作の判定ルールの正本 (`policy/action-policy.json`) です。
 - `docs/`: 利用者向けの文書です。エージェントまわりの仕組みは `docs/agents.md` にまとめています。
-- そのほかのディレクトリは各ツールの設定です (fish、nushell、nvim、helix、wezterm、ghostty、herdr など)。
+- そのほかのディレクトリは各ツールの設定です (fish、nushell、nvim、helix、wezterm、ghostty、herdr-app、herdr-core など)。
 
 ## 変更するときの注意
 

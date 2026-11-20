@@ -114,7 +114,7 @@ if [ "${REMOTE_CONTAINERS:-}" != true ]; then
   esac
 fi
 
-# herdr and herdr-core read %APPDATA% on Windows and $XDG_CONFIG_HOME elsewhere.
+# herdr-core reads %APPDATA% on Windows and $XDG_CONFIG_HOME elsewhere.
 case "$(uname -s)" in
 MINGW* | MSYS*)
   herdr_config_root="$(cygpath -u "$APPDATA")"
@@ -125,10 +125,8 @@ MINGW* | MSYS*)
   herdr_config_os=unix
   ;;
 esac
-for herdr_tool in herdr herdr-core; do
-  mkdir -p "$herdr_config_root/$herdr_tool"
-  ln -sfn "$DOTDIR/$herdr_tool/config.$herdr_config_os.toml" "$herdr_config_root/$herdr_tool/config.toml"
-done
+mkdir -p "$herdr_config_root/herdr-core"
+ln -sfn "$DOTDIR/herdr-core/config.$herdr_config_os.toml" "$herdr_config_root/herdr-core/config.toml"
 
 # Herdr app keeps its own state in the same folder, so link only the keymap.
 # Each OS starts from the app's own defaults (Cmd-based on macOS); the Ctrl+;
@@ -247,21 +245,6 @@ bash "$DOTDIR/agent-shared/bin/managed-skills.sh" sync ||
 if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   bash "$DOTDIR/claude/install-plugins.sh" ||
     echo "setup.sh: Claude plugin install failed"
-fi
-
-if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  bash "$DOTDIR/agent-shared/bin/herdr-plugins.sh" restore ||
-    echo "setup.sh: Herdr plugin restore failed"
-fi
-
-if command -v herdr >/dev/null 2>&1; then
-  herdr_status="$(env -u CLAUDE_CONFIG_DIR -u CODEX_HOME herdr integration status 2>/dev/null)"
-  for integration in claude codex; do
-    if ! printf '%s\n' "$herdr_status" | grep -q "^${integration}: current"; then
-      env -u CLAUDE_CONFIG_DIR -u CODEX_HOME herdr integration install "$integration" ||
-        echo "setup.sh: Herdr $integration integration install failed"
-    fi
-  done
 fi
 
 echo "please reload shell"

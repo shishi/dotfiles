@@ -42,7 +42,6 @@ log_normal() {
 declare -A MARKETPLACE_REPO=(
   [superpowers-marketplace]="obra/superpowers-marketplace"
   [claude-plugins-official]="anthropics/claude-plugins-official"
-  [claude-code-herdr-plugin]="yigitkonur/claude-code-herdr-plugin"
 )
 
 command -v claude >/dev/null 2>&1 || { log_normal "install-plugins: claude CLI not found; skip"; exit 0; }

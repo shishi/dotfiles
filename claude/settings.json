@@ -221,16 +221,6 @@
         ]
       },
       {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"$OS\" = Windows_NT ]; then if [ \"${HERDR_ENV:-}\" = 1 ]; then powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$USERPROFILE/.claude/hooks/herdr-agent-state.ps1\" session; fi; else bash ~/.claude/hooks/herdr-agent-state.sh session; fi",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "^(startup|clear|compact)$",
         "hooks": [
           {
@@ -325,7 +315,6 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "claude-code-herdr-plugin@claude-code-herdr-plugin": false,
     "claude-code-setup@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "double-shot-latte@superpowers-marketplace": false,
@@ -344,13 +333,6 @@
     "vue-lsp@teachme-web-lsp": true
   },
   "extraKnownMarketplaces": {
-    "claude-code-herdr-plugin": {
-      "source": {
-        "source": "github",
-        "repo": "yigitkonur/claude-code-herdr-plugin"
-      },
-      "autoUpdate": true
-    },
     "claude-plugins-official": {
       "source": {
         "source": "github",

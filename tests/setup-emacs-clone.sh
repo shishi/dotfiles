@@ -13,13 +13,12 @@ mkdir -p \
   "$DOTFILES/agent-shared/bin" "$DOTFILES/agent-shared/hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/wezterm" "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
-  "$DOTFILES/nushell" "$DOTFILES/herdr" \
+  "$DOTFILES/nushell" \
   "$HOME_DIR/.emacs.d" "$CONFIG_DIR"
 cp "$REPO/setup.sh" "$DOTFILES/setup.sh"
 printf 'user config\n' >"$HOME_DIR/.emacs.d/init.el"
 printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
-printf '' >"$DOTFILES/herdr/config.unix.toml"
 printf '#!/usr/bin/env bash\nexit 1\n' >"$DOTFILES/agent-shared/bin/resolve-memory-dir.sh"
 
 # Keep the per-user app folders inside the fixture too, so the run never relinks real settings.

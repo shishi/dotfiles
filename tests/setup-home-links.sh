@@ -27,7 +27,7 @@ mkdir -p \
   "$DOTFILES/agent-shared/bin" "$DOTFILES/agent-shared/hooks" "$DOTFILES/agent-shared/git-hooks" \
   "$DOTFILES/claude" "$DOTFILES/codex/skills" \
   "$DOTFILES/fish" "$DOTFILES/nvim" "$DOTFILES/helix" \
-  "$DOTFILES/nushell" "$DOTFILES/herdr" "$DOTFILES/herdr-core" \
+  "$DOTFILES/nushell" "$DOTFILES/herdr-core" \
   "$DOTFILES/herdr-app" "$DOTFILES/hunk" \
   "$HOME_DIR/.claude" "$HOME_DIR/.codex" "$HOME_DIR/.agent-shared/skills" \
   "$CONFIG_DIR/hunk" "$TMP/appdata" "$TMP/herdr-app-home" "$MEMORY_DIR" "$TMP/bin"
@@ -51,8 +51,6 @@ printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.agent-shared/skills/local.txt"
 printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
-printf '' >"$DOTFILES/herdr/config.unix.toml"
-printf '' >"$DOTFILES/herdr/config.windows.toml"
 printf '' >"$DOTFILES/herdr-core/config.unix.toml"
 printf '' >"$DOTFILES/herdr-core/config.windows.toml"
 printf '{}\n' >"$DOTFILES/herdr-app/keys.json"
@@ -69,7 +67,7 @@ git -C "$MEMORY_DIR" -c user.name=test -c user.email=test@example.invalid \
 cat >"$TMP/hide-optional.sh" <<'EOF'
 command() {
   if [ "${1:-}" = -v ]; then
-    case "${2:-}" in claude | herdr | hunk) return 1 ;; esac
+    case "${2:-}" in claude | hunk) return 1 ;; esac
   fi
   builtin command "$@"
 }

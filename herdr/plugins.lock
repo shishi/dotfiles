@@ -1,4 +1,0 @@
-# GitHub-managed Herdr plugins recorded after successful install/uninstall.
-# Each owner/repo[/subdir]@commit is restored exactly by setup.sh.
-
-shishi/herdr-paste-image@91e314f5b5db245e560fae89c1b579ee199e1c44

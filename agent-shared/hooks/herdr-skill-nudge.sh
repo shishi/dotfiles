@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SessionStart hook: herdr-core の端末 (HC_TERMINAL_ID) や旧 herdr (HERDR_ENV=1) の中の各 agent に、対応する skill の使用を促す。
+# SessionStart hook: herdr-core の端末 (HC_TERMINAL_ID) の中の各 agent に、対応する skill の使用を促す。
 # skill の発動はモデルが description に気づくかに依存するため、確定的に注入する。
-# fail-open: どちらの外でも何も出力せず正常終了する。
+# fail-open: herdr-core の外では何も出力せず正常終了する。
 set -u
 
 if [ -n "${HC_TERMINAL_ID:-}" ]; then
@@ -12,14 +12,6 @@ if [ -n "${HC_TERMINAL_ID:-}" ]; then
 hc を使う前に herdr-core skill を開き、操作手順を確認してください。手段選択と子の確認待ちへの対応は、この起動時の案内を優先してください。
 子が blocked を報告したら、画面を読んで質問と権限確認を見分けてください。委任された作業上の質問は、選択肢を確かめて hc keys で答えてください。権限確認は対象操作を照合して不足する承認を取得してください。
 Herdr のデスクトップ画面の表示や配置を変えるときは herdr-app skill を使ってください。
-</herdr-context>
-EOF
-elif [ "${HERDR_ENV:-}" = "1" ]; then
-  cat <<'EOF'
-<herdr-context>
-このセッションは herdr の内側で動いている (HERDR_ENV=1)。
-タブを開く・ペインを分割する・エージェントを起動する・他ペインの出力を読む・状態を待つ、
-など herdr の操作を頼まれたら、必ず先に herdr skill を invoke してから CLI を使うこと。
 </herdr-context>
 EOF
 fi

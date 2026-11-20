@@ -18,8 +18,6 @@
 !/claude/agents/**
 !/claude/hooks/
 !/claude/hooks/**
-# Herdr が Windows 用に生成・更新する runtime hook。POSIX 用 .sh は追跡する。
-/claude/hooks/herdr-agent-state.ps1
 !/claude/rules/
 !/claude/rules/**
 !/claude/skills/

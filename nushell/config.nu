@@ -35,27 +35,6 @@ def --wrapped codex [...args] {
     ^codex --no-daemon ...$args
 }
 
-# Keep the tracked Herdr plugin lock in sync after successful mutations.
-def --wrapped herdr [...args] {
-    ^herdr ...$args
-    let herdr_status = $env.LAST_EXIT_CODE
-
-    if (
-        $herdr_status == 0 and
-        ($args | length) >= 2 and
-        $args.0 == 'plugin' and
-        $args.1 in ['install' 'uninstall']
-    ) {
-        let recorder = 'bash ~/.agent-shared/bin/herdr-plugins.sh record'
-        let windows_runner = ($nu.home-dir | path join '.agent-shared/bin/invoke-git-bash-hook.ps1')
-        if ((which powershell.exe | is-not-empty) and ($windows_runner | path exists)) {
-            ^powershell.exe -NoProfile -ExecutionPolicy Bypass -File $windows_runner $recorder
-        } else {
-            ^bash ~/.agent-shared/bin/herdr-plugins.sh record
-        }
-    }
-}
-
 # scoop は 1 件の失敗で abort（= exit）して残り全部を巻き添えにするので、
 # アプリごとに子プロセスへ分けて更新する。nu から呼ぶ分には pwsh 自身も同じ
 # ループで更新できる（pwsh セッションが動いていないため）。pwsh から呼ぶと
