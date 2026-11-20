@@ -55,7 +55,7 @@ for want in "## Task 1" "Task 1: verified" "[tool] Bash"; do
   grep -qF -- "$want" "$JUDGE_INPUT" || fail "判定役への入力に '$want' が無い"
 done
 # 見出しの次の行に、その欄の値が入っている
-after() { sed -n "/^$1:\$/{n;p;q}" "$JUDGE_INPUT"; }
+after() { sed -n "/^$1:\$/{n;p;q;}" "$JUDGE_INPUT"; }
 [ "$(after "LAST USER MESSAGE")" = 続けて ] || fail "最後の利用者の発言: $(after "LAST USER MESSAGE")"
 [ "$(after "FINAL MESSAGE")" = "Task 1 を終えました" ] || fail "最後の応答: $(after "FINAL MESSAGE")"
 grep -qF -e 注入された指示 -e 差し戻し <(sed -n '/LAST USER MESSAGE:/,/RECENT ACTIVITY:/p' "$JUDGE_INPUT") && fail "注入された指示や hook の差し戻しを利用者の発言として渡した"
