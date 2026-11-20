@@ -9,7 +9,7 @@ pids=()
 stop_pids() { local p; for p in ${pids[@]+"${pids[@]}"}; do pkill -P "$p" 2>/dev/null || :; kill "$p" 2>/dev/null || :; done; pids=(); }
 trap 'stop_pids; rm -rf "$work"' EXIT
 # 監視 hook は Codex が直接起動したプロセスを調べる。テストではこのスクリプトを Codex に見立てる
-export TASK_MONITOR_STATE_DIR="$work/state" TASK_MONITOR_CODEX_SESSIONS="$work/sessions" TASK_MONITOR_CODEX_PID=$$
+export TASK_MONITOR_STATE_DIR="$work/state" TASK_MONITOR_CODEX_SESSIONS="$work/sessions" TASK_MONITOR_CODEX_PID=$$ KATA_STATE_DIR="$work/kata"
 R="$work/rollout.jsonl"
 : > "$R"
 
@@ -28,6 +28,15 @@ run pre-bash '{tool_use_id:"t1", tool_input:{command:"ls"}}'
 run post-bash '{tool_use_id:"t1", tool_response:"ok"}'
 [ -z "$(stop)" ] || fail "終わったコマンドで止めた"
 ok "組が閉じたコマンドでは止めない"
+
+# kata の計画を実装中のセッションでは、Stop の判定を kata-completion.sh に任せ、そこから呼ばれたときだけ判定する
+mkdir -p "$KATA_STATE_DIR/codex/s1" && : > "$KATA_STATE_DIR/codex/s1/plan"
+live k1; run pre-bash '{tool_use_id:"k1", tool_input:{command:"make k"}}'
+[ -z "$(stop)" ] || fail "計画の実装中に、監視 hook 自身の Stop で判定した"
+out=$(jq -cn --arg r "$R" '{session_id:"s1", transcript_path:$r}' | bash "$HOOK" stop from-kata)
+has "$out" "make k" "kata-completion から呼ばれた Stop"
+stop_pids; rm -rf "$KATA_STATE_DIR/codex/s1" "$work/state/codex/s1/running/cmd-k1"; run prompt '{prompt:"x"}'
+ok "計画の実装中は、kata-completion から呼ばれたときだけ判定する"
 
 # PreToolUse の別の hook や承認で止められたコマンドは実行されず、PostToolUse も来ない。
 # 動いているかを確かめられない OS では記録を残すため、Linux と macOS でだけ確かめる

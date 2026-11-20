@@ -23,19 +23,18 @@ sid=$(jq -r '.session_id // empty' <<<"$in")
 # kata-active と同じ場所。両 CLI の sandbox から書ける /tmp/claude-<uid> の下に置く
 dir="${KATA_STATE_DIR:-/tmp/claude-$(id -u)/kata}/$cli/$sid"
 [ -f "$dir/plan" ] || exit 0
+# Codex では、監視 hook (task-monitor-codex.sh) の Stop の判定をここから呼ぶ。監視 hook は計画の実装中のセッションでは
+# 自分の Stop で判定せず、この呼出しに任せる
+if [ "$cli" = codex ]; then
+  monitor=$(bash "$HOOK_DIR/task-monitor-codex.sh" stop from-kata <<<"$in")
+  [ -n "$monitor" ] && { printf '%s\n' "$monitor"; exit 0; }
+fi
 plan=$(cat "$dir/plan")
 # 計画ファイルが消えた (/tmp の掃除など) 記録では判定できないため、記録を消して止める
 [ -f "$plan" ] || { rm -rf "$dir"; exit 0; }
 
 if [ "$cli" = claude ]; then
   [ "$(jq '[.background_tasks[]? | select(.type == "shell" or .type == "subagent")] | length' <<<"$in")" -gt 0 ] && exit 0
-else
-  # task-monitor-codex.sh が実行中のコマンド・子エージェントを記録する場所 (tm_state_dir と同じ)。
-  # 同時に動く task-monitor-codex.sh の Stop より先に読むと、動いていないコマンドの記録を待つものと数えてしまうため、
-  # 読む前に同じ判定で消す
-  bash "$HOOK_DIR/task-monitor-codex.sh" prune <<<"$in"
-  running="${TASK_MONITOR_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/task-monitor}/codex/$sid/running"
-  [ -n "$(ls -A "$running" 2>/dev/null)" ] && exit 0
 fi
 
 # Claude Code は同じ hook の差し戻しが 10 回続くとターンを終える (2.1.309 の実測)。両 CLI で同じ回数にそろえる

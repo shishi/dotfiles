@@ -9,8 +9,8 @@
 #   pre-wait                    PreToolUse (wait_agent): timeout_ms を予定の待ち時間へ書き換え、次の間隔へ進める
 #   post-wait                   PostToolUse (wait_agent): 待機中の子の rollout の最新の内容を渡す
 #   prompt                      UserPromptSubmit: 待ち時間を 10 分から数え直す
-#   stop                        Stop: 実行中のものがあればターン終了を止める
-#   prune                       動いていないコマンドの記録だけを消す (同時に動く Stop hook が記録を読む前に使う)
+#   stop [from-kata]            Stop: 実行中のものがあればターン終了を止める。kata の計画を実装中のセッションでは、
+#                               kata-completion.sh から from-kata で呼ばれたときだけ判定する
 set -u
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 . "$HOOK_DIR/lib/task-monitor-common.sh"
@@ -118,8 +118,6 @@ case $mode in
     id=$(field .agent_id); [ -n "$id" ] && rm -f "$run/agent-$id" ;;
   prompt)
     reset ;;
-  prune)
-    prune_commands ;;
   pre-wait)
     # 待つたびに 10・20・40 分と進める。Stop を挟まずに待ち続けても間隔が進み、新しいタスクの起動で 0 に戻る。
     round=$(num round)
@@ -138,6 +136,11 @@ case $mode in
     [ -n "$ctx" ] && jq -cn --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext:
       ("監視: 待機中の子の最新の内容です。目的の結果へ進んでいるかを判断し、止まっていれば close_agent か interrupt_agent で止めて、原因を調べ、直すか別の方法で元の目的をやり直してください。\n" + $c)}}' ;;
   stop)
+    # kata の計画を実装中は、kata-completion.sh がこの判定を呼び、止めない場合だけ計画の完了を判定する。
+    # 2 つの Stop hook が別々に判定すると、その間にコマンドが終わったとき、一方は待つものがあるとして判定をやめ、
+    # 他方は止めずにターンが終わるため、判定はその呼出しの 1 回だけにする。計画の記録の場所は kata-active・
+    # kata-completion.sh と同じにする (ずれると両方の Stop で判定する)
+    [ "${2:-}" = from-kata ] || [ ! -f "${KATA_STATE_DIR:-/tmp/claude-$(id -u)/kata}/codex/$sid/plan" ] || exit 0
     prune_commands
     transcript=$(field .transcript_path)
     items=$(ls "$run")

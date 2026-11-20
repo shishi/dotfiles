@@ -77,15 +77,23 @@ for _ in $(seq 5); do stop continue "$again" >/dev/null; done
 ok "差し戻しが同じターンで連続 10 回続いたら止め、利用者の新しいターンでは数え直す"
 
 [ -z "$(stop continue '{background_tasks:[{id:"b1", type:"subagent"}]}')" ] && [ ! -e "$JUDGE_INPUT" ] || fail "Claude のバックグラウンド待ちを差し戻した"
+# Codex では監視 hook の判定をここから呼び、止めるならその指示を返して計画の判定はしない。
+# 同じ入力で Stop が続いても、監視が止めた回 (見に行かないまま 3 回目になって監視をやめる 4 回目を含む) は判定せず、
+# 止めなくなった回で判定する
 mkdir -p "$TASK_MONITOR_STATE_DIR/codex/s1/running" && : > "$TASK_MONITOR_STATE_DIR/codex/s1/running/agent-x"
 mkdir -p "$work/state/codex/s1" && cp "$work/state/claude/s1/plan" "$work/state/codex/s1/plan"
-[ -z "$(stop continue '{}' codex)" ] && [ ! -e "$JUDGE_INPUT" ] || fail "Codex のバックグラウンド待ちを差し戻した"
-rm -rf "$TASK_MONITOR_STATE_DIR/codex/s1/running"/*
-[ -n "$(stop continue '{}' codex)" ] || fail "Codex で待つものが無いのに差し戻さない"
-# 止められて実行されなかったコマンドの記録は、監視 hook が消す前でも待つものに数えない
-printf '{"command":"cat SKILL.md"}\n' > "$TASK_MONITOR_STATE_DIR/codex/s1/running/cmd-blocked"
-[ -n "$(TASK_MONITOR_CODEX_PID=$$ stop continue '{}' codex)" ] || fail "動いていないコマンドの記録だけで判定をやめた"
-rm -rf "$TASK_MONITOR_STATE_DIR/codex/s1/running"/*
+for n in 1 2 3 4; do
+  out=$(stop continue '{}' codex)
+  grep -qF "監視:" <<<"$out" && [ ! -e "$JUDGE_INPUT" ] || fail "Codex で監視が止めた $n 回目の Stop で計画を判定した: $out"
+done
+[ -n "$(stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "Codex で待つものが無いのに判定しない"
+# 止められて実行されなかったコマンドの記録は、待つものに数えない。監視 hook が記録を消すのは、
+# コマンドが動いているかを確かめられる Linux と macOS だけ
+case $(uname -s) in Linux | Darwin)
+  printf '{"command":"cat SKILL.md"}\n' > "$TASK_MONITOR_STATE_DIR/codex/s1/running/cmd-blocked"
+  [ -n "$(TASK_MONITOR_CODEX_PID=$$ stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "動いていないコマンドの記録だけで判定をやめた"
+  rm -rf "$TASK_MONITOR_STATE_DIR/codex/s1/running"/*
+;; esac
 rm -rf "$work/state/codex"
 ok "バックグラウンドのタスクを待つターン終了は判定しない"
 
