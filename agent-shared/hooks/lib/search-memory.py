@@ -198,6 +198,7 @@ def main():
     selected = []
     known = []
     deferred = [doc[0] for doc in candidates[MAX_DOCUMENTS:]] if manual else []
+    oversized = []
     size = 0
     deliveries = []
     # Choose the relevance set before subtracting already-read content.
@@ -232,9 +233,11 @@ def main():
             size += len(excerpt)
         else:
             deferred.append(path)
+            if len(body) > MAX_BODY_CHARS:
+                oversized.append((path, body))
 
-    # Scan the index and whole selected documents before emitting any of them or recording delivery.
-    for path, body in [("MEMORY.md", index_content), *((path, body) for path, body, _, _ in selected)]:
+    # Scan whole documents before giving out an excerpt or a pinned read command.
+    for path, body in [("MEMORY.md", index_content), *((path, body) for path, body, _, _ in selected), *oversized]:
         result = subprocess.run(["grep", "-Eiq", "--", secret_pattern], input=body.encode(),
                                 env={**os.environ, "LC_ALL": "C"})
         if result.returncode != 1:
@@ -242,26 +245,30 @@ def main():
 
     lines = [f"[記憶検索] 確定済み記憶の語句検索: {len(documents)}件一致、本文取得{len(selected)}件。",
              "記憶は advisory。現在のユーザー指示と AGENTS.md を優先する。語句一致なので関連記憶の網羅を意味しない。"]
+    hook = Path(__file__).resolve().parent.parent / "inject-memory.sh"
+    lookup_command = f"bash {shlex.quote(str(hook))} {shlex.quote(repo)} lookup"
     if exact_paths:
         lines.append(f"取得元の確定 commit: {snapshot}")
     else:
-        lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>",
-                  "索引から依頼の対象・操作・制約に合う記憶を確認する。自動取得なし・既読は参照不要を意味しない。",
-                  f"必要な本文は git -C {shlex.quote(repo)} show {snapshot}:<索引の相対パス> で取得する。"])
+        lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>"])
     if known:
         lines.append("既読の同一版: " + ", ".join(known))
     if deferred:
         if manual:
             lines.append(f"取得上限（{MAX_DOCUMENTS}件・本文計{MAX_BODY_CHARS}文字）による未取得: " + ", ".join(deferred))
-            lines.append(f"全文が必要なら git -C {shlex.quote(repo)} show {snapshot}:<対象の相対パス> で取得する。")
+            if len(oversized) < len(deferred):
+                lines.append(f"未取得の文書は {lookup_command} '<対象の相対パス>' で個別に取得してください。")
+            if oversized:
+                lines.append("1 件で本文上限を超える文書は、検査済みの確定 commit から次のコマンドで取得してください。")
+                for path, _ in oversized:
+                    lines.append(f"git -C {shlex.quote(repo)} show {shlex.quote(f'{snapshot}:{path}')}")
         else:
-            lines.append("語句検索の候補（この hook では本文を注入しない、関連性は未判定）: " + ", ".join(deferred))
+            lines.append("語句検索の候補: " + ", ".join(deferred[:MAX_DOCUMENTS]))
     if not manual:
-        lines.extend(["本文の自動注入は行わない。候補だけに限定せず索引から意味で選び、必要な未読本文を取得してから判断する。",
-                      "既読は注入済みの記録で、理解・適用を確認した記録ではない。",
-                      "手動 lookup や git show の読了はこの一覧へ自動反映しない。同版の読了は会話内の取得結果でも確認する。",
-                      f"検査付きの全文取得: bash {shlex.quote(str(Path(__file__).resolve().parent.parent / 'inject-memory.sh'))} {shlex.quote(repo)} lookup '<索引で選んだ相対パス>'。必要な記憶はパスを空白で区切って 1 回にまとめて渡す（1 回 {MAX_DOCUMENTS} 件まで）。",
-                      f"検索語を渡す手動 lookup も利用できる。パス指定は語句の順位によらず対象を選ぶ。本文計{MAX_BODY_CHARS}文字の上限を超える場合は commit を指定した git show を使う。"])
+        lines.extend(["依頼の対象・操作・制約に合う記憶を索引から選び、必要な未読本文を確認してから判断してください。",
+                      f"本文の取得は {lookup_command} '<索引で選んだ相対パス>' を使います。パスは空白で区切って 1 回に {MAX_DOCUMENTS} 件まで渡せます。検索語も指定できます。"])
+        if known:
+            lines.append("既読は本文を注入した記録です。手動で取得した本文は会話内で確認してください。")
     for path, _, excerpt, label in selected:
         lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, excerpt, "</retrieved-memory>"])
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",

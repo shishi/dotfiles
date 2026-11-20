@@ -40,6 +40,17 @@ if printf '%s' "$output" | grep -q '<personal-memory>' \
 else
   ng "healthy main snapshot injects index, core, and selected project memory"
 fi
+startup_commit=$(git -C "$MEMORY_DIR" rev-parse main)
+for startup_mode in startup core; do
+  output="$(printf '%s' "$payload" | bash "$HOOK" "$MEMORY_DIR" "$startup_mode")"
+  if printf '%s' "$output" | grep -qF "$startup_commit" \
+    && printf '%s' "$output" | grep -q lookup \
+    && ! printf '%s' "$output" | grep -q 'Read'; then
+    ok "$startup_mode startup identifies the committed source and refers to checked lookup"
+  else
+    ng "$startup_mode startup identifies the committed source and refers to checked lookup"
+  fi
+done
 
 draft_value="UNCOMMITTED_DRAFT_SENTINEL"
 printf '\n%s\n' "$draft_value" >>"$MEMORY_DIR/MEMORY.md"
@@ -92,6 +103,12 @@ if printf '%s' "$automatic_output" | jq -e '.hookSpecificOutput.additionalContex
   ok "automatic lookup offers candidates without injecting unselected bodies"
 else
   ng "automatic lookup offers candidates without injecting unselected bodies"
+fi
+if printf '%s' "$automatic_output" | jq -er '.hookSpecificOutput.additionalContext' | grep -q 'inject-memory.sh .* lookup ' \
+  && ! printf '%s' "$automatic_output" | jq -er '.hookSpecificOutput.additionalContext' | grep -Eq 'git -C .* show|git show'; then
+  ok "automatic lookup advertises only checked body retrieval"
+else
+  ng "automatic lookup advertises only checked body retrieval"
 fi
 # Explicit retrieval still exercises delivery tracking, ranking, sections and scanning.
 lookup() { printf '%s' "$lookup_payload" | jq '.memory_lookup_manual = true' | HOME="$TMP/home" PYTHONIOENCODING=cp932 bash "$HOOK" "$MEMORY_DIR" lookup; }
@@ -234,6 +251,14 @@ printf '# Other topic\nLookupTarget INCIDENTAL_FOURTH\n' >"$MEMORY_DIR/z.md"
 git -C "$MEMORY_DIR" add a.md b.md c.md z.md
 git -C "$MEMORY_DIR" commit -qm ranking-fixture
 lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"ranking",prompt:"LookupTarget"}')
+output=$(printf '%s' "$lookup_payload" | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup)
+if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext
+  | contains("INDEX_SENTINEL") and (contains("PRIMARY_a") | not) and (contains("z.md") | not)
+  and (split("\n") | any(startswith("語句検索の候補") and endswith("a.md, b.md, c.md")))' >/dev/null; then
+  ok "automatic lookup lists only the strongest candidates for a broad match"
+else
+  ng "automatic lookup lists only the strongest candidates for a broad match"
+fi
 output=$(lookup)
 output=$(lookup)
 if ! printf '%s' "$output" | grep -q INCIDENTAL_FOURTH && printf '%s' "$output" | grep -q '既読'; then
@@ -373,6 +398,34 @@ if [ "$(chars "$core_output")" -lt 10000 ] && ! contains "$core_output" CORE_TAI
   ok "an oversized startup document is replaced by a pinned read instruction"
 else
   ng "an oversized startup document is replaced by a pinned read instruction ($(chars "$core_output") chars)"
+fi
+
+{ cat "$LARGE_DIR/CORE.md"; large_body More 追加方針 LOOKUP_OVERFLOW_SENTINEL; } >"$LARGE_DIR/long.md"
+git -C "$LARGE_DIR" add long.md
+git -C "$LARGE_DIR" commit -qm lookup-overflow
+overflow_commit=$(git -C "$LARGE_DIR" rev-parse main)
+output=$(HOME="$TMP/home" bash "$HOOK" "$LARGE_DIR" lookup long.md)
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext' | grep -qF "show ${overflow_commit}:long.md" \
+  && ! contains "$output" LOOKUP_OVERFLOW_SENTINEL; then
+  ok "an individually oversized lookup offers a read command pinned to the exact document"
+else
+  ng "an individually oversized lookup offers a read command pinned to the exact document"
+fi
+output=$(HOME="$TMP/home" bash "$HOOK" "$LARGE_DIR" lookup CORE.md projects/github.com-shishi-dotfiles.md)
+if printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext' | grep -q 'inject-memory.sh .* lookup ' \
+  && ! printf '%s' "$output" | jq -er '.hookSpecificOutput.additionalContext' | grep -q 'git -C .* show'; then
+  ok "a batch that exceeds the limit offers individual checked lookup"
+else
+  ng "a batch that exceeds the limit offers individual checked lookup"
+fi
+printf '\npassword = %s\n' "$secret_value" >>"$LARGE_DIR/long.md"
+git -C "$LARGE_DIR" commit -qam oversized-secret
+lookup_status=0
+output=$(HOME="$TMP/home" bash "$HOOK" "$LARGE_DIR" lookup long.md 2>/dev/null) || lookup_status=$?
+if [ "$lookup_status" -eq 2 ] && [ -z "$output" ]; then
+  ok "checked lookup withholds the read command when the oversized source contains a secret candidate"
+else
+  ng "checked lookup withholds the read command when the oversized source contains a secret candidate"
 fi
 
 # 同期は CORE 側の hook だけが行い、並列に走るプロジェクト側は同期を待たずに読む旨を伝える。

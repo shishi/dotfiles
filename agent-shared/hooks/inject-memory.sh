@@ -346,6 +346,7 @@ fi
 if [ -n "$py_bin" ] && [ "$mode" != core ] && [ "$mode" != project ]; then
   printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
 fi
+source_note="取得元は確定 commit ${snapshot} です。追加の本文は毎入力の索引で選び、lookup で取得してください。"
 
 # Claude は hook 出力 1 つあたり 10,000 文字を超えると、先頭だけのプレビューに置き換えて
 # 本文を渡さない。超える場合は本文の代わりに、確定 commit から全文を読む手順を渡す。
@@ -353,7 +354,7 @@ if [ "$mode" = core ] || [ "$mode" = project ]; then
   claude_limit=10000
   if [ "$mode" = core ]; then
     tag=personal-memory
-    header="個人永続記憶の全体価値観と方針。索引は毎入力の <personal-memory-index>、プロジェクト記憶は別の起動時 hook で渡す。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
+    header="個人永続記憶の全体価値観と方針。プロジェクト記憶は別の起動時 hook で渡します。${source_note}"
     project_note=""
     if [ -n "$pre_sync" ] && [ "$pre_sync" != "$snapshot" ] \
       && ! git -C "$MEMORY_DIR" diff --quiet "$pre_sync" "$snapshot" -- "$project_path" 2>/dev/null; then
@@ -410,7 +411,7 @@ if [ "$mode" = core ] || [ "$mode" = project ]; then
 fi
 
 echo "<personal-memory>"
-echo "個人永続記憶。詳細は ${MEMORY_DIR}/ 配下を必要時に Read で開くこと。"
+echo "個人永続記憶。${source_note}"
 [ -n "$sync_note" ] && echo "$sync_note"
 if [ -n "$project_present" ]; then
   echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
