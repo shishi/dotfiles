@@ -18,7 +18,7 @@ has() { grep -qF -- "$2" <<<"$1" || fail "$3: '$2' が無い: $1"; }
 cat > "$work/judge.sh" <<'J'
 w=$(dirname "$0")
 cat >> "$w/judge.in"; echo "---" >> "$w/judge.in"
-a=$(head -n 1 "$w/answers"); sed -i 1d "$w/answers"
+a=$(head -n 1 "$w/answers"); tail -n +2 "$w/answers" > "$w/answers.new"; mv "$w/answers.new" "$w/answers"
 [ "$a" = fail ] && exit 1
 if [ "$a" = progressing-rc1 ]; then jq -cn '{type:"result",subtype:"success",is_error:false,structured_output:{status:"progressing",reason:"x"}}'; exit 1; fi
 if [ "$a" = noreason ]; then jq -cn '{type:"result",subtype:"success",is_error:false,structured_output:{status:"progressing"}}'; exit 0; fi

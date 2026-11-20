@@ -6,8 +6,10 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 HOOK="$HOOK_DIR/task-monitor-codex.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/task-monitor-codex-test.XXXXXX")
 pids=()
-trap 'kill ${pids[@]+"${pids[@]}"} 2>/dev/null || :; rm -rf "$work"' EXIT
-export TASK_MONITOR_STATE_DIR="$work/state" TASK_MONITOR_CODEX_SESSIONS="$work/sessions"
+stop_pids() { local p; for p in ${pids[@]+"${pids[@]}"}; do pkill -P "$p" 2>/dev/null || :; kill "$p" 2>/dev/null || :; done; pids=(); }
+trap 'stop_pids; rm -rf "$work"' EXIT
+# 監視 hook は Codex が直接起動したプロセスを調べる。テストではこのスクリプトを Codex に見立てる
+export TASK_MONITOR_STATE_DIR="$work/state" TASK_MONITOR_CODEX_SESSIONS="$work/sessions" TASK_MONITOR_CODEX_PID=$$
 R="$work/rollout.jsonl"
 : > "$R"
 
@@ -17,9 +19,10 @@ has() { grep -qF -- "$2" <<<"$1" || fail "$3: '$2' が無い: $1"; }
 run() { local mode=$1; shift; jq -cn --arg r "$R" "{session_id:\"s1\", transcript_path:\$r} + $1" | bash "$HOOK" "$mode"; }
 stop() { run stop '{}'; }
 toolcall() { echo '{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"x"}}' >> "$R"; }
-running() { ls "$work/state/codex/s1/running" 2>/dev/null | wc -l; }
-# Codex が実行中のコマンドのプロセスへ渡すのと同じ CODEX_TOOL_CALL_ID を持つプロセスを動かす
-live() { CODEX_TOOL_CALL_ID=$1 sleep 600 & pids+=($!); }
+running() { ls "$work/state/codex/s1/running" 2>/dev/null | wc -l | tr -d " "; }
+# Codex が実行中のコマンドのプロセスへ渡すのと同じ CODEX_TOOL_CALL_ID を持つプロセスを動かす。
+# macOS では OS 付属のコマンド (/bin/sleep など) の環境変数を読めないため、テストを動かしている bash を残す
+live() { CODEX_TOOL_CALL_ID=$1 "$BASH" -c 'sleep 600; :' & pids+=($!); }
 
 run pre-bash '{tool_use_id:"t1", tool_input:{command:"ls"}}'
 run post-bash '{tool_use_id:"t1", tool_response:"ok"}'
@@ -27,11 +30,14 @@ run post-bash '{tool_use_id:"t1", tool_response:"ok"}'
 ok "組が閉じたコマンドでは止めない"
 
 # PreToolUse の別の hook や承認で止められたコマンドは実行されず、PostToolUse も来ない。
-# 動いているかを確かめられない OS では記録を残すため、Linux でだけ確かめる
-if [ "$(uname -s)" = Linux ]; then
+# 動いているかを確かめられない OS では記録を残すため、Linux と macOS でだけ確かめる
+case $(uname -s) in Linux | Darwin)
+  # 同時に動く別の hook (呼出し ID を持たない) が、環境変数を読めないコマンドを起動している場合も含めて確かめる
+  env -u CODEX_TOOL_CALL_ID "$BASH" -c "env -i $(command -v sleep) 600; :" & pids+=($!)
   run pre-bash '{tool_use_id:"blocked", tool_input:{command:"cat SKILL.md"}}'
   [ -z "$(stop)" ] || fail "実行されなかったコマンドで止めた"
   [ "$(running)" = 0 ] || fail "実行されなかったコマンドの記録が残る"
+  stop_pids
   ok "実行されなかったコマンドでは止めず、記録を消す"
 
   # 起動を拒否されたコマンドは、プロセスを持たない失敗の完了だけが rollout に残る
@@ -46,7 +52,22 @@ if [ "$(uname -s)" = Linux ]; then
   has "$out" "npm test" "rollout が無いセッション"
   rm -f "$work/state/codex/s1/running/cmd-unknown"; run prompt '{prompt:"x"}'
   ok "rollout が無いセッションでは記録を残す"
-fi
+
+  live running
+  run pre-bash '{tool_use_id:"running", tool_input:{command:"make all"}}'
+  run pre-bash '{tool_use_id:"blocked", tool_input:{command:"cat SKILL.md"}}'
+  out=$(stop); has "$out" "make all" "実行中のコマンド"
+  ! grep -qF "cat SKILL.md" <<<"$out" || fail "実行中のコマンドと一緒に、実行されなかったコマンドも待たせた: $out"
+  stop_pids; rm -f "$work/state/codex/s1/running/cmd-running"; run prompt '{prompt:"x"}'
+  ok "実行中のコマンドがあっても、実行されなかったコマンドの記録は消す"
+
+  # 環境変数を空にして動くプロセスは、どの呼出しのものか分からない
+  env -i "$(command -v sleep)" 600 & pids+=($!)
+  run pre-bash '{tool_use_id:"opaque", tool_input:{command:"exec env -i sleep 600"}}'
+  out=$(stop); has "$out" "exec env -i sleep 600" "環境変数を読めないプロセス"
+  stop_pids; rm -f "$work/state/codex/s1/running/cmd-opaque"; run prompt '{prompt:"x"}'
+  ok "環境変数を読めないプロセスが動いている間は記録を残す"
+;; esac
 
 live t2
 run pre-bash '{tool_use_id:"t2", tool_input:{command:"make build"}}'
@@ -90,11 +111,14 @@ run subagent-stop '{agent_id:"019a-child"}'
 mkdir -p "$work/sessions/2026/11/10"
 printf '%s\n' '{"type":"session_meta","payload":{"id":"019c-other","parent_thread_id":"other","agent_path":"/root/fixer"}}' > "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-02-019c-other.jsonl"
 printf '%s\n' '{"type":"session_meta","payload":{"id":"019a-old","parent_thread_id":"s1","agent_path":"/root/fixer"}}' > "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-00-019a-old.jsonl"
-touch -d '-1 hour' "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-00-019a-old.jsonl"
+old=$(( $(date +%s) - 3600 ))
+touch -t "$(date -d "@$old" +%Y%m%d%H%M.%S 2>/dev/null || date -r "$old" +%Y%m%d%H%M.%S)" "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-00-019a-old.jsonl"
 printf '%s\n' '{"type":"session_meta","payload":{"id":"019b-done","parent_thread_id":"s1","agent_path":"/root/fixer"}}' > "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-01-019b-done.jsonl"
 w >/dev/null; w >/dev/null
+echo agent-019b-done >> "$work/state/codex/s1/seen"
 run post-followup '{tool_name:"collaborationfollowup_task", tool_input:{target:"fixer", message:"retry"}}'
 [ -e "$work/state/codex/s1/running/agent-019b-done" ] || fail "再依頼した子が記録されない"
+! grep -qx agent-019b-done "$work/state/codex/s1/seen" || fail "再依頼した子を前回見たタスクのまま数えた"
 [ ! -e "$work/state/codex/s1/running/agent-019c-other" ] || fail "別のセッションの同名の子を記録した"
 [ ! -e "$work/state/codex/s1/running/agent-019a-old" ] || fail "作り直す前の古い子を記録した"
 [ "$(w)" = 600000 ] || fail "再依頼で数え直さない"

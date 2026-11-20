@@ -25,26 +25,61 @@ mkdir -p "$run"
 field() { jq -r "$1 // empty" <<<"$in"; }
 # 子への宛先 (agent_path・その末尾の名前・id) から、このセッションの子の rollout の id を返す。
 # 別のセッションにも同じ名前の子がいるため、親 (parent_thread_id) がこのセッションのものだけを見る。
-# 同じ名前の子を作り直した場合に備え、新しい rollout から順に見る
+# 同じ名前の子を作り直した場合に備え、いちばん新しい rollout の子を選ぶ
 resolve_agent() {
-  local r id
-  find "${TASK_MONITOR_CODEX_SESSIONS:-$HOME/.codex/sessions}" -name 'rollout-*.jsonl' -mmin -1440 -printf '%T@ %p\n' 2>/dev/null |
-    sort -rn | cut -d' ' -f2- | while IFS= read -r r; do
-      id=$(head -n 1 "$r" | jq -r --arg t "$1" --arg sid "$sid" '.payload | select(.parent_thread_id == $sid)
-        | select(.id == $t or .agent_path == $t or (.agent_path // "" | endswith("/" + $t))) | .id' 2>/dev/null)
-      [ -n "$id" ] && { printf '%s\n' "$id"; break; }
-    done
+  local r id best= newest=
+  while IFS= read -r r; do
+    id=$(head -n 1 "$r" | jq -r --arg t "$1" --arg sid "$sid" '.payload | select(.parent_thread_id == $sid)
+      | select(.id == $t or .agent_path == $t or (.agent_path // "" | endswith("/" + $t))) | .id' 2>/dev/null)
+    [ -n "$id" ] && { [ -z "$newest" ] || [ "$r" -nt "$newest" ]; } && best=$id newest=$r
+  done < <(find "${TASK_MONITOR_CODEX_SESSIONS:-$HOME/.codex/sessions}" -name 'rollout-*.jsonl' -mmin -1440 2>/dev/null)
+  [ -n "$best" ] && printf '%s\n' "$best"
+}
+# プロセスの環境変数を 1 行 1 つで返す。プロセスが無ければ失敗する。読めなければ空を返す
+proc_env() {
+  local args all again
+  case $os in
+    Linux) [ -e "/proc/$1" ] && { tr '\0' '\n' 2>/dev/null < "/proc/$1/environ" || :; } ;;
+    # macOS の ps -E は引数のあとに環境変数を空白でつないで出す。OS 付属のコマンドは環境変数を出さない。
+    # 読む間に別のコマンドへ置き換わると引数を環境変数と取り違えるため、前後の引数が違えば読めなかった扱いにする
+    Darwin) args=$(ps -ww -o command= -p "$1") && all=$(ps -E -ww -o command= -p "$1") &&
+      again=$(ps -ww -o command= -p "$1") || return 1
+      [ "$args" = "$again" ] || return 0
+      case $all in "$args" | "$args "*) printf '%s\n' "${all#"$args"}" | tr ' ' '\n' ;; esac ;;
+  esac
+}
+# Codex が直接起動したプロセス (コマンドごとの起点) から、動いているコマンドの呼出し ID を出す。Codex は
+# コマンドのプロセスへ CODEX_TOOL_CALL_ID を渡し、Linux の sandbox の外側のプロセスや macOS のシェルが
+# それを持ち続ける。環境変数を読めない起点 (HOME も無い。macOS の OS 付属のコマンドなど) があれば、
+# 記録したどのコマンドかを判定できないので失敗を返す。読めて ID の無い起点は hook や MCP サーバーなので数えない。
+# 起点が自分で ID だけを消して HOME を残すと、動いていても見落とす。
+# hook は Codex から新しいセッションで起動されるため、自分のプロセスグループの先頭の親が Codex になる
+live_command_ids() {
+  local pg root x e unknown=
+  pg=$(ps -o pgid= -p $$)
+  root=${TASK_MONITOR_CODEX_PID:-$(ps -o ppid= -p $pg)}
+  root=$(( root )) && [ "$root" -gt 1 ] || return 1
+  for x in $(ps -A -o pid=,ppid= | awk -v r="$root" -v g="$pg" '$2 == r && $1 != g { print $1 }'); do
+    e=$(proc_env "$x") || continue
+    case $'\n'$e in
+      *$'\n'CODEX_TOOL_CALL_ID=*) sed -n 's/^CODEX_TOOL_CALL_ID=//p' <<<"$e" | head -n 1 ;;
+      *$'\n'HOME=*) ;;
+      *) unknown=1 ;;
+    esac
+  done
+  [ -z "$unknown" ]
 }
 # 実行された証拠のないコマンドの記録を消す。PostToolUse が来ないことだけでは、バックグラウンドで動いているのか、
 # 別の PreToolUse hook や承認で止められて実行されなかったのかを区別できないため。
-# 証拠は、Codex がコマンドのプロセスへ渡す CODEX_TOOL_CALL_ID が記録の id と同じ生きたプロセス (実行中) と、
-# rollout にあるその id のプロセスを持った CommandExecution の完了 (終わったが、結果をまだ write_stdin で
-# 読んでいない) の二つ。どちらかを観測できない環境 (/proc の無い OS、rollout の無いセッション) では記録を残す。
-# sandbox を通らないコマンドが自分の環境変数を消す・上書きすると、動いていても見落とす
+# 証拠は、動いているプロセス (live_command_ids) と、rollout にあるその id のプロセスを持った
+# CommandExecution の完了 (終わったが、結果をまだ write_stdin で読んでいない) の二つ。
+# どちらかを観測できない環境 (Linux・macOS 以外、rollout の無いセッション) では記録を残す
 prune_commands() {
-  [ "$(uname -s)" = Linux ] && [ -f "$1" ] || return 0
-  local ids f
-  ids=$(cat /proc/[0-9]*/environ 2>/dev/null | tr '\0' '\n' | sed -n 's/^CODEX_TOOL_CALL_ID=//p'
+  os=$(uname -s)
+  case $os in Linux | Darwin) [ -f "$1" ] || return 0 ;; *) return 0 ;; esac
+  local ids live f
+  live=$(live_command_ids) || return 0
+  ids=$(printf '%s\n' "$live"
     grep -F '"CommandExecution"' "$1" | jq -R -r 'fromjson? | .payload.item? // empty
       | select(.type == "CommandExecution" and .process_id != null) | .id')
   for f in "$run"/cmd-*; do
@@ -76,7 +111,7 @@ case $mode in
     id=$(resolve_agent "$target")
     # 前回の Stop の後に終わった子は seen に残っているため、seen からも消して新しいタスクとして数える
     [ -n "$id" ] && printf '{}\n' > "$run/agent-$id" && rm -f "$state/round" &&
-      { [ ! -f "$state/seen" ] || sed -i "/^agent-$id\$/d" "$state/seen"; } ;;
+      { [ ! -f "$state/seen" ] || { grep -vxF "agent-$id" "$state/seen" > "$state/seen.new"; mv "$state/seen.new" "$state/seen"; }; } ;;
   post-close)
     # 止めた子に SubagentStop が来るとは限らない。記録が残ると、止めた子を待つよう指示し続けるため消す
     target=$(field .tool_input.target)
