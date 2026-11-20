@@ -5,11 +5,14 @@
 #   prompt (UserPromptSubmit): そのセッションに「kata をまだ開いていない」印を付け、案内を出す。
 #   pre    (PreToolUse):       印がある間は、kata を開く操作 (Skill・Read・Codex のコマンド) とタスク表示用のツールだけを通し、ほかは止める。
 #
-# 子エージェントのツール呼出し (agent_id がある) と、委譲された子のセッション (AGENT_DELEGATED_SESSION=1) は
-# 受け取った担当の範囲で進めるので対象外にする。
+# 子エージェントのツール呼出し (agent_id がある) と、委譲された子のセッションは受け取った担当の範囲で進めるので
+# 対象外にする。委譲された子は AGENT_DELEGATED_SESSION=1 で示すが、T3 Code の delegate_task が起動した子には
+# この変数が付かないため、T3 がその子のスレッドに付ける ID の接頭辞でも見分ける。T3 はこの ID を Claude Code には
+# プロセスの環境で渡すが、Codex にはシェルコマンドの環境でしか渡さず hook に届かないため、Codex の子は見分けられない。
 set -u
 
 [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && exit 0
+case ${T3CODE_THREAD_ID:-} in thread:delegated-task:*) exit 0 ;; esac
 in=$(cat)
 sid=$(jq -r '.session_id // empty' <<<"$in" 2>/dev/null)
 [ -n "$sid" ] || exit 0

@@ -6,7 +6,7 @@ hook="$(cd "$(dirname "$0")" && pwd)/kata-first.sh"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/kata-first-test.XXXXXX") || exit 1
 trap 'rm -rf "$tmp"' EXIT
 export KATA_FIRST_STATE_DIR=$tmp/state
-unset AGENT_DELEGATED_SESSION
+unset AGENT_DELEGATED_SESSION T3CODE_THREAD_ID
 fail=0
 
 prompt() { # session
@@ -58,6 +58,15 @@ check "委譲された子には入力の案内を出さない" "" "$out"
 prompt s6 > /dev/null
 check "印があっても委譲された子のツールは止めない" 0 "$(AGENT_DELEGATED_SESSION=1 tool s6 Bash '{"command":"ls"}')"
 check "委譲された子が通っても親の印は残る" 2 "$(tool s6 Bash '{"command":"ls"}')"
+
+# T3 Code の delegate_task が起動した子は AGENT_DELEGATED_SESSION を持たず、スレッド ID で分かる。
+t3_child=thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Ay
+out=$(T3CODE_THREAD_ID=$t3_child prompt s15)
+check "T3 の委譲の子には入力の案内を出さない" "" "$out"
+prompt s15 > /dev/null
+check "印があっても T3 の委譲の子のツールは止めない" 0 "$(T3CODE_THREAD_ID=$t3_child tool s15 Bash '{"command":"ls"}')"
+T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 prompt s16 > /dev/null
+check "T3 の利用者と話すスレッドは kata を開く前のツールを止める" 2 "$(T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 tool s16 Bash '{"command":"ls"}')"
 
 prompt s9 > /dev/null
 check "Claude の Read で kata の SKILL.md を開くと通す" 0 "$(tool s9 Read '{"file_path":"/home/u/.claude/skills/kata/SKILL.md"}')"

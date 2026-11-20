@@ -7,6 +7,7 @@ hook=${KATA_ENTRY_HOOK:-$here/kata-entry.sh}
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/kata-entry-test.XXXXXX") || exit 1
 tmp=$(cd -P "$tmp" && pwd) || exit 1
 trap 'rm -rf "$tmp"' EXIT
+unset AGENT_DELEGATED_SESSION T3CODE_THREAD_ID
 fail=0
 
 check() { # name expected-substring-or-! output
@@ -39,41 +40,56 @@ out=$(run)
 check "入口の案内を出す" "<kata-entry>" "$out"
 check "同じ版なら通知しない" "!<superpowers-import>" "$out"
 out=$(AGENT_DELEGATED_SESSION=1 run)
-check "委譲された子には工程 1 から始める入口を出さない" "!工程 1 の kata-design" "$out"
+check "委譲された子には利用者への応答の案内を出さない" "!利用者への最初の応答" "$out"
 check "委譲された子には依頼の範囲で進めることを伝える" "委譲された担当" "$out"
+# T3 Code の delegate_task が起動した子は AGENT_DELEGATED_SESSION を持たず、スレッド ID で分かる。
+out=$(T3CODE_THREAD_ID=thread:delegated-task:command%3Amcp%3Ax%3Adelegate-task%3Ay run)
+check "T3 の委譲の子には利用者への応答の案内を出さない" "!利用者への最初の応答" "$out"
+check "T3 の委譲の子には依頼の範囲で進めることを伝える" "委譲された担当" "$out"
+out=$(T3CODE_THREAD_ID=6d7b900a-28cb-465f-876e-cb77fa6793d6 run)
+check "T3 の利用者と話すスレッドには入口の案内を出す" "利用者への最初の応答" "$out"
 
 tag v7.0.10
 out=$(run)
 check "確認から 30 日以内は通信せず前回の結果を使う" "!<superpowers-import>" "$out"
 
 echo "0 7.0.2" > "$tmp/state/superpowers-upstream"
-out=$(run)
-check "30 日を過ぎたら確認し、新しい版を通知する" "新しい版 7.0.10" "$out"
-check "取り込み済みの版を示す" "取り込み済みは 7.0.2" "$out"
+run > /dev/null
+check "30 日を過ぎたら確認し、新しい版を記録する" "7.0.10" "$(cut -d' ' -f2 "$tmp/state/superpowers-upstream")"
 
 check "新しい版の取り込みを無人で始める" "7.0.10" "$(cat "$tmp/import-calls" 2>/dev/null)"
-check "取り込み中であることを伝える" "無人の取り込みを進めている" "$(run)"
+check "取り込み中は通知しない" "!<superpowers-import>" "$(run)"
 check "同じ版の取り込みは一度だけ起動する" "1" "$(wc -l < "$tmp/import-calls" | tr -d ' ')"
 
-echo "failed 0" > "$tmp/state/import-7.0.10/status"
-check "失敗したら記録の場所を伝える" "失敗または停止した (記録: $tmp/state/import-7.0.10)" "$(run)"
+echo "failed 100" > "$tmp/state/import-7.0.10/status"
+out=$(run)
+check "失敗したら記録の場所を伝える" "失敗または停止した (記録: $tmp/state/import-7.0.10)" "$out"
+check "新しい版を示す" "新しい版 7.0.10" "$out"
+check "取り込み済みの版を示す" "取り込み済みは 7.0.2" "$out"
+notice=$(sed -n '/<superpowers-import>/,/<\/superpowers-import>/p' <<<"$out")
+check "依頼への回答を終えた後に伝えるよう指示する" "依頼への回答を終えた後" "$notice"
+check "最初の応答への割り込みを指示しない" "!最初の応答" "$notice"
+check "同じ失敗は二度通知しない" "!<superpowers-import>" "$(run)"
+echo "failed 150" > "$tmp/state/import-7.0.10/status"
+check "やり直しが再び失敗したら改めて通知する" "失敗または停止した" "$(run)"
 sleep 300 & dead_pid=$!; kill $dead_pid; wait $dead_pid 2>/dev/null
-echo "running 0 $dead_pid" > "$tmp/state/import-7.0.10/status"
+echo "running 200 $dead_pid" > "$tmp/state/import-7.0.10/status"
 check "記録が running のままプロセスが無ければ停止として伝える" "失敗または停止した" "$(run)"
-echo "running 0 $$" > "$tmp/state/import-7.0.10/status"
-check "プロセスが生きていれば取り込み中として伝える" "無人の取り込みを進めている" "$(run)"
-echo "done 0" > "$tmp/state/import-7.0.10/status"
+echo "running 300 $$" > "$tmp/state/import-7.0.10/status"
+check "やり直しの取り込み中は通知しない" "!<superpowers-import>" "$(run)"
+echo "done 400" > "$tmp/state/import-7.0.10/status"
+out=$(T3CODE_THREAD_ID=thread:delegated-task:x run)
+check "T3 の委譲の子には通知しない" "!<superpowers-import>" "$out"
+out=$(AGENT_DELEGATED_SESSION=1 run)
+check "委譲の子セッションには通知しない" "!<superpowers-import>" "$out"
 out=$(run)
 check "終わったら報告と作業場所を伝える" "作業場所: $tmp/state/import-7.0.10/repo" "$out"
 check "取り込み手順の文書の場所を示す" "$tmp/docs/agents.md" "$out"
-
-out=$(AGENT_DELEGATED_SESSION=1 run)
-check "委譲の子セッションには通知しない" "!<superpowers-import>" "$out"
+check "終わった通知は一度だけ出す" "!<superpowers-import>" "$(run)"
+sed -i.bak 's/^[0-9]*/0/' "$tmp/state/superpowers-upstream"
+check "上流を確かめ直しても終わった通知を繰り返さない" "!<superpowers-import>" "$(run)"
 
 rm -rf "$tmp/upstream.git"
-out=$(run)
-check "通知は次の確認まで続く" "新しい版 7.0.10" "$out"
-
 echo "0 7.0.2" > "$tmp/state/superpowers-upstream"
 out=$(run)
 check "通信できなくても入口の案内は出す" "<kata-entry>" "$out"

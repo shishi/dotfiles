@@ -127,7 +127,7 @@ brainstorming のうち、ブラウザで図を見せる visual companion は取
 3. `tests/skills-sync.sh` で Claude 側と Codex 側をそろえます。
 4. 独立レビューを通し、`superpowers-imported-version` を更新して commit します。移すものが無い版も値を更新します。
 
-結果はセッションの開始時に知らせます。`import-<版>/report.md` を確かめてから、`import-<版>/repo` の master を `git-lossless-integrate` で取り込みます。取り込まないと決めた場合は、作業中の checkout の `superpowers-imported-version` をその版にして知らせを止めます。失敗・停止したら `import-<版>/codex.log` と `report.md` で原因を確かめ、`import-<版>/status` を消すと、次のセッションで clone の成果を引き継いで再実行します。
+取り込みが完了・失敗・停止すると、次のセッションで結果ごとに一度だけ、依頼への回答の後に知らせます。`import-<版>/report.md` を確かめてから、`import-<版>/repo` の master を `git-lossless-integrate` で取り込みます。取り込まないと決めた場合は、作業中の checkout の `superpowers-imported-version` をその版にします。失敗・停止したら `import-<版>/codex.log` と `report.md` で原因を確かめ、`import-<版>/status` を消すと、次のセッションで clone の成果を引き継いで再実行します。
 
 計画の実装を途中で止めないよう、`kata-completion.sh` が両 CLI の Stop hook として動きます。kata-plan の最後に `kata-active <claude|codex> start <計画ファイル>` で実装中を記録したセッションでだけ判定し、記録がなければ何もしません。ターンを終えようとするたびに、判定役の Sonnet へ計画・進捗・直近の利用者の発言・会話記録の末尾の操作と結果・最後の応答を渡し、次の 3 つのどれかを返させます。
 

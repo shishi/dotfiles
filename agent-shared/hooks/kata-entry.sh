@@ -4,13 +4,21 @@
 # 両 CLI に同じ入口を渡し、工程の選択は kata が担う。
 #
 # あわせて、kata の工程 skill へ取り込んだ superpowers の上流に新しい版が出ていないかを月に一度だけ
-# 確かめ、出ていれば superpowers-import で無人の取り込みを始めて、その状況を伝える。毎回の起動で
-# 通信しないよう、確認結果を状態ファイルに残して使い回す。
+# 確かめ、出ていれば superpowers-import で無人の取り込みを始める。取り込みが終わる・失敗する・止まるたびに
+# 一度だけ結果を伝える。毎回の起動で通信しないよう、確認結果を状態ファイルに残して使い回す。
 set -u
 
-# 委譲された子 (AGENT_DELEGATED_SESSION=1) には利用者がおらず、設計・作業場所・統合は司令塔が担う。
-# 工程 1 から始める入口を渡すと受託範囲を越えて質問や設計を始めるため、担当の範囲で進める案内に替える。
-if [ "${AGENT_DELEGATED_SESSION:-}" = 1 ]; then
+# 委譲された子には利用者がおらず、設計・作業場所・統合は司令塔が担う。工程 1 から始める入口を渡すと
+# 受託範囲を越えて質問や設計を始めるため、担当の範囲で進める案内に替える。
+# T3 Code の delegate_task が起動した子には AGENT_DELEGATED_SESSION が付かないため、T3 がその子の
+# スレッドに付ける ID の接頭辞でも見分ける。T3 はこの ID を Claude Code にはプロセスの環境で渡すが、Codex には
+# シェルコマンドの環境でしか渡さず hook に届かないため、Codex の子は見分けられない。
+delegated() {
+  [ "${AGENT_DELEGATED_SESSION:-}" = 1 ] && return 0
+  case ${T3CODE_THREAD_ID:-} in thread:delegated-task:*) return 0 ;; esac
+  return 1
+}
+if delegated; then
   cat <<'MSG'
 <kata-entry>
 このセッションは委譲された担当。受け取った依頼の範囲と受入条件だけを進め、設計・作業場所・統合・利用者への質問は司令塔へ返す。不具合・想定外の挙動を調べるときは investigation-discipline、テストを書くときは test-red-first、文章を書く・直す前は writing-prose を開く。完了を報告する前に kata-verify で証拠を確かめ、成果と検証結果を司令塔へ返す。
@@ -69,12 +77,13 @@ url=${KATA_UPSTREAM_URL:-https://github.com/obra/superpowers}
 interval=$((30 * 24 * 60 * 60))
 now=$(date +%s)
 
-# 状態ファイルは「確認した時刻 上流の最新版」の 1 行。
-checked=0 latest=
+# 状態ファイルは「確認した時刻 上流の最新版 最後に伝えた取り込みの結果」の 1 行。
+checked=0 latest= notified=
 if [ -r "$state" ]; then
-  read -r checked latest < "$state" || true
+  read -r checked latest notified < "$state" || true
 fi
 case $checked in '' | *[!0-9]*) checked=0 ;; esac
+save_state() { printf '%s %s %s\n' "$checked" "$latest" "$notified" > "$state" 2>/dev/null || true; }
 
 if [ $((now - checked)) -ge "$interval" ]; then
   # 通信できなければ、次の起動で再び確かめるよう時刻を更新しない。利用者の Git 設定が github.com を
@@ -82,13 +91,13 @@ if [ $((now - checked)) -ge "$interval" ]; then
   found=$(ls_remote_tags "$url" 2>/dev/null |
     sed -n 's|.*refs/tags/v\{0,1\}\([0-9][0-9.]*\)$|\1|p' | newest_version)
   if [ -n "$found" ]; then
-    latest=$found
-    printf '%s %s\n' "$now" "$latest" > "$state" 2>/dev/null || true
+    checked=$now latest=$found
+    save_state
   fi
 fi
 
 # 委譲・レビューの子セッションには利用者がいないため、通知は司令塔のセッションにだけ出す。
-[ -z "${AGENT_DELEGATED_SESSION:-}" ] && [ -z "${SUPERPOWERS_IMPORT_RUNNING:-}" ] || exit 0
+! delegated && [ -z "${SUPERPOWERS_IMPORT_RUNNING:-}" ] || exit 0
 [ -n "$latest" ] || exit 0
 newest=$(printf '%s\n%s\n' "$imported" "$latest" | newest_version)
 [ "$newest" != "$imported" ] || exit 0
@@ -98,20 +107,25 @@ if [ ! -s "$work/status" ]; then
   nohup ${KATA_IMPORT_CMD:-bash "$agent_shared/bin/superpowers-import"} "$latest" "$state_dir" \
     < /dev/null > /dev/null 2>&1 &
 fi
-{ read -r import_status _ import_pid < "$work/status"; } 2>/dev/null || import_status=running
+{ read -r import_status import_time import_pid < "$work/status"; } 2>/dev/null || import_status=running
 # 記録が running のままプロセスが無ければ、終了を記録できずに止まっている。
 if [ "$import_status" = running ] && [ -n "${import_pid:-}" ] && ! kill -0 "$import_pid" 2>/dev/null; then
   import_status=stopped
 fi
 docs="$(dirname "$agent_shared")/docs/agents.md の「superpowers の取り込み」"
 case $import_status in
-  done) detail="取り込みの作業が終わった (報告: $work/report.md、作業場所: $work/repo)。報告を読んで利用者に要点を伝え、作業中の checkout へ取り込むかを確かめる。取り込みは $docs の手順で進める。" ;;
-  failed | stopped) detail="無人の取り込みが失敗または停止した (記録: $work)。記録から原因を確かめて利用者に伝える。やり直す手順は $docs にある。" ;;
-  *) detail="無人の取り込みを進めている (記録: $work)。終われば次のセッションで結果を伝える。" ;;
+  done) detail="無人の取り込みが終わった (報告: $work/report.md、作業場所: $work/repo)。報告の要点と、作業中の checkout へ取り込むかの確認を伝える。取り込みは $docs の手順で進める。" ;;
+  failed | stopped) detail="無人の取り込みが失敗または停止した (記録: $work)。記録から確かめた原因を伝える。やり直す手順は $docs にある。" ;;
+  *) exit 0 ;;
 esac
+# status の時刻まで含めて記録し、やり直した取り込みが再び失敗したときも伝える。
+result="$latest:$import_status:${import_time:-}"
+[ "$result" != "$notified" ] || exit 0
+notified=$result
+save_state
 cat <<MSG
 <superpowers-import>
-kata の工程 skill へ取り込んだ superpowers の上流に新しい版 $latest が出ている (取り込み済みは $imported)。$detail 最初の応答で利用者にこのことを伝える。
+kata の工程 skill へ取り込んだ superpowers の上流の新しい版 $latest (取り込み済みは $imported) について、$detail 依頼への回答を終えた後に、このことを利用者へ一行で伝える。
 </superpowers-import>
 MSG
 exit 0
