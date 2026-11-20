@@ -11,6 +11,8 @@ import subprocess
 import sys
 
 
+# Transcript replay found 5 observed reads among 40 second suggestions and 2 among 39 third suggestions.
+MAX_AUTOMATIC_CANDIDATES = 2
 MAX_DOCUMENTS = 3
 MAX_BODY_CHARS = 16000
 
@@ -263,7 +265,7 @@ def main():
                 for path, _ in oversized:
                     lines.append(f"git -C {shlex.quote(repo)} show {shlex.quote(f'{snapshot}:{path}')}")
         else:
-            lines.append("語句検索の候補: " + ", ".join(deferred[:MAX_DOCUMENTS]))
+            lines.append("語句検索の候補: " + ", ".join(deferred[:MAX_AUTOMATIC_CANDIDATES]))
     if not manual:
         lines.extend(["依頼の対象・操作・制約に合う記憶を索引から選び、必要な未読本文を確認してから判断してください。",
                       f"本文の取得は {lookup_command} '<索引で選んだ相対パス>' を使います。パスは空白で区切って 1 回に {MAX_DOCUMENTS} 件まで渡せます。検索語も指定できます。"])

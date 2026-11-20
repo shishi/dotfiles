@@ -254,12 +254,19 @@ lookup_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"ranking",
 output=$(printf '%s' "$lookup_payload" | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup)
 if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext
   | contains("INDEX_SENTINEL") and (contains("PRIMARY_a") | not) and (contains("z.md") | not)
-  and (split("\n") | any(startswith("語句検索の候補") and endswith("a.md, b.md, c.md")))' >/dev/null; then
-  ok "automatic lookup lists only the strongest candidates for a broad match"
+  and (split("\n") | any(. == "語句検索の候補: a.md, b.md"))' >/dev/null; then
+  ok "automatic lookup lists the two strongest candidates for a broad match"
 else
-  ng "automatic lookup lists only the strongest candidates for a broad match"
+  ng "automatic lookup lists the two strongest candidates for a broad match"
 fi
 output=$(lookup)
+if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext
+  | contains("PRIMARY_a") and contains("PRIMARY_b") and contains("PRIMARY_c")
+  and (contains("INCIDENTAL_FOURTH") | not)' >/dev/null; then
+  ok "manual lookup still retrieves three matching bodies"
+else
+  ng "manual lookup still retrieves three matching bodies"
+fi
 output=$(lookup)
 if ! printf '%s' "$output" | grep -q INCIDENTAL_FOURTH && printf '%s' "$output" | grep -q '既読'; then
   ok "already read candidates do not refill slots with weaker matches"
