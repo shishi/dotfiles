@@ -26,6 +26,6 @@
 
 ```sh
 RECORD_UPDATE=$(mktemp "${RUN_RECORD}.XXXXXX") || exit 1
-jq -c --slurpfile quota "$QUOTA_OBSERVATIONS" --argjson verification "$VERIFICATION_JSON" --argjson adopted "$ADOPTED_FINDINGS" --argjson rework "$REWORK_COUNT" '.verification = $verification | .adopted_findings = $adopted | .rework_count = $rework | .rate_limits = $quota[0]' "$RUN_RECORD" > "$RECORD_UPDATE" || { rm -f "$RECORD_UPDATE"; exit 1; }
+jq -c --slurpfile quota "$QUOTA_OBSERVATIONS" --argjson verification "$VERIFICATION_JSON" --argjson adopted "$ADOPTED_FINDINGS" --argjson rework "$REWORK_COUNT" '.verification = $verification | .adopted_findings = $adopted | .rework_count = $rework | .rate_limits = $quota[0]' "$RUN_RECORD" > "$RECORD_UPDATE" || { rm -- "$RECORD_UPDATE"; exit 1; }
 mv "$RECORD_UPDATE" "$RUN_RECORD"
 ```

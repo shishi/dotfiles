@@ -27,7 +27,7 @@ worktree vs HEAD の全変更 + untracked ファイル。staged だけを見る�
    scan_root=$(git rev-parse --show-toplevel) || exit 1
    cd "$scan_root" || exit 1
    scan_list=$(mktemp "${TMPDIR:-/tmp}/secrets-scan.XXXXXX") || exit 1
-   trap 'rm -f "$scan_list"' EXIT
+   trap 'rm -- "$scan_list"' EXIT
    { git diff --name-only -z --diff-filter=d HEAD && git ls-files --others --exclude-standard -z; } > "$scan_list" || exit 1
    cfg=(); [ ! -f .gitleaks.toml ] || cfg=(-c "$scan_root/.gitleaks.toml")
    found=0
