@@ -40,9 +40,9 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
 fi
 
 # 使用率: 公式 context_window.used_percentage 優先。取れない場合は直近 1 ターンの
-# usage 合計を context 窓で割る。分母が窓より小さいと 100% 超の数字になり、閾値
+# usage 合計をコンテキストウィンドウで割る。分母がコンテキストウィンドウより小さいと 100% 超の数字になり、閾値
 # 判定が読めなくなる (200000 を入れると実測 769K のターンが 384% と出る)。
-# Opus / Fable はどちらも 1M。窓の違うモデルを使うなら環境変数で上書きする。
+# Opus / Fable はどちらも 1M。コンテキストウィンドウの違うモデルを使うなら環境変数で上書きする。
 percentage=""
 if [ -n "$USED_PCT_RAW" ]; then
   percentage=${USED_PCT_RAW%.*}
@@ -95,7 +95,7 @@ fi
 if [ -n "$USED_PCT_RAW" ]; then
   pct_source=official        # 公式フィールド。現在の占有量
 elif [ -n "$percentage" ]; then
-  pct_source=calc            # transcript の直近 1 ターンから計算。分母は窓の想定値
+  pct_source=calc            # transcript の直近 1 ターンから計算。分母はコンテキストウィンドウの想定値
 else
   pct_source=none            # どちらも取れず、表示は _%
 fi

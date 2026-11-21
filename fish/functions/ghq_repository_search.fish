@@ -6,7 +6,7 @@ function ghq_repository_search -d 'Repository search'
 
     if not type -qf $selector
         printf "\nERROR: '$selector' not found.\n"
-        # exit だと対話シェルごと終了する(端末直下で動いていれば窓ごと閉じる)。
+        # exit だと対話シェルごと終了する(端末直下で動いていればウィンドウごと閉じる)。
         # fish の exit は関数脱出ではないため return を使う
         commandline -f repaint
         return 1
