@@ -591,7 +591,7 @@ def build_report(repo, commit, claude_dirs, codex_dirs, since):
 
 def print_text(report):
     print(f"期間: {report['since']} 以降 / 基準 commit: {report['commit']}")
-    print(f"索引 MEMORY.md: {report['index_chars']} 文字（毎入力の注入に含まれる。Codex では起動時にも入る）")
+    print(f"索引 MEMORY.md: {report['index_chars']} 文字（会話にまだ渡していない版だけ、入力時の注入に含まれる。Codex では起動時にも入る）")
     print(f"記憶検索 hook が動いた入力: {report['prompts']} 件、うち本文取得あり {report['prompts_with_retrieval']} 件")
     print(f"毎入力の記憶注入: 中央値 {report['prompt_context_chars_median']} 文字、合計 {report['prompt_context_chars_total']} 文字")
     print(f"取得した本文のうち候補一覧にあったもの: {report['retrieved_in_candidates']} / {report['retrieved_total']}"

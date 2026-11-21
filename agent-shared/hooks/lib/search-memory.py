@@ -89,8 +89,10 @@ def main():
         return loaded if isinstance(loaded, dict) else {}
 
     if session:
+        # 子エージェントは親と同じ session_id で来ることがある。会話が別なので記録も分ける。
+        agent = str(event.get("agent_id") or "")
         key = hashlib.sha256((str(Path(repo).resolve()) + "\0" + session + "\0" +
-                              (event.get("transcript_path") or "")).encode()).hexdigest()
+                              (event.get("transcript_path") or "") + ("\0" + agent if agent else "")).encode()).hexdigest()
         directory = Path.home() / ".cache" / "agent-memory-lookup"
         # cache は「既読の本文を再注入しない」ための最適化。sandbox 内 (入れ子の claude -p など) で
         # ~/.cache に書けない場合は cache 無しで続け、検索・取得そのものは止めない
@@ -124,7 +126,11 @@ def main():
             temporary.write_text(json.dumps(seen))
             temporary.replace(target)
         except OSError:
-            pass
+            # 書き直せなかった古い記録を次の入力が信じると、新しい会話に渡していない文書を既読と扱う。
+            try:
+                target.unlink()
+            except OSError:
+                pass
 
     if mode in ("reset", "reset-project", "record-core"):
         # reset-project and record-core are the two halves of Claude's split startup output;
@@ -249,10 +255,21 @@ def main():
              "記憶は advisory。現在のユーザー指示と AGENTS.md を優先する。語句一致なので関連記憶の網羅を意味しない。"]
     hook = Path(__file__).resolve().parent.parent / "inject-memory.sh"
     lookup_command = f"bash {shlex.quote(str(hook))} {shlex.quote(repo)} lookup"
+    # 索引は入力のたびに同じ本文を足すと、長い会話ではその繰り返しがコンテキストを埋める。同じ会話に
+    # 渡した版はもう一度渡さない。起動・再開・圧縮では記録が消えるので、新しいコンテキストには渡し直す。
+    index_digest = hashlib.sha256(index_content.encode()).hexdigest()
+    index_version = index_digest[:8]
+    index_delivered = False
     if exact_paths:
         lines.append(f"取得元の確定 commit: {snapshot}")
+    elif not manual and seen.get("MEMORY.md") == index_digest:
+        # この hook からは、渡した索引が会話に残っているかを確かめられない (巻き戻しや、記録を作り直さない圧縮がある)。
+        # 版を示して、読む側が会話にある索引と照合できるようにする。
+        lines.append(f"記憶の索引 (版 {index_version}) は、この会話に渡してあります。会話にある索引 (<personal-memory-index>、または lookup で取得した MEMORY.md) を使ってください。"
+                     f"会話にある索引の版が {index_version} でない場合と、索引が見当たらない場合は、{lookup_command} MEMORY.md で取得してください。")
     else:
-        lines.extend(["<personal-memory-index>", index_content, "</personal-memory-index>"])
+        lines.extend(["<personal-memory-index>", f"索引の版: {index_version}", index_content, "</personal-memory-index>"])
+        index_delivered = not manual
     if known:
         lines.append("既読の同一版: " + ", ".join(known))
     if deferred:
@@ -263,6 +280,8 @@ def main():
             if oversized:
                 lines.append("1 件で本文上限を超える文書は、検査済みの確定 commit から次のコマンドで取得してください。")
                 for path, _ in oversized:
+                    if path == "MEMORY.md":
+                        lines.append(f"索引の版: {index_version}")
                     lines.append(f"git -C {shlex.quote(repo)} show {shlex.quote(f'{snapshot}:{path}')}")
         else:
             lines.append("語句検索の候補: " + ", ".join(deferred[:MAX_AUTOMATIC_CANDIDATES]))
@@ -272,7 +291,9 @@ def main():
         if known:
             lines.append("既読は本文を注入した記録です。手動で取得した本文は会話内で確認してください。")
     for path, _, excerpt, label in selected:
-        lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, excerpt, "</retrieved-memory>"])
+        # 手で取り直した索引にも版を付け、次の入力の案内と照合できるようにする。
+        version = [f"索引の版: {index_version}"] if path == "MEMORY.md" else []
+        lines.extend([f"\n<retrieved-memory path={json.dumps(path)}>", label, *version, excerpt, "</retrieved-memory>"])
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                            "additionalContext": "\n".join(lines)}}, ensure_ascii=False), flush=True)
     for path, body, updates in deliveries:
@@ -281,6 +302,8 @@ def main():
         else:
             for key, content in updates:
                 remember(key, content)
+    if index_delivered:
+        seen["MEMORY.md"] = index_digest
     save()
 
 

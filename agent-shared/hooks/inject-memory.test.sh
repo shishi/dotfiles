@@ -145,7 +145,7 @@ else
   ng "explicit lookup can still retrieve body-only candidates"
 fi
 output=$(HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup MEMORY.md)
-if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("INDEX_SENTINEL") and contains("<retrieved-memory path=\"MEMORY.md\">")' >/dev/null; then
+if printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("INDEX_SENTINEL") and contains("<retrieved-memory path=\"MEMORY.md\">") and contains("索引の版: ")' >/dev/null; then
   ok "an explicitly selected index is retrieved rather than silently excluded"
 else
   ng "an explicitly selected index is retrieved rather than silently excluded"
@@ -551,6 +551,50 @@ if jq -e '[.hooks.SessionStart[].hooks[] | .command | select(contains("inject-me
   ok "claude/settings.json injects CORE and project memory from separate startup hooks"
 else
   ng "claude/settings.json injects CORE and project memory from separate startup hooks"
+fi
+
+# 同じ会話に同じ版の索引を繰り返し渡さない。新しいコンテキスト (起動・再開・圧縮) と索引の更新では渡し直す。
+index_prompt() { jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once",prompt:"次の作業を進める",hook_event_name:"UserPromptSubmit"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup; }
+index_start() { jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" >/dev/null; }
+index_start
+first=$(index_prompt)
+second=$(index_prompt)
+if printf '%s' "$first" | grep -q '</personal-memory-index>' && ! printf '%s' "$second" | grep -q '</personal-memory-index>' \
+  && printf '%s' "$second" | jq -e '.hookSpecificOutput.additionalContext | contains("は、この会話に渡してあります") and contains("lookup MEMORY.md で取得")' >/dev/null \
+  && [ "$(printf '%s' "$first" | grep -o '索引の版: [0-9a-f]*' | head -1 | cut -d' ' -f2)" = "$(printf '%s' "$second" | grep -o '(版 [0-9a-f]*)' | head -1 | tr -d '()' | cut -d' ' -f2)" ]; then
+  ok "the index is delivered once per context and later prompts point back to it"
+else
+  ng "the index is delivered once per context and later prompts point back to it"
+fi
+index_start
+if index_prompt | grep -q '</personal-memory-index>'; then
+  ok "a new context receives the index again"
+else
+  ng "a new context receives the index again"
+fi
+index_prompt >/dev/null
+# Claude は起動時の hook を core と project に分けて動かす。project 側が記録を作り直す。
+jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" project >/dev/null
+if index_prompt | grep -q '</personal-memory-index>'; then
+  ok "a new Claude context receives the index again"
+else
+  ng "a new Claude context receives the index again"
+fi
+# 子エージェントは親と同じ session_id で来ても、会話が別なので索引を受け取る。
+if jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once",agent_id:"child-1",prompt:"次の作業を進める",hook_event_name:"UserPromptSubmit"}' \
+  | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup | grep -q '</personal-memory-index>'; then
+  ok "a child agent sharing the session id receives the index"
+else
+  ng "a child agent sharing the session id receives the index"
+fi
+printf '\n- [索引更新](index-update.md) — 索引の更新を確かめる項目\n' >>"$MEMORY_DIR/MEMORY.md"
+printf -- '---\nname: index-update\ndescription: 索引の更新を確かめる項目\ntype: reference\n---\n\n# 索引更新\n' >"$MEMORY_DIR/index-update.md"
+git -C "$MEMORY_DIR" add MEMORY.md index-update.md
+git -C "$MEMORY_DIR" commit -qm index-update
+if index_prompt | grep -q 'index-update.md'; then
+  ok "an updated index is delivered again in the same context"
+else
+  ng "an updated index is delivered again in the same context"
 fi
 
 echo "PASS=$PASS FAIL=$FAIL"

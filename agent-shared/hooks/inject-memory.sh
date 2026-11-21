@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索候補を渡す。
 # Claude の SessionStart は hook 出力 1 つあたりの文字数上限に収めるため、core と project の
-# 2 つの hook に分ける。索引は毎入力の lookup で届くので、Claude の起動時には出さない。
+# 2 つの hook に分ける。索引は最初の入力の lookup で届くので、Claude の起動時には出さない。
 # 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
 # usage: inject-memory.sh [MEMORY_DIR] [core|project|lookup [検索語...]]
 set -u
@@ -346,7 +346,7 @@ fi
 if [ -n "$py_bin" ] && [ "$mode" != core ] && [ "$mode" != project ]; then
   printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
 fi
-source_note="取得元は確定 commit ${snapshot} です。追加の本文は毎入力の索引で選び、lookup で取得してください。"
+source_note="取得元は確定 commit ${snapshot} です。追加の本文は会話に渡される索引で選び、lookup で取得してください。"
 
 # Claude は hook 出力 1 つあたり 10,000 文字を超えると、先頭だけのプレビューに置き換えて
 # 本文を渡さない。超える場合は本文の代わりに、確定 commit から全文を読む手順を渡す。
