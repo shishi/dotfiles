@@ -39,7 +39,7 @@ stop_pids; rm -rf "$KATA_STATE_DIR/codex/s1" "$work/state/codex/s1/running/cmd-k
 ok "計画の実装中は、kata-completion から呼ばれたときだけ判定する"
 
 # PreToolUse の別の hook や承認で止められたコマンドは実行されず、PostToolUse も来ない。
-# 動いているかを確かめられない OS では記録を残すため、Linux と macOS でだけ確かめる
+# 動いているかをプロセスから確かめられるのは Linux と macOS だけなので、ここではその 2 つで確かめる
 case $(uname -s) in Linux | Darwin)
   # 同時に動く別の hook (呼出し ID を持たない) が、環境変数を読めないコマンドを起動している場合も含めて確かめる
   env -u CODEX_TOOL_CALL_ID "$BASH" -c "env -i $(command -v sleep) 600; :" & pids+=($!)

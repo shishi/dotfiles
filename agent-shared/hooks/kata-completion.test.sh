@@ -87,8 +87,8 @@ for n in 1 2 3 4; do
   grep -qF "監視:" <<<"$out" && [ ! -e "$JUDGE_INPUT" ] || fail "Codex で監視が止めた $n 回目の Stop で計画を判定した: $out"
 done
 [ -n "$(stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "Codex で待つものが無いのに判定しない"
-# 止められて実行されなかったコマンドの記録は、待つものに数えない。監視 hook が記録を消すのは、
-# コマンドが動いているかを確かめられる Linux と macOS だけ
+# 止められて実行されなかったコマンドの記録は、待つものに数えない。ほかの OS では監視 hook が
+# 判定役へ進む前に確認を促して止めるため、Linux と macOS でだけ確かめる
 case $(uname -s) in Linux | Darwin)
   printf '{"command":"cat SKILL.md"}\n' > "$TASK_MONITOR_STATE_DIR/codex/s1/running/cmd-blocked"
   [ -n "$(TASK_MONITOR_CODEX_PID=$$ stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "動いていないコマンドの記録だけで判定をやめた"
