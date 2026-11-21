@@ -3,7 +3,7 @@
 # 使うかを判断させるため。SessionStart の案内だけでは、すぐ答えられそうな質問で kata を飛ばすことがある。
 #
 #   prompt (UserPromptSubmit): そのセッションに「kata をまだ開いていない」印を付け、案内を出す。
-#   pre    (PreToolUse):       印がある間は、kata を開く操作 (Skill・Read・Codex のコマンド) とタスク表示用のツールだけを通し、ほかは止める。
+#   pre    (PreToolUse):       印がある間は、kata を開く操作 (Skill・Read・Codex のコマンド)、タスク表示用のツール、回答を返すツールだけを通し、ほかは止める。
 #
 # 子エージェントのツール呼出し (agent_id がある) と、委譲された子のセッション (lib/delegated-session.sh) は
 # 受け取った担当の範囲で進めるので対象外にする。
@@ -48,6 +48,8 @@ case ${1:-} in
     tool=$(jq -r '.tool_name // empty' <<<"$in")
     case $tool in
       mcp__ccd_turn__* | TodoWrite | update_plan) exit 0 ;;
+      # 回答を決まった形で返すだけのツール。skill を開くツールを持たない判定用の実行が、結果を返せなくなるため通す。
+      StructuredOutput) exit 0 ;;
       Skill)
         if [ "$(jq -r '.tool_input.skill // empty' <<<"$in")" = kata ]; then
           rm -f "$pending"; exit 0
