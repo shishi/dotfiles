@@ -70,17 +70,28 @@ live_command_ids() {
   done
   [ -z "$unknown" ]
 }
-# 動いていないコマンドの記録を消す。PostToolUse が来ないことだけでは、バックグラウンドで動いているのか、
-# 別の PreToolUse hook や承認で止められて実行されなかったのか、終わったが結果を write_stdin で読んでいないのかを
-# 区別できないため。動いているかを確かめられない環境 (Linux・macOS 以外) では記録を残す
+# Stop で確認できた呼び出しだけを待つ。OS がプロセスの環境を隠す場合は、このスレッドの終了通知を照合し、
+# それでも状態が分からない呼び出しは、セッション ID を受け取ったエージェントへ一度だけ確認を戻す。
 prune_commands() {
+  local files=("$run"/cmd-*) live= finished= complete= f id command
+  [ -e "${files[0]}" ] || return 0
   os=$(uname -s)
-  case $os in Linux | Darwin) ;; *) return 0 ;; esac
-  local live f
-  live=$(live_command_ids) || return 0
-  for f in "$run"/cmd-*; do
-    [ -e "$f" ] || continue
-    grep -qxF -- "${f##*/cmd-}" <<<"$live" || rm -f "$f"
+  case $os in
+    Linux | Darwin) if live=$(live_command_ids); then complete=1; fi ;;
+  esac
+  if [ -z "$complete" ] && [ -r "$transcript" ]; then
+    finished=$(jq -Rr --arg sid "$sid" 'fromjson? | select(.type == "event_msg") | .payload
+      | select(.thread_id == $sid and .type == "item_completed") | .item
+      | select(.type == "CommandExecution" and (.status == "completed" or .status == "failed" or .status == "declined")) | .id' "$transcript")
+  fi
+  for f in "${files[@]}"; do
+    id=${f##*/cmd-}
+    grep -qxF -- "$id" <<<"$live" && continue
+    if [ -z "$complete" ] && ! grep -qxF -- "$id" <<<"$finished"; then
+      command=$(jq -r .command "$f" 2>/dev/null) || continue
+      check_list+=$'\n- '"$command"
+    fi
+    rm -f "$f"
   done
 }
 num() { cat "$state/$1" 2>/dev/null || echo 0; }
@@ -141,10 +152,19 @@ case $mode in
     # 他方は止めずにターンが終わるため、判定はその呼出しの 1 回だけにする。計画の記録の場所は kata-active・
     # kata-completion.sh と同じにする (ずれると両方の Stop で判定する)
     [ "${2:-}" = from-kata ] || [ ! -f "${KATA_STATE_DIR:-/tmp/claude-$(id -u)/kata}/codex/$sid/plan" ] || exit 0
-    prune_commands
     transcript=$(field .transcript_path)
+    check_list= notice=
+    prune_commands
+    if [ -n "$check_list" ]; then
+      notice="監視 hook では次の呼び出しの状態を確認できません。ツールの返答を確認し、実行中のセッション ID が返っていたものだけ結果を回収してください。起動拒否・終了済みなら、この確認は完了です。$check_list"
+    fi
     items=$(ls "$run")
-    if [ -z "$items" ]; then reset; exit 0; fi
+    if [ -z "$items" ]; then
+      reset
+      [ -z "$notice" ] || jq -cn --arg reason "$notice" '{decision: "block", reason: $reason}'
+      exit 0
+    fi
+    [ -z "$notice" ] || notice=$'\n'"$notice"
     lines=0; [ -f "$transcript" ] && lines=$(wc -l < "$transcript")
     [ -f "$state/seen" ] || : > "$state/seen"
     new=$(comm -23 <(printf '%s\n' "$items") "$state/seen")
@@ -171,13 +191,13 @@ case $mode in
     done)
     if [ "$idle" -ge 3 ]; then
       rm -f "$run"/*; reset
-      jq -cn --arg l "$list" '{decision: "block", reason: ("監視: 実行中として記録したタスクを見に行かないまま 3 回ターンを終えたため、監視をやめました。残っているタスクの状態を確かめ、利用者へ報告して終えてください。\n" + $l)}'
+      jq -cn --arg n "$notice" --arg l "$list" '{decision: "block", reason: ("監視: 実行中として記録したタスクを見に行かないまま 3 回ターンを終えたため、監視をやめました。残っているタスクの状態を確かめ、利用者へ報告して終えてください。\n" + $l + $n)}'
       exit 0
     fi
     printf '%s\n' "$round" > "$state/round"; printf '%s\n' "$idle" > "$state/idle"
     printf '%s\n' "$lines" > "$state/mark"; printf '%s\n' "$items" > "$state/seen"; rm -f "$state/waited"
     ms=$(( $(tm_interval "$round") * 60000 ))
-    jq -cn --arg l "$list" --arg ms "$ms" '{decision: "block", reason: ("監視: まだ終わっていないタスクがあります。\n" + $l + "\n" +
-      "子エージェントは wait_agent で、コマンドは空の write_stdin (yield_time_ms は " + $ms + ") で待ってから最新の内容を確かめてください。進んでいれば続けて待ち、止まっていれば close_agent / interrupt_agent か write_stdin の割込みで止め、原因を調べて、直すか別の方法で元の目的をやり直して。")}' ;;
+    jq -cn --arg n "$notice" --arg l "$list" --arg ms "$ms" '{decision: "block", reason: ("監視: まだ終わっていないタスクがあります。\n" + $l + "\n" +
+      "子エージェントは wait_agent で、コマンドは空の write_stdin (yield_time_ms は " + $ms + ") で待ってから最新の内容を確かめてください。進んでいれば続けて待ち、止まっていれば close_agent / interrupt_agent か write_stdin の割込みで止め、原因を調べて、直すか別の方法で元の目的をやり直して。" + $n)}' ;;
 esac
 exit 0

@@ -67,16 +67,34 @@ case $(uname -s) in Linux | Darwin)
   # 環境変数を空にして動くプロセスは、どの呼出しのものか分からない
   env -i "$(command -v sleep)" 600 & pids+=($!)
   run pre-bash '{tool_use_id:"opaque", tool_input:{command:"exec env -i sleep 600"}}'
-  out=$(stop); has "$out" "exec env -i sleep 600" "環境変数を読めないプロセス"
-  stop_pids; rm -f "$work/state/codex/s1/running/cmd-opaque"; run prompt '{prompt:"x"}'
-  ok "環境変数を読めないプロセスが動いている間は記録を残す"
+  run pre-bash '{tool_use_id:"finished", tool_input:{command:"npm test"}}'
+  run pre-bash '{tool_use_id:"denied", tool_input:{command:"denied before startup"}}'
+  printf '%s\n' '{"type":"event_msg","payload":{"type":"item_completed","thread_id":"s1","item":{"type":"CommandExecution","id":"denied","process_id":null,"status":"failed"}}}' >> "$R"
+  out=$(stop); has "$out" "exec env -i sleep 600" "実行結果を確認するコマンド"
+  for word in 'yield_time_ms' 'まだ終わっていない' 'npm test' 'denied before startup'; do
+    ! grep -qF "$word" <<<"$out" || fail "照合できないときの誤案内: $out"
+  done
+  [ -z "$(stop)" ] || fail "同じ記録の確認を繰り返した"
+  stop_pids; run prompt '{prompt:"x"}'
+  ok "プロセスを識別できないときは拒否・完了済みを除き、残った呼び出しの結果確認を一度だけ促す"
 ;; esac
 
-live t2
-run pre-bash '{tool_use_id:"t2", tool_input:{command:"make build"}}'
+# 待機間隔の試験には、各 OS で実行中だと確かめられるタスクを使う。
+case $(uname -s) in
+  Linux | Darwin)
+    live t2
+    run pre-bash '{tool_use_id:"t2", tool_input:{command:"make build"}}'
+    wait_target='make build' ;;
+  *)
+    run pre-bash '{tool_use_id:"unknown", tool_input:{command:"unidentified"}}'
+    out=$(stop); has "$out" "unidentified" "起動結果の確認"
+    [ -z "$(stop)" ] || fail "状態を確認できないコマンドを待ち続けた"
+    run subagent-start '{agent_id:"initial-child"}'
+    wait_target='initial-child' ;;
+esac
 out=$(stop)
 [ "$(jq -r .decision <<<"$out")" = block ] || fail "実行中で止めない: $out"
-has "$out" "yield_time_ms は 600000" "1 回目の待ち時間"; has "$out" "make build" "止める理由"
+has "$out" "yield_time_ms は 600000" "1 回目の待ち時間"; has "$out" "$wait_target" "止める理由"
 has "$out" "元の目的をやり直して" "止める理由"
 ok "実行中のコマンドがあれば 10 分待つよう指示して止める"
 
@@ -140,10 +158,12 @@ has "$o3" "報告" "解放"; [ "$(running)" = 0 ] || fail "解放後に記録が
 ok "見に行かないまま 3 回終えたら解放し、残った記録を消す"
 
 w >/dev/null; w >/dev/null
-live t3
-run pre-bash '{tool_use_id:"t3", tool_input:{command:"sleep 1"}}'
+case $(uname -s) in
+  Linux | Darwin) live t3; run pre-bash '{tool_use_id:"t3", tool_input:{command:"sleep 1"}}' ;;
+  *) run subagent-start '{agent_id:"new-child"}' ;;
+esac
 out=$(stop); has "$out" "yield_time_ms は 600000" "待った後に起動したコマンド"
-ok "待った後に新しいコマンドを起動しても 10 分から数え直す"
+ok "待った後に新しいタスクを起動しても 10 分から数え直す"
 toolcall; out=$(stop); has "$out" "1200000" "数え直し前"
 run prompt '{prompt:"x"}'
 out=$(stop); has "$out" "yield_time_ms は 600000" "利用者の入力"
