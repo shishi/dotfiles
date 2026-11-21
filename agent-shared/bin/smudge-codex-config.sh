@@ -1,21 +1,10 @@
 #!/usr/bin/env bash
 # Git の smudge フィルター (codex/config.toml): clean フィルター (clean-codex-config.sh) が Git から
-# 除くマシンごとの状態を、作業コピーへ書き出す内容に戻す。
-# - 出力ゲートを有効にしたマシンでは中継の行。Python が無ければ戻さない。
-# - clean が稼働中の設定から控えたプロジェクトと hook の信頼の表。
+# 除くマシンごとの状態のうち、稼働中の設定から控えたプロジェクトと hook の信頼の表を、
+# 作業コピーへ書き出す内容に戻す。
 set -o pipefail
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 store="${XDG_STATE_HOME:-$HOME/.local/state}/codex-config/trust.toml"
-
-gate_lines() {
-  for candidate in python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -I -c '' >/dev/null 2>&1; then
-      "$candidate" -I "$script_dir/output-gate-codex-config.py" smudge
-      return
-    fi
-  done
-  cat
-}
 
 # 表を追跡していた版から更新するマシンには、まだ控えが無い。更新前の HEAD は表を含むので、
 # そこから控えを作る (稼働中の設定のときだけ clean が控えを書く)。控えを書けなければ
@@ -41,7 +30,7 @@ drop_known_tables() {
   ' "$store" -
 }
 
-drop_known_tables | gate_lines || exit
+drop_known_tables || exit
 if [ -s "$store" ]; then
   printf '\n'
   cat "$store"

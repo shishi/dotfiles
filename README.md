@@ -4,5 +4,3 @@
 
 - [エージェントの設定](docs/agents.md)
 - [Herdr アプリの設定](docs/herdr-app.md)
-- [出力ゲート](docs/output-gate.md)
-- [出力検査の設計判断](docs/ADR/20261103-213806-output-gate-post-check.md)

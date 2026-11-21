@@ -68,10 +68,10 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
    REVIEW_EFFORT=high
    PERSPECTIVE=correctness
    STARTED_AT=$(date +%s)
-   # 委譲先の hook (kata-entry・kata-first と、有効なら出力ゲート) に、委譲された子のセッションだと知らせる目印。codex exec の行の許可 prefix を
+   # 委譲先の hook (kata-entry・kata-first) に、委譲された子のセッションだと知らせる目印。codex exec の行の許可 prefix を
    # 保つため別の行で設定する。export が codex exec に届くよう、このブロックは 1 回の Bash 呼び出しで実行する
    export AGENT_DELEGATED_SESSION=1
-   codex exec -s read-only -c 'openai_base_url=""' --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" 2> "$REVIEW_LOG" |
+   codex exec -s read-only --model "$REVIEW_MODEL" --config "model_reasoning_effort=$REVIEW_EFFORT" --config approval_policy=never --json -o "$REVIEW_OUTPUT" - < "$REVIEW_INPUT" 2> "$REVIEW_LOG" |
      tee "$REVIEW_EVENTS" | jq -Rrc --unbuffered 'fromjson? | select(.type == "item.completed") | .item | "\(.type) \(.command // .text // "" | tostring | .[0:80])"'
    # 各段の終了コードは bash では PIPESTATUS、zsh では pipestatus に入り、添字の始まりも違う。
    # 定義されている側だけを位置引数で受けると、どちらのシェルでも $1 が codex、$2 が tee になる。取れなければ失敗として扱う

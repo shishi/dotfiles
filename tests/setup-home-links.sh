@@ -40,12 +40,6 @@ cp "$REPO/agent-shared/bin/install-dotfiles-hooks.sh" "$DOTFILES/agent-shared/bi
 cp "$REPO/agent-shared/bin/check-dotfiles-portability.py" "$DOTFILES/agent-shared/bin/"
 cp "$REPO/agent-shared/git-hooks/pre-commit" "$DOTFILES/agent-shared/git-hooks/"
 git -C "$DOTFILES" init -q
-cat >"$DOTFILES/agent-shared/hooks/output-gate-codex.sh" <<'EOF'
-#!/usr/bin/env bash
-[ "$1" = enable ] && [ -z "${CODEX_HOME:-}" ] && [ -L "$HOME/.codex" ] && [ -L "$HOME/.agent-shared/bin" ] || exit 1
-mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/output-gate"
-printf '{"enabled": true, "port": 18765}\n' >"${XDG_STATE_HOME:-$HOME/.local/state}/output-gate/codex.json"
-EOF
 printf 'runtime\n' >"$HOME_DIR/.claude/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.codex/history.jsonl"
 printf 'runtime\n' >"$HOME_DIR/.agent-shared/skills/local.txt"
@@ -113,7 +107,6 @@ resolves_to() {
 }
 
 run_setup
-assert "first setup leaves the output gate disabled" test ! -e "$TMP/state/output-gate/codex.json"
 assert "setup installs the commit guard" test -x "$DOTFILES/.git/hooks/pre-commit"
 assert "Hunk config is linked" resolves_to "$CONFIG_DIR/hunk/config.toml" "$DOTFILES/hunk/config.toml"
 assert "Hunk runtime stays local" grep -qx '{"local":true}' "$CONFIG_DIR/hunk/state.json"
@@ -129,10 +122,7 @@ assert "Claude memory uses the canonical private repo" resolves_to "$DOTFILES/cl
 assert "Codex memory uses the canonical private repo" resolves_to "$DOTFILES/codex/memory" "$MEMORY_DIR"
 assert "setup synchronizes managed external skills" grep -q '^skill --help$' "$FAKE_GH_CALLS"
 
-mkdir -p "$TMP/state/output-gate"
-printf '{"enabled": false, "port": 18765}\n' >"$TMP/state/output-gate/codex.json"
 run_setup
-assert "rerun preserves a disabled output gate" grep -q '"enabled": false' "$TMP/state/output-gate/codex.json"
 assert "rerun keeps Hunk config linked" resolves_to "$CONFIG_DIR/hunk/config.toml" "$DOTFILES/hunk/config.toml"
 if [ ! -e "$HOME_DIR/.claude.back.1" ] && [ ! -e "$HOME_DIR/.codex.back.1" ]; then
   ok "rerun keeps correct links without extra backups"

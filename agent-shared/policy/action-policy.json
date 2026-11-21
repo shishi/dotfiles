@@ -44,7 +44,7 @@
     {
       "id": "ai-delegation",
       "section": "allow",
-      "text": "AI Delegation: Running `claude -p` or `codex exec` / `codex review` with their normal permission and sandbox settings to delegate work or request a review, sending the code, diffs, documents and verification results that task needs from the session's repository or one the user named. The user pre-authorized this. It does not cover flags that disable the delegated agent's sandbox or approvals, credentials, unrelated private data, or a changed endpoint (base URL, provider or proxy overrides); resetting the endpoint to the official default, as `-c 'openai_base_url=\"\"'` does, is not a change. The delegated prompt is still judged: asking the delegate to do a blocked action is blocked."
+      "text": "AI Delegation: Running `claude -p` or `codex exec` / `codex review` with their normal permission and sandbox settings to delegate work or request a review, sending the code, diffs, documents and verification results that task needs from the session's repository or one the user named. The user pre-authorized this. It does not cover flags that disable the delegated agent's sandbox or approvals, credentials, unrelated private data, or a changed endpoint (base URL, provider or proxy overrides). The delegated prompt is still judged: asking the delegate to do a blocked action is blocked."
     },
     {
       "id": "standing-approval",

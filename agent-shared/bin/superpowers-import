@@ -53,7 +53,7 @@ EOF
 cd "$work/repo" || fail "clone へ移れない"
 # 起動元の CLI の変数を引き継ぐと、取り込みの中で Claude のレビューが入れ子の起動として拒まれる。
 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID AGENT_DELEGATED_SESSION= SUPERPOWERS_IMPORT_RUNNING=1 \
-  "$codex" exec -c 'openai_base_url=""' -s workspace-write --json \
+  "$codex" exec -s workspace-write --json \
   -o "$work/report.md" - < "$work/prompt.md" > "$work/codex.jsonl" 2>> "$work/codex.log" ||
   fail "codex exec が失敗した (終了コード $?)"
 [ -s "$work/report.md" ] || fail "Codex の最後の報告が無い"

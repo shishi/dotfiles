@@ -12,13 +12,8 @@ cat >"$TMP/input.toml" <<'EOF'
 model = "gpt-5.6-sol"
 
 notify = ["/Applications/ChatGPT.app/notify", "turn-ended"]
-openai_base_url = "http://127.0.0.1:18800/backend-api/codex"
 
 [features]
-token_budget = false
-context_management = false
-output_token_replay = false
-enable_request_compression = false
 hooks = true
 
 [tui]
@@ -112,23 +107,10 @@ cmp "$TMP/updated-expected.toml" "$TMP/staged.toml"
 cmp "$TMP/updated.toml" "$TMP/repo/codex/config.toml"
 echo "ok: git add excludes counters, stages settings, and preserves local state"
 
-# checkout が作業コピーを書き直しても、出力ゲートを有効にしたマシンでは中継の行が戻る。
 SMUDGER="$REPO/agent-shared/bin/smudge-codex-config.sh"
 git -C "$TMP/repo" config filter.codex-config.smudge "bash '$SMUDGER'"
 git -C "$TMP/repo" -c user.name=t -c user.email=t@example.invalid commit -q -m config
 export XDG_STATE_HOME="$TMP/state"
-mkdir -p "$XDG_STATE_HOME/output-gate"
-printf '{"enabled": true, "port": 18800}\n' >"$XDG_STATE_HOME/output-gate/codex.json"
-rm "$TMP/repo/codex/config.toml"
-git -C "$TMP/repo" checkout -- codex/config.toml
-grep -q '^openai_base_url = "http://127.0.0.1:18800/backend-api/codex"' "$TMP/repo/codex/config.toml"
-grep -q '^enable_request_compression = false' "$TMP/repo/codex/config.toml"
-[ -z "$(git -C "$TMP/repo" status --porcelain codex/config.toml)" ]
-printf '{"enabled": false, "port": 18800}\n' >"$XDG_STATE_HOME/output-gate/codex.json"
-rm "$TMP/repo/codex/config.toml"
-git -C "$TMP/repo" checkout -- codex/config.toml
-cmp "$TMP/updated-expected.toml" "$TMP/repo/codex/config.toml"
-echo "ok: checkout restores the relay lines only where the output gate is enabled"
 
 # パスを鍵にする表 (プロジェクトと hook の信頼) はマシンごとの状態なので Git に入れない。
 # 稼働中の設定 (CODEX_HOME の config.toml) の表はマシンに控え、checkout で書き直しても戻す。
@@ -190,7 +172,7 @@ done
 { cat "$TMP/updated-expected.toml"; echo; cat "$TMP/trust.toml"; } >"$TMP/up/codex/config.toml"
 git -C "$TMP/up" -c filter.codex-config.clean=cat add -A
 git -C "$TMP/up" -c user.name=t -c user.email=t@example.invalid commit -q -m old
-cp "$REPO/agent-shared/bin/clean-codex-config.sh" "$REPO/agent-shared/bin/smudge-codex-config.sh" "$REPO/agent-shared/bin/output-gate-codex-config.py" "$TMP/up/agent-shared/bin/"
+cp "$REPO/agent-shared/bin/clean-codex-config.sh" "$REPO/agent-shared/bin/smudge-codex-config.sh" "$TMP/up/agent-shared/bin/"
 cp "$TMP/updated-expected.toml" "$TMP/up/codex/config.toml"
 git -C "$TMP/up" -c filter.codex-config.clean=cat add -A
 git -C "$TMP/up" -c user.name=t -c user.email=t@example.invalid commit -q -m new
