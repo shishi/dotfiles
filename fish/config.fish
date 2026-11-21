@@ -433,7 +433,8 @@ end
 # Herdr Core does not mark its terminals the way Herdr 1 marked every pane
 # (herdrdev/herdr-core#84). Without the mark, Codex can report a copy that
 # reached only this machine's clipboard, so a Herdr App on another machine
-# receives nothing.
+# receives nothing. setup.sh marks the core itself on Linux; this covers a core
+# that started without that, as on macOS.
 if set -q HC_TERMINAL_ID; and not set -q HERDR_ENV
     set -gx HERDR_ENV 1
 end

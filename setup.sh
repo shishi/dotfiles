@@ -128,6 +128,16 @@ esac
 mkdir -p "$herdr_config_root/herdr-core"
 ln -sfn "$DOTDIR/herdr-core/config.$herdr_config_os.toml" "$herdr_config_root/herdr-core/config.toml"
 
+# On Linux the core runs as a transient user unit named hc-serve-<id>; systemd
+# applies a drop-in for that name prefix to each of them.
+if [ "$(uname -s)" = Linux ] && command -v systemctl >/dev/null 2>&1; then
+  herdr_serve_dropin="$XDG_CONFIG_HOME/systemd/user/hc-serve-.service.d"
+  mkdir -p "$herdr_serve_dropin"
+  ln -sfn "$DOTDIR/herdr-core/hc-serve.herdr-env.conf" "$herdr_serve_dropin/herdr-env.conf"
+  systemctl --user daemon-reload ||
+    echo "setup.sh: systemd user manager not reloaded; the Herdr Core drop-in applies after the next login"
+fi
+
 # Herdr app keeps its own state in the same folder, so link only the keymap.
 # Each OS starts from the app's own defaults (Cmd-based on macOS); the Ctrl+;
 # chords for panes, tabs, spaces and agents are the same on every OS.
