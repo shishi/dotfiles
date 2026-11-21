@@ -38,7 +38,7 @@ class SkillSourceTest(unittest.TestCase):
 
     def resolve(self, path, **environment):
         return subprocess.run(
-            [sys.executable, str(SCRIPT), str(path)],
+            [sys.executable, str(SCRIPT), str(path)], cwd=self.root,
             env={**os.environ, **environment, "AGENT_SKILL_OVERRIDES_DIR": str(self.state)},
             capture_output=True, text=True,
         )
@@ -101,6 +101,28 @@ class SkillSourceTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('disabled', result.stderr)
         self.assertEqual(result.stdout, '')
+
+    def test_codex_plugin_enabled_by_a_profile_resolves(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = false\n')
+        (agent_home / 'work.config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = true\n')
+        result = self.resolve(self.upstream / 'SKILL.md')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["path"], str(self.upstream / 'SKILL.md'))
+
+    def test_codex_plugin_enabled_by_the_project_resolves(self):
+        agent_home = self.cached_skill('codex')
+        (agent_home / 'config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = false\n')
+        project = self.root / 'project'
+        (project / '.codex').mkdir(parents=True)
+        (project / 'nested').mkdir()
+        (project / '.codex/config.toml').write_text('[plugins."example-plugin@example-market"]\nenabled = true\n')
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), str(self.upstream / 'SKILL.md')], cwd=project / 'nested',
+            env={**os.environ, "AGENT_SKILL_OVERRIDES_DIR": str(self.state)}, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["path"], str(self.upstream / 'SKILL.md'))
 
     def test_disabled_claude_plugin_cannot_resolve_without_a_registry(self):
         agent_home = self.cached_skill('claude')

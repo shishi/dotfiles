@@ -127,7 +127,7 @@ skill が選ばれるかはモデルが description に気づくかに左右さ�
 
 ### superpowers の取り込み
 
-工程 skill は [superpowers](https://github.com/obra/superpowers) (MIT License) の手順を取り込んだものです。plugin は両 CLI で無効にしています (アンインストールはしていません)。有効にすると、上流と自前の同じ手順を二重に読むためです。著作権表示は `claude/skills/superpowers.LICENSE` にあります。
+工程 skill は [superpowers](https://github.com/obra/superpowers) (MIT License) の手順を取り込んだものです。plugin は両 CLI の設定で無効にしています (アンインストールはしていません)。有効にすると、上流と自前の同じ手順を二重に読むためです。ただし Codex は、アカウントに導入された plugin について、この無効化を反映しません。そのため Codex では、`codex/config.toml` の `[[skills.config]]` で superpowers の skill を一つずつ一覧から外しています。著作権表示は `claude/skills/superpowers.LICENSE` にあります。
 
 | 上流の skill | 取り込み先 |
 |---|---|

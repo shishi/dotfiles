@@ -1,0 +1,3 @@
+# `codex -p g-dev-gokigen-super-express` で起動したセッションだけ、この plugin を有効にする。
+[plugins."g-dev-gokigen-super-express@studist-agent-marketplace"]
+enabled = true

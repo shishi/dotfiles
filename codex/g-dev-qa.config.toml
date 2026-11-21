@@ -1,0 +1,3 @@
+# `codex -p g-dev-qa` で起動したセッションだけ、この plugin を有効にする。
+[plugins."g-dev-qa@studist-agent-marketplace"]
+enabled = true

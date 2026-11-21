@@ -29,6 +29,19 @@ def fingerprints(root):
     return result
 
 
+def codex_plugin_enabled(config_file, identity):
+    config = tomllib.loads(config_file.read_text(encoding='utf-8'))
+    return config.get('plugins', {}).get(identity, {}).get('enabled')
+
+
+def codex_plugin_enabled_elsewhere(home, identity):
+    # Codex は利用者の設定に、起動時に選んだ profile と、作業中の repo の設定を重ねる。どの profile を選んだかは
+    # ここから分からないため、profile か repo の設定が有効にしている plugin は、利用者が止めた plugin と扱わない。
+    folders = (Path.cwd(), *Path.cwd().parents)
+    layers = (*home.glob('*.config.toml'), *(folder / '.codex/config.toml' for folder in folders))
+    return any(layer.is_file() and codex_plugin_enabled(layer, identity) is True for layer in layers)
+
+
 def check_plugin_enabled(source):
     for cache in source.parents:
         if cache.name != 'cache' or cache.parent.name != 'plugins':
@@ -42,8 +55,9 @@ def check_plugin_enabled(source):
         codex_config = home / 'config.toml'
         claude_settings = home / 'settings.json'
         if codex_config.is_file():
-            config = tomllib.loads(codex_config.read_text(encoding='utf-8'))
-            enabled = config.get('plugins', {}).get(identity, {}).get('enabled')
+            enabled = codex_plugin_enabled(codex_config, identity)
+            if enabled is False and codex_plugin_enabled_elsewhere(home, identity):
+                enabled = True
         elif claude_settings.is_file():
             config = json.loads(claude_settings.read_text(encoding='utf-8'))
             enabled = config.get('enabledPlugins', {}).get(identity)

@@ -1,0 +1,3 @@
+# `codex -p teachme-biz` で起動したセッションだけ、この plugin を有効にする。
+[plugins."teachme-biz@studist-agent-marketplace"]
+enabled = true

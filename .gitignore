@@ -24,6 +24,11 @@
 /codex/*
 !/codex/AGENTS.md
 !/codex/config.toml
+!/codex/teachme-biz.config.toml
+!/codex/g-dev.config.toml
+!/codex/g-dev-design.config.toml
+!/codex/g-dev-gokigen-super-express.config.toml
+!/codex/g-dev-qa.config.toml
 !/codex/auto-review-template.LICENSE
 !/codex/hooks.json
 !/codex/agents/

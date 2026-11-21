@@ -1,9 +1,9 @@
 personality = "friendly"
 # model は書かない。版を固定すると新しい世代が出ても古いモデルを使い続けるため、CLI の既定 (最新の推奨モデル) に任せる。
 model_reasoning_effort = "high"
-# Codex は skill 一覧の上限を context window の 2% で決め、超えると説明文を後ろから切る。各モデルの既定の窓
-# では「いつ使うか」の条件が切れて skill を選べなくなるため、モデル一覧の max_context_window まで広げる。
-# [skills].max_context_tokens は 10000 で頭打ちになり、全文が収まらない。
+# Codex は skill 一覧の上限をコンテキストウィンドウの 2% で決め、超えると説明文を後ろから切る。各モデルの既定の
+# コンテキストウィンドウでは「いつ使うか」の条件が切れて skill を選べなくなるため、モデル一覧の max_context_window まで広げる。
+# [skills].max_context_tokens は 10000 で頭打ちになり、アカウントに導入された plugin の分を含む全文が収まらない。
 model_context_window = 872000
 model_auto_compact_token_limit = 750000
 project_doc_max_bytes = 65536
@@ -252,20 +252,86 @@ enabled = true
 [plugins."code-review@openai-bundled"]
 enabled = true
 
+# 会社の plugin は全体では無効にする。全部を有効にすると、アカウントに導入された plugin の分と合わせて skill 一覧が
+# 上限を超え、自前の skill の説明文が切れる。使う repo は、Codex で信頼した repo の .codex/config.toml で有効にする。
+# ほかの場所で使うときは、`codex -p g-dev` のように、同じ名前の profile (<plugin 名>.config.toml) を指定して起動する。
+# 項目は消さない。消すと、起動時の自動更新がその plugin のキャッシュを入れ替えなくなる。
 [plugins."teachme-biz@studist-agent-marketplace"]
-enabled = true
+enabled = false
 
 [plugins."g-dev@studist-agent-marketplace"]
-enabled = true
+enabled = false
 
 [plugins."g-dev-design@studist-agent-marketplace"]
-enabled = true
+enabled = false
 
 [plugins."g-dev-gokigen-super-express@studist-agent-marketplace"]
-enabled = true
+enabled = false
 
 [plugins."g-dev-qa@studist-agent-marketplace"]
-enabled = true
+enabled = false
+
+# superpowers の skill は一覧に出さない。自前の工程 skill に取り込み済みで、アカウントに導入された plugin には
+# 上の `[plugins."superpowers@…"] enabled = false` が反映されないため、skill ごとに外す。
+[[skills.config]]
+name = "superpowers:brainstorming"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:diagnosing-superpowers"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:dispatching-parallel-agents"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:executing-plans"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:finishing-a-development-branch"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:receiving-code-review"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:requesting-code-review"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:subagent-driven-development"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:systematic-debugging"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:test-driven-development"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:using-git-worktrees"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:using-superpowers"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:verification-before-completion"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:writing-plans"
+enabled = false
+
+[[skills.config]]
+name = "superpowers:writing-skills"
+enabled = false
 
 [hooks.state]
 
