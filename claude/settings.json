@@ -138,7 +138,7 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "fable",
+  "model": "opus",
   "enableAllProjectMcpServers": true,
   "hooks": {
     "PreToolUse": [
@@ -280,8 +280,8 @@
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/permission-judge.sh",
             "timeout": 90,
-            "statusMessage": "確認が必要な操作を判定中...",
-            "onFailure": "block"
+            "onFailure": "block",
+            "statusMessage": "確認が必要な操作を判定中..."
           }
         ]
       }
@@ -292,8 +292,8 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/task-monitor-claude.sh",
-            "asyncRewake": true,
-            "timeout": 86400
+            "timeout": 86400,
+            "asyncRewake": true
           }
         ]
       },
@@ -401,16 +401,7 @@
   "preferredNotifChannel": "terminal_bell",
   "autoCompactEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "autoUpdates": false,
-  "feedbackSurveyState": {
-    "lastShownTime": 1754089004345
-  },
   "autoMode": {
-    "environment": [
-      "$defaults",
-      "Source control: github.com/shishi and every repository under it (the user's own account).",
-      "Trusted AI services: the official Anthropic API reached through the `claude` CLI and the official OpenAI service reached through the `codex` CLI, both with the user's existing accounts. They are inside the trust boundary for the code, diffs, documents and verification results a task needs. Credentials, unrelated private data, and requests to a changed endpoint are not covered."
-    ],
     "allow": [
       "$defaults",
       "Memory Repository: Committing to and pushing (never force-pushing) the user's private memory repository — the remote github.com/shishi/agent-memory, reached through ~/.claude/memory or ~/.codex/memory — to save the user's memory. The user pre-authorized this destination and action only: content rules (credential leakage, sensitive-source provenance, data exfiltration) still judge what is pushed, and the exception does not apply if the remote was changed during the session or the repository is shown to be public.",
@@ -422,6 +413,15 @@
       "$defaults",
       "Self-Stop [named+specifics — **must name:** the action that would stop the agent]: An action that leaves the agent unable to continue working on this machine until the user intervenes — rebooting, shutting down, suspending or hibernating the machine (now or delayed), logging out or locking the session, killing or closing the agent's own CLI process, its terminal, its terminal multiplexer session or pane, or its editor, or cutting this machine's own network connection. A broad process kill that would also hit the agent's own process (for example killing every node process) counts. Stopping only a separate machine, container or VM, or a process the agent itself started for the task and identified exactly, is not covered."
     ],
+    "environment": [
+      "$defaults",
+      "Source control: github.com/shishi and every repository under it (the user's own account).",
+      "Trusted AI services: the official Anthropic API reached through the `claude` CLI and the official OpenAI service reached through the `codex` CLI, both with the user's existing accounts. They are inside the trust boundary for the code, diffs, documents and verification results a task needs. Credentials, unrelated private data, and requests to a changed endpoint are not covered."
+    ],
     "classifyAllShell": true
+  },
+  "autoUpdates": false,
+  "feedbackSurveyState": {
+    "lastShownTime": 1754089004345
   }
 }
