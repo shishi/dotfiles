@@ -142,7 +142,7 @@ skill が選ばれるかはモデルが description に気づくかに左右さ�
 | finishing-a-development-branch | kata-finish |
 | using-superpowers | kata・`kata-entry.sh` |
 | dispatching-parallel-agents | agent-delegation |
-| writing-skills | create-rule・empirical-prompt-tuning |
+| writing-skills | create-rule・improving-skills・empirical-prompt-tuning |
 | diagnosing-superpowers | 取り込まない (superpowers 自体の不具合を報告するための skill) |
 
 brainstorming のうち、ブラウザで図を見せる visual companion は取り込まず、kata-design ではテキストの図を使います。

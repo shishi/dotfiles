@@ -50,4 +50,4 @@
 
 ## skill 作成
 
-- skill・指示文の作成と改訂は [create-rule](../../create-rule/SKILL.md) の配置・検証手順で行います。実行者の判断・手順・出力を変える改訂では、[empirical-prompt-tuning](../../empirical-prompt-tuning/SKILL.md) の実行・修正・再評価を使います。利用環境に `skill-creator` などの作成支援 skill が付属する場合は、その配布版の適用範囲・形式にも従います。全変更への固定回数の実験、先行して書いた文書の機械的削除、自動 push は要求しません。
+- skill・指示文の作成と改訂では、置き場と検証を [create-rule](../../create-rule/SKILL.md)、既存の skill の本文の編集を [improving-skills](../../improving-skills/SKILL.md) の手順で行います。実行者の判断・手順・出力を変える改訂では、[empirical-prompt-tuning](../../empirical-prompt-tuning/SKILL.md) の実行・修正・再評価を使います。利用環境に `skill-creator` などの作成支援 skill が付属する場合は、その配布版の適用範囲・形式にも従います。全変更への固定回数の実験、先行して書いた文書の機械的削除、自動 push は要求しません。
