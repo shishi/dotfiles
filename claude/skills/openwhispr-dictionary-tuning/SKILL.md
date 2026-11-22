@@ -5,7 +5,7 @@ description: OpenWhispr の音声入力で繰り返す聞き間違いを、文�
 
 # OpenWhispr の聞き間違いを直す
 
-OpenWhispr の文字起こし履歴から繰り返す聞き間違いを拾い、利用者が承認した組だけを登録します。登録の前と後に、本番と同じ条件で整形の結果を測って比べます。対象は Windows の OpenWhispr 1.11 系で、整形にローカル LLM を使う構成です。版が違う場合は、下の「アプリの仕様で知っておくこと」をその版のソースで確かめ直します。
+OpenWhispr の文字起こし履歴から繰り返す聞き間違いを拾い、利用者が承認した組だけを登録します。登録の前と後に、本番と同じ条件で整形の結果を測って比べます。対象は Windows の OpenWhispr 1.11 系で、整形に LLM を使う構成です。版が違う場合は、下の「アプリの仕様で知っておくこと」をその版のソースで確かめ直します。
 
 コマンドは Git Bash で、この skill のディレクトリを作業場所として実行する前提で書いています。スクリプトは Node.js 22 以降 (組み込みの `WebSocket` を使う) と Python 3 で動きます。
 
@@ -65,7 +65,7 @@ node scripts/ow-cleanup-check.mjs inputs.json pairs.tsv --save before.json
 | 普通の語どうしの取り違え (どちらの表記も文として成り立つ) | 登録しない | 登録しない |
 
 - 辞書: ストアの `updateCustomDictionary({add: [...], remove: [...]})` で変更し、`window.electronAPI.getDictionary()` で結果を確かめます。`window.electronAPI.applyDictionaryChanges` はデータベースだけを書き換え、再起動するまで整形と Whisper のヒントに反映されません。
-- 整形の指示: [整形の指示のひな形](references/cleanup-prompt.md) の表に組を足し、ストアの `setCustomPrompt("cleanup", 指示)` で設定します。整形を使うには `setUseCleanupModel(true)` で有効にし、整形のモデルをローカルのものにします。
+- 整形の指示: [整形の指示のひな形](references/cleanup-prompt.md) の表に組を足し、ストアの `setCustomPrompt("cleanup", 指示)` で設定します。整形が無効なら `setUseCleanupModel(true)` で有効にします。整形の接続先 (アプリが動かすローカルのモデルか、自前のサーバーか) とモデルは、利用者の今の設定のまま変えません。登録前と登録後の測定も、この設定で行います。
 - 口調を貼り付け先に合わせる設定 (`toneStyleEnabled`) は無効にします (`setToneStyleEnabled(false)`)。有効だと「話し手の言い回しを保つ指示より口調を優先する」文が整形の指示に足され、句読点・用語以外の文字も変わります。
 - 置換 (ストアの `setSnippets([...{trigger, replacement}])`) は聞き間違いの直しには使いません。理由は「アプリの仕様で知っておくこと」にあります。置換は、住所やメールアドレスのような、その語だけを単独で言う定型を入れるためのものです。
 

@@ -48,7 +48,16 @@ hash 等で途中終了すると、後続が実行されず終了値が成功に
 
 ## 更新後
 
-`scoop status`、導入済み version、`current` の実リンク先、実行ファイルの版を照合します。
+各アプリの結果は、導入後と同じく `scoop list <app>`、`current` の実リンク先、実行ファイルの版で照合します。
+既存の wrapper で更新した場合は、その wrapper の成否の判定 (実行前後の `scoop status` の比較など) に従います。
+更新が残っていないかは、本体と bucket を同期した後の手元の manifest で判定します。`scoop status` は
+アプリの版を手元の manifest と比べるので、bucket が古いとリモートにだけある新版が一覧に出ません。
+`scoop update` は bucket ごとの `git pull` の失敗を終了結果に反映しないので、成功の表示だけでは
+対象アプリの bucket が同期できたとは判断しません。対象の bucket のディレクトリ (既定は
+`~/scoop/buckets/<bucket>`) で `git fetch` を実行し、その終了コードが 0 のときだけ `git status -sb` で
+リモートより遅れていないことを確かめ、`scoop status -l` で一覧を取ります。`git fetch` が失敗した bucket は
+追跡先が古いままで遅れが表示されないので、遅れていた bucket と同じく同期をやり直し、
+成功を確かめるまで「残る更新なし」と判定しません。
 更新が残っている理由を、実行中 skip、hash/展開失敗、未実行、scope 間違いに分けます。
 `current` と実 version path の違いが二重起動やショートカットへ影響する場合は、起動元の
 登録と command line を調べます。OS 全アプリの自動再起動を一律に無効化しません。
