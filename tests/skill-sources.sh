@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# skill の由来の台帳 (agent-shared/skill-sources.tsv) が、実際の skill と管理の仕組みに合っている契約を検証する。
-# 台帳に無い skill や、種類と Git 管理が食い違う skill があると、編集してよいファイルを取り違える。
+# skill の由来の一覧 (agent-shared/skill-sources.tsv) が、実際の skill と管理の仕組みに合っていることを確かめる。
+# 由来の一覧に無い skill や、種類と Git 管理が食い違う skill があると、編集してよいファイルを取り違える。
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -30,7 +30,7 @@ licensed() { # $1=出所の URL: 著作権表示のファイルが Source 行に
     grep -oE 'https?://[^ ,)]+' | grep -qxF -- "$1"
 }
 
-# 台帳の各行は、種類に応じた Git 管理と管理の仕組みに合っている。
+# 一覧の各行は、種類に応じた Git 管理と管理の仕組みに合っている。
 seen=
 while IFS="$TAB" read -r name kind source extra; do
   if [ -z "$name" ] || [ -z "$kind" ] || [ -z "$source" ] || [ -n "$extra" ]; then
@@ -93,7 +93,7 @@ while IFS="$TAB" read -r name kind source extra; do
   ok
 done < <(rows "$LEDGER")
 
-# Git が追跡する skill と、作業ツリーにある skill は、すべて台帳に載っている。
+# Git が追跡する skill と、作業ツリーにある skill は、すべて由来の一覧に載っている。
 # ツール自身が置く symlink は、この repo が管理する skill ではないので数えない。
 names=$(
   {
@@ -115,7 +115,7 @@ for overlay in "$OVERLAYS"/*.md; do
   if [ "$(kind_of "$name")" = generated ]; then ok; else ng "$name (has an overlay, but is not generated in skill-sources.tsv)"; fi
 done
 
-# managed-skills.sh が取得する skill は、台帳でも managed になっている。
+# managed-skills.sh が取得する skill は、由来の一覧でも managed になっている。
 while IFS="$TAB" read -r name _; do
   [ -n "$name" ] || continue
   if [ "$(kind_of "$name")" = managed ]; then ok; else ng "$name (in managed-skills.tsv, but not managed in skill-sources.tsv)"; fi

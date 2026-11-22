@@ -17,7 +17,7 @@ bash setup.sh
 | 実行前ガードとイベント処理 | `agent-shared/hooks/` |
 | 操作の判定ルールの元ファイルと生成 | `agent-shared/policy/action-policy.json`、`agent-shared/bin/apply-action-policy` |
 | 作業別の手順 | `claude/skills/`、`codex/skills/` |
-| skill の由来の台帳 | `agent-shared/skill-sources.tsv` |
+| skill の由来の一覧 | `agent-shared/skill-sources.tsv` |
 | モデル間の委譲 | [codex-delegate](../claude/skills/codex-delegate/SKILL.md)、[claude-delegate](../codex/skills/claude-delegate/SKILL.md) |
 | 独立レビュー | [review-gate](../codex/skills/review-gate/SKILL.md)、[codex-review](../claude/skills/codex-review/SKILL.md)、[claude-review](../codex/skills/claude-review/SKILL.md) |
 
@@ -53,19 +53,19 @@ Hunk の手順も、固定した配布先への symlink ではなく、実行版
 
 ## skill の由来と編集先
 
-skill には、この repo で書いたものと、外部の成果物に由来するものがあります。由来によって、直してよいファイルと上流の更新の取り込み方が違います。取り違えると、同期や生成で変更が消えたり、自前の変更を上流の本文で置き換えたりします。各 skill の種類と出所は台帳 `agent-shared/skill-sources.tsv` にまとめ、`tests/skill-sources.sh` で実物と照合します。skill を追加・編集・更新する前に、台帳で種類を確かめます。
+skill には、この repo で書いたものと、外部の成果物に由来するものがあります。由来によって、直してよいファイルと上流の更新の取り込み方が違います。取り違えると、同期や生成で変更が消えたり、自前の変更を上流の本文で置き換えたりします。各 skill の種類と出所は由来の一覧 `agent-shared/skill-sources.tsv` にまとめ、`tests/skill-sources.sh` で実物と照合します。skill を追加・編集・更新する前に、由来の一覧で種類を確かめます。
 
 | 種類 | 内容 | 編集先 | 上流の更新 |
 |---|---|---|---|
 | own | この repo で書いた skill | `claude/skills/`・`codex/skills/` の本文 | 無し |
 | adapted | 外部の本文を取り込んで書き直し、Git で管理する skill | 同上 | 上流のファイルで置き換えず、上流の差分を読んで必要な内容を移す。superpowers は[下の手順](#superpowers-の取り込み)に従う |
-| managed | `managed-skills.sh` が取得し、Git で管理しない skill | 直接編集しない。変更するときは `fork NAME` で導入先をすべて Git 管理へ移し、台帳の種類を adapted にする。両側に導入した skill の片側だけを fork すると、両側を同じ内容に保つ規約を満たさないので、片側だけの fork は使わない | `managed-skills.sh sync` |
+| managed | `managed-skills.sh` が取得し、Git で管理しない skill | 直接編集しない。変更するときは `fork NAME` で導入先をすべて Git 管理へ移し、由来の一覧で種類を adapted にする。両側に導入した skill の片側だけを fork すると、両側を同じ内容に保つ規約を満たさないので、片側だけの fork は使わない | `managed-skills.sh sync` |
 | generated | 端末の CLI が出力する手引きから生成し、Git で管理しない skill | `agent-shared/skill-overlays/<skill 名>.md`。生成した SKILL.md は直接編集しない | `herdr-skills.sh sync` |
 | entry | 本文を実行時に CLI から取得する、この repo で書いた入口 | 入口の SKILL.md | CLI の更新で反映される |
 
-外部に由来する skill の出所と著作権表示は `claude/skills/*.LICENSE` にあります。plugin が配布する skill と Codex の system skill はこの台帳の対象外で、修正は [skill-source-overrides](../codex/skills/skill-source-overrides/SKILL.md) の手順で配布物とは別の場所に修正版を置きます。
+外部に由来する skill の出所と著作権表示は `claude/skills/*.LICENSE` にあります。plugin が配布する skill と Codex の system skill はこの由来の一覧の対象外で、修正は [skill-source-overrides](../codex/skills/skill-source-overrides/SKILL.md) の手順で配布物とは別の場所に修正版を置きます。
 
-外部の skill をそのまま導入するときは、次の節の `managed-skills.sh add` を使います。`npx skills add` や `gh skill install` を直接実行しません。`setup.sh` が作る `~/.claude/skills` と `~/.agents/skills` はこの repo の `claude/skills` と `codex/skills` を指すため、これらのコマンドが利用者全体へ導入すると、同じ名前の skill をこの repo の中で置き換えます。CLI が同名の skill の導入を案内していても (Hunk の `hunk-review` など)、この repo の入口を使います。skill を新設・fork・廃止したら、同じ変更で台帳も直します。
+外部の skill をそのまま導入するときは、次の節の `managed-skills.sh add` を使います。`npx skills add` や `gh skill install` を直接実行しません。`setup.sh` が作る `~/.claude/skills` と `~/.agents/skills` はこの repo の `claude/skills` と `codex/skills` を指すため、これらのコマンドが利用者全体へ導入すると、同じ名前の skill をこの repo の中で置き換えます。CLI が同名の skill の導入を案内していても (Hunk の `hunk-review` など)、この repo の入口を使います。skill を新設・fork・廃止したら、同じ変更で由来の一覧も直します。
 
 ## 外部 skill
 

@@ -1,4 +1,4 @@
-# skill の由来の台帳。列はタブ区切りで、名前・種類・出所 (無ければ -)。
+# skill の由来の一覧。列はタブ区切りで、名前・種類・出所 (無ければ -)。
 # 種類ごとの編集先と更新の手順は docs/agents.md の「skill の由来と編集先」にある。tests/skill-sources.sh で実物と照合する。
 #   own        この repo で書いた skill
 #   adapted    外部の本文を取り込んで書き直し、Git で管理する skill

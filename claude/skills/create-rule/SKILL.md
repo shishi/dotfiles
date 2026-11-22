@@ -113,7 +113,7 @@ description: エージェントの判断・操作・応答などの挙動につ�
 - 既存の同じ規則を置換・統合し、同じ詳細を記憶や複数の配置に複製しません。
   共通指示との矛盾があれば、現在のユーザー指示と上位の権限制約に合わせて解消します。
   vendor cache は変更せず、自前で管理する編集先と有効な配布先を更新します。
-- 既存の skill の編集・分割・統合は [improving-skills](../improving-skills/SKILL.md) で行います。skill を新設・fork・廃止するときは、由来の台帳 `agent-shared/skill-sources.tsv` と `docs/agents.md` の「skill の由来と編集先」に従い、同じ変更で台帳も直します。外部の skill の導入・更新と、plugin・system skill の本文は `skill-source-overrides` に従います。
+- 既存の skill の編集・分割・統合は [improving-skills](../improving-skills/SKILL.md) で行います。skill を新設・fork・廃止するときは、由来の一覧 `agent-shared/skill-sources.tsv` と `docs/agents.md` の「skill の由来と編集先」に従い、同じ変更で由来の一覧も直します。外部の skill の導入・更新と、plugin・system skill の本文は `skill-source-overrides` に従います。
 - 採用した配置の通常の読込・呼出経路で、規則が必要な時点に使われることを確認します。
   両エージェントの登録と実際の参照先、既存 hook の契約、関連する既存テストも確認します。
   新しい hook の登録や定義変更で trust の更新が必要なら、通常の承認経路で扱います。

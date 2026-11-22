@@ -43,6 +43,6 @@ python3 "$HOME/.agent-shared/bin/resolve-skill-source.py" "$PACKAGE_ROOT" --prep
 
 `setup.sh` で配備した環境では、利用者全体の skill の置き場 (`~/.claude/skills` と `~/.agents/skills`) が dotfiles の `claude/skills` と `codex/skills` を指します。`npx skills add`・`npx skills update`・`gh skill install` などを直接実行すると、同じ名前の自作の skill や取り込み済みの skill を置き換えます。CLI や README がこれらのコマンドを案内していても実行しません。
 
-1. dotfiles の由来の台帳 `agent-shared/skill-sources.tsv` (配備先からは `~/.agent-shared/bin/../skill-sources.tsv` で開けます) で、同じ名前の skill の有無と種類を確かめます。
-2. 台帳にある skill は、dotfiles の `docs/agents.md` の「skill の由来と編集先」が種類ごとに示す方法で更新します。上流のファイルで置き換えません。
-3. 台帳に無い外部の skill をそのまま導入するときは、`bash ~/.agent-shared/bin/managed-skills.sh add OWNER/REPO SKILL` を使い、同じ変更で台帳へ行を足します。
+1. dotfiles の由来の一覧 `agent-shared/skill-sources.tsv` (配備先からは `~/.agent-shared/bin/../skill-sources.tsv` で開けます) で、同じ名前の skill の有無と種類を確かめます。
+2. 由来の一覧にある skill は、dotfiles の `docs/agents.md` の「skill の由来と編集先」が種類ごとに示す方法で更新します。上流のファイルで置き換えません。
+3. 由来の一覧に無い外部の skill をそのまま導入するときは、`bash ~/.agent-shared/bin/managed-skills.sh add OWNER/REPO SKILL` を使い、同じ変更で由来の一覧へ行を足します。

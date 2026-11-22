@@ -9,7 +9,7 @@ skill への変更は、足したい文をどこに書くかではなく、変�
 
 ## 1. 対象と周辺を読む
 
-1. 実際に使われている版を特定します。skill を管理する repo の規約で、対象の由来と編集先を確かめます。この dotfiles では、台帳 `agent-shared/skill-sources.tsv` と `docs/agents.md` の「skill の由来と編集先」に従います。plugin・system skill を直すときと、外部の skill を導入・更新するときは、[skill-source-overrides](../skill-source-overrides/SKILL.md) で修復版の有無と使う版を先に決めます。
+1. 実際に使われている版を特定します。skill を管理する repo の規約で、対象の由来と編集先を確かめます。この dotfiles では、由来の一覧 `agent-shared/skill-sources.tsv` と `docs/agents.md` の「skill の由来と編集先」に従います。plugin・system skill を直すときと、外部の skill を導入・更新するときは、[skill-source-overrides](../skill-source-overrides/SKILL.md) で修復版の有無と使う版を先に決めます。
 2. その版の description と、SKILL.md・references/ の全文を読みます。一部の節だけを読んで直しません。
 3. 対象の名前で検索し、対象を参照する skill・共通指示と、対象が参照する skill を読みます。重複と矛盾は skill の外にも及ぶためです。
 4. 変更の動機 (依頼、指摘、観測された失敗) を確かめます。エージェントの挙動への指摘が動機なら、[create-rule](../create-rule/SKILL.md) の手順で前提と適用されなかった経路を先に調べます。この skill は本文を直す段階で使います。
@@ -45,7 +45,7 @@ skill への変更は、足したい文をどこに書くかではなく、変�
 
 1. 要件の一覧の各要件について、変更後の扱いを確かめます。維持・移動・統合した要件は、反映先と適用条件が本文にあることを確かめます。消した要件 (矛盾の解消で消した側など) は、消した根拠を作業メモに残します。
 2. 変更後の本文に、新しい矛盾・重複・事例の列挙が無いことを確かめます。
-3. 参照先が存在することを確かめます。skill を管理する repo の検査も通します。この dotfiles では、`claude/skills/` と `codex/skills/` の両方にある skill を同じ内容に直して `tests/skills-sync.sh` で確かめます。分割・統合で skill を作ったり消したりしたら、同じ変更で台帳も直します。作ったファイルは `git add`、消したファイルは `git rm` で Git に反映してから `tests/skill-sources.sh` で確かめます。この検査は、台帳の種類に応じて SKILL.md の Git 登録の有無も確かめるためです。
+3. 参照先が存在することを確かめます。skill を管理する repo の検査も通します。この dotfiles では、`claude/skills/` と `codex/skills/` の両方にある skill を同じ内容に直して `tests/skills-sync.sh` で確かめます。分割・統合で skill を作ったり消したりしたら、同じ変更で由来の一覧も直します。作ったファイルは `git add`、消したファイルは `git rm` で Git に反映してから `tests/skill-sources.sh` で確かめます。この検査は、一覧に載っている各 skill の種類に応じて SKILL.md の Git 登録の有無も確かめるためです。
 4. 確かめ方は、実行者が読む本文・読む時機・求める行動のどれかを改訂が変えるかで決めます。どれも変えない改訂は、上の 1 の照合で確かめます。同じ本文の中の言い回しの統一や、判断に使われない経緯の削除がこれに当たります。どれかを変える改訂は、[empirical-prompt-tuning](../empirical-prompt-tuning/SKILL.md) で変更前の版と比べます。矛盾の解消・基準への置き換え・手順の削除と、要件を別のファイルへ移す分離・移動・参照への置き換えがこれに当たります。要件を別のファイルへ移した場合は、通常の依頼でその要件が必要になる時点までに移動先が読まれたことと、読んだ後の判断が要件を満たしたことを分けて確かめます。
 
 方法は、Anthropic の [skill-creator](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md) と [Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)、superpowers の [writing-skills](https://github.com/obra/superpowers/blob/main/skills/writing-skills/SKILL.md) を参考にしています。例外を独立した分岐として書く規則は writing-skills から取り込みました。writing-skills の文言比較では、結果の安定していた指示に例外条項を一つ足しただけで結果がぶれました。
