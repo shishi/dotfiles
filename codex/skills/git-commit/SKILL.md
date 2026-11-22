@@ -72,3 +72,11 @@ git log --oneline -10      # style reference
 - [ ] Breaking changes are marked `feat!:` / `fix!:`
 - [ ] If the project has a CI-skip convention and this commit touches
       no code, the subject carries the project's skip marker
+
+## After the final commit
+
+After the final commit succeeds, open [kata-finish](../kata-finish/SKILL.md)
+before reporting completion, including for work without a kata plan and work
+that finishes with a local commit. If you used a kata plan, first finish the
+[post-commit recording in step 6](../kata/references/workflow.md#開始から終了まで).
+Keep the working notes available after intermediate commits.
