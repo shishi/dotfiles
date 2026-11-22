@@ -1,6 +1,6 @@
 ---
 name: capturing-memory
-description: Use when a task or conversation may have produced durable user values, policies, preferences, corrections, project constraints, reusable environment knowledge, an explicit request to remember something, or a stale/unhealthy personal-memory state is reported.
+description: 会話や作業から、今後の別の作業でも使う利用者の価値観・方針・好み・訂正、プロジェクトの制約、再利用する環境の知識が分かったとき、記憶を頼まれたとき、記憶 repo の write lock の残存などの不健全な状態が警告されたときに使う。保存するかは assessing-memory、本文の書き方は improving-memory で決め、この skill は保存範囲と書き込みの手順と、不健全な状態からの復旧を担う。
 ---
 
 # 個人記憶の保存
@@ -9,16 +9,12 @@ description: Use when a task or conversation may have produced durable user valu
 
 ## 指示・修正と記憶を分ける
 
-`create-rule` で反映先を判定済みなら、この節を繰り返さず保存範囲・書き込みへ進む。
 エージェントの判断・操作・応答についての指示と修正要求は、失敗の指摘の有無にかかわらず
 [create-rule](../create-rule/SKILL.md) の「挙動について指示・修正を受けたとき」で扱う。
-関連 skill への反映・検証と、元の依頼に未達があればその是正を同じターンで進める。
-追加のルール化依頼を条件にせず、記憶の保存だけで skill への反映を代替しない。
-
-行動の修正要求に限らず、個人の恒常方針や、再利用する事実・環境/プロジェクト知識が
-訂正・確定した場合も、既存記憶と照合する。この skill の保存対象に当たる内容を、
-保存範囲と書き込み手順に従って保存する。一回限りの条件を恒久化しない。
-記憶の保存成功と対策の検証結果は分け、保存だけで行動の改善を実証したとは扱わない。
+この skill は、そのうち記憶に置く内容と、行動の修正以外で確定した個人の恒常方針・
+再利用する事実・環境/プロジェクト知識の保存を担う。create-rule で反映先を判定済みなら、
+この節を繰り返さず保存範囲の判定と書き込みへ進む。保存する内容は既存記憶と照合し、一回限りの条件を恒久化しない。
+記憶の保存成功を、skill への反映や行動の改善を実証したことの代わりにしない。
 
 個人マシン名・私的なパス・接続先・端末固有の知見は、再利用に必要なら private 記憶に
 保持する。公開文書へ転記せず、私的情報であることを理由にこの記憶から削除しない。
