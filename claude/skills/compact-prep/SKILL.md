@@ -1,9 +1,6 @@
 ---
 name: compact-prep
-description: |
-  Claude Code の /compact 実行前に、現セッションの作業状態を state file へ保存する。
-  MANDATORY TRIGGERS: /compact-prep, compact-prep, 圧縮準備, compact 準備, コンパクト準備, 圧縮前状態保存。
-  DO NOT TRIGGER: compact 後の復旧、通常の進捗報告、plan 作成、context 使用率の雑談。
+description: 利用者が /compact-prep を実行したとき、または「圧縮準備」「compact の準備」「圧縮前の状態保存」を頼まれたときに、Claude Code の /compact の前に現セッションの作業状態を state file へ保存する。圧縮後の復旧、通常の進捗報告、計画の作成には使わない。
 argument-hint: "[復旧メモ]"
 allowed-tools: Read, Write, Bash(echo:*), Bash(date:*), Bash(mkdir:*)
 ---
@@ -15,17 +12,23 @@ Claude Code の `/compact` 前に、圧縮サマリーへ残りにくい「判�
 圧縮要約は「過去の作業記録」になりがちで、却下理由・現在フェーズ・委譲状態が
 落ちる。この state file が圧縮直後の復旧材料になる(SessionStart hook が参照する)。
 
-## Strict procedure
+## 必ず守ること
 
-- **Hard gate**: session_id が取得できない場合は state file を推測名で作らず、
+- session_id が取得できない場合は state file を推測名で作らず、
   「session_id が取得できないため準備未完了」と報告して停止する。
-- **Forcing function**: 保存後にファイルを Read で読み返し、必須見出しの有無を確認する。
+- 保存後にファイルを Read で読み返し、必須見出しの有無を確認する。
+
+## 提案が出る経路
+
+使用率が閾値を超えると、statusline (`claude/statusline.sh`) が印を書き、UserPromptSubmit の hook がこの skill の実行を提案させる。
+この提案は statusline が動く Claude Code CLI の会話でしか出ていない。T3 Code と Claude デスクトップアプリの会話では、
+提案が出ないまま圧縮が起きている。そこでは、利用者が /compact-prep を実行したときにこの skill を使う。
 
 ## 手順
 
 1. session_id を取得する。
    - `echo "$CLAUDE_CODE_SESSION_ID"` を実行する。
-   - 空の場合は Hard gate に従い停止する。
+   - 空の場合は上の「必ず守ること」に従い、報告して停止する。
 2. `mkdir -p ~/.claude/compact-state` を実行し、
    保存先を `~/.claude/compact-state/<session_id>.md` に決める。
 3. 現セッションを振り返り、保存内容を収集する。
