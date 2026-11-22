@@ -57,6 +57,8 @@
     "ctrl-; s r": "space.rename",
     "ctrl-; a [": "agent.prev",
     "ctrl-; a ]": "agent.next",
+    "ctrl-; a x": { "command": "tab.new", "args": { "name": "Codex", "argv": ["fish", "-lic", "codex"] } },
+    "ctrl-; a c": { "command": "tab.new", "args": { "name": "Claude Code", "argv": ["fish", "-lic", "claude"] } },
     "cmd-alt-[": "space.prev",
     "cmd-alt-]": "space.next",
     "cmd-shift-[": "agent.prev",

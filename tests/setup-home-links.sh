@@ -49,6 +49,7 @@ printf '' >"$DOTFILES/herdr-core/config.unix.toml"
 printf '' >"$DOTFILES/herdr-core/config.windows.toml"
 printf '{}\n' >"$DOTFILES/herdr-app/keys.json"
 printf '{}\n' >"$DOTFILES/herdr-app/keys.macos.json"
+printf '{}\n' >"$DOTFILES/herdr-app/keys.linux.json"
 printf '{"old": true}\n' >"$TMP/herdr-app-home/keys.json"
 printf 'theme = "github-dark-default"\n' >"$DOTFILES/hunk/config.toml"
 printf 'theme = "old-theme"\n' >"$CONFIG_DIR/hunk/config.toml"
@@ -87,6 +88,7 @@ case "$(uname -s)" in
 esac
 case "$(uname -s)" in
   Darwin) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.macos.json" ;;
+  Linux) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.linux.json" ;;
   *) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.json" ;;
 esac
 

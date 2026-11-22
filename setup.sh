@@ -140,10 +140,11 @@ fi
 
 # Herdr app keeps its own state in the same folder, so link only the keymap.
 # Each OS starts from the app's own defaults (Cmd-based on macOS); the Ctrl+;
-# chords for panes, tabs, spaces and agents are the same on every OS.
+# chords for navigating panes, tabs, spaces and agents are the same on every OS.
 # Package managers may move the app home with HERDR_APP_HOME (Scoop does).
 case "$(uname -s)" in
 Darwin) herdr_app_keys="$DOTDIR/herdr-app/keys.macos.json" ;;
+Linux) herdr_app_keys="$DOTDIR/herdr-app/keys.linux.json" ;;
 *) herdr_app_keys="$DOTDIR/herdr-app/keys.json" ;;
 esac
 if [ -n "${HERDR_APP_HOME:-}" ]; then
