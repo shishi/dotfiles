@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: 最上位の Claude Code から Codex CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。review-gate の外部エンジンまたは明示された Codex レビューに使い、実装や受託側からの再委譲には使わない。
+description: 最上位の Claude Code から Codex CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。T3 Code の外での review-gate の外部エンジンまたは明示された Codex レビューに使い、実装や受託側からの再委譲には使わない。
 ---
 
 # Codex レビューエンジンの接続
@@ -9,7 +9,8 @@ description: 最上位の Claude Code から Codex CLI へ correctness・adversa
 
 観点・入力の組成・引用の照合・採否・反復・通過判定・報告は `review-gate` に従う。この skill は
 Codex CLI の 1 パスの起動と結果の受領だけを担う。単独発動も review-gate の「一つの観点だけを実行する」に従う。
-最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。
+最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。T3 Code で動いているときはこの skill を使わず、
+review-gate のエンジンの節のとおり別 provider の子として起動する。
 
 ## モード(= 観点)
 
@@ -36,8 +37,9 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
 1. `codex` CLI が PATH にある(`which codex` → 0)。無ければこの skill は適用不可
    (review-gate 経由なら gate がエンジンを Claude に差し替える)
 2. Codex が認証済み(`401 Unauthorized` を返さない)
-3. **secrets-scan を先行させ、検出ゼロを確認してから codex に送る**(単独発動でも必須。
-   secrets 入りの内容を外部 API に送らない。gitleaks 不能なら停止してユーザーへ報告)
+3. **review-gate の「実行と通過判定」の手順 3 の secrets 検査を先行させ、検出ゼロを確認してから codex に送る**(単独発動でも必須。
+   「実行手順」の 2 で書く入力ファイルも secrets-scan に渡す。secrets 入りの内容を外部 API に送らない。
+   gitleaks 不能なら停止してユーザーへ報告)
 4. 対象を読める sandbox 経路が利用可能であること。sandbox・hook・承認の拒否は
    起動条件の不足として扱い、既存の deny や sandbox を弱めない。利用不能なら
    `review-gate` の代替 reviewer を選び、必要な権限は司令塔が通常の承認経路で扱う。

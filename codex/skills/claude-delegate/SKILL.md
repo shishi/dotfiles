@@ -1,6 +1,6 @@
 ---
 name: claude-delegate
-description: Codex の最上位司令塔から Claude Code へ探索・定型変更・実装を委譲するときに使う。受託側からの再委譲には使わない。独立レビューは claude-review / review-gate を使う。
+description: T3 Code の外で、Codex の最上位司令塔から Claude Code へ探索・定型変更・実装を委譲するときに使う。受託側からの再委譲には使わない。独立レビューは claude-review / review-gate を使う。
 ---
 
 # Claude への作業委譲
@@ -9,6 +9,7 @@ description: Codex の最上位司令塔から Claude Code へ探索・定型変
 
 `codex-delegate` の逆方向の入口です。担当範囲と受入条件を渡し、進捗ログとは別に
 上限付きの JSON を受け取ります。成果物の検証・独立レビュー・統合は呼出元が担当します。
+T3 Code で動いているときはこの skill を使わず、`agent-delegation` の「T3 Code で動いているとき」に従って子として起動します。
 
 ## 担当と権限
 
