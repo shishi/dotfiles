@@ -29,7 +29,7 @@
 
 原因調査・テストは次の条件で作業へ組み込みます。
 
-- 方式選定・実装着手・高コスト処理・再試行の前に、判断を左右する未確認事項があれば [investigation-discipline](../../investigation-discipline/SKILL.md) の「次の操作を選ぶ前に確認する」を使います。既存資料・現物で得られる事実を回収してから、その結果に基づいて次の工程を選びます。
+- 方式選定・実装着手には kata の入口で定めた外部情報と現物の照合を使います。高コスト処理・再試行では、[investigation-discipline](../../investigation-discipline/SKILL.md) の「次の操作を選ぶ前に確認する」で判断を左右する前提を確かめてから進めます。
 - 不具合・想定外の挙動では、修正案の前に [investigation-discipline](../../investigation-discipline/SKILL.md) で観測・原因・既存保証を確認し、原因に対応する設計・計画へ戻します。調査だけの依頼を実装へ広げません。
 - テストの作成・変更は [test-red-first](../../test-red-first/SKILL.md) に従います。
 - 工程 1 で始めた受入は、別の実装・レビューを重ねず、同じ対象・目的・前提・証拠が一致する結果を組み込みます。

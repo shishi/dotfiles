@@ -38,7 +38,7 @@ case ${1:-} in
     # 案内は状態の保存に失敗しても出す。
     [ -n "$pending" ] && : > "$pending" 2>/dev/null
     jq -nc '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext:
-      "<kata-first>この入力でも、最初に開く skill は kata にする。kata の入口で、直接答えるか、どの skill や工程を使うかを判断する。</kata-first>"}}'
+      "<kata-first>この入力でも、最初に開く skill は kata にする。調査・真偽判定・方式選定・実装着手では、kata から investigation-discipline を開く。その手順で外部資料の本文を取り、手元の現物と照合してから結論・提案・実装に進む。</kata-first>"}}'
     ;;
   pre)
     [ -n "$pending" ] && [ -e "$pending" ] || exit 0

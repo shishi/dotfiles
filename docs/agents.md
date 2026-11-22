@@ -123,7 +123,9 @@ Claude Code では `~/.claude/memory` を指定します。同期できない場
 | 6. 完了前の確認 | [kata-verify](../codex/skills/kata-verify/SKILL.md) |
 | 7. 統合と後片付け | [kata-finish](../codex/skills/kata-finish/SKILL.md) |
 
-skill が選ばれるかはモデルが description に気づくかに左右されるため、SessionStart hook の `kata-entry.sh` が入口の kata と工程ごとの skill を毎回伝えます。それでも、すぐ答えられそうな質問では kata を飛ばすことがあるため、`kata-first.sh` が利用者の入力ごとに kata を最初に開くよう伝え (UserPromptSubmit)、kata を開くまで他のツールを止めます (PreToolUse)。子エージェントのツール呼出しと委譲された子のセッションは止めません。Codex では hook を追加・変更したら `/hooks` で信頼し直すまで動きません。委譲された子のセッションには、受けた範囲だけを進めて設計・統合・利用者への質問は司令塔へ返す案内を伝えます。
+SessionStart hook の `kata-entry.sh` が kata と工程ごとの skill を案内します。`kata-first.sh` は利用者の入力ごとに、最初に kata を開いて調査の要否を判断するよう伝えます (UserPromptSubmit)。kata を開くまで、PreToolUse の対象になる通常のツールを止めます。子エージェントのツール呼出しと委譲された子のセッションにはこの停止を適用しません。委譲先には、担当範囲で調査を進め、設計・統合・利用者への質問は司令塔へ返すよう案内します。Codex で hook の登録を追加・変更した場合は、`/hooks` で信頼し直すまで動きません。
+
+調査・真偽判定・方式選定などでは、kata が [investigation-discipline](../codex/skills/investigation-discipline/SKILL.md#外部情報と現物を並行して調べる) の入口になります。エージェントは外部の資料を手元の実物と照合してから、結論・設計・実装へ進みます。hook が制御するのは kata を開く順序で、資料の関連性や照合の成否はエージェントが判断します。
 
 ### superpowers の取り込み
 
