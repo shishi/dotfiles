@@ -91,6 +91,8 @@ bash ~/.agent-shared/bin/managed-skills.sh fork NAME
 
 ### Herdr の skill
 
+Herdr Core の端末で作業すると、エージェントは独立して進められる仕事を子端末に割り当て、親から進捗を確認して結果を回収します。作業や成果を画面に表示する依頼には Herdr App を使います。委譲の判断は [agent-delegation](../codex/skills/agent-delegation/SKILL.md)、端末と画面の手順は生成された各 skill にあります。
+
 herdr-core と herdr-app の skill は、各 CLI が `--skill` で出力する手引きを本文にして、`setup.sh` が生成します。手引きは端末に入っている CLI の版で変わるため、生成した SKILL.md は Git で管理しません。いつ使うかを決める description と、この repo の補足は `agent-shared/skill-overlays/<skill 名>.md` に書き、手引きの前に置きます。上流の手引きを取り込み直しても、この上書きは毎回重なります。CLI を更新したら、次のコマンドで手引きを取り込みます。
 
 ```sh

@@ -430,11 +430,9 @@ if not set -q __dotfiles_fish_initialized; and type nix &>/dev/null
     set -x PATH /nix/var/nix/profiles/default/bin ~/.nix-profile/bin $PATH
 end
 
-# Herdr Core does not mark its terminals the way Herdr 1 marked every pane
-# (herdrdev/herdr-core#84). Without the mark, Codex can report a copy that
-# reached only this machine's clipboard, so a Herdr App on another machine
-# receives nothing. setup.sh marks the core itself on Linux; this covers a core
-# that started without that, as on macOS.
+# Herdr Core may leave HERDR_ENV unset (herdrdev/herdr-core#84).
+# Codex uses this mark to send clipboard copies to a remote Herdr App.
+# setup.sh marks the core itself on Linux; this covers cores started without it.
 if set -q HC_TERMINAL_ID; and not set -q HERDR_ENV
     set -gx HERDR_ENV 1
 end

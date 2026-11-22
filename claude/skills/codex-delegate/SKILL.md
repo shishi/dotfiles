@@ -146,6 +146,8 @@ Do not commit, stash, or create branches. Leave all changes in the working tree.
 
 ### 3. 走査・実行・結果の取り出し
 
+Herdr Core の端末では、`herdr-core` の「非対話の委譲・レビューを子端末で実行する」に従い、次のブロックの Codex CLI 呼び出しと入出力の処理を子端末で動かす。
+
 以下は explore の例。chore / implement はコマンド先頭の `-s read-only` を
 `-s workspace-write` へ直接置き換える。`codex exec` 行の許可 prefix に一致させるため、
 この値は変数にしない。準備・記録など同じブロック内の別コマンドの許可は、それぞれ判定される。
@@ -254,6 +256,9 @@ exit "$rc"
 
 ## 長時間の委譲
 
+Core で起動した場合は、`herdr-core` の手順で同じ子端末を待ち、下の停止確認も行う。
+以下の background 起動は Core を使わない場合の手順。
+
 長い委譲は起動元の timeout と background 実行の仕様を確認し、必要なら最初から background
 で始める。background では、監視 hook がタスクの出力で進み具合を判定する。出力をすべてファイルへ向けたままだと
 進んでいても確認のたびに起こされるため、上の `codex exec` の行を codex-review と同じ形
@@ -306,7 +311,7 @@ codex が作業中に読んだファイルの内容とコマンド出力も送�
 Claude Code の Bash sandbox 内で走る。sandbox は TLS を傍受するので、codex 自身の API 接続が証明書の
 発行者不明で切れる。**権限エラーではなく証明書エラーとして出る**ので、原因がメッセージに現れない。
 
-`codex exec` は Bash 呼び出しの中で素のコマンドとして書く。包む形にしない。走っている呼び出しが
+Core を使わず Bash ツールから実行するときは、`codex exec` を素のコマンドとして書く。走っている呼び出しが
 sandbox の内側かどうかは `echo "$TMPDIR"` で分かる — sandbox 内では `/tmp/claude-*`、外では
 システムの一時領域を指す。
 

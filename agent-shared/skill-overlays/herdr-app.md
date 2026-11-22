@@ -1,4 +1,8 @@
 ---
 name: herdr-app
-description: "Change what the person sees in the Herdr desktop app window — spaces, tabs, panes, focus, layouts, keys and mods — through the `herdr-app` CLI. Use only when the user explicitly asks to show, arrange or customize something in the Herdr window, or when another skill's steps call for it (such as hunk-review showing Hunk beside the conversation). Starting, reading, messaging or waiting on agents and programs belongs to herdr-core (`hc`)."
+description: "Herdr App の画面に作業や成果を表示するとき、スペース・タブ・ペイン・フォーカス・レイアウト・キー設定を確認または調整するときに使います。利用者への表示が依頼の成果に含まれる場合は、Herdr の明示指定がなくても候補にします。子エージェントやプログラムの実行と観測は herdr-core を使います。"
 ---
+
+## このリポジトリでの補足
+
+表示も依頼の成果に含まれる場合は、手引きの `herdr-app ls` と `status` で、表示先と対象を確かめます。たとえば差分の表示は `hunk-review` に従います。子の作業を親が観測するだけなら Core の端末を読み、画面を移動する必要があるときは、操作前に対象のタブやペインを特定します。Core の端末 ID を App のペイン ID として使いません。

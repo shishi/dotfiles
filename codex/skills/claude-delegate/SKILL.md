@@ -66,6 +66,8 @@ Return the supplied JSON schema. Report partial or blocked when required work or
 
 ## 実行と受領
 
+Herdr Core の端末では、`herdr-core` の「非対話の委譲・レビューを子端末で実行する」に従い、次のブロックの Claude CLI 呼び出しと入出力の処理を子端末で動かします。
+
 次は explore の実行例です。`WORK` は作成済みの実パスに置き換え、モデルと推論量を選びます。
 各呼出しは一度だけ起動し、実行 handle を保持します。必要な通信を許可した経路で実行します。
 

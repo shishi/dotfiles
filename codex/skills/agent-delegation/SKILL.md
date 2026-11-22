@@ -14,6 +14,7 @@ description: 同じツール内の子や別 CLI へ作業・レビュー・受�
 | 場面 | 必須の参照 |
 |---|---|
 | 委譲・レビュー・受入・長いバックグラウンド実行の割当、観測、待機直前の判断 | [作業の割当・観測・利用枠と履歴](references/execution.md) |
+| Herdr Core の子端末で起動・観測・回収 | `herdr-core` の「このリポジトリでの補足」と操作手順 |
 | Codex 内の子を起動 | [Codex の子とモデル選択](references/codex-children.md) |
 | Claude 内の子、または最上位の Claude から Codex への委譲を選択 | [Claude Code の委譲とモデル選択](references/claude-children.md) |
 | 別 CLI を一般作業・レビュー・対話で起動 | [認証方式と送信先の確認](references/authentication.md) |
