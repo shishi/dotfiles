@@ -9,11 +9,11 @@ description: Scoop manifest の checkver・autoupdate・hash・extract_dir を�
 
 ## 更新経路を再現する
 
-1. 対象 manifest の正本と未コミット変更を確認します。対応する全 architecture の `url`・`hash`・`extract_dir` と `autoupdate` の配置を列挙します。
+1. repo にある対象 manifest と未コミット変更を確認します。対応する全 architecture の `url`・`hash`・`extract_dir` と `autoupdate` の配置を列挙します。
 2. 対象 manifest と必要な補助ファイルを一時ディレクトリへコピーします。既存の `checkver.ps1` を使い、`-Dir` がコピー先の絶対パスであることを確認します。
 3. コピーに対して `checkver.ps1 -Dir <コピー先> -App <対象名> -Update -ForceUpdate` を実行します。`-Update` は manifest を書き換えるため、検証では bucket 本体へ向けません。取得先への通信とキャッシュ書き込みも発生します。
 4. 生成差分を読み、各 architecture が使う URL、hash、展開先を照合します。バイト単位の一致は現在版で差分がない証拠です。将来の版の置換や展開が正しい証拠にはしません。
-5. 配布アーカイブの一覧と展開結果で `extract_dir` および必要な実行ファイルを確認します。検証した変更を正本へ反映し、対象外の差分がないことを確認します。
+5. 配布アーカイブの一覧と展開結果で `extract_dir` および必要な実行ファイルを確認します。検証した変更を repo の manifest へ反映し、対象外の差分がないことを確認します。
 
 ## 差分を判断する条件
 

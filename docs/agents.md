@@ -15,7 +15,7 @@ bash setup.sh
 | 共通の指示 | `codex/AGENTS.md` |
 | Claude Code の共通指示の読み込み | `claude/CLAUDE.md` |
 | 実行前ガードとイベント処理 | `agent-shared/hooks/` |
-| 操作の判定ルールの正本と生成 | `agent-shared/policy/action-policy.json`、`agent-shared/bin/apply-action-policy` |
+| 操作の判定ルールの元ファイルと生成 | `agent-shared/policy/action-policy.json`、`agent-shared/bin/apply-action-policy` |
 | 作業別の手順 | `claude/skills/`、`codex/skills/` |
 | skill の由来の台帳 | `agent-shared/skill-sources.tsv` |
 | モデル間の委譲 | [codex-delegate](../claude/skills/codex-delegate/SKILL.md)、[claude-delegate](../codex/skills/claude-delegate/SKILL.md) |
@@ -63,7 +63,7 @@ skill には、この repo で書いたものと、外部の成果物に由来�
 | generated | 端末の CLI が出力する手引きから生成し、Git で管理しない skill | `agent-shared/skill-overlays/<skill 名>.md`。生成した SKILL.md は直接編集しない | `herdr-skills.sh sync` |
 | entry | 本文を実行時に CLI から取得する、この repo で書いた入口 | 入口の SKILL.md | CLI の更新で反映される |
 
-外部に由来する skill の出所と著作権表示は `claude/skills/*.LICENSE` にあります。plugin が配布する skill と Codex の system skill はこの台帳の対象外で、修正は [skill-source-overrides](../codex/skills/skill-source-overrides/SKILL.md) の手順で配布物の外に持ちます。
+外部に由来する skill の出所と著作権表示は `claude/skills/*.LICENSE` にあります。plugin が配布する skill と Codex の system skill はこの台帳の対象外で、修正は [skill-source-overrides](../codex/skills/skill-source-overrides/SKILL.md) の手順で配布物とは別の場所に修正版を置きます。
 
 外部の skill をそのまま導入するときは、次の節の `managed-skills.sh add` を使います。`npx skills add` や `gh skill install` を直接実行しません。`setup.sh` が作る `~/.claude/skills` と `~/.agents/skills` はこの repo の `claude/skills` と `codex/skills` を指すため、これらのコマンドが利用者全体へ導入すると、同じ名前の skill をこの repo の中で置き換えます。CLI が同名の skill の導入を案内していても (Hunk の `hunk-review` など)、この repo の入口を使います。skill を新設・fork・廃止したら、同じ変更で台帳も直します。
 

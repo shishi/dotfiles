@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Memory write preflight: bootstrap 手順 1-4 (正本解決 / link 照合 / lock 取得 /
+# Memory write preflight: bootstrap 手順 1-4 (記憶 repo の場所の解決 / link 照合 / lock 取得 /
 # 前提検証 / pull --rebase / 再検証) を 1 回の Bash 呼び出しにまとめ、tool call
 # 往復を減らす。
 #
@@ -7,7 +7,7 @@
 # --read-sync は起動時の同期。fetch は lock の外で 8 秒で打ち切る。更新が無ければ lock を
 #   取らずに終え、更新があれば lock を取って fast-forward し、解放してから返す。
 #   <memory-link-path> は agent home 側の link (~/.claude/memory or ~/.codex/memory)。
-# 正本の解決は resolve-memory-dir.sh に委ね、同じ env 契約 (AGENT_MEMORY_DIR など) に従う。
+# 記憶 repo の場所の解決は resolve-memory-dir.sh に委ね、同じ env 契約 (AGENT_MEMORY_DIR など) に従う。
 # exit contract: 通常の成功は exit 0 + stdout に opaque lock handle 1 行、lock は保持したまま。
 #   --read-sync の成功は exit 0 + stdout 空、lock は保持していない。
 #   失敗は非 0 + stdout 空。ここで取得した lock は解放して返す (解放失敗は stderr に
@@ -89,7 +89,7 @@ if [ -z "$link" ]; then
   exit 2
 fi
 
-# 手順 1: 正本を解決し、agent home の link が物理的に同じ場所を指すことを確認する。
+# 手順 1: 記憶 repo の場所を解決し、agent home の link が物理的に同じ場所を指すことを確認する。
 memory_repo="$(bash "$BIN_DIR/resolve-memory-dir.sh")" \
   || { warn "memory repo could not be resolved"; exit 1; }
 repo_physical="$(cd "$memory_repo" 2>/dev/null && pwd -P)" \
@@ -152,7 +152,7 @@ PY
   fi
 fi
 
-# 手順 2: 同一プロセスで再解決した正本を渡して lock を取得する。
+# 手順 2: 同一プロセスで再解決した記憶 repo の場所を渡して lock を取得する。
 # trap は acquire より前に張る。取得成功の瞬間から解放を保証するためで、
 # 取得後に張ると trap 設置までの数命令の間に終了すると lock が残る。
 # handle が空のまま死んだ場合は finish_preflight のガードが release を抑止する

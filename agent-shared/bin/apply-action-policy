@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""エージェントの操作の判定ルールを、正本 (agent-shared/policy/action-policy.json) から各 CLI の設定へ書き出す。
+"""エージェントの操作の判定ルールを、元の定義 (agent-shared/policy/action-policy.json) から各 CLI の設定へ書き出す。
 
     apply-action-policy           claude/settings.json の autoMode と codex/config.toml の [auto_review].policy を書き換える
     apply-action-policy --check   書き出す内容と設定ファイルが食い違えば差分を示して 1 で終える
@@ -41,7 +41,7 @@ def claude_defaults():
 
 def rule_texts(policy, section, target):
     # targets を省いたルールは両 CLI に渡す。片方の組み込みルールで足りるものだけ targets で絞る。
-    # disabled のルールは書き出さない。試しに外したルールを、戻し方の note と一緒に正本へ残すため。
+    # disabled のルールは書き出さない。試しに外したルールを、戻し方の note と一緒に action-policy.json へ残すため。
     return [rule["text"] for rule in policy["rules"]
             if rule["section"] == section and not rule.get("disabled")
             and target in rule.get("targets", ["claude", "codex"])]

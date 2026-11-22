@@ -32,6 +32,6 @@ T3 の Working の一覧に並ぶのは親を持たないスレッドだけで�
 ## 実行用 skill へ渡す
 
 - T3 Code の外では、Codex から Claude への一般作業は `claude-delegate`、Claude から Codex へは `codex-delegate` を使います。T3 Code の中では上の「T3 Code で動いているとき」に従います。この skill は各 adapter のコマンド・権限設定を複製しません。
-- 独立レビューは `review-gate` と `claude-review` / `codex-review` へ渡します。レビューの編成・順序・採否は `review-gate` を正本とし、受託側で追加の独立レビューを重ねません。
+- 独立レビューは `review-gate` と `claude-review` / `codex-review` へ渡します。レビューの編成・順序・採否は `review-gate` に従い、受託側で追加の独立レビューを重ねません。
 - 起動前に担当範囲・入力・維持条件・受入条件・権限・締切・進捗の観測点を確定します。CLI の接続先確認と秘密情報検査を終えてから、既存の承認範囲に合う実行へ進みます。
 - 受託側から成果物・直接の検証結果・未解決点を受け取り、司令塔が実物と照合して採否・統合を判断します。完了通知だけでは作業完了としません。

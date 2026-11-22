@@ -49,8 +49,9 @@ newest_version() {
       if (NR == 1 || better) { for (i = 1; i <= 4; i++) best[i] = v[i]; out = $0 } }
     END { if (NR) print out }'
 }
-# 通信が止まっても 5 秒で git を止める。macOS には timeout が無いことがあり、git の速度下限は
-# 名前解決や接続の待ちには効かないため、自前で時間を切る。
+# 通信が止まっても 5 秒で git を止める。macOS には timeout が無いことがあり、git の
+# http.lowSpeedLimit (転送が遅い状態が続いたら打ち切る設定) は名前解決や接続を待つ間は
+# 働かないため、自前で時間を切る。
 ls_remote_tags() {
   out=$(mktemp "${TMPDIR:-/tmp}/kata-entry.XXXXXX") || return 1
   # git を独立したプロセスグループで動かし、止めるときは子の git-remote-https ごと止める。

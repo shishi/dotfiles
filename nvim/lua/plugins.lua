@@ -533,7 +533,7 @@ later(function()
         -- masterと判定したsessionではplugin/nvim-treesitter.luaを空振りさせているので
         -- :TSUpdateが定義されていない。notifyで案内する復旧手順(:DepsUpdate!)の途中で
         -- E492が出て「失敗した」と読めてしまうため、存在を確かめてから呼ぶ。
-        -- そのsessionではcheckout自体は成立し、再起動後にauto installが効く
+        -- そのsessionではcheckout自体は成立し、再起動後にauto installが動く
         if vim.fn.exists(':TSUpdate') == 2 then
           vim.cmd('TSUpdate')
         end
@@ -1205,7 +1205,7 @@ later(function()
   end
 
   -- 先頭の / は検索ルートへのアンカーで、rgもfdもgitignore構文として解釈する。
-  -- worktreeのパスにglobメタ文字(* [ など)が入っていると一致せず除外が効かないが、
+  -- worktreeのパスにglobメタ文字(* [ など)が入っていると一致せず除外されないが、
   -- その場合は歩く量が増えるだけで結果は正しい
   local function worktree_excludes(flag, prefix)
     local args = {}

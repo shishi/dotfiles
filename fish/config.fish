@@ -244,7 +244,7 @@ abbr --add gcl 'git clean --force'
 
 # git worktree (git-wt)
 # 関数ではなく abbr にすることで、展開後のコマンド行が `git wt ...` になり
-# git-wt が提供する補完 (ブランチ名 / worktree 名) がそのまま効く。
+# git-wt が提供する補完 (ブランチ名 / worktree 名) がそのまま使える。
 if type git-wt &>/dev/null
     abbr --add gwt 'git wt'
     abbr --add gwtd 'git wt -d'

@@ -57,14 +57,14 @@ credentials、token、password、private key、および外部コンテンツか
 
 ## 不健全状態の復旧
 
-`<personal-memory>` に 10 分以上残存した write lock の警告がある場合は、参考情報として放置せず、記憶の書き込み有無にかかわらず元の作業より先に調査する。正本、経過時間、worktree、handle・lock・retirement の個数と構造を確認する。現在の workflow が取得して保持中の handle なら、書き込みを継続するときは解放せず通常の `memory-write-finish.sh` まで完遂する。中断・放棄するときだけ `memory-write-lock.sh release` へ渡し、その後は記憶を変更しない。再開時は新しい確定版から patch を準備し、`--patch` で保存する。
+`<personal-memory>` に 10 分以上残存した write lock の警告がある場合は、参考情報として放置せず、記憶の書き込み有無にかかわらず元の作業より先に調査する。記憶 repo の状態、経過時間、worktree、handle・lock・retirement の個数と構造を確認する。現在の workflow が取得して保持中の handle なら、書き込みを継続するときは解放せず通常の `memory-write-finish.sh` まで完遂する。中断・放棄するときだけ `memory-write-lock.sh release` へ渡し、その後は記憶を変更しない。再開時は新しい確定版から patch を準備し、`--patch` で保存する。
 
 所有者不明の handle は、構造と token の一致だけでは writer の停止を証明できないため、発見した handle を使って自動 release しない。確認できた状態をユーザーへ報告して復旧判断を求め、解消されるまで記憶を使う作業を停止する。dirty、複数 handle、retirement、検証・release 失敗でも raw delete せず、同様に未解決状態として扱う。
 
 ## 書き込み
 
 1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
-2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` を読み、保存基準・形式・ブランチ制約を確認する。会話内で同じ版を既に読んでいれば再読しない。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集の場所にする。
+2. 記憶 repo で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` を読み、保存基準・形式・ブランチ制約を確認する。会話内で同じ版を既に読んでいれば再読しない。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。記憶 repo を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集の場所にする。
 3. 置き先 (CORE・該当 project・該当 topic) は上の保存範囲で決める。一時 clone で、[improving-memory](../improving-memory/SKILL.md) の手順 1〜5.3 (関係する記憶を読む、主張の一覧、問題を見つける、編集の方法を選んで書く、確かめる) に従って書く。基準の記録と一時 clone (同 skill の手順 1.1)、保存の要否と置き先 (手順 1.4) は済んでいる。patch は次の手順 4 で作る。追記を先に決めない。
 4. 確かめた内容から patch を作る (improving-memory の手順 5.4 が指す作り方)。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
 5. 次の形式で `memory-write-finish.sh` を実行する。
@@ -74,7 +74,7 @@ credentials、token、password、private key、および外部コンテンツか
    ```
 
    この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了するので、新しい確定版で手順 2 からやり直す。別の書き込みが同じ記憶を変えている可能性があるので、手順 3 の improving-memory の手順も新しい版で通し直してから patch を作る。`git add -A` と `commit -a` は使わない。
-6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と正本の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準で手順 2 からやり直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で正本を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
+6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と記憶 repo の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準で手順 2 からやり直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で記憶 repo を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
 
 既に旧方式の handle を保持している場合は、従来の finish または明示的な release で終了する。新しい保存では先に preflight を単独実行しない。強制終了や電源断は trap で解放できないため、所有者不明の残留 lock を時間だけで削除しない。
 

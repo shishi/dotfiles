@@ -10,8 +10,8 @@
 ## 構成
 
 - `setup.sh`: 各設定をホームディレクトリへ symlink で配備します。配備先は repo の実ファイルを指すため、変更は配備先のファイルにそのまま反映されます。ツールへの適用には、再読み込みや再起動、hook の信頼し直しが必要な場合があります。
-- `claude/`・`codex/`: Claude Code と Codex のホーム (`~/.claude`・`~/.codex`) の Git 管理部分です。共通の指示は `codex/AGENTS.md` が正本で、`claude/CLAUDE.md` から読み込みます。
-- `agent-shared/`: 両エージェントが共有する hook (`hooks/`) と補助スクリプト (`bin/`)、操作の判定ルールの正本 (`policy/action-policy.json`) です。
+- `claude/`・`codex/`: Claude Code と Codex のホーム (`~/.claude`・`~/.codex`) の Git 管理部分です。共通の指示は `codex/AGENTS.md` に書き、`claude/CLAUDE.md` から読み込みます。
+- `agent-shared/`: 両エージェントが共有する hook (`hooks/`) と補助スクリプト (`bin/`)、操作の判定ルールの元ファイル (`policy/action-policy.json`) です。
 - `docs/`: 利用者向けの文書です。エージェントまわりの仕組みは `docs/agents.md` にまとめています。
 - そのほかのディレクトリは各ツールの設定です (fish、nushell、nvim、helix、wezterm、ghostty、herdr-app、herdr-core など)。
 

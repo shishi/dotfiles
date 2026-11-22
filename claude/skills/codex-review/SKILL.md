@@ -107,7 +107,7 @@ CLI をまたぐレビューの起動は最上位の司令塔が行う。受託�
 You are a delegated reviewer called by Claude Code. Review only the supplied scope.
 Do not edit files, commit, run another review gate, or delegate to another agent or CLI.
 Task under review: <変更の短い説明(あればタスク記述の逐語引用)>
-Purpose source: <review-gate の入力組成で確定した目的の正本の逐語。PR 本文・紐づく issue を含む>
+Purpose source: <review-gate の入力組成で確定した目的の根拠資料の逐語。PR 本文・紐づく issue を含む>
 Focus: <呼び出し側指定の焦点。無ければ the entire change>
 Review target: <呼出元が固定した基準 commit、全差分、対象 untracked の全文、必要な周辺文脈>
 If you inspect the working tree, compare it with the supplied target. Report any version

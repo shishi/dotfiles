@@ -29,7 +29,7 @@ models=$(codex debug models) || {
   exit 1
 }
 
-# 一覧は UTF-8 の JSON。-I では PYTHONUTF8 が効かず、Windows では標準入力が ANSI コードページで
+# 一覧は UTF-8 の JSON。-I では PYTHONUTF8 が無視され、Windows では標準入力が ANSI コードページで
 # 読まれるため、バイト列のまま渡す。
 printf '%s' "$models" | "$py_bin" -I -c '
 import json, sys

@@ -5,7 +5,7 @@ description: LAN の機器が見つからない、DHCP・一時 IP・有線リ�
 
 # LAN の機器と経路の診断
 
-機器の管理 IP、L2 の転送、DHCP、物理リンク、Tailscale を含む実経路を分けて調べます。個人環境の構成と変更の正本は関連記憶・プロジェクト記憶・repo から取得します。
+機器の管理 IP、L2 の転送、DHCP、物理リンク、Tailscale を含む実経路を分けて調べます。個人環境の構成と変更の記録は関連記憶・プロジェクト記憶・repo から取得します。
 
 ## 機器が見つからないとき
 
@@ -70,7 +70,7 @@ repo 経由の変更が必要な環境で、端末へ直接設定を反映しま
   `10.<任意>.<任意>.0/24` のように他拠点と重なりにくい範囲を選びます。
   重複後の対処は、再採番、4via6、subnet router 上の iptables `NETMAP` の順に検討します。
   4via6 は宛先を IPv6 で書けるアプリでしか使えません。`NETMAP` は Tailscale の管理外で、自分で保守します。
-- 承認済みの変更を構成の正本へ反映し、同じ宛先の送信元・NIC 転送量と転送結果を再取得します。
+- 承認済みの変更を、その環境で構成を管理している方法 (設定 repo・管理画面など) で反映し、同じ宛先の送信元・NIC 転送量と転送結果を再取得します。
   同じファイルサイズ・方向・負荷で速度を比較し、再接続成功だけで完了しません。
 
 構文と副作用は [New-NetIPAddress](https://learn.microsoft.com/en-us/powershell/module/nettcpip/new-netipaddress)、[Set-NetIPInterface](https://learn.microsoft.com/en-us/powershell/module/nettcpip/set-netipinterface)、[Get-NetAdapter](https://learn.microsoft.com/en-us/powershell/module/netadapter/get-netadapter) を実行版と照合します。
