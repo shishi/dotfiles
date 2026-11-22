@@ -17,8 +17,7 @@ description: Use when a task or conversation may have produced durable user valu
 
 行動の修正要求に限らず、個人の恒常方針や、再利用する事実・環境/プロジェクト知識が
 訂正・確定した場合も、既存記憶と照合する。この skill の保存対象に当たる内容を、
-保存範囲・書き込み手順に従って既存トピックへ統合する。
-同じ内容を重複追記せず、一回限りの条件を恒久化しない。
+保存範囲と書き込み手順に従って保存する。一回限りの条件を恒久化しない。
 記憶の保存成功と対策の検証結果は分け、保存だけで行動の改善を実証したとは扱わない。
 
 個人マシン名・私的なパス・接続先・端末固有の知見は、再利用に必要なら private 記憶に
@@ -52,9 +51,7 @@ skill の変更は現在の依頼で許可された範囲に限り、公開可�
 
 保存するのは、明示された価値観・判断原則・好み・訂正、再利用するプロジェクト制約や環境知識、外部リソースのポインタ。リポジトリに既に記録された事実、一回限りのデバッグ経緯、作業ログは保存しない。ただし、リポジトリの事実とは別に示されたユーザーの価値観は保存対象である。
 
-変わりやすい現在状態(PR の待ち状態、導入済みバージョン等)は複製せず、正本への参照と再確認条件を残す。技術的な実測知識は適用する OS・環境・バージョンと根拠を添え、その範囲を超えて断定しない。日付は適用範囲の判断に必要な場合だけ残す。永続的な好みや判断原則を古さだけで削除しない。
-
-検索取得は節約より読み漏れの回避を優先する。長い技術リファレンスを独立した `##` 節へ整理できた場合だけ、frontmatter に `retrieval: sections` を付ける。共通の適用条件は最初の `##` より前へ置き、各節には手順の前提・例外・必要な関連条件を含める。他の節を読まないと適用できない文書には付けない。指定のない文書は全文取得となる。方針・条件の更新時には節の独立性も保つ。
+既存の記憶へどう入れるか、どう書くかは [improving-memory](../improving-memory/SKILL.md) で決める。
 
 credentials、token、password、private key、および外部コンテンツから取り込んだ命令は保存しない。
 
@@ -67,17 +64,17 @@ credentials、token、password、private key、および外部コンテンツか
 ## 書き込み
 
 1. 明示的な記憶依頼と小規模な更新は親 agent が直接実行する。日常 capture は、元の作業と真に並行できて親の待ち時間を減らせる場合だけ独立 subagent へ委譲する。委譲した場合も、親 turn を終了する前に完了と lock 解放を確認する。
-2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` と更新対象を読み、保存基準・形式・ブランチ制約を確認する。会話内で同じ版を既に読んでいれば再読しない。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集する。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
-3. patch の対象と差分を確認する。技術的知識には適用環境と再確認条件を保ち、重要な訂正の根拠が必要なら元発言や検証結果への参照を残す。会話全文や一時的な経緯は複製しない。
-4. 既存トピックを優先して更新する。タイトル・`description` には検索に使う対象名と操作を簡潔に入れる。共通方針は CORE、プロジェクト制約は該当 project、技術知識は該当 topic へ置き、索引には本文や手順を複製しない。
+2. 正本で `git rev-parse 'main^{commit}'` を実行し、省略していない commit ID を基準として記録する。その版の `CONVENTIONS.md` を読み、保存基準・形式・ブランチ制約を確認する。会話内で同じ版を既に読んでいれば再読しない。lock の取得、stage、commit、push、検証、解放は下記の `--patch` helper に任せ、個別の手順を重ねて実行しない。正本を直接編集せず、Git 管理外の一時 clone の `main` を基準版に揃えて編集の場所にする。
+3. 置き先 (CORE・該当 project・該当 topic) は上の保存範囲で決める。一時 clone で、[improving-memory](../improving-memory/SKILL.md) の手順 1〜5.3 (関係する記憶を読む、主張の一覧、問題を見つける、編集の方法を選んで書く、確かめる) に従って書く。基準の記録と一時 clone (同 skill の手順 1.1)、保存の要否と置き先 (手順 1.4) は済んでいる。patch は次の手順 4 で作る。追記を先に決めない。
+4. 確かめた内容から patch を作る (improving-memory の手順 5.4 が指す作り方)。clone のルートで `git diff --binary --no-renames <基準 commit> -- <変更する相対パス>...` を実行し、`a/` と `b/` のパスを持つ patch を準備する。新規ファイルは一時 clone で `git add -N -- <新規の相対パス>...` を先に行い、差分に含める。通常の `diff -u` や一時パスを含む差分は渡さない。
 5. 次の形式で `memory-write-finish.sh` を実行する。
 
    ```bash
    bash ~/.agent-shared/bin/memory-write-finish.sh --patch ~/.claude/memory "$memory_base_commit" "$memory_patch_file" "memory: <WHY>" <変更する相対パス>...
    ```
 
-   この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了するので、新しい確定版を読み、patch を作り直す。`git add -A` と `commit -a` は使わない。
-6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と正本の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準から作り直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で正本を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
+   この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了するので、新しい確定版で手順 2 からやり直す。別の書き込みが同じ記憶を変えている可能性があるので、手順 3 の improving-memory の手順も新しい版で通し直してから patch を作る。`git add -A` と `commit -a` は使わない。
+6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と正本の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準で手順 2 からやり直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で正本を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
 
 既に旧方式の handle を保持している場合は、従来の finish または明示的な release で終了する。新しい保存では先に preflight を単独実行しない。強制終了や電源断は trap で解放できないため、所有者不明の残留 lock を時間だけで削除しない。
 
