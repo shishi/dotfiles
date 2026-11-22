@@ -303,7 +303,7 @@
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/kata-completion.sh claude",
             "timeout": 120,
-            "statusMessage": "計画の完了を確認中..."
+            "asyncRewake": true
           }
         ]
       }

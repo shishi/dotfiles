@@ -1,4 +1,4 @@
-# 委譲された子のセッションかを判定する。kata-entry.sh と kata-first.sh が読み込む。
+# 委譲された子のセッションかを判定する。kata-entry.sh・kata-first.sh・kata-completion.sh が読み込む。
 #   delegated_session <hook の入力の session_id>
 # 委譲された子には利用者がおらず、設計・作業場所・統合は司令塔が担うため、hook は司令塔向けの案内と関門を外す。
 
