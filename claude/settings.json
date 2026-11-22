@@ -255,8 +255,7 @@
           {
             "type": "command",
             "command": "bash ~/.agent-shared/hooks/kata-first.sh prompt",
-            "timeout": 10,
-            "onFailure": "block"
+            "timeout": 10
           }
         ]
       }

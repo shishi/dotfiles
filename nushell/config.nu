@@ -32,11 +32,7 @@ def ll [...args] {
 # Keep Codex in-process so every launch inherits its caller's environment.
 # Reusing the shared app-server daemon would drop pane-scoped variables.
 def --wrapped codex [...args] {
-    if $nu.os-info.name == "linux" and (is-terminal --stdin) and (is-terminal --stdout) {
-        ^bash ($nu.home-dir | path join ".agent-shared" "bin" "kata-codex-launch.sh") ...$args
-    } else {
-        ^codex --no-daemon ...$args
-    }
+    ^codex --no-daemon ...$args
 }
 
 # scoop は 1 件の失敗で abort（= exit）して残り全部を巻き添えにするので、
