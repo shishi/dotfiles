@@ -12,6 +12,18 @@ set -u
 . "$(dirname "$0")/lib/delegated-session.sh"
 in=$(cat)
 sid=$(jq -r '.session_id // empty' <<<"$in" 2>/dev/null)
+if [ "${1:-}" = prompt ] && [ -n "${KATA_RESEARCH_CLAUDE_STATE:-}" ]; then
+  case $sid in
+    "" | *[!A-Za-z0-9_-]*)
+      echo "Claude Code の調査制御に必要なセッション情報を取得できませんでした。" >&2
+      exit 2
+      ;;
+  esac
+  if ! jq -e '.prompt | type == "string"' <<<"$in" >/dev/null 2>&1; then
+    echo "Claude Code の調査制御に必要な入力を取得できませんでした。" >&2
+    exit 2
+  fi
+fi
 [ -n "$sid" ] || exit 0
 case $sid in *[!A-Za-z0-9._-]* | . | ..) exit 0 ;; esac
 
@@ -35,12 +47,28 @@ names_kata() { [[ $1 =~ skills[/\\]kata([/\\[:space:]]|$) && $1 == *SKILL.md* ]]
 case ${1:-} in
   prompt)
     delegated_session "$sid" && exit 0
+    if [ -n "${KATA_RESEARCH_CLAUDE_STATE:-}" ]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        digest=$(jq -j '.prompt' <<<"$in" | sha256sum)
+      else
+        digest=$(jq -j '.prompt' <<<"$in" | shasum -a 256)
+      fi
+      marker="$KATA_RESEARCH_CLAUDE_STATE/$sid-${digest%% *}"
+      if [ ! -d "$KATA_RESEARCH_CLAUDE_STATE" ] || [ ! -O "$KATA_RESEARCH_CLAUDE_STATE" ] ||
+        [ -L "$marker" ] || [ ! -f "$marker" ] || ! rm -- "$marker"; then
+        echo "Claude Code の調査制御を確認できなかったため、入力を保留しました。" >&2
+        exit 2
+      fi
+    fi
     # 案内は状態の保存に失敗しても出す。
     [ -n "$pending" ] && : > "$pending" 2>/dev/null
     jq -nc '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext:
       "<kata-first>この入力でも、最初に開く skill は kata にする。調査・真偽判定・方式選定・実装着手では、kata から investigation-discipline を開く。その手順で外部資料の本文を取り、手元の現物と照合してから結論・提案・実装に進む。</kata-first>"}}'
     ;;
   pre)
+    if [ -n "${KATA_RESEARCH_CHECK_SOCKET:-}" ]; then
+      exec bash "$(dirname "$0")/kata-codex-tool-guard.sh" <<<"$in"
+    fi
     [ -n "$pending" ] && [ -e "$pending" ] || exit 0
     # 判定は印があるときだけ行い、ツールを呼ぶたびに T3 の記録を引かない。
     delegated_session "$sid" && exit 0

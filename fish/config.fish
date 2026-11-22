@@ -277,6 +277,10 @@ end
 # Keep Codex in-process so every launch inherits its caller's environment.
 # Reusing the shared app-server daemon would drop pane-scoped variables.
 function codex --wraps codex
+    if isatty stdin; and isatty stdout; and test (uname -s) = Linux
+        bash "$HOME/.agent-shared/bin/kata-codex-launch.sh" $argv
+        return
+    end
     command codex --no-daemon $argv
 end
 
