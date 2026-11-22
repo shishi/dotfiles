@@ -1,6 +1,6 @@
 ---
 name: claude-review
-description: Codex の最上位司令塔から Claude CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。T3 Code の外での review-gate の外部エンジンまたは明示された Claude レビューに使い、実装や受託側からの再委譲には使わない。
+description: Codex の最上位司令塔から Claude CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。review-gate の外部エンジンまたは明示された Claude レビューに使い、実装や受託側からの再委譲には使わない。
 ---
 
 # Claude Review
@@ -8,8 +8,7 @@ description: Codex の最上位司令塔から Claude CLI へ correctness・adve
 担当の割当・起動前に `agent-delegation` を使い、該当する参照本文で認証・送信先・モデル選択・実行記録を確認します。
 
 観点・通過条件・反復は `review-gate` に従う。この skill は Claude CLI の起動と結果の受領だけを担う。
-最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。T3 Code で動いているときはこの skill を使わず、
-review-gate のエンジンの節のとおり別 provider の子として起動する。
+最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。
 
 ## 入力の組成
 

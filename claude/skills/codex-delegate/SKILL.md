@@ -1,7 +1,7 @@
 ---
 name: codex-delegate
 description: |
-  T3 Code の外で、最上位の Claude Code から Codex CLI へ探索・定型変更・実装を委譲するときに使う。
+  最上位の Claude Code から Codex CLI へ探索・定型変更・実装を委譲するときに使う。
   担当範囲と受入条件を渡し、JSON で結果を受け取る。受託側からの再委譲には使わない。
   独立レビューは codex-review / review-gate を使う。
 ---
@@ -13,8 +13,7 @@ description: |
 担当範囲と受入条件を Codex CLI に渡し、進捗ログとは別に上限付きの JSON を受け取る。
 成果物の検証・独立レビュー・統合は呼出元の Claude が担当する。委譲先は `agent-delegation` の
 作業割当と利用枠の手順で選び、Claude 内の子と Codex CLI のどちらかを固定で優先しない。
-codex の進捗出力はログファイルへ逃がし、失敗したときだけ末尾を読む。T3 Code で動いているときは
-この skill を使わず、`agent-delegation` の「T3 Code で動いているとき」に従って子として起動する。
+codex の進捗出力はログファイルへ逃がし、失敗したときだけ末尾を読む。
 
 委譲で入った変更は Claude 自身が書いた変更と同じものとして扱う。エージェントがファイルを
 編集するという点で両者に差はなく、意図した変更かどうかの判断はどちらの場合もオーケストレータ

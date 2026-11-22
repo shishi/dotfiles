@@ -1,6 +1,6 @@
 ---
 name: review-gate
-description: レビューを依頼されたとき (他者の PR・差分・文書を含む) は、kata の入口から常にこの skill へ進む。自分が作った仕様・実装・設定・文書の独立レビュー、受けたレビュー指摘の採否、issue 投稿更新や commit・PR・merge・release 前にも使う。作業の途中で reviewer の agent・他方の CLI・別 provider の子にレビューを渡す前にも、この skill で対象と担当を決める。
+description: レビューを依頼されたとき (他者の PR・差分・文書を含む) は、kata の入口から常にこの skill へ進む。自分が作った仕様・実装・設定・文書の独立レビュー、受けたレビュー指摘の採否、issue 投稿更新や commit・PR・merge・release 前にも使う。作業の途中で reviewer の agent・他方の CLI にレビューを渡す前にも、この skill で対象と担当を決める。
 ---
 
 # 独立レビューの実行
@@ -106,7 +106,6 @@ reviewer が別案の利点を挙げても確認基準は増やしません。�
 - 外部 CLI は最上位の司令塔が直接起動する。Codex CLI は `codex-review`、Claude CLI は
   `claude-review` に観点名・組成済み入力・focus を渡して 1 パス実行する。
   受託 reviewer はレビューを返すだけで、別 CLI へ再委譲もゲートの再起動もしない。
-- T3 Code で動いているときは、外部 CLI の代わりに `agent-delegation` の「T3 Code で動いているとき」に従って別 provider の子として起動する。観点・入力・独立性の条件はこの skill のまま変えない。
 
 新規 agent・外部 CLI のどちらにも組成済み本文を渡し、実装した会話の履歴や判断過程は渡しません。reviewer が見るのは成果物と根拠であり、作成側の思考の流れではないためです。大きな入力は呼び出し側が組成したファイルで渡せますが、reviewer が利用できる読取手段を指定し、全本文の読了を確認します。対象の選別を reviewer に委ねず、切り詰めや読取失敗があれば回収します。Claude CLI には Bash を与えず、全対象と必要な周辺文脈を入力に含めます。
 

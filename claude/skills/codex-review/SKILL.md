@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: 最上位の Claude Code から Codex CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。T3 Code の外での review-gate の外部エンジンまたは明示された Codex レビューに使い、実装や受託側からの再委譲には使わない。
+description: 最上位の Claude Code から Codex CLI へ correctness・adversarial・spec-scope の独立レビューを渡す。review-gate の外部エンジンまたは明示された Codex レビューに使い、実装や受託側からの再委譲には使わない。
 ---
 
 # Codex レビューエンジンの接続
@@ -9,8 +9,7 @@ description: 最上位の Claude Code から Codex CLI へ correctness・adversa
 
 観点・入力の組成・引用の照合・採否・反復・通過判定・報告は `review-gate` に従う。この skill は
 Codex CLI の 1 パスの起動と結果の受領だけを担う。単独発動も review-gate の「一つの観点だけを実行する」に従う。
-最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。T3 Code で動いているときはこの skill を使わず、
-review-gate のエンジンの節のとおり別 provider の子として起動する。
+最上位の司令塔が起動し、受託 reviewer は別 CLI へ再委譲しない。
 
 ## モード(= 観点)
 
