@@ -21,7 +21,7 @@ description: kata の工程 7 で、実装と検証を終えた作業の終え�
 
 4. merge・pull・rebase・cherry-pick は [git-lossless-integrate](../git-lossless-integrate/SKILL.md) で実行します。未コミットの変更と稼働中の設定を守り、競合を解消してから反映します。
 5. 統合した場合は、統合後の版で関連する検証を実行します。失敗したら、たまたまの失敗と決めつけず、ブランチと作業場所を残したまま原因を調べます。ローカルの統合は push 前なら戻せるため、片付けより調査を先にします。
-6. 反映先の実物を確かめます。push したなら remote の commit、PR を作ったならその URL と本文を取得して照合し、URL を報告します。
+6. 反映先の実物を確かめます。push したなら remote の commit、PR を作ったならその URL と本文を取得して照合し、URL を報告します。成果を残す場合は後片付けの前に、完了後に必要な情報を PR または commit からたどれることを [作業メモの置き場](../kata/references/workflow.md#作業メモの置き場) の方針に沿って確かめます。
 7. 後片付けは、ローカルで統合して統合後の検証が通った場合と、破棄を確認した場合だけ行います。worktree は、その中ではなく本体の checkout へ移動してから、手順 2 で控えたパスを `git worktree remove` で消し、`git worktree prune` で古い登録を整理します。専用ツールで作った場所は、その終了ツールで片付けます。除外された作業メモは削除を止めず、worktree と一緒に消えます。消す前に、報告と実行記録への追記に使う内容を読み終え、手順 10 で残すと決まる作業メモは本体の checkout の置き場へ移します。worktree を消した後に、統合済みのブランチを `git branch -d` で消します。`-d` は未統合のブランチを消さないため、`-D` は破棄を確認した場合だけに使います。
 8. 片付けの対象は、工程 2 の記録で自分が作ったと示せる場所だけです。作業の開始時から入っていた worktree や detached HEAD、古そうに見える他の worktree は残します。作成主体・使用状況・未統合の成果を確かめ、ディレクトリ名だけで所有者を決めません。整理は [git-lossless-integrate](../git-lossless-integrate/SKILL.md) の手順に従います。
 9. `git worktree remove` が未コミット・未追跡のファイルを理由に拒否したら、`--force` を自分の判断で付けず、[git-lossless-integrate](../git-lossless-integrate/SKILL.md) の「worktree の削除が拒否されたとき」に従ってファイルを処理してから消します。

@@ -32,9 +32,12 @@ git log --oneline -10      # style reference
   explains reasoning and motivation — what problem, why now, why this
   approach over alternatives — not a restatement of the diff. State the problem and
   the reason at the level a later reader of the history needs to judge the change.
-  Leave out the record of how the change was verified — trial counts, per-run
-  results, the models and conditions compared, the steps of the investigation —
-  which stays in untracked working notes. Apply writing-prose's
+  For work finished without a PR, make the verification conclusions, the
+  conditions needed to interpret them, and constraints on use and maintenance
+  traceable from the commit. Follow the
+  [record policy](../kata/references/workflow.md#作業メモの置き場) for related documents.
+  Use temporary working notes for individual trial logs and investigation steps.
+  Apply writing-prose's
   publication rules to the message: include reader-relevant reasons, not private
   machine identifiers, local paths, or agent working notes moved out of documents.
 - Subject: imperative mood, under 50 characters.
