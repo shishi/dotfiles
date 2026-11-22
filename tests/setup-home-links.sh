@@ -47,7 +47,7 @@ printf '' >"$DOTFILES/nushell/config.nu"
 printf '' >"$DOTFILES/nushell/env.nu"
 printf '' >"$DOTFILES/herdr-core/config.unix.toml"
 printf '' >"$DOTFILES/herdr-core/config.windows.toml"
-printf '{}\n' >"$DOTFILES/herdr-app/keys.json"
+printf '{}\n' >"$DOTFILES/herdr-app/keys.windows.json"
 printf '{}\n' >"$DOTFILES/herdr-app/keys.macos.json"
 printf '{}\n' >"$DOTFILES/herdr-app/keys.linux.json"
 printf '{"old": true}\n' >"$TMP/herdr-app-home/keys.json"
@@ -89,7 +89,7 @@ esac
 case "$(uname -s)" in
   Darwin) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.macos.json" ;;
   Linux) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.linux.json" ;;
-  *) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.json" ;;
+  *) HERDR_APP_KEYS_SOURCE="$DOTFILES/herdr-app/keys.windows.json" ;;
 esac
 
 run_setup() {

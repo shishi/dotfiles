@@ -145,7 +145,7 @@ fi
 case "$(uname -s)" in
 Darwin) herdr_app_keys="$DOTDIR/herdr-app/keys.macos.json" ;;
 Linux) herdr_app_keys="$DOTDIR/herdr-app/keys.linux.json" ;;
-*) herdr_app_keys="$DOTDIR/herdr-app/keys.json" ;;
+*) herdr_app_keys="$DOTDIR/herdr-app/keys.windows.json" ;;
 esac
 if [ -n "${HERDR_APP_HOME:-}" ]; then
   case "$(uname -s)" in
