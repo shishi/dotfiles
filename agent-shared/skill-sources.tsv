@@ -48,6 +48,7 @@ modern-web-guidance	own	-
 nix-binary-cache	own	-
 nixos-binary-runtime	own	-
 openwhispr-dictionary-tuning	own	-
+precedent-research	own	-
 relational-data-modeling	own	-
 review-gate	adapted	https://github.com/obra/superpowers
 scoop-manifest	own	-
