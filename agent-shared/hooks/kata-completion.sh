@@ -111,7 +111,9 @@ fi
 progress=
 [ -n "$plan" ] && [ -f "$(dirname "$plan")/progress.md" ] && progress=$(cat "$(dirname "$plan")/progress.md")
 
-schema='{"type":"object","properties":{"status":{"type":"string","enum":["complete","waiting_on_human","continue"]},"reason":{"type":"string"}},"required":["status","reason"],"additionalProperties":false}'
+# check は判定役が当てはめた段の番号。番号を書かせて、指示文の段を上から順に確かめさせる。
+# maximum は判定文 (kata-completion-judge-prompt.md) の段の数と合わせる
+schema='{"type":"object","properties":{"check":{"type":"integer","minimum":1,"maximum":7},"status":{"type":"string","enum":["complete","waiting_on_human","continue"]},"reason":{"type":"string"}},"required":["check","status","reason"],"additionalProperties":false}'
 judge() {
   if [ -n "${KATA_COMPLETION_JUDGE:-}" ]; then
     $KATA_COMPLETION_JUDGE
