@@ -54,6 +54,17 @@
     "ctrl-; s r": "space.rename",
     "ctrl-; a [": "agent.prev",
     "ctrl-; a ]": "agent.next",
+    "ctrl-; a x": {
+      "command": "tab.new",
+      "args": {
+        "name": "Codex",
+        "argv": [
+          "nu", "-e",
+          "if (which codex | any {|entry| $entry.type != 'external'}) { codex } else { ^codex --no-daemon }"
+        ]
+      }
+    },
+    "ctrl-; a c": { "command": "tab.new", "args": { "name": "Claude Code", "argv": ["nu", "-e", "claude"] } },
     "ctrl-alt-[": "space.prev",
     "ctrl-alt-]": "space.next",
     "ctrl-shift-[": "agent.prev",
