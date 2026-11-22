@@ -47,7 +47,7 @@ case ${1:-} in
     [ -n "$(jq -r '.agent_id // empty' <<<"$in")" ] && exit 0
     tool=$(jq -r '.tool_name // empty' <<<"$in")
     case $tool in
-      mcp__ccd_turn__* | TodoWrite | update_plan) exit 0 ;;
+      mcp__ccd_turn__* | TaskCreate | TodoWrite | update_plan) exit 0 ;;
       # 回答を決まった形で返すだけのツール。skill を開くツールを持たない判定用の実行が、結果を返せなくなるため通す。
       StructuredOutput) exit 0 ;;
       Skill)

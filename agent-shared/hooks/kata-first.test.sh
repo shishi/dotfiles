@@ -58,6 +58,7 @@ case $out in *kata*) echo "ok   入力のたびに kata を最初に開く案内
 check "入力のあと kata を開く前の Bash を止める" 2 "$(tool s1 Bash '{"command":"ls"}')"
 check "タスク表示用のツールは止めない" 0 "$(tool s1 mcp__ccd_turn__update_plan '{"items":[]}')"
 check "Claude Code のタスク表示 (TodoWrite) は止めない" 0 "$(tool s1 TodoWrite '{"todos":[]}')"
+check "Claude Code のタスク作成 (TaskCreate) は kata を開く前も通す" 0 "$(tool s1 TaskCreate '{"subject":"調査する","description":"現行の設定を確認する"}')"
 check "Codex のタスク表示 (update_plan) は止めない" 0 "$(tool s1 update_plan '{"plan":[]}')"
 check "回答を決まった形で返すツール (StructuredOutput) は止めない" 0 "$(tool s1 StructuredOutput '{"should_continue":false}')"
 check "子エージェントのツール呼出しは止めない" 0 "$(tool s1 Read '{"file_path":"/x"}' child1)"

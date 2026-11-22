@@ -114,6 +114,9 @@ default_subagent_reasoning_effort = "medium"
 [browser_use.default_origin_policy]
 access = "allow"
 
+[tools.update_plan]
+enabled = true
+
 [features]
 hooks = true
 js_repl = false
