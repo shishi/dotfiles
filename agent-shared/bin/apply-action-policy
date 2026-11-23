@@ -3,9 +3,11 @@
 
     apply-action-policy           Claude Code と Codex の設定を action-policy.json に合わせる
     apply-action-policy --check   書き出す内容と設定ファイルが食い違えば差分を示して 1 で終える
-    apply-action-policy --codex   [auto_review].policy だけを更新または削除する (Codex の SessionStart hook が使う)
+    apply-action-policy --codex   [auto_review].policy だけを更新または削除する
+    apply-action-policy --codex-startup   停止中は設定に触れない (Codex の SessionStart hook が使う)
 
 判定そのものは Claude Code の auto mode の分類器と Codex の auto-review が行う。ここは両者に同じルールを渡すだけ。
+enabled が true のときに独自ルールを生成する。停止中に手動で実行すると、両 CLI の上書きを取り除く。
 Claude の allow は、drop_default_allow が空なら "$defaults" で標準の一覧を取り込む。空でなければ、標準の一覧から
 そのラベルを除いた全文を書く。soft_deny に足した規則より標準の allow が優先されるため、標準の allow を 1 件だけ外す
 にはこの書き方しかない。その場合の標準の一覧は `claude auto-mode defaults` から取るので、Claude Code の更新で標準が
@@ -97,7 +99,12 @@ def codex_extra_policy(policy):
 
 def render_settings(text, auto_mode):
     settings = json.loads(text)
-    settings["autoMode"] = auto_mode
+    if auto_mode is None:
+        if "autoMode" not in settings:
+            return text
+        del settings["autoMode"]
+    else:
+        settings["autoMode"] = auto_mode
     return json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -176,15 +183,18 @@ def replace_file(path, current, wanted, render):
 
 def main():
     mode = sys.argv[1:]
-    if mode not in ([], ["--check"], ["--codex"]):
+    if mode not in ([], ["--check"], ["--codex"], ["--codex-startup"]):
         sys.exit(__doc__)
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    enabled = policy.get("enabled") is True
+    if mode == ["--codex-startup"] and not enabled:
+        return
     # 外部の CLI から取る値は先に揃える。設定ファイルを読んでから書くまでの間を短くし、その間に別の書き手が
     # 入れた変更を古い内容で上書きしにくくするため。
-    review_policy = codex_policy(policy) if policy.get("codex_custom_policy") is True else None
+    review_policy = codex_policy(policy) if enabled and policy.get("codex_custom_policy") is True else None
     targets = [(CODEX_CONFIG, lambda text: render_codex(text, review_policy))]
-    if mode != ["--codex"]:
-        auto_mode = claude_auto_mode(policy, claude_defaults())
+    if mode in ([], ["--check"]):
+        auto_mode = claude_auto_mode(policy, claude_defaults()) if enabled else None
         targets.insert(0, (CLAUDE_SETTINGS, lambda text: render_settings(text, auto_mode)))
     # 片方の生成に失敗したとき、もう片方だけが新しい規則になるのを防ぐため、全部生成してから書く。
     changes = []

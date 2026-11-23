@@ -14,12 +14,13 @@ ng() { echo "FAIL $1"; fail=1; }
 
 work="$tmp/dotfiles"
 mkdir -p "$work/agent-shared/bin" "$work/agent-shared/hooks" "$work/agent-shared/policy" "$work/codex" \
-  "$tmp/home/.agent-shared" "$tmp/fakebin"
+  "$work/claude" "$tmp/home/.agent-shared" "$tmp/fakebin"
 cp "$repo/agent-shared/bin/apply-action-policy" "$work/agent-shared/bin/"
 cp "$here/codex-review-policy.sh" "$work/agent-shared/hooks/" 2>/dev/null
+cp "$here/permission-judge.sh" "$work/agent-shared/hooks/"
 ln -s "$work/agent-shared/bin" "$tmp/home/.agent-shared/bin"
 cat >"$work/agent-shared/policy/action-policy.json" <<'EOF'
-{"codex_custom_policy": true, "drop_default_allow": [], "rules": [
+{"enabled": true, "codex_custom_policy": true, "drop_default_allow": [], "rules": [
   {"section": "environment", "text": "Env A"},
   {"section": "soft_deny", "text": "Block A"},
   {"section": "allow", "text": "Allow A"}
@@ -84,9 +85,9 @@ else
   ng "方針が同じなら config.toml に書かない (rc=$rc)"
 fi
 
-cp "$work/codex/config.toml" "$tmp/config.before"
+cp "$work/codex/config.toml" "$tmp/config.with-policy"
 run_hook "$tmp/missing.json"; rc=$?
-if [ "$rc" -eq 0 ] && cmp -s "$tmp/config.before" "$work/codex/config.toml" && [ ! -s "$tmp/stdout" ]; then
+if [ "$rc" -eq 0 ] && cmp -s "$tmp/config.with-policy" "$work/codex/config.toml" && [ ! -s "$tmp/stdout" ]; then
   ok "方針を取れなければ何も書かず正常終了する"
 else
   ng "方針を取れなければ何も書かず正常終了する (rc=$rc)"
@@ -103,6 +104,7 @@ path.write_text(json.dumps(policy))
 config = pathlib.Path(sys.argv[2])
 config.write_text(config.read_text().replace("[auto_review]", "[auto_review] # Local review settings"))
 PY
+cp "$work/codex/config.toml" "$tmp/config.with-policy"
 run_hook "$tmp/missing.json"
 if python3 - "$work/codex/config.toml" <<'PY'
 import pathlib, sys, tomllib
@@ -126,6 +128,53 @@ if [ "$(mtime)" = "$before" ] && [ ! -s "$tmp/stdout" ] && [ ! -s "$tmp/stderr" 
   ok "次の起動でも独自ポリシーを再適用しない"
 else
   ng "次の起動でも独自ポリシーを再適用しない"
+fi
+
+python3 - "$work/agent-shared/policy/action-policy.json" <<'PY'
+import json, pathlib, sys
+
+path = pathlib.Path(sys.argv[1])
+policy = json.loads(path.read_text())
+policy.update(enabled=False, codex_custom_policy=True)
+path.write_text(json.dumps(policy))
+PY
+cp "$work/codex/config.toml" "$tmp/config.before"
+run_hook "$tmp/catalog.json"
+if cmp -s "$tmp/config.before" "$work/codex/config.toml" && [ ! -s "$tmp/stderr" ]; then
+  ok "一時停止中は Codex の起動時に適用しない"
+else
+  ng "一時停止中は Codex の起動時に適用しない"
+fi
+
+cat >"$tmp/fakebin/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$tmp/fakebin/claude"
+if PATH="$tmp/fakebin:$PATH" bash "$work/agent-shared/hooks/permission-judge.sh" >"$tmp/decision" <<'EOF' && [ ! -s "$tmp/decision" ]; then
+{"tool_name":"Bash","tool_input":{"command":"true"}}
+EOF
+  ok "一時停止中は Claude Code の確認画面に代理で答えない"
+else
+  ng "一時停止中は Claude Code の確認画面に代理で答えない"
+fi
+
+printf '%s\n' '{"autoMode":{"allow":["Extra rule"]},"permissions":{"defaultMode":"auto"}}' >"$work/claude/settings.json"
+cp "$tmp/config.with-policy" "$work/codex/config.toml"
+if PATH="$tmp/fakebin:$PATH" FAKE_CATALOG="$tmp/catalog.json" python3 "$work/agent-shared/bin/apply-action-policy" && \
+    python3 -c 'import json, sys; assert json.load(open(sys.argv[1])) == {"permissions": {"defaultMode": "auto"}}' "$work/claude/settings.json" && \
+    cmp -s "$tmp/config.before" "$work/codex/config.toml"; then
+  ok "一時停止中の手動適用で両 CLI が組み込みポリシーに戻る"
+else
+  ng "一時停止中の手動適用で両 CLI が組み込みポリシーに戻る"
+fi
+
+printf '%s\n' '{"enabled": true,' >"$work/agent-shared/policy/action-policy.json"
+PATH="$tmp/fakebin:$PATH" bash "$work/agent-shared/hooks/permission-judge.sh" </dev/null >"$tmp/decision" 2>"$tmp/stderr"
+if [ "$?" -ne 0 ] && [ ! -s "$tmp/decision" ]; then
+  ok "設定を読めないときは Claude Code にフックの失敗を返す"
+else
+  ng "設定を読めないときは Claude Code にフックの失敗を返す"
 fi
 
 exit "$fail"

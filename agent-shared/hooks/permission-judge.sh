@@ -15,6 +15,13 @@
 set -o pipefail
 
 hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+jq -e '.enabled == true' "$hook_dir/../policy/action-policy.json" >/dev/null
+case $? in
+  0) ;;
+  1) exit 0 ;;
+  *) exit 1 ;;
+esac
+
 # 実測の所要時間は 3.0〜5.4 秒 (ルール一式と長い会話記録を渡した場合を含む)。通信の揺れを見込んで十分に長くとる。
 # hook 自体の上限は 90 秒。
 judge_timeout_seconds=75

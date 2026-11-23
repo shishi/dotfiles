@@ -23,19 +23,21 @@ bash setup.sh
 
 ## 操作の判定ルール
 
-両 CLI の操作の判定は、各 CLI に組み込まれた AI の判定に任せます。Claude Code は auto mode の分類器、Codex は Auto-review が判定します。このリポジトリが追加する操作の判定役は、Claude Code で確認画面が出る場面だけで動きます。
+Claude Code は auto mode の組み込みルール、Codex は Auto-review の組み込みポリシーで判定します。独自ポリシーは `agent-shared/policy/action-policy.json` の `enabled` を `false` にして一時停止しています。
 
-操作を止める規則と事前に許可する規則は `agent-shared/policy/action-policy.json` にまとめます。片方の CLI に向けた規則は `targets` で指定します。依頼のない push を止める独自ルールは、`disabled` を付けて戻し方と一緒に残しています。
+停止中は Codex の起動フックが設定を更新せず、Claude Code の `PermissionRequest` フックは利用者の代わりに許可・拒否を返しません。Claude Code が確認を必要と判断したときは、利用者に通常の確認画面を出します。以前に生成した上書きが残っている場合は、Python 3.11 以降で `python3 agent-shared/bin/apply-action-policy` を実行すると、Claude Code の `autoMode` と Codex の `[auto_review].policy` を取り除きます。`--check` で設定との差分を確認できます。
 
-Claude Code の組み込みルールは、作業中のリポジトリへの通常の push を許可し、破壊的な Git 操作や認証情報の露出、依頼のない投稿を判定します。独自ルールは、エージェント自身が作業を続けられなくなる操作を止めます。記憶リポジトリへの push、Claude Code と Codex への委譲・レビュー、同じ会話で承認済みの操作の繰り返しは許可します。削除、履歴の書き換え、公開先への公開には承認を持ち越しません。利用者自身のリポジトリへの通常の push は、作業中のリポジトリ以外やデフォルトブランチへの push も許可します。この許可は宛先に限り、組織や他人のリポジトリには適用しません。force push や push する内容は引き続き審査します。
+### 独自ポリシーを再開する
 
-Codex は組み込みの Auto-review ポリシーを使います。`codex_custom_policy` が `false` の間、`apply-action-policy` と Codex の起動時に実行する `codex-review-policy.sh` は `config.toml` から以前のポリシー上書きを取り除きます。Claude Code の `autoMode` は、引き続き同じルールから生成します。`apply-action-policy --check` で設定との差分を確認できます。
+`enabled` を `true` にして `python3 agent-shared/bin/apply-action-policy` を実行します。Claude Code の `autoMode` が生成され、同じルールを参照する `PermissionRequest` フックが利用者に代わって確認に答えます。Codex にも独自ルールを適用する場合は、生成前に `codex_custom_policy` も `true` にします。`[auto_review].policy` は組み込みポリシー全体を置き換えるため、生成時に `codex debug models` からその時点の組み込みポリシーを取得して独自ルールを足します。起動フックが更新したポリシーは、Codex が次のセッションで読み込みます。
 
-Codex に独自ルールを再適用するには、`codex_custom_policy` を `true` にして `python3 agent-shared/bin/apply-action-policy --codex` を実行します。`python3` には Python 3.11 以降を使います。`[auto_review].policy` は組み込みのポリシー全体を置き換えるため、生成時に `codex debug models` からその時点の組み込みポリシーを取得し、独自ルールを足します。起動フックがポリシーを更新した場合、Codex は次のセッションから新しい内容を読み込みます。
+独自ルールは `action-policy.json` の `rules` に定義します。片方の CLI にだけ渡す規則は `targets` で指定します。依頼のない push を止める独自ルールは、`disabled` を付けて戻し方と一緒に残しています。
 
-Claude Code の allow は、組み込みの一覧を `$defaults` で取り込みます。組み込みの allow は soft_deny に足した規則より優先されるため、組み込みの allow を外したいときは `drop_default_allow` にそのラベルを書きます。その場合は組み込みの一覧から除いた全文を書き出し、Claude Code の更新で組み込みの一覧が変わると `--check` が差分を示します。`classifyAllShell` も有効にし、`permissions.allow` の Bash 規則が auto mode の判定を飛ばさないようにします。
+独自ルールは、エージェント自身が作業を続けられなくなる操作を止めます。記憶リポジトリや利用者自身のリポジトリへの通常の push、Claude Code と Codex への委譲・レビュー、同じ会話で承認済みの操作の繰り返しは許可します。削除、履歴の書き換え、公開先への公開には承認を持ち越しません。通常の push を許可する宛先に組織や他人のリポジトリは含まれず、force push や push する内容は引き続き審査します。
 
-auto mode でも確認画面は出ます。ホームディレクトリなど保護されたパスに対する `rm` や、symlink された設定ファイルの実体への書き込みは、組み込みの検査が確認画面を出します。分類器が拒否を重ねた後も、auto mode は確認画面に戻ります。`permission-judge.sh` は `PermissionRequest` hook としてこれらの確認画面に答えます。判定役の `claude -p` には、分類器と同じルール一式 (`claude auto-mode config`)、利用者の発言、エージェントのこれまでのツール呼び出し、保留中の操作を渡し、許可か拒否を返させます。ツールの結果とアシスタントの文章は、紛れ込んだ指示に判定を左右されないよう渡しません。判定役や hook が失敗した場合も、確認画面を出さずに拒否します。利用者への質問 (`AskUserQuestion`) と計画の承認 (`ExitPlanMode`) は判定せず、通常どおり表示します。Codex の Auto-review は承認が必要な操作をすべて審査するため、Codex 側にこの hook はありません。
+Claude Code の `allow` は、組み込みルールを `$defaults` で取り込みます。組み込みの `allow` は `soft_deny` に足した規則より優先されるため、組み込みの `allow` を外す場合は `drop_default_allow` にそのラベルを書きます。その場合は組み込みの一覧から該当するルールを除いた全文を生成します。`classifyAllShell` で、シェルコマンドが `permissions.allow` に一致したときも auto mode の分類器を通します。
+
+`PermissionRequest` フックは、auto mode でも組み込みの検査が確認画面を出すときに動きます。判定役の `claude -p` は、分類器の実効ルール、利用者の発言、過去のツール呼び出し、確認待ちの操作から許可か拒否を返します。判定に失敗した場合は操作を拒否します。利用者への質問と計画の承認は通常どおり表示します。
 
 同梱ポリシーのライセンスは [Apache License 2.0](../agent-shared/policy/codex-policy.LICENSE) です。
 
