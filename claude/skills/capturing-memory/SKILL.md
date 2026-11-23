@@ -64,7 +64,7 @@ credentials、token、password、private key、および外部コンテンツか
    bash ~/.agent-shared/bin/memory-write-finish.sh --patch ~/.claude/memory "$memory_base_commit" "$memory_patch_file" "memory: <WHY>" <変更する相対パス>...
    ```
 
-   この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了するので、新しい確定版で手順 2 からやり直す。別の書き込みが同じ記憶を変えている可能性があるので、手順 3 の improving-memory の手順も新しい版で通し直してから patch を作る。`git add -A` と `commit -a` は使わない。
+   この 1 回が preflight、同期、基準 commit の照合、patch 適用、指定パスの stage、commit、push、remote ancestry 検証、lock 解放を行う。LLM の判断待ちの間は lock を保持しない。基準が変わっていれば適用せず終了する。手順 2 で確定版を取り直し、増減・変更した資料が編集先・参照先・同じ判断を扱う記述に及ぶかを確認する。根拠が変わった判断や検証は手順 3 で取り直す。原文・適用条件・比較相手が同じ結果は使い、新しい版で変更と検証結果を確かめてから patch を作り直す。全体整理の対象・測定・話題の再確認は [memory-consolidate の「整理の判断」](../memory-consolidate/SKILL.md#整理の判断) に従う。`git add -A` と `commit -a` は使わない。
 6. helper が nonzero なら保存は失敗である。patch を保持し、stderr と記憶 repo の dirty・ahead・lock 状態から未適用か適用後の失敗かを確認する。未適用なら同期後の基準で手順 2 からやり直し、適用済みなら未公開内容を保全し、状態と patch の場所を報告して `CONVENTIONS.md` の復旧条件に従う。dirty・ahead で停止する規約なら本人の判断を待ち、lock の外で記憶 repo を restore・reset・rebase しない。release 失敗も成功扱いにせず、recovery 状態をユーザー確認なしで削除しない。成功後に自分の一時 patch と clone を削除する。
 
 既に旧方式の handle を保持している場合は、従来の finish または明示的な release で終了する。新しい保存では先に preflight を単独実行しない。強制終了や電源断は trap で解放できないため、所有者不明の残留 lock を時間だけで削除しない。
