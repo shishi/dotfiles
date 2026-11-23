@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# codex-review-policy.sh が、Codex の組み込みの方針の変化に合わせて config.toml の [auto_review].policy を
-# 書き直し、変化が無いときや方針を取れないときは何も書かず黙って終わることを、偽の codex で確かめる。
+# codex-review-policy.sh が、独自ポリシーの有効・無効に応じて config.toml を更新することを確かめる。
 # 使い方: bash agent-shared/hooks/codex-review-policy.test.sh
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -20,7 +19,7 @@ cp "$repo/agent-shared/bin/apply-action-policy" "$work/agent-shared/bin/"
 cp "$here/codex-review-policy.sh" "$work/agent-shared/hooks/" 2>/dev/null
 ln -s "$work/agent-shared/bin" "$tmp/home/.agent-shared/bin"
 cat >"$work/agent-shared/policy/action-policy.json" <<'EOF'
-{"drop_default_allow": [], "rules": [
+{"codex_custom_policy": true, "drop_default_allow": [], "rules": [
   {"section": "environment", "text": "Env A"},
   {"section": "soft_deny", "text": "Block A"},
   {"section": "allow", "text": "Allow A"}
@@ -91,6 +90,42 @@ if [ "$rc" -eq 0 ] && cmp -s "$tmp/config.before" "$work/codex/config.toml" && [
   ok "方針を取れなければ何も書かず正常終了する"
 else
   ng "方針を取れなければ何も書かず正常終了する (rc=$rc)"
+fi
+
+python3 - "$work/agent-shared/policy/action-policy.json" "$work/codex/config.toml" <<'PY'
+import json, pathlib, sys
+
+path = pathlib.Path(sys.argv[1])
+policy = json.loads(path.read_text())
+policy["codex_custom_policy"] = False
+path.write_text(json.dumps(policy))
+
+config = pathlib.Path(sys.argv[2])
+config.write_text(config.read_text().replace("[auto_review]", "[auto_review] # Local review settings"))
+PY
+run_hook "$tmp/missing.json"
+if python3 - "$work/codex/config.toml" <<'PY'
+import pathlib, sys, tomllib
+
+path = pathlib.Path(sys.argv[1])
+assert tomllib.loads(path.read_text()) == {
+    "model_reasoning_effort": "high",
+    "auto_review": {"timeout_ms": 120000},
+    "agents": {"enabled": True},
+}
+PY
+then
+  ok "無効なら独自ポリシーだけを外す"
+else
+  ng "無効なら独自ポリシーだけを外す"
+fi
+
+before=$(mtime)
+run_hook "$tmp/catalog.json"
+if [ "$(mtime)" = "$before" ] && [ ! -s "$tmp/stdout" ] && [ ! -s "$tmp/stderr" ]; then
+  ok "次の起動でも独自ポリシーを再適用しない"
+else
+  ng "次の起動でも独自ポリシーを再適用しない"
 fi
 
 exit "$fail"
