@@ -144,8 +144,8 @@ case $mode in
       r=$(ls -t "${TASK_MONITOR_CODEX_SESSIONS:-$HOME/.codex/sessions}"/*/*/*/rollout-*"$id"*.jsonl 2>/dev/null | head -n 1)
       [ -n "$r" ] && ctx="$ctx## 子 $id"$'\n'"$(tm_excerpt "$r" 1500)"$'\n'
     done
-    [ -n "$ctx" ] && jq -cn --arg c "$ctx" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext:
-      ("監視: 待機中の子の最新の内容です。目的の結果へ進んでいるかを判断し、止まっていれば close_agent か interrupt_agent で止めて、原因を調べ、直すか別の方法で元の目的をやり直してください。\n" + $c)}}' ;;
+    [ -n "$ctx" ] && jq -cn --arg c "$ctx" --arg criteria "$(tm_progress_criteria)" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext:
+      ("監視: 待機中の子の最新の内容です。完了した子の結果は回収してください。まだ実行中の子は目的の結果へ進んでいるかを判断し、止まっていれば close_agent か interrupt_agent で止めて、原因を調べ、直すか別の方法で元の目的をやり直してください。\n進捗の判断基準:\n" + $criteria + "\n\n" + $c)}}' ;;
   stop)
     # kata の計画を実装中は、kata-completion.sh がこの判定を呼び、止めない場合だけ計画の完了を判定する。
     # 2 つの Stop hook が別々に判定すると、その間にコマンドが終わったとき、一方は待つものがあるとして判定をやめ、
@@ -197,7 +197,7 @@ case $mode in
     printf '%s\n' "$round" > "$state/round"; printf '%s\n' "$idle" > "$state/idle"
     printf '%s\n' "$lines" > "$state/mark"; printf '%s\n' "$items" > "$state/seen"; rm -f "$state/waited"
     ms=$(( $(tm_interval "$round") * 60000 ))
-    jq -cn --arg n "$notice" --arg l "$list" --arg ms "$ms" '{decision: "block", reason: ("監視: まだ終わっていないタスクがあります。\n" + $l + "\n" +
-      "子エージェントは wait_agent で、コマンドは空の write_stdin (yield_time_ms は " + $ms + ") で待ってから最新の内容を確かめてください。進んでいれば続けて待ち、止まっていれば close_agent / interrupt_agent か write_stdin の割込みで止め、原因を調べて、直すか別の方法で元の目的をやり直して。" + $n)}' ;;
+    jq -cn --arg n "$notice" --arg l "$list" --arg ms "$ms" --arg criteria "$(tm_progress_criteria)" '{decision: "block", reason: ("監視: まだ終わっていないタスクがあります。\n" + $l + "\n" +
+      "子エージェントは wait_agent で、コマンドは空の write_stdin (yield_time_ms は " + $ms + ") で待ってから最新の内容を確かめてください。完了していれば結果を回収し、進んでいれば続けて待ってください。止まっていれば close_agent / interrupt_agent か write_stdin の割込みで止め、原因を調べて、直すか別の方法で元の目的をやり直して。" + $n + "\n進捗の判断基準:\n" + $criteria)}' ;;
 esac
 exit 0

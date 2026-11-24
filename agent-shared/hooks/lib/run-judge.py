@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""判定役を締切付きで実行する: run-judge.py <秒> <作業ディレクトリ> <コマンド> [引数...]
+"""判定役を締切付きで実行する: run-judge.py [--keep-process-group] <秒> <作業ディレクトリ> <コマンド> [引数...]
 
 標準入力を判定役へ渡し、判定役の標準出力をそのまま出す。終了コードは判定役のもの。
 締切を過ぎたら 124、コマンドが見つからなければ 127 で終える。判定役のエラー出力は読み捨てる。
@@ -15,7 +15,8 @@ import sys
 import threading
 import time
 
-seconds, cwd, *command = sys.argv[1:]
+keep_process_group = sys.argv[1:2] == ["--keep-process-group"]
+seconds, cwd, *command = sys.argv[2 if keep_process_group else 1:]
 parent_pid = os.getppid()
 executable = shutil.which(command[0])
 if executable is None:
@@ -28,6 +29,8 @@ def stop_tree():
         if os.name == "nt":
             subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        elif keep_process_group:
+            process.kill()
         else:
             os.killpg(process.pid, signal.SIGKILL)
     except (OSError, subprocess.SubprocessError):
@@ -37,10 +40,7 @@ def stop_tree():
 def stop_judge(signum, _frame):
     # 呼び出し側が止められたとき (POSIX の TERM・HUP) も、別グループの判定役を残さない。
     if process is not None:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except OSError:
-            pass
+        stop_tree()
     sys.exit(128 + signum)
 
 
@@ -49,7 +49,7 @@ if os.name != "nt":
     signal.signal(signal.SIGHUP, stop_judge)
 process = subprocess.Popen([executable, *command[1:]], cwd=cwd, stdin=subprocess.PIPE,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           start_new_session=os.name != "nt")
+                           start_new_session=os.name != "nt" and not keep_process_group)
 output = []
 
 

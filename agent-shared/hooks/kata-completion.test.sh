@@ -46,9 +46,11 @@ export KATA_COMPLETION_JUDGE="bash $work/judge.sh" JUDGE_INPUT="$work/judge-inpu
 # 終了コード 2 と標準エラー、Codex では標準出力の JSON で差し戻す
 stop() {
   local rc=0 out
+  local args=("${3:-claude}")
+  [ -z "${4:-}" ] || args+=("$4")
   rm -f "$JUDGE_INPUT"
   out=$(jq -cn --arg t "$T" "{session_id:\"s1\", cwd:\"/\", transcript_path:\$t, last_assistant_message:\"Task 1 を終えました\"} + ${2:-{\}}" |
-    JUDGE_STATUS=$1 bash "$HOOK" "${3:-claude}" 2>"$work/err") || rc=$?
+    JUDGE_STATUS=$1 bash "$HOOK" "${args[@]}" 2>"$work/err") || rc=$?
   if [ "${3:-claude}" = claude ]; then
     # Claude Code は終了コード 2 でだけエージェントを起こす。標準出力の decision は読まない
     [ -z "$out" ] || fail "Claude Code の Stop で標準出力に書いた: $out"
@@ -65,6 +67,15 @@ stop() {
   fi
 }
 marked() { [ -f "$work/state/claude/s1/plan" ]; }
+
+mkdir -p "$TASK_MONITOR_STATE_DIR/codex/s1/running"
+: > "$TASK_MONITOR_STATE_DIR/codex/s1/running/agent-no-plan"
+out=$(stop continue '{}' codex stop)
+grep -qF '子エージェント: no-plan' <<<"$out" && [ ! -e "$JUDGE_INPUT" ] || fail "Codex の Stop が計画のないセッションで監視を行わなかった: $out"
+[ -z "$(stop continue '{}' codex)" ] && [ ! -e "$JUDGE_INPUT" ] || fail "旧登録が別の Stop hook と重複して監視した"
+rm "$TASK_MONITOR_STATE_DIR/codex/s1/running/agent-no-plan"
+[ -z "$(stop continue '{}' codex stop)" ] && [ ! -e "$JUDGE_INPUT" ] || fail "Codex の Stop が計画もバックグラウンドのタスクもないセッションを差し戻した"
+ok "Codex の統合した Stop は計画なしでも監視し、待つものがなければ判定しない"
 
 out=$(stop continue)
 grep -qF "kata:" <<<"$out" && grep -qF テストの理由 <<<"$out" || fail "計画が無いセッションで未完了を差し戻さない: $out"
@@ -165,10 +176,11 @@ ok "長い発言も末尾の指示まで判定役へ渡す"
 mkdir -p "$TASK_MONITOR_STATE_DIR/codex/s1/running" && : > "$TASK_MONITOR_STATE_DIR/codex/s1/running/agent-x"
 mkdir -p "$work/state/codex/s1" && cp "$work/state/claude/s1/plan" "$work/state/codex/s1/plan"
 for n in 1 2 3 4; do
-  out=$(stop continue '{}' codex)
+  out=$(stop continue '{}' codex stop)
   grep -qF "監視:" <<<"$out" && [ ! -e "$JUDGE_INPUT" ] || fail "Codex で監視が止めた $n 回目の Stop で計画を判定した: $out"
 done
-[ -n "$(stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "Codex で待つものが無いのに判定しない"
+[ -n "$(stop continue '{}' codex stop)" ] && [ -e "$JUDGE_INPUT" ] || fail "Codex で待つものが無いのに判定しない"
+[ -n "$(stop continue '{}' codex)" ] && [ -e "$JUDGE_INPUT" ] || fail "Codex の旧登録で計画の完了を判定しない"
 # 計画が無いセッションでは判定も監視の呼出しもしない (監視 hook が自分の Stop で判定する)
 rm -f "$work/state/codex/s1/plan"
 : > "$TASK_MONITOR_STATE_DIR/codex/s1/running/agent-y"

@@ -74,8 +74,17 @@ def sections(body):
     return body[:starts[0]], [body[start:end] for start, end in zip(starts, ends)]
 
 
+def index_block(body, digest):
+    return ["<personal-memory-index>", f"索引の版: {digest[:8]}", body, "</personal-memory-index>"]
+
+
 def main():
-    repo, snapshot, mode, project, secret_pattern = sys.argv[1:]
+    repo, snapshot, mode, project, secret_pattern, *record = sys.argv[1:]
+    if mode == "format-index":
+        raw = sys.stdin.buffer.read()
+        block = index_block(raw.decode("utf-8"), hashlib.sha256(raw).hexdigest())
+        sys.stdout.buffer.write("\n".join(block).encode("utf-8"))
+        return
     event = json.load(sys.stdin)
     session = event.get("session_id", "")
     cache = core_cache = None
@@ -141,6 +150,8 @@ def main():
             if path and subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{snapshot}:{path}"],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
                 remember_document(path, git(repo, "show", f"{snapshot}:{path}"))
+        if record == ["index"]:
+            remember("MEMORY.md", git(repo, "show", f"{snapshot}:MEMORY.md"))
         save(core_cache if mode == "record-core" else cache)
         return
 
@@ -268,7 +279,7 @@ def main():
         lines.append(f"記憶の索引 (版 {index_version}) は、この会話に渡してあります。会話にある索引 (<personal-memory-index>、または lookup で取得した MEMORY.md) を使ってください。"
                      f"会話にある索引の版が {index_version} でない場合と、索引が見当たらない場合は、{lookup_command} MEMORY.md で取得してください。")
     else:
-        lines.extend(["<personal-memory-index>", f"索引の版: {index_version}", index_content, "</personal-memory-index>"])
+        lines.extend(index_block(index_content, index_digest))
         index_delivered = not manual
     if known:
         lines.append("既読の同一版: " + ", ".join(known))

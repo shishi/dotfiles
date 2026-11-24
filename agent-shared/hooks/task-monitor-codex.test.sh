@@ -120,12 +120,14 @@ ok "見に行き続ける限り、長いタスクでも止め続ける"
 run subagent-start '{agent_id:"019a-child"}'
 [ "$(w)" = 600000 ] || fail "子の起動直後の wait"
 out=$(stop); has "$out" "yield_time_ms は 1200000" "起動後に待ってからの Stop"; has "$out" "019a-child" "新しいタスク"
+has "$out" "the same error or the same action repeating" "Stop からの停滞の判断基準"
 ok "子を起動したら、Stop を待たずに 10 分から数え直す"
 
 mkdir -p "$work/sessions/2026/11/10"
 printf '%s\n' '{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"cargo test\"}"}}' > "$work/sessions/2026/11/10/rollout-2026-11-10T00-00-00-019a-child.jsonl"
 out=$(run post-wait '{tool_name:"collaborationwait_agent", tool_response:"Wait timed out."}')
 has "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$out")" "[tool] exec_command" "子の最新の内容"
+has "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$out")" "the same error or the same action repeating" "wait_agent 後の停滞の判断基準"
 ok "wait_agent から戻ったら子の最新の内容を渡す"
 
 run subagent-stop '{agent_id:"019a-child"}'

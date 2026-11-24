@@ -34,15 +34,22 @@ sid=$(jq -r '.session_id // empty' <<<"$in")
 dir="${KATA_STATE_DIR:-/tmp/claude-$(id -u)/kata}/$cli/$sid"
 plan=
 [ -f "$dir/plan" ] && plan=$(cat "$dir/plan")
-# 計画が無いとき、Codex は判定しない。Codex は待機中のエージェントを起こせず、判定のたびに利用者がターンの
-# 終わりで待つため。このとき監視 hook (task-monitor-codex.sh) は自分の Stop で判定する
-[ ! -f "$dir/plan" ] && [ "$cli" = codex ] && exit 0
-# Codex の計画の実装中は、監視 hook の Stop の判定をここから呼ぶ。監視 hook は計画の実装中のセッションでは
-# 自分の Stop で判定せず、この呼出しに任せる
 if [ "$cli" = codex ]; then
-  monitor=$(bash "$HOOK_DIR/task-monitor-codex.sh" stop from-kata <<<"$in")
+  # 旧登録を読み込んだセッションでは、計画が無いときは別の Stop hook が監視する。
+  if [ -f "$dir/plan" ]; then
+    monitor=$(bash "$HOOK_DIR/task-monitor-codex.sh" stop from-kata <<<"$in")
+  elif [ "${2:-}" = stop ]; then
+    remaining=$((10 - SECONDS))
+    [ "$remaining" -gt 0 ] || exit 0
+    # Codex が hook を中断するときに監視も止まるよう、同じプロセスグループで実行する。
+    py_bin=$(command -v python3 || command -v python) || exit 0
+    monitor=$("$py_bin" -I "$HOOK_DIR/lib/run-judge.py" --keep-process-group "$remaining" "$PWD" \
+      "$BASH" "$HOOK_DIR/task-monitor-codex.sh" stop from-kata <<<"$in") || exit 0
+  else
+    exit 0
+  fi
   [ -n "$monitor" ] && { printf '%s\n' "$monitor"; exit 0; }
-  # 計画ファイルが空なら、計画が無いのと同じく判定しない
+  # 計画の無い対話は、ターンの終了を判定待ちで遅らせない。
   [ -n "$plan" ] || exit 0
 fi
 transcript=$(jq -r '.transcript_path // empty' <<<"$in")

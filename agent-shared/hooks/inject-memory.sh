@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart は索引・CORE・プロジェクト、UserPromptSubmit は索引と検索候補を渡す。
-# Claude の SessionStart は hook 出力 1 つあたりの文字数上限に収めるため、core と project の
-# 2 つの hook に分ける。索引は最初の入力の lookup で届くので、Claude の起動時には出さない。
+# Claude の SessionStart は core と project に分ける。索引は project の出力に収まれば起動時に渡す。
 # 起動時の異常は警告で伝え、lookup の失敗は exit 2 で入力の処理を止める。
 # usage: inject-memory.sh [MEMORY_DIR] [core|project|lookup [検索語...]]
 set -u
@@ -267,10 +266,11 @@ esac
 
 # required index、optional CORE、存在する selected project file は、wrapper を出す前に
 # 固定 snapshot から各 1 回だけ読み切る。途中失敗時に partial wrapper を残さない。
-if ! memory_content=$(emit_file "MEMORY.md"); then
+if ! memory_content=$(emit_file "MEMORY.md" && printf '\001'); then
   echo "<personal-memory-warning>記憶 snapshot の読み取りに失敗したため注入をスキップ: MEMORY.md(${MEMORY_DIR})。worktree は読み取っていません</personal-memory-warning>"
   exit 0
 fi
+memory_content=${memory_content%$'\001'}
 
 core_content=""
 core_present=""
@@ -340,11 +340,10 @@ if [ -n "$project_present" ]; then
   scan_path "$project_path" "$project_content" && exit 0
 fi
 
-# 圧縮・再開を含む新コンテキストでは取得済み状態をリセットする。既読として記録するのは、
-# この出力が全文を渡す文書だけにする。Claude では並列に走る 2 つの hook が同じ記録を
-# 書き合わないよう、project 側が共有の記録をリセットし、core 側は CORE を別の記録に書く。
-if [ -n "$py_bin" ] && [ "$mode" != core ] && [ "$mode" != project ]; then
-  printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" || true
+# 確定版の索引を起動時と入力時で同じ形式にする。末尾の改行も含めて索引の版を計算する。
+index_output=
+if [ -n "$py_bin" ] && [ "$mode" != core ]; then
+  index_output=$(printf '%s' "$memory_content" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" format-index "$project_path" "$secret_pattern") || index_output=
 fi
 source_note="取得元は確定 commit ${snapshot} です。追加の本文は会話に渡される索引で選び、lookup で取得してください。"
 
@@ -389,10 +388,9 @@ if [ "$mode" = core ] || [ "$mode" = project ]; then
   [ -n "$doc_present" ] && body=$(printf '%s\n%s' "$doc_title" "$doc_content")
   output=$(render "$body")
   # Claude の文字数は UTF-16 の単位で数える。数えられないときは本文をそのまま出す。
-  chars=""
-  if [ -n "$py_bin" ]; then
-    chars=$(printf '%s' "$output" | "$py_bin" -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8", "replace").encode("utf-16-le")) // 2)' 2>/dev/null | tr -d '\r')
-  fi
+  count_chars() { "$py_bin" -c 'import sys; print(len(sys.stdin.buffer.read().decode("utf-8", "replace").encode("utf-16-le")) // 2)' 2>/dev/null | tr -d '\r'; }
+  chars=
+  [ -z "$py_bin" ] || chars=$(printf '%s' "$output" | count_chars)
   delivered="$doc_path"
   if is_num "$chars" && [ "$chars" -ge "$claude_limit" ]; then
     mem_q=$(printf '%q' "$MEMORY_DIR")
@@ -401,38 +399,64 @@ if [ "$mode" = core ] || [ "$mode" = project ]; then
     delivered=""
   fi
   [ -n "$doc_present" ] || delivered=""
+  delivered_index=
+  if [ "$mode" = project ] && [ -n "$index_output" ]; then
+    combined="$output"$'\n'"$index_output"
+    chars=$(printf '%s\n' "$combined" | count_chars)
+    if is_num "$chars" && [ "$chars" -le "$claude_limit" ]; then
+      output=$combined
+      delivered_index=index
+    fi
+  fi
   if [ -n "$py_bin" ]; then
+    # 並列の hook は別々の記録に保存する。project 側が取得済み状態もリセットする。
     record_mode=reset-project
     [ "$mode" = core ] && record_mode=record-core
-    printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" "$record_mode" "$delivered" "$secret_pattern" || true
+    printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" "$record_mode" "$delivered" "$secret_pattern" ${delivered_index:+index} || true
   fi
   printf '%s\n' "$output"
   exit 0
 fi
 
-echo "<personal-memory>"
-echo "個人永続記憶。${source_note}"
-[ -n "$sync_note" ] && echo "$sync_note"
-if [ -n "$project_present" ]; then
-  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
-elif [ -n "$degraded" ]; then
-  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: 最後の commit 時点ではなし)"
-else
-  echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
-fi
-[ -n "$degraded" ] && echo "$degraded"
-[ -n "$ahead_warn" ] && echo "$ahead_warn"
-echo ""
-printf '%s\n' "$memory_content"
-if [ -n "$core_present" ]; then
+render_startup() {
+  echo "<personal-memory>"
+  echo "個人永続記憶。${source_note}"
+  [ -n "$sync_note" ] && echo "$sync_note"
+  if [ -n "$project_present" ]; then
+    echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: ${project_path})"
+  elif [ -n "$degraded" ]; then
+    echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: 最後の commit 時点ではなし)"
+  else
+    echo "現在のプロジェクト slug: ${slug}(プロジェクト記憶: なし)"
+  fi
+  [ -n "$degraded" ] && echo "$degraded"
+  [ -n "$ahead_warn" ] && echo "$ahead_warn"
   echo ""
-  echo "## 全体価値観と方針"
-  printf '%s\n' "$core_content"
+  printf '%s\n' "$1"
+  if [ -n "$core_present" ]; then
+    printf '\n## 全体価値観と方針\n%s\n' "$core_content"
+  fi
+  if [ -n "$project_present" ]; then
+    printf '\n## プロジェクト記憶 (%s)\n%s\n' "$slug" "$project_content"
+  fi
+  echo "</personal-memory>"
+}
+
+plain_index=$(printf '%s' "$memory_content")
+output=$(render_startup "${index_output:-$plain_index}")
+if [ -n "$py_bin" ]; then
+  # Codex の上限は hooks.json の 30,000 トークン（UTF-8 の 4 バイトを 1 トークンと換算）。
+  # 版の表示が原因で本文が省略されないよう、上限を超えたら従来の書式を使う。
+  delivered_index=
+  if [ -n "$index_output" ]; then
+    bytes=$(printf '%s' "$output" | wc -c)
+    if [ "$bytes" -le 120000 ]; then
+      delivered_index=index
+    else
+      output=$(render_startup "$plain_index")
+    fi
+  fi
+  printf '%s' "$input" | "$py_bin" "$lookup_script" "$MEMORY_DIR" "$snapshot" reset "$project_path" "$secret_pattern" ${delivered_index:+index} || true
 fi
-if [ -n "$project_present" ]; then
-  echo ""
-  echo "## プロジェクト記憶 (${slug})"
-  printf '%s\n' "$project_content"
-fi
-echo "</personal-memory>"
+printf '%s\n' "$output"
 exit 0

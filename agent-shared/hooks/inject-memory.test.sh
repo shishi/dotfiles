@@ -553,32 +553,30 @@ else
   ng "claude/settings.json injects CORE and project memory from separate startup hooks"
 fi
 
-# 同じ会話に同じ版の索引を繰り返し渡さない。新しいコンテキスト (起動・再開・圧縮) と索引の更新では渡し直す。
+# 起動時に渡した索引を、その会話の入力で繰り返し渡さない。
 index_prompt() { jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once",prompt:"次の作業を進める",hook_event_name:"UserPromptSubmit"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" lookup; }
-index_start() { jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" >/dev/null; }
-index_start
+index_start() { jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" "$@"; }
+startup=$(index_start)
 first=$(index_prompt)
 second=$(index_prompt)
-if printf '%s' "$first" | grep -q '</personal-memory-index>' && ! printf '%s' "$second" | grep -q '</personal-memory-index>' \
+if printf '%s' "$startup" | grep -q '</personal-memory-index>' \
+  && ! printf '%s' "$first$second" | grep -q '</personal-memory-index>' \
   && printf '%s' "$second" | jq -e '.hookSpecificOutput.additionalContext | contains("は、この会話に渡してあります") and contains("lookup MEMORY.md で取得")' >/dev/null \
-  && [ "$(printf '%s' "$first" | grep -o '索引の版: [0-9a-f]*' | head -1 | cut -d' ' -f2)" = "$(printf '%s' "$second" | grep -o '(版 [0-9a-f]*)' | head -1 | tr -d '()' | cut -d' ' -f2)" ]; then
+  && [ "$(printf '%s' "$startup" | grep -o '索引の版: [0-9a-f]*' | head -1 | cut -d' ' -f2)" = "$(printf '%s' "$second" | grep -o '(版 [0-9a-f]*)' | head -1 | tr -d '()' | cut -d' ' -f2)" ]; then
   ok "the index is delivered once per context and later prompts point back to it"
 else
   ng "the index is delivered once per context and later prompts point back to it"
 fi
-index_start
-if index_prompt | grep -q '</personal-memory-index>'; then
+if index_start | grep -q '</personal-memory-index>'; then
   ok "a new context receives the index again"
 else
   ng "a new context receives the index again"
 fi
-index_prompt >/dev/null
-# Claude は起動時の hook を core と project に分けて動かす。project 側が記録を作り直す。
-jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once"}' | HOME="$TMP/home" bash "$HOOK" "$MEMORY_DIR" project >/dev/null
-if index_prompt | grep -q '</personal-memory-index>'; then
-  ok "a new Claude context receives the index again"
+# Claude は project 側で記憶と索引を渡す。索引が入らないときは入力時に渡す。
+if index_start project | grep -q '</personal-memory-index>' && ! index_prompt | grep -q '</personal-memory-index>'; then
+  ok "a new Claude context receives the index at startup"
 else
-  ng "a new Claude context receives the index again"
+  ng "a new Claude context receives the index at startup"
 fi
 # 子エージェントは親と同じ session_id で来ても、会話が別なので索引を受け取る。
 if jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-once",agent_id:"child-1",prompt:"次の作業を進める",hook_event_name:"UserPromptSubmit"}' \
@@ -595,6 +593,28 @@ if index_prompt | grep -q 'index-update.md'; then
   ok "an updated index is delivered again in the same context"
 else
   ng "an updated index is delivered again in the same context"
+fi
+
+INDEX_LIMIT_DIR="$TMP/index-limit-memory"
+make_memory_repo "$INDEX_LIMIT_DIR"
+{ printf '# Index\nINDEX_FALLBACK\n'; head -c 6000 /dev/zero | tr '\0' x; } >"$INDEX_LIMIT_DIR/MEMORY.md"
+{ printf '# Project\nPROJECT_FALLBACK\n'; head -c 6000 /dev/zero | tr '\0' y; } >"$INDEX_LIMIT_DIR/projects/github.com-shishi-dotfiles.md"
+head -c 121000 /dev/zero | tr '\0' z >"$INDEX_LIMIT_DIR/CORE.md"
+git -C "$INDEX_LIMIT_DIR" add -A
+git -C "$INDEX_LIMIT_DIR" commit -qm index-fallback
+large_index_payload=$(jq -n --arg cwd "$PROJECT_DIR" '{cwd:$cwd,session_id:"index-fallback",prompt:"次へ"}')
+startup=$(printf '%s' "$large_index_payload" | HOME="$TMP/home" bash "$HOOK" "$INDEX_LIMIT_DIR" project)
+fallback_lookup() { printf '%s' "$large_index_payload" | HOME="$TMP/home" bash "$HOOK" "$INDEX_LIMIT_DIR" lookup; }
+if contains "$startup" PROJECT_FALLBACK && ! contains "$startup" INDEX_FALLBACK && fallback_lookup | grep -q INDEX_FALLBACK; then
+  ok "Claude keeps project text and delivers an index that does not fit at startup on input"
+else
+  ng "Claude keeps project text and delivers an index that does not fit at startup on input"
+fi
+printf '%s' "$large_index_payload" | HOME="$TMP/home" bash "$HOOK" "$INDEX_LIMIT_DIR" >/dev/null
+if fallback_lookup | grep -q INDEX_FALLBACK; then
+  ok "Codex resends the index when its startup context may be truncated"
+else
+  ng "Codex resends the index when its startup context may be truncated"
 fi
 
 echo "PASS=$PASS FAIL=$FAIL"

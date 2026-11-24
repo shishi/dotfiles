@@ -1,5 +1,10 @@
 # 監視 hook (task-monitor-claude.sh / task-monitor-codex.sh) が source する共通処理。
 
+tm_progress_criteria() {
+  sed -n '/^<!-- shared-progress -->$/,/^<!-- end-shared-progress -->$/ { /^<!-- /d; p; }' \
+    "$HOOK_DIR/task-monitor-judge-prompt.md"
+}
+
 # 確認の間隔 (分)。n 回目 (0 始まり) の確認までの待ち時間で、10・20・40 分の後は 40 分ごと。
 # 60 分以下に保つのは、Codex で待機から戻ったエージェントが 1 時間のプロンプトキャッシュを使えるようにするため。
 tm_interval() {
